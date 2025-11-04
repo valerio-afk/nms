@@ -1,0 +1,27 @@
+{% extends "index.html" %}
+
+{% block title %}Disk Management{% endblock %}
+
+{% block content %}
+
+{% if disks %}
+    <div class="row g-3">
+        {% for disk in disks %}
+            {% set idx = loop.index %}
+            {% include "card.disk.html" %}
+        {% endfor %}
+    </div>
+
+    {% if pool %}
+        pool exists
+    {% else %}
+        <div class="row g-3 mt-1">
+            {% include "card.new_array.html" %}
+        </div>
+    {% endif %}
+
+{% else %}
+    {% include "warning.no_hdd.html" %}
+{% endif %}
+
+{% endblock %}

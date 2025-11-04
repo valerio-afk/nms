@@ -1,0 +1,31 @@
+{% extends "card.html" %}
+
+{% block card_title %}<i class="bi bi-link-45deg"></i> Network{% endblock %}
+
+{% block card_content %}
+
+{% if ifaces %}
+<dl class="row">
+  {% for iface in ifaces %}
+    <dt class="col-sm-4">{{ iface.name }}:</dt>
+    <dd class="col-sm-8">{{ iface.status | enabled_fmt | safe }}</dd>
+    {% if iface.ipv4 %}<dd class="ms-4 mb-1"><span class="fw-bold">IPv4 Address:</span> {{ iface.ipv4 }} </dd>{% endif %}
+    {% if iface.ipv6 %}<dd class="ms-4 mb-1"><span class="fw-bold">IPv6 Address:</span> {{ iface.ipv6 }} </dd>{% endif %}
+    {% if iface.network_name %}<dd class="ms-4 mb-1"><span class="fw-bold">Network:</span> {{ iface.network_name }} </dd>{% endif %}
+  {% endfor %}
+</dl>
+{% else %}
+<div class="p-3 mb-3 border-start border-4 border-warning bg-warning-subtle rounded ">
+  No disk array configuration found. Go to <a href="{{ url_for('disk_management') }}">Disk Management</a> to configure your disk array.
+</div>
+{% endif %}
+
+
+  <script>
+    GlobalRefresher.register("{{ card_id }}","http://localhost:5000/async/widgets/network_overview");
+  </script>
+
+
+{% endblock %}
+
+

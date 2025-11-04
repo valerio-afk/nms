@@ -1,0 +1,14 @@
+{% extends "index.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+
+<div class="row g-3">
+    {% for widget in widgets %}
+        {{ widget|safe }}
+    {% endfor %}
+</div>
+
+
+{% endblock %}

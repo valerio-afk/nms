@@ -1,0 +1,18 @@
+{% extends "card.html" %}
+
+{% block card_title %}<i class="bi bi-terminal-fill"></i> Access Services{% endblock %}
+
+{% block card_content %}
+
+
+<dl class="row">
+  {% for name,enabled in services %}
+    <dt class="col-sm-4">{{ name }}:</dt>
+    <dd class="col-sm-8">{{ enabled | enabled_fmt | safe }}</dd>
+  {% endfor %}
+</dl>
+
+
+{% endblock %}
+
+

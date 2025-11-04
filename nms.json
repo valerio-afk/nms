@@ -1,0 +1,26 @@
+{
+    "pool": {
+        "name": "tank",
+        "encrypted": "/root/tank.key",
+        "redundancy": false,
+        "compressed": true,
+        "disks": [
+            "/dev/sda",
+            "/dev/sdb"
+        ]
+    },
+    "dataset": "data",
+    "access": {
+        "login": {
+            "username": "afk",
+            "password": "d033e22ae348aeb5660fc2140aec35850c4da997"
+        },
+        "services": {
+            "sftp": false,
+            "ssh": false,
+            "nfs": false,
+            "smb": false,
+            "web": false
+        }
+    }
+}

@@ -1,0 +1,54 @@
+{% extends "card.html" %}
+
+{% block card_title %}<i class="bi bi-info-circle-fill"></i> System Information{% endblock %}
+
+{% block card_content %}
+
+{% if system_info %}
+    <dl class="row">
+      {% for lbl,info in system_info.items() %}
+        {% if not lbl.startswith('_') %}
+          <dt class="col-sm-4">{{ lbl }}:</dt>
+          <dd class="col-sm-8">{{ info }}</dd>
+        {% endif %}
+      {% endfor %}
+    </dl>
+
+
+<dl class="row">
+      <dt class="col-sm-4">CPU Load:</dt>
+      <dd class="col-sm-8">
+        <div class="progress" role="progressbar" aria-valuenow="{{ system_info['_cpu_load'] }}" aria-valuemin="0" aria-valuemax="100">
+            <div class="progress-bar  progress-bar-striped  bg-success" style="width: {{ system_info['_cpu_load'] }}%">{{ system_info['_cpu_load'] }}%</div>
+        </div>
+      </dd>
+    <dt class="col-sm-4">RAM Usage:</dt>
+      <dd class="col-sm-8">
+        <div class="progress" role="progressbar" aria-valuenow="{{ system_info['_memory_load'] }}" aria-valuemin="0" aria-valuemax="100">
+            <div class="progress-bar  progress-bar-striped  bg-success" style="width: {{ system_info['_memory_load'] }}%">{{ system_info['_memory_load'] }}%</div>
+        </div>
+      </dd>
+</dl>
+
+<div class="row">
+     <dt class="col-sm-4">Network:</dt>
+    <div class="col-auto">
+        <i class="bi bi-box-arrow-in-down"></i> {{ system_info['_net_counters']['received'] | human_readable_bytes}}/s
+    </div>
+
+    <div class="col-auto">
+        <i class="bi bi-box-arrow-in-up"></i> {{ system_info['_net_counters']['sent'] | human_readable_bytes }}/s
+    </div>
+</div>
+
+
+{% endif %}
+
+    <script>
+        GlobalRefresher.register("{{ card_id }}","http://localhost:5000/async/widgets/system_info");
+    </script>
+
+
+{% endblock %}
+
+

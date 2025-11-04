@@ -1,0 +1,56 @@
+{% extends "card.html" %}
+
+{% block card_title %}<i class="bi bi-hdd-stack-fill"></i> Disk List{% endblock %}
+
+{% block card_content %}
+
+{% if disks %}
+    <table class="table table-striped" id="disk_list">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Model</th>
+                <th>Size</th>
+                <th></th>
+            </tr>
+        </thead>
+
+        <tbody>
+        {% for disk in disks %}
+        <tr>
+            <td>{{ disk.name }}</td>
+            <td>{{ disk.model }}</td>
+            <td>{{ disk.size | human_readable_bytes }}</td>
+            <td><span title="{{ disk.status }}">{{ disk.status | disk_charm }}</span></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    {% if pool_options %}
+        <dl class="row">
+          {% for lbl,status in pool_options %}
+          <dt class="col-sm-4">{{ lbl }}:</dt>
+          <dd class="col-sm-8">{{ status | enabled_fmt | safe }}</dd>
+          {% endfor %}
+        </dl>
+     {% else %}
+
+        {% set callout_text = "No disk array configuration found. Go to <a href=\""~ url_for('disk_management') ~"\">Disk Management</a> to configure your disk array." %}
+        {% include "callout.warning.html" %}
+
+
+     {% endif %}
+
+{% else %}
+    {% include "warning.no_hdd.html" %}
+{% endif %}
+
+  <script>
+    GlobalRefresher.register("{{ card_id }}","http://localhost:5000/async/widgets/disk_overview");
+  </script>
+
+
+{% endblock %}
+
+
