@@ -2,19 +2,19 @@ import os
 import hashlib
 import json
 import subprocess
-from xml.sax.handler import property_encoding
-
 import psutil
 import socket
 import platform
 import datetime
 from collections import OrderedDict
-from cmdl import CreateKey, ZPoolCreate, ZPoolLabelClear, ZFSCreate, CommandLineTransaction, ZpoolScrub
+from cmdl import CreateKey, ZPoolCreate, ZPoolLabelClear, ZFSCreate, RemoteCommandLineTransaction, ZpoolScrub
 from constants import KEYPATH, POOLNAME, DATASETNAME
-from daemon import NetIOCounter
+from flask_daemons import NetIOCounter
 from disk import Disk,DiskStatus
 from iface import NetworkInterface
 from enum import Enum
+
+from sudo_daemon import SOCK_PATH
 
 hash_password = lambda pwd : hashlib.sha1(pwd.encode()).hexdigest()
 
@@ -242,14 +242,19 @@ class NMSBackend:
         commands.append(ZPoolCreate(disks_path,redundancy,enc_key,compression,poolname))
         commands.append(ZFSCreate(poolname,datasetname))
 
-        trans = CommandLineTransaction(*commands)
-        output = trans.execute()
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            *commands
+        )
+        output = trans.run()
 
         if (not trans.success):
             if (len(output)==0):
                 raise Exception("Unknown error")
             else:
-                raise Exception(output[-1].stdout)
+                raise Exception(output[-1].get('stderr',None))
 
         this._cfg['pool']['name'] = poolname
         this._cfg['dataset'] = datasetname

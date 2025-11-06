@@ -1,10 +1,11 @@
+import json
 import subprocess
+import socket
 import time
 import os
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 
-class RevertableCommandLine:
-
+class RevertibleCommandLine(ABC):
     def __init__(this, command, revert_command = None, tag=None, sudo=False):
         this._command = command
         this._revert_command = revert_command
@@ -50,13 +51,16 @@ class RevertableCommandLine:
     def to_dict(this):
         return {"__class__":this.__class__.__name__}
 
+    def to_json(this):
+        return this.to_dict()
+
     @staticmethod
     @abstractmethod
     def from_dict(serialisation):
         pass
 
 
-class ZPoolCommand(RevertableCommandLine):
+class ZPoolCommand(RevertibleCommandLine):
     def __init__(this, subcommand, flags=None, disks=None,**kwargs):
         this._disks = None
         this._flags = None
@@ -153,7 +157,7 @@ class ZpoolScrub(ZPoolCommand):
     def from_dict(serialisation):
         return ZpoolScrub(serialisation.get('pool',None))
 
-class ZFSCommand(RevertableCommandLine):
+class ZFSCommand(RevertibleCommandLine):
     def __init__(this, subcommand,**kwargs):
         this._disks = None
         cmd = ["zfs", subcommand]
@@ -189,7 +193,7 @@ class ZFSCreate(ZFSCommand):
         return ZFSCreate(serialisation.get('pool',None),serialisation.get('dataset',None))
 
 
-class CreateKey(RevertableCommandLine):
+class CreateKey(RevertibleCommandLine):
     def __init__(this,key_path="/root/tank.key",bytes=32):
         cmd = [ "dd", "if=/dev/urandom", f"of={key_path}", f"bs={bytes}","count=1"]
         revert = ["rm", key_path]
@@ -211,7 +215,7 @@ class CreateKey(RevertableCommandLine):
     def from_dict(serialisation):
         return CreateKey(serialisation.get('key_path',None),serialisation.get('bytes',0))
 
-class Chmod(RevertableCommandLine):
+class Chmod(RevertibleCommandLine):
     def __init__(this,flags,path,sudo=False):
         this._flags = flags
         this._path = path
@@ -239,14 +243,23 @@ class Chmod(RevertableCommandLine):
 class CommandLineTransaction:
     def __init__(this, *args):
         this._cmds = [x for x in args]
-
         this._success = None
+
+    @property
+    def commands(this):
+        return [x for x in this._cmds]
 
     @property
     def success(this):
         return this._success
 
-    def execute(this):
+    @abstractmethod
+    def run(this):
+        pass
+
+class LocalCommandLineTransaction(CommandLineTransaction):
+
+    def run(this):
         outputs = []
 
         failed = False
@@ -270,4 +283,46 @@ class CommandLineTransaction:
         else:
             this._success = True
 
+        return [ {"returncode": o.returncode, "stdout":o.stdout, "stderr":o.stderr} for o in outputs ]
+
+
+class RemoteCommandLineTransaction(CommandLineTransaction):
+    def __init__(this, address_family,type, address,*args):
+        this._address_family = address_family
+        this._type = type
+        this._address = address
+
+        super().__init__(*args)
+
+    def run(this):
+        s = socket.socket(this._address_family, this._type)
+        s.settimeout(5)
+        s.connect(this._address)
+
+
+        message = {
+            "action": "run",
+            "args": {"commands": this.commands}
+        }
+
+        s.sendall(json.dumps(message,default=lambda x:x.to_dict()).encode()+b'\n')
+
+        response = b""
+        while True:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            response += chunk
+            if b"\n" in chunk:
+                break
+
+        s.close()
+
+        outputs = json.loads(response.decode("utf-8").strip())
+
+        this._success = sum([o['returncode'] for o in outputs]) == 0
+
         return outputs
+
+
+
