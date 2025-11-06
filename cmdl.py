@@ -1,5 +1,7 @@
 import subprocess
 import time
+import os
+from abc import abstractmethod
 
 class RevertableCommandLine:
 
@@ -8,6 +10,14 @@ class RevertableCommandLine:
         this._revert_command = revert_command
         this._tag = tag
         this._sudo = sudo
+
+    def append(this,cmd):
+        if (isinstance(cmd,list)):
+            this._command.extend([x for x in cmd])
+        elif (isinstance(cmd,str)):
+            this._command.append(cmd)
+        else:
+            raise TypeError("The `cmd` parameter must be either a list or a string")
 
     @property
     def command(this):
@@ -37,63 +47,194 @@ class RevertableCommandLine:
 
         return output
 
+    def to_dict(this):
+        return {"__class__":this.__class__.__name__}
 
-class ZPoolLabelClear(RevertableCommandLine):
+    @staticmethod
+    @abstractmethod
+    def from_dict(serialisation):
+        pass
 
+
+class ZPoolCommand(RevertableCommandLine):
+    def __init__(this, subcommand, flags=None, disks=None,**kwargs):
+        this._disks = None
+        this._flags = None
+        cmd = ["zpool", subcommand]
+
+        kwargs['sudo'] = True
+        super().__init__(cmd,**kwargs)
+
+        if (flags is not None):
+            this._flags = [x for x in flags]
+            this.append(this._flags)
+
+        if (disks is not None):
+            this._disks = [x for x in disks]
+            this.append(this._disks)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['disks'] = this._disks
+        return d
+
+
+class ZPoolLabelClear(ZPoolCommand):
     def __init__(this,disks):
-        cmd = ["zpool","labelclear"]+disks
-        super().__init__(cmd,sudo=True)
+        super().__init__(subcommand='labelclear',disks=disks)
 
-class ZPoolCreate(RevertableCommandLine):
-    def __init__(this,disks,redudancy,encryption,compression,tank_name="tank"):
-        cmd = ["zpool", "create",
-               "-f" #force
+    @staticmethod
+    def from_dict(serialisation):
+        return ZPoolLabelClear(serialisation.get('disks',[]))
+
+
+
+class ZPoolCreate(ZPoolCommand):
+    def __init__(this,disks,redundancy,encryption,compression,tank_name="tank"):
+        cmd_revert = ["sudo", "zpool", "-f", "destroy", tank_name]
+
+        this._redundancy = redundancy
+        this._encryption = encryption
+        this._compression = compression
+        this._tank_name = tank_name
+
+        flags = [
+               "-f", #force
                "-o", "ashift=12" #block alignment
             ]
 
         if (compression):
-            cmd.extend(["-O", "compression=lz4",])
+            flags.extend(["-O", "compression=lz4"])
 
         if (encryption is not None):
-            cmd.extend(["-O", "encryption=aes-256-gcm"])
-            cmd.extend(["-O", "keyformat=raw"])
-            cmd.extend(["-O", f"keylocation=file://{encryption}"])
+            flags.extend(["-O", "encryption=aes-256-gcm"])
+            flags.extend(["-O", "keyformat=raw"])
+            flags.extend(["-O", f"keylocation=file://{encryption}"])
 
-        cmd.append(tank_name)
+        flags.append(tank_name)
 
-        if (redudancy):
-            cmd.append("raidz1")
+        if (redundancy):
+            flags.append("raidz1")
 
-        cmd.extend(disks)
+        super().__init__("create", flags, disks, revert_command=cmd_revert)
 
-        cmd_revert = ["sudo","zpool","-f","destroy",tank_name]
 
-        super().__init__(cmd,cmd_revert,sudo=True)
+    def to_dict(this):
+        d = super().to_dict()
+        d['redundancy'] = this._redundancy
+        d['encryption'] = this._encryption
+        d['compression'] = this._compression
+        d['tank_name'] = this._tank_name
+        return d
 
-class ZFSCreate(RevertableCommandLine):
+    @staticmethod
+    def from_dict(serialisation):
+        return ZPoolCreate(serialisation.get('disks',[]),
+                           serialisation.get('redundancy', False),
+                           serialisation.get('encryption', None),
+                           serialisation.get('compression', False),
+                           serialisation.get('tank_name', None),
+                           )
 
-    def __init__(this,tank="tank", dataset_name="data"):
-        cmd = ["zfs","create",f"{tank}/{dataset_name}"]
-        cmd_revert = ["sudo", "zfs", "destroy", f"{tank}/{dataset_name}"]
 
-        super().__init__(cmd,cmd_revert,sudo=True)
+class ZpoolScrub(ZPoolCommand):
+    def __init__(this, pool):
+        this._pool = pool
+        super().__init__(subcommand="scrub",disks=None)
+        this.append(this._pool)
 
-class ZpoolScrub(RevertableCommandLine):
-    def __init__(this,tank):
-        super().__init__(['zpool','scrub',tank],sudo=True)
+    def to_dict(this):
+        d = ZPoolCommand.to_dict(this)
+        d['pool'] = this._pool
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ZpoolScrub(serialisation.get('pool',None))
+
+class ZFSCommand(RevertableCommandLine):
+    def __init__(this, subcommand,**kwargs):
+        this._disks = None
+        cmd = ["zfs", subcommand]
+
+        kwargs['sudo'] = True
+        super().__init__(cmd,**kwargs)
+
+
+class ZFSCreate(ZFSCommand):
+
+    def __init__(this,pool="tank", dataset="data"):
+        this._pool = pool
+        this._dataset = dataset
+
+        fs = f"{pool}/{dataset}"
+
+        cmd_revert = ["sudo", "zfs", "destroy", fs]
+
+        super().__init__("create", revert_command=cmd_revert, sudo=True)
+
+        this.append(fs)
+
+    def to_dict(this):
+        d = super().to_dict()
+
+        d['pool'] = this._pool
+        d['dataset'] = this._dataset
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ZFSCreate(serialisation.get('pool',None),serialisation.get('dataset',None))
 
 
 class CreateKey(RevertableCommandLine):
     def __init__(this,key_path="/root/tank.key",bytes=32):
         cmd = [ "dd", "if=/dev/urandom", f"of={key_path}", f"bs={bytes}","count=1"]
-        super().__init__(cmd,sudo=True)
+        revert = ["rm", key_path]
+
+        this._key_path = key_path
+        this._bytes = bytes
+
+        super().__init__(cmd,revert_command=revert,sudo=True)
+
+    def to_dict(this):
+        d = super().to_dict()
+
+        d['key_path'] = this._key_path
+        d['bytes'] = this._bytes
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return CreateKey(serialisation.get('key_path',None),serialisation.get('bytes',0))
 
 class Chmod(RevertableCommandLine):
     def __init__(this,flags,path,sudo=False):
-        cmd = ["sudo","chmod",str(flags),path]
+        this._flags = flags
+        this._path = path
 
-        super().__init__(cmd,sudo=sudo)
+        current_mode = os.stat(path).st_mode
 
+        revert_cmd = ["chmod",str(oct(current_mode)),path]
+
+        cmd = ["chmod",flags,path]
+        super().__init__(cmd,revert_command=revert_cmd,sudo=sudo)
+
+    def to_dict(this):
+        d = super().to_dict()
+
+        d['flags'] = this._flags
+        d['path'] = this._path
+        d['sudo'] = this._sudo
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return Chmod(serialisation.get('flags',None),serialisation.get('path',None),sudo=serialisation.get('sudo',False))
 
 class CommandLineTransaction:
     def __init__(this, *args):

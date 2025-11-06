@@ -222,6 +222,7 @@ class NMSBackend:
             raise Exception("The disk array is already configured.")
 
         disks = [d for d in this.get_disks() if d.status == DiskStatus.NEW]
+        disks_path = [d.path for d in disks]
 
         if redundancy and (len(disks)<3):
             raise Exception("You must have at least 3 disks connected to opt in redundancy.")
@@ -237,8 +238,8 @@ class NMSBackend:
         poolname = POOLNAME
         datasetname = DATASETNAME
 
-        commands.append(ZPoolLabelClear(disks))
-        commands.append(ZPoolCreate(disks,redundancy,enc_key,compression,poolname))
+        commands.append(ZPoolLabelClear(disks_path))
+        commands.append(ZPoolCreate(disks_path,redundancy,enc_key,compression,poolname))
         commands.append(ZFSCreate(poolname,datasetname))
 
         trans = CommandLineTransaction(*commands)
