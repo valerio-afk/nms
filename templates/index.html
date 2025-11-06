@@ -19,10 +19,10 @@
     <div class="container">
       <ul class="navbar-nav">
         <li class="nav-item">
-          <a href="{{ url_for('dashboard') }}" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" id="nav-dashboard"> <i class="bi bi-speedometer2"></i> Dashboard</a>
+          <a href="{{ url_for('main.dashboard') }}" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" id="nav-dashboard"> <i class="bi bi-speedometer2"></i> Dashboard</a>
         </li>
         <li class="nav-item">
-          <a href="{{ url_for('disk_management') }}" class="nav-link {% if active_page == 'disk' %}active{% endif %}" id="nav-disk"> <i class="bi bi-hdd-rack-fill"></i> Disk Management</a>
+          <a href="{{ url_for('main.disk_management') }}" class="nav-link {% if active_page == 'disk' %}active{% endif %}" id="nav-disk"> <i class="bi bi-hdd-rack-fill"></i> Disk Management</a>
         </li>
         <li class="nav-item">
           <a href="#" class="nav-link {% if active_page == 'network' %}active{% endif %}" id="nav-network"><i class="bi bi-link-45deg"></i> Network</a>
@@ -59,18 +59,17 @@
   </nav>
 
   <div id="page-content">
-
-    {% for t in tasks %}
-      {% if t %}
-        {% if t.failed %}
-            {% set callout_text = t.result %}
-            {% include "callout.error.html" %}
-        {% elif t.successful %}
-          {% set callout_text = t.result %}
-          {% include "callout.success.html" %}
-        {% endif %}
-      {% endif %}
-    {% endfor %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category,msg in messages %}
+            {% if category == "error" %}
+                {% set callout_text = msg %}
+                {% include "callout.error.html" %}
+            {% elif category == "success" %}
+              {% set callout_text = msg %}
+              {% include "callout.success.html" %}
+            {% endif %}
+        {% endfor %}
+    {% endwith %}
 
     {% block content %}
     {% endblock %}

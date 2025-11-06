@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import  Enum
+import json
 
 class DiskStatus(Enum):
     NEW       = 0
@@ -23,3 +24,13 @@ class Disk:
     size:int
     status:DiskStatus
     path:str
+
+    def serialise(this):
+        return {
+            "model": this.model,
+            "serial": this.serial,
+        }
+
+    def __eq__(this, other):
+        if (isinstance(other,Disk)):
+            return (other.model == this.model) and (other.serial == this.serial)

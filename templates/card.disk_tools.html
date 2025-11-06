@@ -1,0 +1,44 @@
+{% extends "card.html" %}
+
+{% block card_title %}<i class="bi bi-tools"></i> Disk Tools{% endblock %}
+
+{% block card_content %}
+
+<div class="container">
+    <div class="row g-3">
+        {% set btn_icon = "<i class=\"bi bi-search-heart\"></i>" | safe %}
+        {% set btn_title = "Verify" %}
+        {% set btn_link = url_for('main.scrub') %}
+        {% set btn_text = "Last verification: " ~ verify['last'] %}
+
+        {% if verify['ongoing'] %}
+          {% set btn_disabled=True %}
+          {% set btn_text = "Verification in progress..." %}
+        {% endif %}
+
+        {% include "element.square_btn.html" %}
+
+        {% if (redundancy) and (redundancy==True) %}
+
+            {% set btn_icon = "<i class=\"bi bi-database-fill-check\"></i>" | safe %}
+            {% set btn_title = "Check & Fix" %}
+
+            {% set btn_text = "Last check: " ~ check['last'] %}
+
+            {% if check['ongoing'] %}
+              {% set btn_disabled=True %}
+              {% set btn_text = "Checking & Fixing in progress..." %}
+            {% endif %}
+
+            {% include "element.square_btn.html" %}
+
+        {% endif %}
+
+    </div>
+</div>
+
+
+
+{% endblock %}
+
+

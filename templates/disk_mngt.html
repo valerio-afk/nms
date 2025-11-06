@@ -13,7 +13,9 @@
     </div>
 
     {% if pool %}
-        pool exists
+        <div class="row g-3 mt-1">
+            {% include "card.disk_tools.html" %}
+        </div>
     {% else %}
         <div class="row g-3 mt-1">
             {% include "card.new_array.html" %}

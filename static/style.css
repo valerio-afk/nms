@@ -96,3 +96,27 @@ span.help
     cursor: pointer;
     font-size:0.9em;
 }
+
+.square-btn {
+      aspect-ratio: 1 / 1; /* keeps it square */
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 1rem;
+      text-align: center;
+      background-color: #6764b5;
+ }
+
+.square-btn:hover{
+    background-color: #8986c5;
+}
+.square-btn .bi {
+  font-size: 3rem; /* big icon */
+  margin-bottom: 0.5rem;
+}
+
+.square-btn .btn-text
+{
+  text-align:left;
+}

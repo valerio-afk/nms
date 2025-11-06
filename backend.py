@@ -2,16 +2,16 @@ import os
 import hashlib
 import json
 import subprocess
+from xml.sax.handler import property_encoding
+
 import psutil
 import socket
 import platform
 import datetime
-
-from cmdl import CreateKey, ZPoolCreate, ZPoolLabelClear, ZFSCreate, CommandLineTransaction
+from collections import OrderedDict
+from cmdl import CreateKey, ZPoolCreate, ZPoolLabelClear, ZFSCreate, CommandLineTransaction, ZpoolScrub
 from constants import KEYPATH, POOLNAME, DATASETNAME
 from daemon import NetIOCounter
-from celery import Celery, Task
-from sqlalchemy.util import OrderedDict
 from disk import Disk,DiskStatus
 from iface import NetworkInterface
 from enum import Enum
@@ -100,9 +100,8 @@ class NMSBackend:
         path = path.lower()
         return [ t.task_id for t in this._celery_tasks if (not t.completed ) and path.startswith(t.page.lower()) ]
 
-    def pop_completed_tasks(this, path):
-        path = path.lower()
-        tasks = [t for t in this._celery_tasks if t.completed and path.startswith(t.page.lower())]
+    def pop_completed_tasks(this, path=None):
+        tasks = [t for t in this._celery_tasks if t.completed and ( (path is None) or path.lower().startswith(t.page.lower()))]
 
         for t in tasks:
             this._celery_tasks.remove(t)
@@ -127,8 +126,10 @@ class NMSBackend:
         for d in sata_disks:
             status = DiskStatus.NEW
 
-            if (d['path'] in pool_disks):
-                status=DiskStatus.ONLINE
+            for disk_in_pool in pool_disks:
+                if (disk_in_pool['model'] == d['model']) and (disk_in_pool['serial'] == d['serial']):
+                    status=DiskStatus.ONLINE
+                    break
 
             disk = Disk(name=d['name'],
                         model=d['model'],
@@ -143,11 +144,35 @@ class NMSBackend:
 
         return detected_disks
 
+    @property
+    def pool_name(this):
+        return this._cfg['pool'].get("name", None)
+
+    @property
+    def has_redundancy(this):
+        return this._cfg['pool'].get("redundancy",False)
+
+    @property
+    def has_encryption(this):
+        return False if this._cfg['pool'].get("encrypted", None) is None else True
+
+    @property
+    def has_compression(this):
+        return this._cfg['pool'].get("compressed", False)
+
+    # @property
+    # def get_verify_info(this):
+    #     return {k:v for k,v in this._cfg['pool'].get('tools',{}).get('verify',{}).items()}
+
+    @property
+    def get_scrub_info(this):
+        return {k: v for k, v in this._cfg['pool'].get('tools', {}).get('scrub', {}).items()}
+
     def get_pool_options(this):
         return [
-            ("Redundancy", this._cfg['pool'].get("redundancy",False)),
-            ("Encryption", False if this._cfg['pool'].get("encrypted", None) is None else True),
-            ("Compression", this._cfg['pool'].get("compressed", False)),
+            ("Redundancy", this.has_redundancy),
+            ("Encryption", this.has_encryption),
+            ("Compression", this.has_compression),
         ]
 
     def is_pool_configured(this):
@@ -196,7 +221,7 @@ class NMSBackend:
         if this.is_pool_configured():
             raise Exception("The disk array is already configured.")
 
-        disks = [d.path for d in this.get_disks() if d.status == DiskStatus.NEW]
+        disks = [d for d in this.get_disks() if d.status == DiskStatus.NEW]
 
         if redundancy and (len(disks)<3):
             raise Exception("You must have at least 3 disks connected to opt in redundancy.")
@@ -237,11 +262,26 @@ class NMSBackend:
         if (compression):
             this._cfg['pool']['compressed'] = True
 
-        this._cfg['pool']['disks'] = disks
+        this._cfg['pool']['disks'] = [d.serialise() for d in disks]
 
         this.flush_config()
 
+    def start_scrub(this):
+        pool = this.pool_name
 
+        if (pool is None):
+            raise Exception("No disk array found")
+
+        command = ZpoolScrub(pool)
+        output = command.execute()
+
+        if (output.returncode!=0):
+            raise Exception (output.stdout)
+
+        this._cfg['pool']['tools']['scrub']['ongoing'] = True
+        this._cfg['pool']['tools']['scrub']['last'] = datetime.datetime.now().timestamp()
+
+        this.flush_config()
 
 
     def create_default_config_file(this):
@@ -251,7 +291,17 @@ class NMSBackend:
                 "encrypted": None,
                 "redundancy": False,
                 "compressed": False,
-                "disks": {}
+                "disks": {},
+                "tools": {
+                    "scrub": {
+                        "ongoing" : False,
+                        "last" : None
+                    },
+                    # "verify": {
+                    #     "ongoing": False,
+                    #     "last": None
+                    # }
+                }
             },
             "dataset": None,
             "access":
@@ -279,18 +329,6 @@ class NMSBackend:
     def flush_config(this):
         with open(this.config_filename,"w") as h:
             json.dump(this._cfg,h,indent=4)
-
-def celery_init_app(app):
-    class FlaskTask(Task):
-        def __call__(self, *args: object, **kwargs: object) -> object:
-            with app.app_context():
-                return self.run(*args, **kwargs)
-
-    celery_app = Celery(app.name, task_cls=FlaskTask)
-    celery_app.config_from_object(app.config["CELERY"])
-    celery_app.set_default()
-    app.extensions["celery"] = celery_app
-    return celery_app
 
 
 BACKEND = NMSBackend()

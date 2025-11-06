@@ -78,6 +78,11 @@ class ZFSCreate(RevertableCommandLine):
 
         super().__init__(cmd,cmd_revert,sudo=True)
 
+class ZpoolScrub(RevertableCommandLine):
+    def __init__(this,tank):
+        super().__init__(['zpool','scrub',tank],sudo=True)
+
+
 class CreateKey(RevertableCommandLine):
     def __init__(this,key_path="/root/tank.key",bytes=32):
         cmd = [ "dd", "if=/dev/urandom", f"of={key_path}", f"bs={bytes}","count=1"]

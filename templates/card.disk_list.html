@@ -36,7 +36,7 @@
         </dl>
      {% else %}
 
-        {% set callout_text = "No disk array configuration found. Go to <a href=\""~ url_for('disk_management') ~"\">Disk Management</a> to configure your disk array." %}
+        {% set callout_text = "No disk array configuration found. Go to <a href=\""~ url_for('main.disk_management') ~"\">Disk Management</a> to configure your disk array." %}
         {% include "callout.warning.html" %}
 
 

@@ -1,0 +1,12 @@
+<div class="col-6">
+      {% if btn_link %} <form action="{{ btn_link }}" method="get"> {% endif %}
+      <button type="{{ 'submit' if btn_link else 'button' }}" class="btn w-100 square-btn" {% if btn_disabled %} disabled {% endif %}>
+          {{ btn_icon }}
+
+      <div class="btn-title fw-bold">{{ btn_title }}</div>
+        <div class="btn-text mt-3">
+            {{ btn_text }}
+        </div>
+      </button>
+    {% if btn_link %} </form> {% endif %}
+</div>
