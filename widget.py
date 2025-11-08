@@ -5,9 +5,6 @@ def render_widget(id,**kwargs):
     template_fname = f"card.{id}.html"
     css_fname = f"card.{id}.css"
 
-
-    print(kwargs)
-
     return render_template(template_fname,card_id=id,**kwargs), css_fname if os.path.exists(os.path.join(current_app.static_folder,css_fname)) else None
 
 

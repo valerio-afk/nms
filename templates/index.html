@@ -48,10 +48,10 @@
           <i class="bi bi-power"></i>
         </a>
         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenu">
-          <li><a class="dropdown-item" href="/logout">Logout</a></li>
+          <li><a class="dropdown-item" href="#" modal-confirm modal-message="Are you sure you want to log out?" modal-action="/logout">Logout</a></li>
           <li class="dropdown-divider"></li>
-          <li><a class="dropdown-item" href="/reboot">Reboot</a></li>
-          <li><a class="dropdown-item" href="/shutdown">Shutdown</a></li>
+          <li><a class="dropdown-item" href="#" modal-confirm modal-message="Are you sure you want to reboot the system?" modal-action="/reboot">Reboot</a></li>
+          <li><a class="dropdown-item" href="#" modal-confirm modal-message="Are you sure you want to power off the system?" modal-action="/shutdown">Shutdown</a></li>
         </ul>
       </li>
     </ul>
@@ -77,6 +77,8 @@
   </div>
 
   <script src="{{ url_for('static', filename='bootstrap-5.3.8-dist/js/bootstrap.bundle.min.js') }}"></script>
+
+  {% include "modal.confirm.html" %}
 
   <script>
     GlobalRefresher.start();

@@ -1,10 +1,8 @@
 import datetime
-import os
 from flask import render_template, redirect, url_for, jsonify, request, flash, Blueprint
-from disk import DiskStatus
 from widget import render_widget,get_widgets_html,get_widgets_css_files
 from random import randint
-from backend import BACKEND
+from backend import BACKEND, LogFilter
 from tasks import create_pool, NMSTask
 from decorators import wait
 
@@ -23,6 +21,9 @@ def widget_disk_overview():
     pool_options = BACKEND.get_pool_options() if BACKEND.is_pool_configured() else []
 
     return render_widget("disk_list",disks=disks,pool_options=pool_options)
+@bp.route('/async/widgets/disk_overview')
+def async_widget_disk_overview():
+    return widget_disk_overview()[0]
 
 @bp.route('/async/widgets/system_info')
 def async_widget_sys_info():
@@ -34,9 +35,7 @@ def widget_sys_info():
 
     return render_widget("system_info",system_info=sys_info)
 
-@bp.route('/async/widgets/disk_overview')
-def async_widget_disk_overview():
-    return widget_disk_overview()[0]
+
 
 def widget_network_overview():
     ifaces = BACKEND.iface_status()
@@ -66,7 +65,7 @@ def widget_access_overview():
 #
 #     return render_widget("disk_tools",redundancy = has_redundancy,verify=verify)
 
-@bp.route('/disk/tool/scrub')
+@bp.route('/disk/tool/scrub',methods=['POST'])
 def scrub():
     try:
         BACKEND.start_scrub()
@@ -162,6 +161,42 @@ def check_tasks():
     tasks = BACKEND.get_tasks_by_path(path)
 
     return jsonify(tasks)
+
+
+@bp.route("/reboot", methods=['POST'])
+def reboot():
+
+    try:
+        BACKEND.reboot()
+    except Exception as e:
+        flash(str(e),"error")
+
+    return redirect(url_for('main.dashboard'))
+
+
+@bp.route("/shutdown", methods=['POST'])
+def shutdown():
+    BACKEND.shutdown()
+
+    return redirect(url_for('main.dashboard'))
+
+
+@bp.route('/advanced/logs', defaults={'log': 'flask'})
+@bp.route('/advanced/logs/<string:log>')
+def system_logs(log):
+    log_filter = LogFilter.FLASK
+
+    match (log):
+        case "backend":
+            log_filter = LogFilter.BACKEND
+        case "celery":
+            log_filter = LogFilter.CELERY
+        case "sudo_daemon":
+            log_filter = LogFilter.SUDODAEMON
+
+    logs = BACKEND.get_logs(log_filter)
+
+    return render_template("advanced.logs.html",active=log,log_html=logs)
 
 @bp.before_request
 def check_flash_messages_from_tasks():

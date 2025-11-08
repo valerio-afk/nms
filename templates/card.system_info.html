@@ -45,7 +45,7 @@
 {% endif %}
 
     <script>
-        GlobalRefresher.register("{{ card_id }}","http://localhost:5000/async/widgets/system_info");
+        GlobalRefresher.register("{{ card_id }}","{{ url_for('main.async_widget_sys_info') }}");
     </script>
 
 

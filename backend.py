@@ -7,18 +7,57 @@ import socket
 import platform
 import datetime
 from collections import OrderedDict
-from cmdl import CreateKey, ZPoolCreate, ZPoolLabelClear, ZFSCreate, RemoteCommandLineTransaction, ZpoolScrub
-from constants import KEYPATH, POOLNAME, DATASETNAME
+from cmdl import CreateKey, ZPoolCreate, ZPoolLabelClear, ZFSCreate, RemoteCommandLineTransaction, ZpoolScrub, Reboot, \
+    Shutdown, JournalCtl
+from constants import KEYPATH, POOLNAME, DATASETNAME,ANSI2HTML_MAP, ANSI_RE
 from flask_daemons import NetIOCounter
 from disk import Disk,DiskStatus
 from iface import NetworkInterface
 from enum import Enum
 
+from logging_utils import setup_logger
 from sudo_daemon import SOCK_PATH
 
 hash_password = lambda pwd : hashlib.sha1(pwd.encode()).hexdigest()
 
 __version__ = "0.1dev"
+
+
+
+def ansi_to_html(text):
+
+    # Keeps track of currently active classes: we will open and close spans.
+    def repl(match):
+        code = match.group('code')
+        if code == '' or code == '0':
+            # reset -> close all spans
+            return '</span>' * 10  # cheap way: close up to N open spans (extra closes are tolerated)
+        parts = code.split(';')
+        classes = []
+        for part in parts:
+            if part in ANSI2HTML_MAP:
+                classes.append(ANSI2HTML_MAP[part])
+        if not classes:
+            # unrecognized code -> no-op
+            return ''
+        class_str = ' '.join(classes)
+        return f'<span class="{class_str}">'
+    # Escape HTML special chars first, but keep newlines. We'll replace < and >.
+    # NOTE: we will rely on Jinja's |safe only after we do manual escaping here to avoid XSS.
+    esc = (text.replace('&', '&amp;')
+                .replace('<', '&lt;')
+                .replace('>', '&gt;'))
+    # Convert ANSI sequences into span tags
+    converted = ANSI_RE.sub(repl, esc)
+    # Ensure all spans closed at the end
+    converted += '</span>' * 10
+    return converted
+
+class LogFilter(Enum):
+    FLASK = 0
+    BACKEND = 1
+    CELERY = 2
+    SUDODAEMON = 3
 
 def get_cpu_name():
     with open("/proc/cpuinfo") as f:
@@ -39,6 +78,7 @@ class NMSBackend:
         this._cfg = {}
         this._celery_tasks = []
         this._daemons = {'net_counters':NetIOCounter()}
+        this._logger = setup_logger("NMS BACKEND")
 
         try:
             this.load_configuration_file()
@@ -109,10 +149,13 @@ class NMSBackend:
         return [t for t in tasks]
 
     def load_configuration_file(this):
+        this._logger.info(f"Loading configuration file `{this.config_filename}`")
         if os.path.exists(this.config_filename):
             with open(this.config_filename, "r") as h:
                 this._cfg = json.load(h)
+                this._logger.info(f"Configuration file `{this.config_filename}` loaded successfully")
         else:
+            this._logger.error(f"Configuration file `{this.config_filename}` not found")
             raise FileNotFoundError(f"Configuration file {this.config_filename} does not exist")
 
     def get_disks(this):
@@ -199,7 +242,12 @@ class NMSBackend:
             network_name = None
 
             try:
-                network_name = subprocess.check_output(["iwgetid", interface, "--raw"], encoding='utf-8').strip()
+                nmcli = ["nmcli", "-t", "-f", "GENERAL.CONNECTION", "device", "show", interface]
+                nmcli_output = subprocess.check_output(nmcli, encoding='utf-8').strip().split(":")
+
+                if (len(nmcli_output)==2):
+                    network_name = nmcli_output[1].strip()
+
             except subprocess.CalledProcessError:
                 pass
 
@@ -272,6 +320,31 @@ class NMSBackend:
 
         this.flush_config()
 
+    def reboot(this):
+
+        this._logger.info("Rebooting...")
+
+        try:
+            trans = RemoteCommandLineTransaction(socket.AF_UNIX,
+                                                 socket.SOCK_STREAM,
+                                                 SOCK_PATH, Reboot())
+
+            trans.run()
+        except Exception as e:
+            this._logger.error(f"Unable to reboot the system: {e}")
+
+    def shutdown(this):
+        this._logger.info("Shutting down...")
+
+        try:
+            trans = RemoteCommandLineTransaction(socket.AF_UNIX,
+                                                 socket.SOCK_STREAM,
+                                                 SOCK_PATH, Shutdown())
+
+            trans.run()
+        except Exception as e:
+            this._logger.error(f"Unable to shut down the system: {e}")
+
     def start_scrub(this):
         pool = this.pool_name
 
@@ -279,10 +352,17 @@ class NMSBackend:
             raise Exception("No disk array found")
 
         command = ZpoolScrub(pool)
-        output = command.execute()
+        trans = RemoteCommandLineTransaction(socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,command)
 
-        if (output.returncode!=0):
-            raise Exception (output.stdout)
+        output = trans.run()
+
+        if (len(output)!=1):
+            raise Exception("Unknown Error")
+
+        if (output[0]['returncode']!=0):
+            raise Exception (output[0]['stderr'])
 
         this._cfg['pool']['tools']['scrub']['ongoing'] = True
         this._cfg['pool']['tools']['scrub']['last'] = datetime.datetime.now().timestamp()
@@ -291,6 +371,7 @@ class NMSBackend:
 
 
     def create_default_config_file(this):
+        this._logger.info(f"Creating default configuration file")
         cfg = {
             "pool" : {
                 "name": None,
@@ -333,8 +414,39 @@ class NMSBackend:
         this.flush_config()
 
     def flush_config(this):
-        with open(this.config_filename,"w") as h:
-            json.dump(this._cfg,h,indent=4)
+        this._logger.info(f"Flushing configuration file `{this.config_filename}`")
+        try:
+            with open(this.config_filename,"w") as h:
+                json.dump(this._cfg,h,indent=4)
+                this._logger.info(f"Configuration file `{this.config_filename}` flushed correctly")
+        except Exception as e:
+            this._logger.error(f"Unable to flush the configuration file `{this.config_filename}`: {str(e)}")
+
+    def get_logs(this, what=LogFilter.FLASK):
+        grep = None
+        service = "nmswebapp.service"
+        match (what):
+            case LogFilter.CELERY:
+                service = "celeryworker.service"
+            case LogFilter.SUDODAEMON:
+                service = "sudodaemon.service"
+            case LogFilter.BACKEND:
+                grep = 'NMS BACKEND'
+
+        journalctl = JournalCtl(service,grep)
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            journalctl
+        )
+        output = trans.run()
+
+        if (len(output)==1):
+            return ansi_to_html(output[0]['stdout'])
+        else:
+            return None
 
 
 BACKEND = NMSBackend()

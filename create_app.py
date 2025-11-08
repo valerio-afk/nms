@@ -1,5 +1,6 @@
 from celery import Celery, Task
 from flask import Flask
+from flask_wtf import CSRFProtect
 
 from filters import human_readable_bytes, enabled_fmt,disk_charm
 from nms import bp
@@ -19,6 +20,8 @@ def create_flask_app():
     app.add_template_filter(disk_charm, "disk_charm")
 
     app.secret_key = "5dkD$RhJ2#y^%9nJyZMWsmR*aZZFB3z^jKgpr@X6dmgbgpRGHH4HEpstPHs&QDcW"
+
+    csrf = CSRFProtect(app)
 
     celery_init_app(app)
 

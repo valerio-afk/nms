@@ -1,0 +1,57 @@
+  <div class="modal fade" id="ConfirmModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Confirm</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <p id="ConfirmModalMessage"></p>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+
+        <form id="ConfirmModalForm" method="post" class="m-0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-danger" id="ConfirmModalBtn">Yes</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  // Modal element and Bootstrap Modal instance
+  var modalEl = document.getElementById('ConfirmModal');
+  if (!modalEl) return;
+  var bsModal = new bootstrap.Modal(modalEl, { backdrop: 'static' });
+
+  // Elements we will update
+  var messageEl = document.getElementById('ConfirmModalMessage');
+  var confirmModalForm = document.getElementById('ConfirmModalForm');
+
+  document.addEventListener('click', function (ev) {
+    var trigger = ev.target.closest('[modal-confirm]');
+    if (!trigger) return; // not a logout trigger
+
+    ev.preventDefault(); // don't follow the link
+
+    // read data attributes (use getAttribute to allow empty strings)
+    var message = trigger.getAttribute('modal-message') || 'Are you sure you want to log out?';
+    var action = trigger.getAttribute('modal-action'); // optional override
+
+    // set modal message
+    if (messageEl) messageEl.textContent = message;
+
+    // set form action if provided
+    if (action && confirmModalForm) {
+      confirmModalForm.action = action;
+    }
+
+    // show modal
+    bsModal.show();
+  });
+})();
+</script>

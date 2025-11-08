@@ -23,7 +23,7 @@
 
 
   <script>
-    GlobalRefresher.register("{{ card_id }}","http://localhost:5000/async/widgets/disk_usage");
+    GlobalRefresher.register("{{ card_id }}","{{ url_for('main.async_widget_disk_usage') }}");
   </script>
 
 {% endblock %}

@@ -22,7 +22,8 @@
 
 
   <script>
-    GlobalRefresher.register("{{ card_id }}","http://localhost:5000/async/widgets/network_overview");
+
+    GlobalRefresher.register("{{ card_id }}","{{ url_for('main.async_widget_network_overview') }}");
   </script>
 
 

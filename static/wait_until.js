@@ -24,6 +24,7 @@ class WaitUntil {
     this.path = path;
     this.endpoint = opts.endpoint || '/check_tasks';
     this.contentType = opts.contentType || 'application/json';
+    this.csrf_token = opts.csrf_token || null;
     this._pollTimer = null;
     this._stopped = false;
   }
@@ -38,7 +39,7 @@ class WaitUntil {
     try {
       const res = await fetch(this.endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': this.contentType },
+        headers: { 'Content-Type': this.contentType, 'X-CSRFToken': this.csrf_token },
         body: JSON.stringify({ path: this.path })
       });
 

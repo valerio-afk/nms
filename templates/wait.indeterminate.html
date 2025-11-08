@@ -13,7 +13,7 @@
 {% if refresh_to %}
 <script src="{{ url_for('static', filename='wait_until.js') }}"></script>
 <script>
-    const waiter = new WaitUntil('{{ refresh_to }}');
+    const waiter = new WaitUntil('{{ refresh_to }}', {csrf_token: '{{ csrf_token() }}' });
     waiter.startPolling(2000);
 </script>
 

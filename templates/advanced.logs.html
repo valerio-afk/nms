@@ -1,0 +1,37 @@
+{% extends "index.html" %}
+
+{% block title %}System Logs{% endblock %}
+
+{% block content %}
+
+<ul class="nav nav-tabs">
+  <li class="nav-item">
+    <a class="nav-link {% if active == 'flask' %} active {% endif %}" href="{{ url_for('main.system_logs',log='flask') }}"><i class="bi bi-window-sidebar"></i> Web App</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if active == 'backend' %} active {% endif %}" href="{{ url_for('main.system_logs',log='backend') }}"><i class="bi bi-gear-wide-connected"></i> Backend</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if active == 'celery' %} active {% endif %}" href="{{ url_for('main.system_logs',log='celery') }}"><i class="bi bi-list-task"></i> Worker Manager</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if active == 'sudo_daemon' %} active {% endif %}" href="{{ url_for('main.system_logs',log='sudo_daemon') }}"><i class="bi bi-terminal-fill"></i> System Manager</a>
+  </li>
+</ul>
+
+<div class="terminal-container">
+<pre class="ansi-viewport mb-0" aria-live="polite" role="log">
+    {{ log_html|safe }}
+</pre>
+</div>
+
+<script>
+  window.addEventListener('DOMContentLoaded', () => {
+    const terminal = document.querySelector('.terminal-container');
+    if (terminal) {
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+  });
+</script>
+
+{% endblock %}

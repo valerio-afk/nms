@@ -41,9 +41,8 @@ class RevertibleCommandLine(ABC):
         if (this._sudo):
             cmd = ["sudo"] + cmd
 
-        print(cmd)
 
-        output = subprocess.run(["ls", "-lah"],stdout=subprocess.PIPE, text=True)
+        output = subprocess.run(cmd,stdout=subprocess.PIPE, text=True)
         time.sleep(1)
 
         return output
@@ -149,6 +148,7 @@ class ZpoolScrub(ZPoolCommand):
 
     def to_dict(this):
         d = ZPoolCommand.to_dict(this)
+        del d['disks']
         d['pool'] = this._pool
 
         return d
@@ -326,3 +326,43 @@ class RemoteCommandLineTransaction(CommandLineTransaction):
 
 
 
+class Shutdown(RevertibleCommandLine):
+    def __init__(this):
+        super().__init__(['shutdown','-h','now'],sudo =True)
+
+    @staticmethod
+    def from_dict(_):
+        return Shutdown()
+
+
+class Reboot(RevertibleCommandLine):
+    def __init__(this):
+        super().__init__(['reboot'], sudo=True)
+
+    @staticmethod
+    def from_dict(_):
+        return Reboot()
+
+class JournalCtl(RevertibleCommandLine):
+    def __init__(this,service, grep=None):
+        this._service = service
+        this._grep = grep
+
+        cmd = ['journalctl','-u',service,'-o','cat']
+
+        if (grep is not None):
+            cmd.extend(['--grep',grep])
+
+        super().__init__(cmd,sudo=True)
+
+    def to_dict(this):
+        d = super().to_dict()
+
+        d['service'] = this._service
+        d['grep'] = this._grep
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return JournalCtl(serialisation.get('service',None),serialisation.get('grep',None))

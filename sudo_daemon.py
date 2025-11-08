@@ -1,19 +1,22 @@
 import os
+import grp
 import json
 import pwd
 import struct
 import socket
 from importlib import import_module
 from socketserver import UnixStreamServer, StreamRequestHandler
+from logging_utils import setup_logger
 
 from cmdl import LocalCommandLineTransaction
 
-SOCK_DIR = "/var/run/nms"
+SOCK_DIR = "/tmp"
 SOCK_FILE= "privileged_cmdl.sock"
 
 SOCK_PATH = os.path.join(SOCK_DIR,SOCK_FILE)
 
 ALLOWED_UID = None
+LOGGER = None
 
 
 def load_cmd_from_json(d):
@@ -62,42 +65,38 @@ def get_uid_for_user(username):
 
 class Handler(StreamRequestHandler):
     def handle(this):
-        # Obtain peer credentials via SO_PEERCRED (Linux)
-        # struct is three ints: pid, uid, gid
+        global LOGGER
+
         fmt = '3i'
         try:
+            LOGGER.info("Received new request - checking permissions")
             creds = this.request.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize(fmt))
             pid, uid, gid = struct.unpack(fmt, creds)
         except Exception as e:
-            #logging.warning("Failed to obtain SO_PEERCRED: %s", e)
+            LOGGER.warning(f"Failed to obtain SO_PEERCRED information: {str(e)}")
             this.wfile.write(json.dumps({"error": "auth_failed", "message": "Unable to determine request permissions"}).encode() + b'\n')
             return
 
-        #logging.info("connection from pid=%d uid=%d gid=%d", pid, uid, gid)
+        LOGGER.info("Request received from pid=%d uid=%d gid=%d", pid, uid, gid)
 
         # Basic auth check: only allow configured UID (and optionally GID)
         if uid != ALLOWED_UID:
-            #logging.warning("unauthorised uid %d (expected %d)", uid, ALLOWED_UID)
+            LOGGER.error(f"Unauthorised request received by {uid}. Discarding request")
             this.wfile.write(json.dumps({"error": "unauthenticated", "message": "Unauthorised user"}).encode() + b'\n')
             return
 
-        # Optional: verify the exe path for extra assurance (defense-in-depth)
-        try:
-            exe_path = os.readlink(f"/proc/{pid}/exe")
-            #logging.debug("peer exe: %s", exe_path)
-            # if you want to enforce a specific client binary, check exe_path here
-        except Exception:
-            exe_path = None
-
+        LOGGER.info("Parsing request")
         # Read a single JSON line (simple protocol)
         line = this.rfile.readline().decode('utf-8').strip()
         if not line:
+            LOGGER.warning("Request was empty")
             this.wfile.write(json.dumps({"error": "empty", "message": "No request"}).encode() + b'\n')
             return
 
         try:
             req = json.loads(line)
         except Exception:
+            LOGGER.error("Request didn't have a valid JSON format")
             this.wfile.write(json.dumps({"error": "bad_json", "message": "Malformed request"}).encode() + b'\n')
             return
 
@@ -106,44 +105,55 @@ class Handler(StreamRequestHandler):
             action = req['action']
             fn = ALLOWED_ACTIONS[action]
         except Exception:
+            LOGGER.error(f"Invalid action `{action}` received. Discarding request")
             this.wfile.write(json.dumps({"error": "invalid_action", "message": f"Action `{action}` is not valid"}).encode() + b'\n')
             return
 
 
         try:
-            output = fn(**req.get('args',{}))
+            args = req.get('args',{})
+            parsed_args = ",".join([ f"{k}={v}" for k,v in args.items() ])
+
+            LOGGER.info(f"Executing action `{action}` with the following arguments: {parsed_args}")
+
+
+            output = fn(**args)
             this.wfile.write(json.dumps(output).encode() + b"\n")
                 #logging.warning("action %s rejected: %s", action, message)
         except Exception as e:
-            #logging.exception("action handler failed")
+            LOGGER.error(f"Failed action `{action}`: {str(e)}")
             this.wfile.write(json.dumps({"error": "handler_error", "message": f"Error occurred for `{action}`: {str(e)}"}).encode() + b"\n")
             raise e
 
 
 def run_server(allowed_username="www-data"):
-    global ALLOWED_UID
-    # set allowed UID from username
+    global ALLOWED_UID, LOGGER
+    LOGGER = setup_logger("SUDO DAEMON")
+
     ALLOWED_UID = get_uid_for_user(allowed_username)
 
-    # ensure socket dir exists with correct perms
-    os.makedirs(SOCK_DIR, exist_ok=True)
-    #os.chown(SOCK_DIR, 0, grp.getgrnam("pihelper").gr_gid)
-    os.chmod(SOCK_DIR, 0o777)
-
-    # remove stale socket
     try:
+        LOGGER.info(f"Deleting previously created socket file `{SOCK_PATH}`")
         os.unlink(SOCK_PATH)
     except FileNotFoundError:
+        LOGGER.info(f"Stale socket file `{SOCK_PATH}` not found - this is good.")
         pass
 
+    LOGGER.info(f"Opening new socket {SOCK_PATH}")
     server = UnixStreamServer(SOCK_PATH, Handler)
-    # ensure socket file has secure perms: root:pihelper 660
-    os.chmod(SOCK_PATH, 0o666)
-    #os.chown(SOCK_PATH, 0, grp.getgrnam("pihelper").gr_gid)
 
-    #logging.info("pi-helper listening on %s (allowed uid=%d)", SOCK_PATH, ALLOWED_UID)
+    socket_perm = 0o666
+    socket_uid = get_uid_for_user("sudodaemon")
+    socket_gid = grp.getgrnam("www-data").gr_gid
+
+    LOGGER.info(f"Opening new socket {SOCK_PATH}: UID {socket_uid} - GID {socket_gid} - PERMISSION {oct(socket_perm)}")
+
+    os.chmod(SOCK_PATH, socket_perm)
+    os.chown(SOCK_PATH, socket_uid, socket_gid)
+
+    LOGGER.info("Listening on %s (allowed uid=%d)", SOCK_PATH, ALLOWED_UID)
     server.serve_forever()
 
 
 if __name__ == "__main__":
-    run_server(allowed_username="tuttoweb")
+    run_server(allowed_username="www-data")
