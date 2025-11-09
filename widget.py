@@ -1,11 +1,15 @@
-from flask import render_template,current_app
+from flask import render_template,current_app, g
 import os
 
 def render_widget(id,**kwargs):
     template_fname = f"card.{id}.html"
     css_fname = f"card.{id}.css"
 
-    return render_template(template_fname,card_id=id,**kwargs), css_fname if os.path.exists(os.path.join(current_app.static_folder,css_fname)) else None
+    return render_template(template_fname,
+                           card_id=id,
+                           csp_nonce=g.csp_nonce,
+                           **kwargs
+                           ), css_fname if os.path.exists(os.path.join(current_app.static_folder,css_fname)) else None
 
 
 def get_widgets_html(widgets):

@@ -391,6 +391,7 @@ SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 log INFO "Creating systemd service for $SERVICE_NAME"
 
 # Write the service file (overwrite if exists)
+SECRET_KEY=$(openssl rand -hex 32)
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=NMS Web App Service
@@ -402,6 +403,7 @@ Type=simple
 User=www-data
 Group=www-data
 WorkingDirectory=/nms
+Environment="NMS_SECRET_KEY=${SECRET_KEY}"
 ExecStart=/opt/python3/bin/python app.py
 Restart=on-failure
 RestartSec=5s

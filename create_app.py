@@ -1,9 +1,15 @@
+import os
+
 from celery import Celery, Task
-from flask import Flask
+from flask import Flask, g
 from flask_wtf import CSRFProtect
+import base64
 
 from filters import human_readable_bytes, enabled_fmt,disk_charm
 from nms import bp
+
+def generate_nonce(length=16):
+    return base64.b64encode(os.urandom(length)).decode('ascii').rstrip('=')
 
 def create_flask_app():
     app = Flask("NMS")
@@ -19,7 +25,33 @@ def create_flask_app():
     app.add_template_filter(enabled_fmt, "enabled_fmt")
     app.add_template_filter(disk_charm, "disk_charm")
 
-    app.secret_key = "5dkD$RhJ2#y^%9nJyZMWsmR*aZZFB3z^jKgpr@X6dmgbgpRGHH4HEpstPHs&QDcW"
+    app.secret_key = os.environ.get("NMS_SECRET_KEY")
+
+    @app.before_request
+    def set_csp_nonce():
+        # store nonce for templates
+        g.csp_nonce = generate_nonce()
+
+    @app.after_request
+    def add_csp_header(response):
+        nonce = getattr(g, 'csp_nonce', None)
+        if nonce is None:
+            return response
+
+        csp = (
+            "default-src 'none'; "
+            f"script-src 'self' 'nonce-{nonce}'; "
+            f"style-src 'self' 'nonce-{nonce}'; "
+            "connect-src 'self'; "
+            "img-src 'self' data:; "
+            "font-src 'self'; "
+            "object-src 'none'; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self';"
+        )
+        response.headers['Content-Security-Policy'] = csp
+        return response
 
     csrf = CSRFProtect(app)
 

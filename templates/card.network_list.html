@@ -21,8 +21,7 @@
 {% endif %}
 
 
-  <script>
-
+  <script nonce="{{ csp_nonce }}">
     GlobalRefresher.register("{{ card_id }}","{{ url_for('main.async_widget_network_overview') }}");
   </script>
 

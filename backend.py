@@ -7,14 +7,14 @@ import socket
 import platform
 import datetime
 from collections import OrderedDict
-from cmdl import CreateKey, ZPoolCreate, ZPoolLabelClear, ZFSCreate, RemoteCommandLineTransaction, ZpoolScrub, Reboot, \
-    Shutdown, JournalCtl
+from cmdl import CreateKey, ZPoolCreate, ZFSCreate, RemoteCommandLineTransaction, ZpoolScrub, Reboot, \
+    Shutdown, JournalCtl, SystemCtlRestart, ZpoolList, ZpoolStatus
 from constants import KEYPATH, POOLNAME, DATASETNAME,ANSI2HTML_MAP, ANSI_RE
-from flask_daemons import NetIOCounter
+from flask_daemons import NetIOCounter, ScrubStateChecker
 from disk import Disk,DiskStatus
 from iface import NetworkInterface
 from enum import Enum
-
+from flask import flash
 from logging_utils import setup_logger
 from sudo_daemon import SOCK_PATH
 
@@ -22,7 +22,8 @@ hash_password = lambda pwd : hashlib.sha1(pwd.encode()).hexdigest()
 
 __version__ = "0.1dev"
 
-
+def scrub_finished_hook():
+    flash("Disk array verification completed","success")
 
 def ansi_to_html(text):
 
@@ -77,7 +78,7 @@ class NMSBackend:
         this._config_file = config_file
         this._cfg = {}
         this._celery_tasks = []
-        this._daemons = {'net_counters':NetIOCounter()}
+        this._daemons = {'net_counters':NetIOCounter(),'scrub_checker':None}
         this._logger = setup_logger("NMS BACKEND")
 
         try:
@@ -86,7 +87,8 @@ class NMSBackend:
             this.create_default_config_file()
 
         for daemon in this._daemons.values():
-            daemon.start()
+            if (daemon is not None):
+                daemon.start()
 
     @property
     def config_filename(this):
@@ -192,6 +194,31 @@ class NMSBackend:
         return this._cfg['pool'].get("name", None)
 
     @property
+    def get_pool_capacity(this):
+        if (not this.is_pool_configured()):
+            return None
+
+        zpool_list = ZpoolList(this.pool_name)
+
+        output = zpool_list.execute()
+
+        if (output.returncode == 0):
+            d = json.loads(output.stdout)
+
+            pool_properties = d.get('pools',{}).get(this.pool_name,{}).get('properties',None)
+
+            if (pool_properties is not None):
+                return {
+                    "used": int(pool_properties.get('allocated',{}).get('value',0)),
+                    "total": int(pool_properties.get('size', {}).get('value', 0))
+                }
+            else:
+                raise Exception(f"Unable to read disk array capacity information: unknown error")
+        else:
+            raise Exception(f"Unable to read disk array capacity information: {output.returncode}")
+
+
+    @property
     def has_redundancy(this):
         return this._cfg['pool'].get("redundancy",False)
 
@@ -286,7 +313,9 @@ class NMSBackend:
         poolname = POOLNAME
         datasetname = DATASETNAME
 
-        commands.append(ZPoolLabelClear(disks_path))
+        # for dev in disks_path:
+        #     commands.append(ZPoolLabelClear(dev))
+
         commands.append(ZPoolCreate(disks_path,redundancy,enc_key,compression,poolname))
         commands.append(ZFSCreate(poolname,datasetname))
 
@@ -369,6 +398,31 @@ class NMSBackend:
 
         this.flush_config()
 
+    def get_last_scrub_report(this):
+        output = ZpoolStatus(this.pool_name).execute()
+
+
+        if (output.returncode == 0):
+            d = json.loads(output.stdout)
+            scan_stats = d.get('pools', {}).get(this.pool_name, {}).get('scan_stats', {})
+
+            if (scan_stats.get('function', "") == "SCRUB"):
+                this._logger.warning("SONO QUI 3")
+                started = int(scan_stats.get('start_time', -1))
+                ended = int(scan_stats.get('end_time', -1))
+                errors = scan_stats.get('errors', "-")
+
+                started = datetime.datetime.fromtimestamp(started).strftime("%c") if started >=0 else "-"
+                ended = datetime.datetime.fromtimestamp(ended).strftime("%c") if ended >= 0 else "-"
+
+                return {
+                    'Started at': started,
+                    'Ended at': ended,
+                    "Errors": errors
+                }
+
+        return None
+
 
     def create_default_config_file(this):
         this._logger.info(f"Creating default configuration file")
@@ -391,22 +445,24 @@ class NMSBackend:
                 }
             },
             "dataset": None,
-            "access":
-                {
-                    "login":
-                        {
-                            "username": "afk",
-                            "password": hash_password("admin"),
-                        },
-                    "services":
-                        {
-                            "sftp": False,
-                            "ssh": False,
-                            "nfs": False,
-                            "smb": False,
-                            "web": False,
-                        }
-                }
+            "access": {
+                "login":
+                    {
+                        "username": "afk",
+                        "password": hash_password("admin"),
+                    },
+                "services":
+                    {
+                        "sftp": False,
+                        "ssh": False,
+                        "nfs": False,
+                        "smb": False,
+                        "web": False,
+                    }
+            },
+            "systemd": {
+                "services": ['nmswebapp.service','celeryworker.service','sudodaemon.service']
+            }
         }
 
         this._cfg = cfg
@@ -447,6 +503,37 @@ class NMSBackend:
             return ansi_to_html(output[0]['stdout'])
         else:
             return None
+
+    def restart_systemd_services(this):
+        cmds = [ SystemCtlRestart(service) for service in this._cfg['systemd'].get('services',[]) ]
+
+        if (len(cmds)>0):
+            trans = RemoteCommandLineTransaction(
+                socket.AF_UNIX,
+                socket.SOCK_STREAM,
+                SOCK_PATH,
+                *cmds
+            )
+
+            trans.run()
+
+    def check_scrub_status(this):
+        if (this._cfg['pool']['tools']['scrub']['ongoing'] == True):
+            daemon = this._daemons['scrub_checker']
+
+            if (daemon is not None):
+                if (not daemon.is_running):
+                    this._cfg['pool']['tools']['scrub']['ongoing'] = False
+                    this.flush_config()
+                    this._daemons['scrub_checker'] = None
+                    this._logger.info(f"Scrub checker thread terminated {daemon.completion_handler}")
+                    scrub_finished_hook()
+            else:
+                daemon = ScrubStateChecker(this.pool_name)
+                this._daemons['scrub_checker'] = daemon
+                daemon.start()
+                this._logger.info("Scrub checker thread started")
+
 
 
 BACKEND = NMSBackend()

@@ -1,7 +1,12 @@
 <div class="col-6">
       {% if btn_link %}
-      <form action="{{ btn_link }}" method="POST">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {% if not btn_method %}
+            {% set btn_method = 'POST' %}
+          {% endif %}
+      <form action="{{ btn_link }}" method="{{ btn_method }}">
+          {% if btn_method.upper() == 'POST' %}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {% endif %}
       {% endif %}
           <button type="{{ 'submit' if btn_link else 'button' }}" class="btn w-100 square-btn" {% if btn_disabled %} disabled {% endif %}>
               {{ btn_icon }}

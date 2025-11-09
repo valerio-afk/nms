@@ -15,6 +15,10 @@
     {% if pool %}
         <div class="row g-3 mt-1">
             {% include "card.disk_tools.html" %}
+
+            {% if scrub %}
+                {% include "card.scrub_report.html" %}
+            {% endif %}
         </div>
     {% else %}
         <div class="row g-3 mt-1">

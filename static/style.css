@@ -106,7 +106,27 @@ span.help
       padding: 1rem;
       text-align: center;
       background-color: #6764b5;
+      max-width: 200px;
+      max-height:200px;
  }
+
+.nav-tabs .nav-item a
+{
+    color:#ffffff;
+}
+
+.nav-tabs .nav-item a.active
+ {
+
+    background-color: #4E4A9B;
+ }
+
+ .nav-tabs .nav-item a:hover
+{
+    background-color: #6764b5;
+}
+
+
 
 .square-btn:hover{
     background-color: #8986c5;

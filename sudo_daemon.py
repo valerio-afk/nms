@@ -4,11 +4,11 @@ import json
 import pwd
 import struct
 import socket
+
 from importlib import import_module
 from socketserver import UnixStreamServer, StreamRequestHandler
 from logging_utils import setup_logger
-
-from cmdl import LocalCommandLineTransaction
+from cmdl import LocalCommandLineTransaction, CommandLineTransaction
 
 SOCK_DIR = "/tmp"
 SOCK_FILE= "privileged_cmdl.sock"
@@ -26,11 +26,20 @@ def load_cmd_from_json(d):
     obj = cls(**d)
     return obj
 
-#    except Exception:
-#        this.wfile.write(
-#            json.dumps({"error": "bad_cmd", "message": f"Command `{clsname}` is not authorised"}).encode() + b'\n')
 
-#        return
+def hook_pre_command(command, revert):
+    global LOGGER
+
+    cmd = command.command if not revert else command.revert_command
+    if (isinstance(cmd,list)):
+        LOGGER.info(f"Executing: {' '.join(cmd)}")
+
+
+def hook_post_command(output):
+    global LOGGER
+
+    LOGGER.info(f"Exit code : {output.returncode}")
+    LOGGER.info(f"Error : {output.stderr}")
 
 def run_commands(commands):
     cmds = []
@@ -40,10 +49,11 @@ def run_commands(commands):
         cmds.append(cmd)
 
     trans = LocalCommandLineTransaction(*cmds)
+    trans.add_hook_handler(hook_pre_command, CommandLineTransaction.Hooks.PRE_COMMAND)
+    trans.add_hook_handler(hook_post_command, CommandLineTransaction.Hooks.POST_COMMAND)
     outputs = trans.run()
 
     return outputs
-
 
 
 
@@ -142,7 +152,7 @@ def run_server(allowed_username="www-data"):
     LOGGER.info(f"Opening new socket {SOCK_PATH}")
     server = UnixStreamServer(SOCK_PATH, Handler)
 
-    socket_perm = 0o666
+    socket_perm = 0o660
     socket_uid = get_uid_for_user("sudodaemon")
     socket_gid = grp.getgrnam("www-data").gr_gid
 

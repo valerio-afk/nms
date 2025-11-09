@@ -1,7 +1,6 @@
 import datetime
-from flask import render_template, redirect, url_for, jsonify, request, flash, Blueprint
+from flask import render_template, redirect, url_for, jsonify, request, flash, Blueprint, g
 from widget import render_widget,get_widgets_html,get_widgets_css_files
-from random import randint
 from backend import BACKEND, LogFilter
 from tasks import create_pool, NMSTask
 from decorators import wait
@@ -9,7 +8,13 @@ from decorators import wait
 bp = Blueprint('main',__name__)
 
 def widget_disk_usage():
-    return render_widget("disk_usage",usage=randint(0,100))
+    pool_capacity = BACKEND.get_pool_capacity
+    used = pool_capacity['used']
+    total = pool_capacity['total']
+
+    capacity = int(used/total*1000)/10 if total > 0 else 0
+
+    return render_widget("disk_usage",used=used, total=total, capacity=capacity)
 
 @bp.route('/async/widgets/disk_usage')
 def async_widget_disk_usage():
@@ -95,26 +100,24 @@ def disk_management():
     disks = BACKEND.get_disks()
     pool = BACKEND.is_pool_configured()
 
-    #has_redundancy = BACKEND.has_redundancy
     verify = BACKEND.get_scrub_info
-    # check = BACKEND.get_check_info
-
 
     if (verify['last'] is None):
         verify['last'] = "Never"
     else:
         verify['last'] = datetime.datetime.fromtimestamp(verify['last']).strftime("%c")
 
-    # if (check['last'] is None):
-    #     check['last'] = "Never"
-    # else:
-    #     check['last'] = datetime.datetime.fromtimestamp(check['last']).strftime()
+    scrub_report = BACKEND.get_last_scrub_report()
+
+
 
     return render_template("disk_mngt.html",
                            active_page="disk",
                            disks=disks,
                            pool=pool,
-                           verify=verify
+                           verify=verify,
+                           scrub = scrub_report,
+                           csp_nonce=g.csp_nonce
                            # check=check
                            )
 
@@ -125,6 +128,7 @@ def new_pool_wait():
                            active_page="disk",
                            refresh_to="/disks",
                            extra_css=["pacman.css"],
+                           csp_nonce=g.csp_nonce,
                            waiting_message="The creation of a new disk array may take some time. Please wait...")
 
 
@@ -143,6 +147,7 @@ def dashboard():
 
     return render_template("dashboard.html",
                            active_page="dashboard",
+                           csp_nonce=g.csp_nonce,
                            widgets=get_widgets_html(dashboard_widgets),
                            extra_css = get_widgets_css_files(dashboard_widgets)
                            )
@@ -181,6 +186,16 @@ def shutdown():
     return redirect(url_for('main.dashboard'))
 
 
+@bp.route("/advanced")
+def advanced():
+    return render_template("advanced.html",csp_nonce=g.csp_nonce,)
+
+@bp.route("/advanced/restart-systemd",methods=['POST'])
+def restart_systemd():
+    flash("System services are being restarted. If the web interface glitched, that is a good sign it's working.")
+    BACKEND.restart_systemd_services()
+    return redirect(url_for("advanced"))
+
 @bp.route('/advanced/logs', defaults={'log': 'flask'})
 @bp.route('/advanced/logs/<string:log>')
 def system_logs(log):
@@ -196,7 +211,9 @@ def system_logs(log):
 
     logs = BACKEND.get_logs(log_filter)
 
-    return render_template("advanced.logs.html",active=log,log_html=logs)
+    return render_template("advanced.logs.html",active=log,log_html=logs,csp_nonce=g.csp_nonce,)
+
+
 
 @bp.before_request
 def check_flash_messages_from_tasks():
@@ -211,3 +228,9 @@ def check_flash_messages_from_tasks():
 
     if (reload_config):
         BACKEND.load_configuration_file()
+
+@bp.after_request
+def scrub_checker(response):
+
+    BACKEND.check_scrub_status()
+    return response

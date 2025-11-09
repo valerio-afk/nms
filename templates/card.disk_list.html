@@ -46,7 +46,7 @@
     {% include "warning.no_hdd.html" %}
 {% endif %}
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
       GlobalRefresher.register("{{ card_id }}","{{ url_for('main.async_widget_disk_overview') }}");
   </script>
 

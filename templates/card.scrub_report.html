@@ -1,0 +1,18 @@
+{% extends "card.html" %}
+
+{% block card_title %}<i class="bi bi-patch-check-fill"></i> Last Verification Report{% endblock %}
+
+{% block card_content %}
+
+
+<dl class="row">
+  {% for name,value in scrub.items() %}
+    <dt class="col-sm-4">{{ name }}:</dt>
+    <dd class="col-sm-8">{{ value }}</dd>
+  {% endfor %}
+</dl>
+
+
+{% endblock %}
+
+
