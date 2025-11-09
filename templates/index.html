@@ -28,7 +28,7 @@
           <a href="#" class="nav-link {% if active_page == 'network' %}active{% endif %}" id="nav-network"><i class="bi bi-link-45deg"></i> Network</a>
         </li>
         <li class="nav-item">
-          <a href="#" class="nav-link {% if active_page == 'access' %}active{% endif %}" id="nav-access"><i class="bi bi-terminal-fill"></i> Access</a>
+          <a href="{{ url_for('main.access') }}" class="nav-link {% if active_page == 'access' %}active{% endif %}" id="nav-access"><i class="bi bi-terminal-fill"></i> Access</a>
         </li>
         <li class="nav-item">
           <a href="{{ url_for('main.advanced') }}" class="nav-link {% if active_page == 'advanced' %}active{% endif %}" id="nav-advanced"><i class="bi bi-gear-fill"></i> Advanced</a>

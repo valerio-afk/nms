@@ -1,5 +1,9 @@
 import datetime
+
+from celery.worker.control import active
 from flask import render_template, redirect, url_for, jsonify, request, flash, Blueprint, g
+
+from forms import AccessServiceForm
 from widget import render_widget,get_widgets_html,get_widgets_css_files
 from backend import BACKEND, LogFilter
 from tasks import create_pool, NMSTask
@@ -186,9 +190,20 @@ def shutdown():
     return redirect(url_for('main.dashboard'))
 
 
+@bp.route("/access")
+def access():
+
+    ssh_enabled = False
+    ssh_form =  AccessServiceForm(enabled=ssh_enabled)
+    ssh_widget = render_widget("access",service="ssh",service_enabled=ssh_enabled,form=ssh_form)
+
+    widgets = [ssh_widget[0]]
+
+    return render_template("access.html",active_page="access",services=widgets)
+
 @bp.route("/advanced")
 def advanced():
-    return render_template("advanced.html",csp_nonce=g.csp_nonce,)
+    return render_template("advanced.html",csp_nonce=g.csp_nonce,active_page="advanced")
 
 @bp.route("/advanced/restart-systemd",methods=['POST'])
 def restart_systemd():
@@ -211,7 +226,7 @@ def system_logs(log):
 
     logs = BACKEND.get_logs(log_filter)
 
-    return render_template("advanced.logs.html",active=log,log_html=logs,csp_nonce=g.csp_nonce,)
+    return render_template("advanced.logs.html",active=log,log_html=logs,csp_nonce=g.csp_nonce,active_page="advanced")
 
 
 

@@ -35,3 +35,6 @@ ANSI2HTML_MAP = {
 }
 
 ANSI_RE = re.compile(r'\x1B\[(?P<code>[0-9;]*)m')
+
+PORT_MIN = 1
+PORT_MAX = 65535

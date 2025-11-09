@@ -8,7 +8,7 @@ import platform
 import datetime
 from collections import OrderedDict
 from cmdl import CreateKey, ZPoolCreate, ZFSCreate, RemoteCommandLineTransaction, ZpoolScrub, Reboot, \
-    Shutdown, JournalCtl, SystemCtlRestart, ZpoolList, ZpoolStatus
+    Shutdown, JournalCtl, SystemCtlRestart, ZpoolList, ZpoolStatus, ZFSGet, ZFSList, LSBLK
 from constants import KEYPATH, POOLNAME, DATASETNAME,ANSI2HTML_MAP, ANSI_RE
 from flask_daemons import NetIOCounter, ScrubStateChecker
 from disk import Disk,DiskStatus
@@ -162,7 +162,8 @@ class NMSBackend:
 
     def get_disks(this):
         pool_disks = this._cfg['pool'].get("disks",[])
-        lsblk_output = subprocess.run(["lsblk", "-J", "-b", "-o", "NAME,MODEL,SERIAL,TYPE,TRAN,SIZE,PATH"],stdout=subprocess.PIPE,text=True)
+        lsblk = LSBLK()
+        lsblk_output = lsblk.execute()
         lsblk_disks = json.loads(lsblk_output.stdout)
 
         sata_disks = [x for x in lsblk_disks['blockdevices'] if x['tran'] == 'sata']
@@ -186,6 +187,7 @@ class NMSBackend:
             detected_disks.append(disk)
 
         detected_disks.sort(key=lambda x : x.name)
+
 
         return detected_disks
 
@@ -407,7 +409,6 @@ class NMSBackend:
             scan_stats = d.get('pools', {}).get(this.pool_name, {}).get('scan_stats', {})
 
             if (scan_stats.get('function', "") == "SCRUB"):
-                this._logger.warning("SONO QUI 3")
                 started = int(scan_stats.get('start_time', -1))
                 ended = int(scan_stats.get('end_time', -1))
                 errors = scan_stats.get('errors', "-")
@@ -454,7 +455,7 @@ class NMSBackend:
                 "services":
                     {
                         "sftp": False,
-                        "ssh": False,
+                        "ssh": "ssh.service",
                         "nfs": False,
                         "smb": False,
                         "web": False,
@@ -467,7 +468,107 @@ class NMSBackend:
 
         this._cfg = cfg
 
+        this.init_pool()
+
         this.flush_config()
+
+    def init_pool(this):
+
+        pool_name = None
+        dataset_name = None
+
+        zfs_list = ZFSList()
+        zfs_list_output = zfs_list.execute()
+
+        if (zfs_list_output.returncode!=0):
+            return
+
+        zfs_list_d = json.loads(zfs_list_output.stdout)
+
+        if (len(zfs_list_d)==0):
+            return
+
+        datasets = zfs_list_d.get('datasets',{})
+
+        if (len(datasets)<2):
+            return
+
+        for dataset in datasets.keys():
+            if "/" in dataset:
+                pool_name,dataset_name = dataset.split("/")
+
+        if ((pool_name is None) or (dataset_name is None)):
+            return
+
+
+        status = ZpoolStatus(pool_name)
+        output = status.execute()
+
+        if (output.returncode==0):
+            d = json.loads(output.stdout)
+
+            vdevs = d.get("pools",{}).get(pool_name,{}).get("vdevs",{}).get(pool_name,{}).get("vdevs",{})
+
+            if (len(vdevs) > 0):
+                disks = [ sd for sd in vdevs.keys() ]
+                disks.sort()
+
+                disks_in_pool = []
+
+                lsblk = LSBLK()
+                lsblk_output = lsblk.execute()
+
+                if (lsblk_output.returncode != 0):
+                    return
+
+                lsblk_json = json.loads(lsblk_output.stdout)
+                block_devices = lsblk_json.get("blockdevices",{})
+
+                if (len(block_devices)==0):
+                    return
+
+                for dev in disks:
+                    for dev_info in block_devices:
+                        if dev == dev_info['name']:
+                            disk_dev= Disk(name=dev_info['name'],
+                                 model=dev_info['model'],
+                                 serial=dev_info['serial'],
+                                 size=dev_info['size'],
+                                 path=dev_info['path'],
+                                 status=DiskStatus.ONLINE
+                                 )
+
+                            disks_in_pool.append(disk_dev)
+
+                this._cfg['pool']['disks'] = [d.serialise() for d in disks_in_pool]
+
+
+                this._cfg['pool']['name'] = pool_name
+                this._cfg['dataset'] = dataset_name
+
+                pool_properties = ZFSGet(pool_name)
+                prop_output = pool_properties.execute()
+
+                if (prop_output.returncode == 0):
+                    d_prop = json.loads(prop_output.stdout)
+                    pool_properties = d_prop.get('datasets',{}).get(pool_name,{}).get("properties",{})
+                    if (len(pool_properties) > 0):
+                        # TODO redundancy
+                        # check compression
+                        this._cfg['pool']['compressed'] = True if (pool_properties['compression']['value'].lower() != "off") else False
+                        # check for encryption
+                        enc_enabled = pool_properties['encryption']['value'].lower() != "off"
+
+                        if (enc_enabled):
+                            key_location = pool_properties['keylocation']['value']
+                            if key_location.startswith("file://"):
+                                key_location = key_location[len("file://"):]
+
+                            this._cfg['pool']['encrypted'] = key_location
+
+
+
+
 
     def flush_config(this):
         this._logger.info(f"Flushing configuration file `{this.config_filename}`")

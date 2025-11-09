@@ -1,0 +1,15 @@
+{% extends "index.html" %}
+
+{% block title %}Access Services{% endblock %}
+
+{% block content %}
+
+{% if services %}
+    <div class="row g-3">
+        {% for card in services %}
+            {{ card | safe }}
+        {% endfor %}
+    </div>
+{% endif %}
+
+{% endblock %}

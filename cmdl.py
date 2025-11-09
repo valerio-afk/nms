@@ -148,7 +148,9 @@ class ZpoolJsonSubCommand(ZPoolCommand):
         this._pool = pool
 
         this.append(['-p', '-j'])
-        this.append(this._pool)
+
+        if (pool is not None):
+            this.append(this._pool)
 
     def to_dict(this):
         d = super().to_dict()
@@ -185,14 +187,44 @@ class ZpoolStatus(ZpoolJsonSubCommand):
     def __init__(this, pool):
         super().__init__(subcommand="status",pool=pool,sudo=False)
 
+class ZpoolGet(ZpoolJsonSubCommand):
+    def __init__(this, pool):
+        super().__init__(subcommand="get",pool=None,sudo=False)
+        this._pool = pool
+
+        this.append(["all", pool])
+
+
+
 class ZFSCommand(RevertibleCommandLine):
     def __init__(this, subcommand,**kwargs):
         this._disks = None
         cmd = ["zfs", subcommand]
-
-        kwargs['sudo'] = True
         super().__init__(cmd,**kwargs)
 
+
+class ZFSGet(ZFSCommand):
+    def __init__(this, pool):
+        super().__init__("get", sudo=False)
+        this.append(['-p','-j','all','tank'])
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['pool'] = this._pool
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ZFSGet(serialisation.get('pool',None))
+
+class ZFSList(ZFSCommand):
+    def __init__(this):
+        super().__init__("list", sudo=False)
+        this.append(['-p','-j'])
+
+    @staticmethod
+    def from_dict(_):
+        return ZFSList()
 
 class ZFSCreate(ZFSCommand):
 
@@ -219,6 +251,8 @@ class ZFSCreate(ZFSCommand):
     @staticmethod
     def from_dict(serialisation):
         return ZFSCreate(serialisation.get('pool',None),serialisation.get('dataset',None))
+
+
 
 
 class CreateKey(RevertibleCommandLine):
@@ -445,3 +479,13 @@ class SystemCtlRestart(RevertibleCommandLine):
     @staticmethod
     def from_dict(serialisation):
         return SystemCtlRestart(serialisation.get('service',None))
+
+
+class LSBLK(RevertibleCommandLine):
+
+    def __init__(this):
+        super().__init__(command=["lsblk", "-J", "-b", "-o", "NAME,MODEL,SERIAL,TYPE,TRAN,SIZE,PATH"],sudo=False)
+
+    @staticmethod
+    def from_dict(_):
+        return LSBLK
