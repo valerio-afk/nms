@@ -4,7 +4,7 @@
 
 {% block card_content %}
 
-<form method="POST">
+<form action="{{ url_for('main.change_access_settings',service=service) }}" method="POST">
     {{ form.hidden_tag() }}
 
     <div class="mb-3 row">
@@ -25,6 +25,13 @@
       <div class="col-sm-4 col-form-label">{{ form.password.label }}</div>
       <div class="col-sm-8">
         {{ form.password(class="form-control") }}
+      </div>
+    </div>
+
+        <div class="mb-3 row">
+      <div class="col-sm-4 col-form-label">{{ form.confirm_password.label }}</div>
+      <div class="col-sm-8">
+        {{ form.confirm_password(class="form-control") }}
       </div>
     </div>
 

@@ -8,15 +8,16 @@ import platform
 import datetime
 from collections import OrderedDict
 from cmdl import CreateKey, ZPoolCreate, ZFSCreate, RemoteCommandLineTransaction, ZpoolScrub, Reboot, \
-    Shutdown, JournalCtl, SystemCtlRestart, ZpoolList, ZpoolStatus, ZFSGet, ZFSList, LSBLK
+    Shutdown, JournalCtl, SystemCtlRestart, ZpoolList, ZpoolStatus, ZFSGet, ZFSList, LSBLK, SystemCtlIsActive
 from constants import KEYPATH, POOLNAME, DATASETNAME,ANSI2HTML_MAP, ANSI_RE
 from flask_daemons import NetIOCounter, ScrubStateChecker
 from disk import Disk,DiskStatus
 from iface import NetworkInterface
 from enum import Enum
 from flask import flash
-from logging_utils import setup_logger
-from sudo_daemon import SOCK_PATH
+from nms_utils import setup_logger
+from constants import SOCK_PATH
+from services import SERVICES
 
 hash_password = lambda pwd : hashlib.sha1(pwd.encode()).hexdigest()
 
@@ -81,14 +82,19 @@ class NMSBackend:
         this._daemons = {'net_counters':NetIOCounter(),'scrub_checker':None}
         this._logger = setup_logger("NMS BACKEND")
 
+
         try:
             this.load_configuration_file()
         except FileNotFoundError as e:
             this.create_default_config_file()
 
+        this._access_services = {key:SERVICES[key](**value) for key,value in this._cfg['access'].get("services",{}).items()}
+
         for daemon in this._daemons.values():
             if (daemon is not None):
                 daemon.start()
+
+
 
     @property
     def config_filename(this):
@@ -232,10 +238,6 @@ class NMSBackend:
     def has_compression(this):
         return this._cfg['pool'].get("compressed", False)
 
-    # @property
-    # def get_verify_info(this):
-    #     return {k:v for k,v in this._cfg['pool'].get('tools',{}).get('verify',{}).items()}
-
     @property
     def get_scrub_info(this):
         return {k: v for k, v in this._cfg['pool'].get('tools', {}).get('scrub', {}).items()}
@@ -288,10 +290,9 @@ class NMSBackend:
 
         return ifaces
 
+    @property
     def get_access_services(this):
-        services = this._cfg['access'].get('services',{})
-
-        return sorted([(name.upper(),enabled) for name,enabled in services.items()],key=lambda x:x[0])
+        return  this._access_services
 
     def create_pool(this,redundancy:bool, encryption:bool, compression:bool):
 
@@ -455,7 +456,10 @@ class NMSBackend:
                 "services":
                     {
                         "sftp": False,
-                        "ssh": "ssh.service",
+                        "ssh": {
+                            "service_name": "ssh.service",
+                            "sys_user": "afk",
+                        },
                         "nfs": False,
                         "smb": False,
                         "web": False,
@@ -604,6 +608,7 @@ class NMSBackend:
             return ansi_to_html(output[0]['stdout'])
         else:
             return None
+
 
     def restart_systemd_services(this):
         cmds = [ SystemCtlRestart(service) for service in this._cfg['systemd'].get('services',[]) ]

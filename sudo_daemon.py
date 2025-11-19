@@ -4,16 +4,13 @@ import json
 import pwd
 import struct
 import socket
-
+from constants import SOCK_PATH
 from importlib import import_module
 from socketserver import UnixStreamServer, StreamRequestHandler
-from logging_utils import setup_logger
+from nms_utils import setup_logger
 from cmdl import LocalCommandLineTransaction, CommandLineTransaction
 
-SOCK_DIR = "/tmp"
-SOCK_FILE= "privileged_cmdl.sock"
 
-SOCK_PATH = os.path.join(SOCK_DIR,SOCK_FILE)
 
 ALLOWED_UID = None
 LOGGER = None

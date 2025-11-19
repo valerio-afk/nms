@@ -1,12 +1,13 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, IntegerField,PasswordField,SubmitField
-from wtforms.validators import DataRequired,NumberRange
+from wtforms.validators import DataRequired,NumberRange, EqualTo
 from constants import PORT_MIN,PORT_MAX
 
 class AccessServiceForm(FlaskForm):
     port = IntegerField("Port",validators=[NumberRange(min=PORT_MIN,max=PORT_MAX,message=f"The port number must be between {PORT_MIN}-{PORT_MAX}")])
     username = StringField("Username",validators=[DataRequired()])
     password = PasswordField("Password", validators=[DataRequired()])
+    confirm_password = PasswordField("Confirm Password", validators=[DataRequired(),EqualTo('password', message='Passwords must match')])
     enable = SubmitField("Enable")
     update = SubmitField("Update")
     disable = SubmitField("Disable")

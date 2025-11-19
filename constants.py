@@ -1,4 +1,5 @@
 import re
+import os
 
 POOLNAME='tank'
 DATASETNAME='data'
@@ -38,3 +39,8 @@ ANSI_RE = re.compile(r'\x1B\[(?P<code>[0-9;]*)m')
 
 PORT_MIN = 1
 PORT_MAX = 65535
+
+SOCK_DIR = "/tmp"
+SOCK_FILE= "privileged_cmdl.sock"
+
+SOCK_PATH = os.path.join(SOCK_DIR,SOCK_FILE)

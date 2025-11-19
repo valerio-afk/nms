@@ -55,7 +55,10 @@ def async_widget_network_overview():
     return widget_network_overview()[0]
 
 def widget_access_overview():
-    services = BACKEND.get_access_services()
+    access_services = BACKEND.get_access_services
+
+    services = [(name.upper(),False) for name,obj in access_services.items()]
+
     return render_widget("access_list",services=services)
 
 
@@ -189,12 +192,37 @@ def shutdown():
 
     return redirect(url_for('main.dashboard'))
 
+@bp.route("/access/update/<string:service>",methods=['POST'])
+def change_access_settings(service):
+    serv = BACKEND.get_access_services.get(service,None)
+
+    if (serv is None):
+        flash(f"Service `{service}` not recognised","error")
+        return redirect(url_for("main.access"))
+
+    form = AccessServiceForm(serv.is_active)
+
+    if (form.validate_on_submit()):
+        raise Exception("All good")
+    elif (request.method == 'POST'):
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(error, "error")
+
+    return redirect(url_for("main.access"))
+
 
 @bp.route("/access")
 def access():
 
-    ssh_enabled = False
+    ssh_service = BACKEND.get_access_services['ssh']
+    ssh_enabled = ssh_service.is_active
+
     ssh_form =  AccessServiceForm(enabled=ssh_enabled)
+    ssh_form.port.default = ssh_service.get("port")
+    ssh_form.username.default = ssh_service.get("username")
+    ssh_form.process()
+
     ssh_widget = render_widget("access",service="ssh",service_enabled=ssh_enabled,form=ssh_form)
 
     widgets = [ssh_widget[0]]
@@ -209,7 +237,7 @@ def advanced():
 def restart_systemd():
     flash("System services are being restarted. If the web interface glitched, that is a good sign it's working.")
     BACKEND.restart_systemd_services()
-    return redirect(url_for("advanced"))
+    return redirect(url_for("main.advanced"))
 
 @bp.route('/advanced/logs', defaults={'log': 'flask'})
 @bp.route('/advanced/logs/<string:log>')

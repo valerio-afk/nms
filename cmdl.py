@@ -1,7 +1,7 @@
 import json
 import subprocess
 import socket
-import time
+from tempfile import tempdir
 import os
 from abc import abstractmethod, ABC
 from enum import Enum
@@ -43,7 +43,6 @@ class RevertibleCommandLine(ABC):
             cmd = ["sudo"] + cmd
 
         output = subprocess.run(cmd,stdout=subprocess.PIPE, text=True)
-        time.sleep(1)
 
         return output
 
@@ -465,14 +464,31 @@ class JournalCtl(RevertibleCommandLine):
     def from_dict(serialisation):
         return JournalCtl(serialisation.get('service',None),serialisation.get('grep',None))
 
-class SystemCtlRestart(RevertibleCommandLine):
-    def __init__(this,service):
+class SystemCtl(RevertibleCommandLine):
+    def __init__(this, service, *params):
         this._service = service
-        cmd = ['systemctl','restart',service]
-        super().__init__(cmd,sudo=True)
+        this._params = list(params)
+
+        cmd = ['systemctl'] + this._params + [service]
+
+        super().__init__(cmd, sudo=True)
 
     def to_dict(this):
         d = super().to_dict()
+        d['service'] = this._service
+        d['params'] = this._params
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return SystemCtlRestart(serialisation.get('service', None))
+
+class SystemCtlRestart(SystemCtl):
+    def __init__(this,service):
+        super().__init__(service,"restart")
+
+    def to_dict(this):
+        d = RevertibleCommandLine.to_dict(this)
         d['service'] = this._service
         return d
 
@@ -480,6 +496,18 @@ class SystemCtlRestart(RevertibleCommandLine):
     def from_dict(serialisation):
         return SystemCtlRestart(serialisation.get('service',None))
 
+class SystemCtlIsActive(SystemCtl):
+    def __init__(this,service):
+        super().__init__(service,"is-active")
+
+    def to_dict(this):
+        d = RevertibleCommandLine.to_dict(this)
+        d['service'] = this._service
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return SystemCtlIsActive(serialisation.get('service',None))
 
 class LSBLK(RevertibleCommandLine):
 
@@ -489,3 +517,51 @@ class LSBLK(RevertibleCommandLine):
     @staticmethod
     def from_dict(_):
         return LSBLK
+
+class ApplyPatch(RevertibleCommandLine):
+    BACK_EXT = ".bkp"
+
+    def __init__(this,patch_file,backup_file=None,sudo=True):
+        super().__init__(["patch","-p0"],sudo=sudo)
+        this._backup_file = backup_file
+        this._patch_file = patch_file
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['patch_file'] = this._patch_file
+        d['backup_file'] = this._backup_file
+        d['sudo'] = this._sudo
+
+        return d
+
+    def execute(this,revert=False):
+        return this._forward_exec() if not revert else this._backward_exec()
+
+    def _forward_exec(this):
+        if (this._backup_file is not None):
+            backup_filename = os.path.join(tempdir,f"{this._backup_file}{ApplyPatch.BACK_EXT}")
+            subprocess.run(["cp",this._backup_file,backup_filename])
+
+        cmd = this._command
+
+        if (this._sudo):
+            cmd = ["sudo"] + cmd
+
+        with open(this._patch_file,"r") as h:
+            return subprocess.run(cmd, stdout=subprocess.PIPE, stdin = h, text=True)
+
+    def _backward_exec(this):
+        if (this._backup_file is not None):
+            backup_filename = os.path.join(tempdir,f"{this._backup_file}{ApplyPatch.BACK_EXT}")
+            return subprocess.run(["cp",backup_filename,this._backup_file], stdout=subprocess.PIPE, text=True)
+        else:
+            return None
+
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ApplyPatch(
+            serialisation.get('patch_file',None),
+            serialisation.get('backup_file', None),
+            serialisation.get('sudo', True)
+        )
