@@ -8,14 +8,14 @@ import platform
 import datetime
 from collections import OrderedDict
 from cmdl import CreateKey, ZPoolCreate, ZFSCreate, RemoteCommandLineTransaction, ZpoolScrub, Reboot, \
-    Shutdown, JournalCtl, SystemCtlRestart, ZpoolList, ZpoolStatus, ZFSGet, ZFSList, LSBLK, SystemCtlIsActive
-from constants import KEYPATH, POOLNAME, DATASETNAME,ANSI2HTML_MAP, ANSI_RE
+    Shutdown, JournalCtl, SystemCtlRestart, ZpoolList, ZpoolStatus, ZFSGet, ZFSList, LSBLK
+from constants import KEYPATH, POOLNAME, DATASETNAME
 from flask_daemons import NetIOCounter, ScrubStateChecker
 from disk import Disk,DiskStatus
 from iface import NetworkInterface
 from enum import Enum
 from flask import flash
-from nms_utils import setup_logger
+from nms_utils import setup_logger, ansi_to_html
 from constants import SOCK_PATH
 from services import SERVICES
 
@@ -26,34 +26,6 @@ __version__ = "0.1dev"
 def scrub_finished_hook():
     flash("Disk array verification completed","success")
 
-def ansi_to_html(text):
-
-    # Keeps track of currently active classes: we will open and close spans.
-    def repl(match):
-        code = match.group('code')
-        if code == '' or code == '0':
-            # reset -> close all spans
-            return '</span>' * 10  # cheap way: close up to N open spans (extra closes are tolerated)
-        parts = code.split(';')
-        classes = []
-        for part in parts:
-            if part in ANSI2HTML_MAP:
-                classes.append(ANSI2HTML_MAP[part])
-        if not classes:
-            # unrecognized code -> no-op
-            return ''
-        class_str = ' '.join(classes)
-        return f'<span class="{class_str}">'
-    # Escape HTML special chars first, but keep newlines. We'll replace < and >.
-    # NOTE: we will rely on Jinja's |safe only after we do manual escaping here to avoid XSS.
-    esc = (text.replace('&', '&amp;')
-                .replace('<', '&lt;')
-                .replace('>', '&gt;'))
-    # Convert ANSI sequences into span tags
-    converted = ANSI_RE.sub(repl, esc)
-    # Ensure all spans closed at the end
-    converted += '</span>' * 10
-    return converted
 
 class LogFilter(Enum):
     FLASK = 0
@@ -89,12 +61,15 @@ class NMSBackend:
             this.create_default_config_file()
 
         this._access_services = {key:SERVICES[key](**value) for key,value in this._cfg['access'].get("services",{}).items()}
+        this._access_services['ssh'].add_change_hook("username",this._sys_username_changed)
 
         for daemon in this._daemons.values():
             if (daemon is not None):
                 daemon.start()
 
-
+    def _sys_username_changed(this,service):
+        this._cfg['access']['services']['ssh']['sys_user'] = service.get("username")
+        this.flush_config()
 
     @property
     def config_filename(this):

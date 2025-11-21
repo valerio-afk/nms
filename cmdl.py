@@ -1,17 +1,18 @@
 import json
 import subprocess
 import socket
-from tempfile import tempdir
+from tempfile import gettempdir
 import os
 from abc import abstractmethod, ABC
 from enum import Enum
 
 class RevertibleCommandLine(ABC):
-    def __init__(this, command, revert_command = None, tag=None, sudo=False):
+    def __init__(this, command, revert_command = None, tag=None, sudo=False,mask_output=False):
         this._command = command
         this._revert_command = revert_command
         this._tag = tag
         this._sudo = sudo
+        this._mask_output=mask_output
 
     def append(this,cmd):
         if (isinstance(cmd,list)):
@@ -30,6 +31,10 @@ class RevertibleCommandLine(ABC):
         return this._revert_command
 
     @property
+    def mask_output(this):
+        return this._mask_output
+
+    @property
     def tag(this):
         return this._tag
 
@@ -42,7 +47,7 @@ class RevertibleCommandLine(ABC):
         if (this._sudo):
             cmd = ["sudo"] + cmd
 
-        output = subprocess.run(cmd,stdout=subprocess.PIPE, text=True)
+        output = subprocess.run(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE, text=True)
 
         return output
 
@@ -355,7 +360,11 @@ class LocalCommandLineTransaction(CommandLineTransaction):
         for t in this._cmds:
             this._invoke_hooks(CommandLineTransaction.Hooks.PRE_COMMAND,command=t,revert=False)
             o = t.execute()
-            this._invoke_hooks(CommandLineTransaction.Hooks.POST_COMMAND, output=o)
+            masked_output = subprocess.CompletedProcess(args=o.args,
+                                        returncode=o.returncode,
+                                        stdout=o.stdout if not t.mask_output else "*"*5,
+                                        stderr=o.stderr if not t.mask_output else "*"*5)
+            this._invoke_hooks(CommandLineTransaction.Hooks.POST_COMMAND, output=masked_output)
 
             outputs.append(o)
 
@@ -465,13 +474,13 @@ class JournalCtl(RevertibleCommandLine):
         return JournalCtl(serialisation.get('service',None),serialisation.get('grep',None))
 
 class SystemCtl(RevertibleCommandLine):
-    def __init__(this, service, *params):
+    def __init__(this, service, *params,**kwargs):
         this._service = service
         this._params = list(params)
 
         cmd = ['systemctl'] + this._params + [service]
 
-        super().__init__(cmd, sudo=True)
+        super().__init__(cmd, **kwargs, sudo=True)
 
     def to_dict(this):
         d = super().to_dict()
@@ -509,6 +518,92 @@ class SystemCtlIsActive(SystemCtl):
     def from_dict(serialisation):
         return SystemCtlIsActive(serialisation.get('service',None))
 
+class SystemCtlUnmask(SystemCtl):
+    def __init__(this,service):
+        super().__init__(service,"unmask",revert_command=["systemctl","mask",service])
+
+    def to_dict(this):
+        d = RevertibleCommandLine.to_dict(this)
+        d['service'] = this._service
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return SystemCtlUnmask(serialisation.get('service',None))
+
+class SystemCtlMask(SystemCtl):
+    def __init__(this,service):
+        super().__init__(service,"mask",revert_command=["systemctl","unmask",service])
+
+    def to_dict(this):
+        d = RevertibleCommandLine.to_dict(this)
+        d['service'] = this._service
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return SystemCtlMask(serialisation.get('service',None))
+
+
+class SystemCtlEnable(SystemCtl):
+    def __init__(this, service):
+        super().__init__(service, "enable", revert_command=["systemctl", "disable", service])
+
+    def to_dict(this):
+        d = RevertibleCommandLine.to_dict(this)
+        d['service'] = this._service
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return SystemCtlEnable(serialisation.get('service', None))
+
+class SystemCtlDisable(SystemCtl):
+    def __init__(this, service):
+        super().__init__(service, "disable", revert_command=["systemctl", "enable", service])
+
+    def to_dict(this):
+        d = RevertibleCommandLine.to_dict(this)
+        d['service'] = this._service
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return SystemCtlDisable(serialisation.get('service', None))
+
+
+
+class SystemCtlStart(SystemCtl):
+    def __init__(this, service):
+        super().__init__(service, "start", revert_command=["systemctl", "stop", service])
+
+    def to_dict(this):
+        d = RevertibleCommandLine.to_dict(this)
+        d['service'] = this._service
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return SystemCtlStart(serialisation.get('service', None))
+
+class SystemCtlStop(SystemCtl):
+    def __init__(this, service):
+        super().__init__(service, "stop", revert_command=["systemctl", "start", service])
+
+    def to_dict(this):
+        d = RevertibleCommandLine.to_dict(this)
+        d['service'] = this._service
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return SystemCtlStop(serialisation.get('service', None))
+
+
+
+
+
+
 class LSBLK(RevertibleCommandLine):
 
     def __init__(this):
@@ -521,15 +616,15 @@ class LSBLK(RevertibleCommandLine):
 class ApplyPatch(RevertibleCommandLine):
     BACK_EXT = ".bkp"
 
-    def __init__(this,patch_file,backup_file=None,sudo=True):
-        super().__init__(["patch","-p0"],sudo=sudo)
-        this._backup_file = backup_file
+    def __init__(this, patch_file, file_to_patch=None, sudo=True):
+        super().__init__(["patch",file_to_patch],sudo=sudo)
+        this._file_to_patch = file_to_patch
         this._patch_file = patch_file
 
     def to_dict(this):
         d = super().to_dict()
         d['patch_file'] = this._patch_file
-        d['backup_file'] = this._backup_file
+        d['file_to_patch'] = this._file_to_patch
         d['sudo'] = this._sudo
 
         return d
@@ -538,9 +633,9 @@ class ApplyPatch(RevertibleCommandLine):
         return this._forward_exec() if not revert else this._backward_exec()
 
     def _forward_exec(this):
-        if (this._backup_file is not None):
-            backup_filename = os.path.join(tempdir,f"{this._backup_file}{ApplyPatch.BACK_EXT}")
-            subprocess.run(["cp",this._backup_file,backup_filename])
+        if (this._file_to_patch is not None):
+            backup_filename = os.path.join(gettempdir(),f"{this._file_to_patch}{ApplyPatch.BACK_EXT}")
+            subprocess.run(["cp", this._file_to_patch, backup_filename])
 
         cmd = this._command
 
@@ -548,12 +643,12 @@ class ApplyPatch(RevertibleCommandLine):
             cmd = ["sudo"] + cmd
 
         with open(this._patch_file,"r") as h:
-            return subprocess.run(cmd, stdout=subprocess.PIPE, stdin = h, text=True)
+            return subprocess.run(cmd, stdout=subprocess.PIPE,stderr=subprocess.PIPE, stdin = h, text=True)
 
     def _backward_exec(this):
-        if (this._backup_file is not None):
-            backup_filename = os.path.join(tempdir,f"{this._backup_file}{ApplyPatch.BACK_EXT}")
-            return subprocess.run(["cp",backup_filename,this._backup_file], stdout=subprocess.PIPE, text=True)
+        if (this._file_to_patch is not None):
+            backup_filename = os.path.join(gettempdir(),f"{this._file_to_patch}{ApplyPatch.BACK_EXT}")
+            return subprocess.run(["cp", backup_filename, this._file_to_patch], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         else:
             return None
 
@@ -562,6 +657,93 @@ class ApplyPatch(RevertibleCommandLine):
     def from_dict(serialisation):
         return ApplyPatch(
             serialisation.get('patch_file',None),
-            serialisation.get('backup_file', None),
+            serialisation.get('file_to_patch', None),
             serialisation.get('sudo', True)
+        )
+
+class UserModChangeUsername(RevertibleCommandLine):
+    def __init__(this,old,new):
+        cmd = ['usermod', '-l', new, old]
+        revert_cmd = ['usermod', '-l', old, new]
+        super().__init__(cmd,revert_cmd,sudo=True)
+
+        this._old = old
+        this._new = new
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['old'] = this._old
+        d['new'] = this._new
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return UserModChangeUsername(
+            serialisation.get('old',None),
+            serialisation.get('new', None),
+        )
+
+class GetEntShadow(RevertibleCommandLine):
+    def __init__(this,username):
+        cmd = ['getent','shadow',username]
+        this._username = username
+
+        super().__init__(cmd,sudo=True,mask_output=True)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['username'] = this._username
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return GetEntShadow(
+            serialisation.get('username',None),
+        )
+
+class ChPasswd(RevertibleCommandLine):
+    def __init__(this,username,new_password,old_shadow=None):
+        cmd = ['chpasswd']
+
+        super().__init__(cmd,sudo=True)
+
+        this._username = username
+        this._new_password = new_password
+        this._old_shadow = old_shadow
+
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['username'] = this._username
+        d['$new_password'] = this._new_password
+        d['$old_shadow'] = this._old_shadow
+
+        return d
+
+    def execute(this,revert=False):
+        cmd = this.command
+        if revert:
+            if (this._old_shadow is None):
+                return
+            else:
+                cmd.append("-e")
+
+        if (this._sudo):
+            cmd.insert(0,"sudo")
+
+
+        input = f"{this._username}:{this._old_shadow if revert else this._new_password}"
+
+        output = subprocess.run(cmd,input=input,stdout=subprocess.PIPE,stderr=subprocess.PIPE, text=True)
+
+        return output
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ChPasswd(
+            serialisation.get('username',None),
+            serialisation.get('$new_password', None),
+            serialisation.get('$old_shadow', None),
         )

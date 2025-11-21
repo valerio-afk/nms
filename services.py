@@ -1,7 +1,9 @@
 import os.path
 import tempfile
 from abc import abstractmethod
-from cmdl import RemoteCommandLineTransaction, SystemCtlIsActive, ApplyPatch
+from cmdl import RemoteCommandLineTransaction, SystemCtlIsActive, ApplyPatch, UserModChangeUsername, GetEntShadow, \
+    ChPasswd, SystemCtlUnmask, SystemCtlEnable, SystemCtlStart, SystemCtlDisable, SystemCtlMask, SystemCtlStop, \
+    SystemCtlRestart
 from constants import SOCK_PATH
 from nms_utils import make_diff, read_lines_from_file
 from pathlib import Path
@@ -11,6 +13,23 @@ class SystemService:
     def __init__(this,service_name, config_file=None):
         this._service_name = service_name
         this._config_file = config_file
+        this._change_hooks = {}
+
+    def add_change_hook(this,property,callback):
+        hooks = this._change_hooks.get(property,[])
+        if (callback not in hooks):
+            hooks.append(callback)
+
+        this._change_hooks[property] = hooks
+
+    def remove_change_hook(this,property,callback):
+        hooks = this._change_hooks.get(property, [])
+        try:
+            hooks.remove(callback)
+        except ValueError:
+            ...
+
+        this._change_hooks[property] = hooks
 
     @property
     def name(this):
@@ -32,6 +51,11 @@ class SystemService:
     def set(this, property, value):
         getattr(this,f"set_{property}")(value)
 
+        hooks = this._change_hooks.get(property,[])
+
+        for callback in hooks:
+            callback(this)
+
     @property
     def is_active(this):
         cmd = SystemCtlIsActive(this.name)
@@ -45,10 +69,48 @@ class SystemService:
         results = trans.run()
 
         if (len(results) == 1):
-            output = results[0]['stdout']
+            output = results[0]['stdout'].strip()
             return output == "active"
         else:
             return False
+
+    def start(this):
+        cmds = [
+            SystemCtlUnmask(this.name),
+            SystemCtlEnable(this.name),
+            SystemCtlStart(this.name),
+        ]
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            *cmds
+        )
+
+        results = trans.run()
+
+        if (not trans.success):
+            raise Exception(f"The service `{this.name}` could not be started: {[x.get('stderr','') for x in results]}")
+
+    def stop(this):
+        cmds = [
+            SystemCtlStop(this.name),
+            SystemCtlDisable(this.name),
+            SystemCtlMask(this.name),
+        ]
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            *cmds
+        )
+
+        results = trans.run()
+
+        if (not trans.success):
+            raise Exception(f"The service `{this.name}` could not be started: {[x.get('stderr', '') for x in results]}")
 
 class SSHService(SystemService):
     port:int
@@ -105,7 +167,7 @@ class SSHService(SystemService):
 
         patch_text = make_diff(this.config_file, mod_lines)
 
-        patch_fname = os.path.join(tempfile.tempdir,f"sshd_config.patch")
+        patch_fname = os.path.join(tempfile.gettempdir(),f"sshd_config.patch")
         Path(patch_fname).write_text(patch_text, encoding="utf-8", errors="surrogateescape")
 
         cmd = ApplyPatch(patch_fname,this.config_file,sudo=True)
@@ -117,8 +179,92 @@ class SSHService(SystemService):
         )
 
         trans.run()
-
         os.remove(patch_fname)
+
+    def set_username(this,value):
+        cmd = UserModChangeUsername(this.get("username"),value)
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            cmd
+        )
+        output = trans.run()
+
+        if (len(output) == 1):
+            if (not trans.success):
+                raise Exception(f"Unable to change username: {output[0]['stderr']}")
+            else:
+                this._username = value
+
+    def set_password(this,value):
+        shadow_cmd = GetEntShadow(this.get("username"))
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            shadow_cmd
+        )
+        output = trans.run()
+
+        if (len(output)!=1):
+            raise Exception("Unable to retrieve the current password")
+
+        stdout_getent = output[0].get("stdout","").split(":",2)
+        uname = stdout_getent[0].strip()
+        shadow_password = stdout_getent[1].strip()
+
+        if (len(shadow_password) == 0):
+            raise Exception("Unable to retrieve the current password")
+
+        if (uname != this.get("username")):
+            raise Exception("Usernames don't match")
+
+        chpasswd = ChPasswd(uname,value,shadow_password)
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            chpasswd
+        )
+        output = trans.run()
+
+        if ((len(output)!=1) or (output[0].get("returncode",-1) != 0)):
+            raise Exception(f"Unable to change password for `{uname}`")
+
+    def _update_data(this,port,username,password):
+        if (port != this.get("port")):
+            this.set("port",port)
+        if (username != this.get("username")):
+            this.set("username",username)
+        if (len(password)!=0):
+            this.set("password",password)
+
+    def enable(this,port,username,password,**kwargs):
+        this._update_data(port,username,password)
+        this.start()
+
+    def disable(this,*args,**kwargs):
+        this.stop()
+
+    def update(this, port, username, password, **kwargs):
+        this._update_data(port, username, password)
+
+        cmd = SystemCtlRestart(this.name)
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            cmd
+        )
+        output = trans.run()
+
+        if (not trans.success):
+            raise Exception(f"{this.name} could not be restarted")
 
 
 

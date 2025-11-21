@@ -194,20 +194,33 @@ def shutdown():
 
 @bp.route("/access/update/<string:service>",methods=['POST'])
 def change_access_settings(service):
-    serv = BACKEND.get_access_services.get(service,None)
+    try:
+        serv = BACKEND.get_access_services.get(service,None)
 
-    if (serv is None):
-        flash(f"Service `{service}` not recognised","error")
-        return redirect(url_for("main.access"))
+        if (serv is None):
+            flash(f"Service `{service}` not recognised","error")
+            return redirect(url_for("main.access"))
 
-    form = AccessServiceForm(serv.is_active)
+        form = AccessServiceForm(serv.is_active)
 
-    if (form.validate_on_submit()):
-        raise Exception("All good")
-    elif (request.method == 'POST'):
-        for field, errors in form.errors.items():
-            for error in errors:
-                flash(error, "error")
+        if (form.validate_on_submit()):
+            form_action = request.form.get('action')
+            form_data = {k:v.data for k,v in form._fields.items()}
+            getattr(serv,form_action)(**form_data)
+
+            match(form_action):
+                case "enable":
+                    flash(f"Service { service.upper() } enabled successfully.","success")
+                case "disable":
+                    flash(f"Service {service.upper()} disabled successfully.", "success")
+
+
+        elif (request.method == 'POST'):
+            for field, errors in form.errors.items():
+                for error in errors:
+                    flash(str(error), "error")
+    except Exception as e:
+        flash(str(e),"error")
 
     return redirect(url_for("main.access"))
 
@@ -227,7 +240,7 @@ def access():
 
     widgets = [ssh_widget[0]]
 
-    return render_template("access.html",active_page="access",services=widgets)
+    return render_template("access.html",active_page="access",services=widgets,csp_nonce=g.csp_nonce)
 
 @bp.route("/advanced")
 def advanced():

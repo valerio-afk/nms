@@ -10,10 +10,31 @@ from socketserver import UnixStreamServer, StreamRequestHandler
 from nms_utils import setup_logger
 from cmdl import LocalCommandLineTransaction, CommandLineTransaction
 
-
-
 ALLOWED_UID = None
 LOGGER = None
+
+
+def sanitise_args(args, mask=False):
+    if isinstance(args, list):
+        return [sanitise_args(x, mask) for x in args]
+
+    if isinstance(args, dict):
+        out = {}
+        for k, v in args.items():
+            v = sanitise_args(v, mask)
+
+            if k.startswith("$"):
+                k = k[1:]
+                if mask:
+                    v = "*" * 5
+
+            out[k] = v
+
+        return out
+
+    return args
+
+
 
 
 def load_cmd_from_json(d):
@@ -36,6 +57,7 @@ def hook_post_command(output):
     global LOGGER
 
     LOGGER.info(f"Exit code : {output.returncode}")
+    LOGGER.info(f"Output : {output.stdout}")
     LOGGER.info(f"Error : {output.stderr}")
 
 def run_commands(commands):
@@ -119,12 +141,15 @@ class Handler(StreamRequestHandler):
 
         try:
             args = req.get('args',{})
-            parsed_args = ",".join([ f"{k}={v}" for k,v in args.items() ])
+            masked_args = sanitise_args(args,True)
+            sanitised_args = sanitise_args(args, False)
+
+
+            parsed_args = ",".join([f"{k}={v}" for k,v in masked_args.items() ])
 
             LOGGER.info(f"Executing action `{action}` with the following arguments: {parsed_args}")
 
-
-            output = fn(**args)
+            output = fn(**sanitised_args)
             this.wfile.write(json.dumps(output).encode() + b"\n")
                 #logging.warning("action %s rejected: %s", action, message)
         except Exception as e:
@@ -138,6 +163,8 @@ def run_server(allowed_username="www-data"):
     LOGGER = setup_logger("SUDO DAEMON")
 
     ALLOWED_UID = get_uid_for_user(allowed_username)
+
+    LOGGER.info(f"Current working directory: {os.getcwd()}")
 
     try:
         LOGGER.info(f"Deleting previously created socket file `{SOCK_PATH}`")

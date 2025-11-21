@@ -1,7 +1,8 @@
 import logging
+import os.path
 import sys
 from datetime import datetime
-from constants import ANSI_RESET, ANSI_COLOURS
+from constants import ANSI_RESET, ANSI_COLOURS,ANSI2HTML_MAP, ANSI_RE
 from pathlib import Path
 import difflib
 
@@ -34,6 +35,7 @@ def read_lines_from_file(path,):
 
 def make_diff(original_filename,modified_lines):
     orig_lines = read_lines_from_file(original_filename)
+
     diff_iter = difflib.unified_diff(
         orig_lines,
         modified_lines,
@@ -43,3 +45,31 @@ def make_diff(original_filename,modified_lines):
     )
     return "".join(diff_iter)
 
+def ansi_to_html(text):
+
+    # Keeps track of currently active classes: we will open and close spans.
+    def repl(match):
+        code = match.group('code')
+        if code == '' or code == '0':
+            # reset -> close all spans
+            return '</span>' * 10  # cheap way: close up to N open spans (extra closes are tolerated)
+        parts = code.split(';')
+        classes = []
+        for part in parts:
+            if part in ANSI2HTML_MAP:
+                classes.append(ANSI2HTML_MAP[part])
+        if not classes:
+            # unrecognized code -> no-op
+            return ''
+        class_str = ' '.join(classes)
+        return f'<span class="{class_str}">'
+    # Escape HTML special chars first, but keep newlines. We'll replace < and >.
+    # NOTE: we will rely on Jinja's |safe only after we do manual escaping here to avoid XSS.
+    esc = (text.replace('&', '&amp;')
+                .replace('<', '&lt;')
+                .replace('>', '&gt;'))
+    # Convert ANSI sequences into span tags
+    converted = ANSI_RE.sub(repl, esc)
+    # Ensure all spans closed at the end
+    converted += '</span>' * 10
+    return converted
