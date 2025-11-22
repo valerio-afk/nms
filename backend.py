@@ -2,6 +2,8 @@ import os
 import hashlib
 import json
 import subprocess
+from importlib import import_module
+
 import psutil
 import socket
 import platform
@@ -10,7 +12,7 @@ import base64
 from collections import OrderedDict
 from cmdl import CreateKey, ZPoolCreate, ZFSCreate, RemoteCommandLineTransaction, ZpoolScrub, Reboot, \
     Shutdown, JournalCtl, SystemCtlRestart, ZpoolList, ZpoolStatus, ZFSGet, ZFSList, LSBLK, ZFSLoadKey, ZFSMount, \
-    ZFSUnLoadKey, ZFSUnmount
+    ZFSUnLoadKey, ZFSUnmount, UserModChangeHomeDir
 from constants import KEYPATH, POOLNAME, DATASETNAME
 from flask_daemons import NetIOCounter, ScrubStateChecker
 from disk import Disk,DiskStatus
@@ -19,7 +21,7 @@ from enum import Enum
 from flask import flash
 from nms_utils import setup_logger, ansi_to_html
 from constants import SOCK_PATH
-from services import SERVICES
+import pwd
 
 hash_password = lambda pwd : hashlib.sha1(pwd.encode()).hexdigest()
 
@@ -62,8 +64,11 @@ class NMSBackend:
         except FileNotFoundError as e:
             this.create_default_config_file()
 
-        this._access_services = {key:SERVICES[key](**value) for key,value in this._cfg['access'].get("services",{}).items()}
-        this._access_services['ssh'].add_change_hook("username",this._sys_username_changed)
+
+
+        this._access_services={}
+
+        this._setup_access_services()
 
         for daemon in this._daemons.values():
             if (daemon is not None):
@@ -71,6 +76,39 @@ class NMSBackend:
 
         if (this.is_pool_configured() and (not this.is_mounted)):
             this.mount()
+
+    def _setup_access_services(this):
+        module = import_module("services")
+
+        for service,args in this._cfg.get("access",{}).get("services",{}).items():
+            try:
+                cls = getattr(module,f"{service.upper()}Service")
+                this._access_services[service] = cls(**args)
+            except AttributeError:
+                ... #service not implemented yet
+
+        this._access_services['ssh'].add_change_hook("username", this._sys_username_changed)
+        this._access_services['ftp'].add_pre_start_hook(this._set_pwd)
+
+    def _set_pwd(this, *args, **kwargs):
+        if (this.is_pool_configured()):
+            mp = this.mountpoint
+            username = this._cfg.get("access",{}).get("services").get("ssh",{}).get("sys_user",None)
+
+            if (username is not None):
+                current_pwd = pwd.getpwnam(username).pw_dir
+
+                if (current_pwd!=mp):
+                    cmd = UserModChangeHomeDir(username,current_pwd,mp)
+
+                    trans = RemoteCommandLineTransaction(
+                        socket.AF_UNIX,
+                        socket.SOCK_STREAM,
+                        SOCK_PATH,
+                        cmd
+                    )
+                    trans.run()
+
 
     def _sys_username_changed(this,service):
         this._cfg['access']['services']['ssh']['sys_user'] = service.get("username")
@@ -277,6 +315,29 @@ class NMSBackend:
         ifaces.sort(key=lambda x:x.name)
 
         return ifaces
+
+    @property
+    def mountpoint(this):
+        cmd = ZFSList(properties=['mountpoint'])
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            cmd
+        )
+        output = trans.run()
+
+        if (len(output) == 1):
+            d = json.loads(output[0].get("stdout", {}))
+            tank = this.pool_name
+            dataset = this.dataset_name
+
+            if ((tank is not None) and (dataset is not None)):
+                return d.get('datasets', {}).get(f"{tank}/{dataset}", {}).get("properties", {}).get("mountpoint",{}).get("value",None)
+            return False
+        else:
+            raise Exception("Could not be determined the mountpoint")
 
     @property
     def is_mounted(this):
@@ -573,7 +634,9 @@ class NMSBackend:
             "access": {
                 "services":
                     {
-                        "sftp": False,
+                        "ftp": {
+                            "service_name": "vsftpd.service"
+                        },
                         "ssh": {
                             "service_name": "ssh.service",
                             "sys_user": "afk",

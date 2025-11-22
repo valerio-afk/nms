@@ -789,6 +789,33 @@ class UserModChangeUsername(RevertibleCommandLine):
             serialisation.get('new', None),
         )
 
+class UserModChangeHomeDir(RevertibleCommandLine):
+    def __init__(this,username, old,new):
+        cmd = ['usermod', '-d', new, username]
+        revert_cmd = ['usermod', '-d', old, username]
+        super().__init__(cmd,revert_cmd,sudo=True)
+
+        this._old = old
+        this._new = new
+        this._username = username
+
+    def to_dict(this):
+        d = super().to_dict()
+
+        d['old'] = this._old
+        d['new'] = this._new
+        d['username'] = this._username
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return UserModChangeHomeDir(
+            serialisation.get("username",None),
+            serialisation.get('old',None),
+            serialisation.get('new', None),
+        )
+
 class GetEntShadow(RevertibleCommandLine):
     def __init__(this,username):
         cmd = ['getent','shadow',username]

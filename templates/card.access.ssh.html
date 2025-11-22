@@ -1,0 +1,103 @@
+{% extends "card.html" %}
+
+{% block card_title %}SSH <span class="float-end">{{ enabled | enabled_fmt | safe }}</span>{% endblock %}
+
+{% block card_content %}
+
+<form action="{{ url_for('main.change_access_settings',service='ssh') }}" method="POST">
+    {{ form.hidden_tag() }}
+
+    <div class="mb-3 row">
+      <div class="col-sm-4 col-form-label">{{ form.port.label }}</div>
+      <div class="col-sm-8">
+        {{ form.port(class="form-control") }}
+      </div>
+    </div>
+
+    <div class="mb-3 row">
+      <div class="col-sm-4 col-form-label">{{ form.username.label }}</div>
+      <div class="col-sm-8">
+        {{ form.username(class="form-control") }}
+      </div>
+    </div>
+
+    <div class="mb-3 row">
+      <div class="col-sm-4 col-form-label">{{ form.password.label }}</div>
+      <div class="col-sm-8">
+        {{ form.password(class="form-control") }}
+      </div>
+    </div>
+
+        <div class="mb-3 row">
+      <div class="col-sm-4 col-form-label">{{ form.confirm_password.label }}</div>
+      <div class="col-sm-8">
+        {{ form.confirm_password(class="form-control") }}
+      </div>
+    </div>
+
+    {% if enabled %}
+      <div class="row g-2">
+        <div class="col-6">
+            <button class="btn btn-success w-100" type="submit" name="action" value="update">Update settings</button>
+        </div>
+        <div class="col-6">
+            <button class="btn btn-danger w-100" type="submit" name="action" value="disable">Disable {{ service | upper }}</button>
+        </div>
+      </div>
+    {% else %}
+      <div class="row g-1">
+        <div class="col-12">
+            <button class="btn btn-success w-100" type="submit" name="action" value="enable">Enable {{ service | upper }}</button>
+        </div>
+    </div>
+    {% endif %}
+</form>
+
+<div class="mt-4">
+    <h4>Connecting using SSH</h4>
+    <div class="accordion" id="ssh_explanations">
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#unix" aria-expanded="true" aria-controls="unix">
+                    Linux & MacOS
+                </button>
+            </h2>
+            <div id="unix" class="accordion-collapse collapse" data-bs-parent="#ssh_explanations">
+                <div class="accordion-body">
+                    <ul>
+                        <li>Open the <strong>Terminal</strong> <i class="bi bi-terminal-fill"></i></li>
+                        <li>Type the following command <br/>
+                            <code>$ ssh {{ form.username.default }}@<strong>IP</strong> -p {{ form.port.default }} </code>
+                        </li>
+                        <li>You should replace <code>IP</code> with the IP address you can find in the Network tab.</li>
+                        <li>The first time you connect, please accept the fingerprint by typing <code>yes</code>.</li>
+                        <li>Enter the password when asked.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#windows" aria-expanded="true" aria-controls="windows">
+                    Windows
+                </button>
+            </h2>
+            <div id="windows" class="accordion-collapse collapse" data-bs-parent="#ssh_explanations">
+                <div class="accordion-body">
+                    <ul>
+                        <li>Download <a href="https://www.putty.org/index.html" target="_blank">PuTTY</a>.</li>
+                        <li>Once you have opened PuTTY, select <code>SSH</code> in <em>Connection type</em>.</li>
+                        <li>Insert the IP of this NAS (you can find in the Network tab) in <code>Hostname</code>.</li>
+                        <li>Change <code>Port</code> with <code>{{ form.username.default }}</code></li>
+                        <li>Press <code>Open</code></li>
+                        <li>You will be asked for your <code>login</code> (username) and <code>password</code>.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+

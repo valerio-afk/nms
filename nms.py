@@ -2,6 +2,9 @@ import datetime
 import os
 from flask import render_template, redirect, url_for, jsonify, request, flash, Blueprint, g, send_file
 from io import BytesIO
+
+from importlib import import_module
+
 from forms import AccessServiceForm
 from widget import render_widget,get_widgets_html,get_widgets_css_files
 from backend import BACKEND, LogFilter
@@ -56,7 +59,7 @@ def async_widget_network_overview():
 def widget_access_overview():
     access_services = BACKEND.get_access_services
 
-    services = [(name.upper(),False) for name,obj in access_services.items()]
+    services = [(name.upper(),obj.is_active) for name,obj in access_services.items()]
 
     return render_widget("access_list",services=services)
 
@@ -223,7 +226,10 @@ def change_access_settings(service):
             flash(f"Service `{service}` not recognised","error")
             return redirect(url_for("main.access"))
 
-        form = AccessServiceForm(serv.is_active)
+        forms = import_module("forms")
+        service_form_cls = getattr(forms, f"{service.upper()}ServiceForm")
+        service_enabled = serv.is_active
+        form = service_form_cls(enabled=service_enabled)
 
         if (form.validate_on_submit()):
             form_action = request.form.get('action')
@@ -250,17 +256,36 @@ def change_access_settings(service):
 @bp.route("/access")
 def access():
 
-    ssh_service = BACKEND.get_access_services['ssh']
-    ssh_enabled = ssh_service.is_active
+    # ssh_service = BACKEND.get_access_services['ssh']
+    # ssh_enabled = ssh_service.is_active
+    #
+    # ssh_form =  AccessServiceForm(enabled=ssh_enabled)
+    # ssh_form.port.default = ssh_service.get("port")
+    # ssh_form.username.default = ssh_service.get("username")
+    # ssh_form.process()
+    #
+    # ssh_widget = render_widget("access",service="ssh",service_enabled=ssh_enabled,form=ssh_form)
 
-    ssh_form =  AccessServiceForm(enabled=ssh_enabled)
-    ssh_form.port.default = ssh_service.get("port")
-    ssh_form.username.default = ssh_service.get("username")
-    ssh_form.process()
+    forms = import_module("forms")
+    widgets = []
+    mountpoint  = BACKEND.mountpoint
 
-    ssh_widget = render_widget("access",service="ssh",service_enabled=ssh_enabled,form=ssh_form)
+    for k,v in BACKEND.get_access_services.items():
+        service_form_cls = getattr(forms,f"{k.upper()}ServiceForm")
+        service_enabled = v.is_active
+        form = service_form_cls(enabled=service_enabled)
 
-    widgets = [ssh_widget[0]]
+        for prop in v.properties:
+            try:
+                attr = getattr(form,prop)
+                attr.default = v.get(prop)
+            except AttributeError:
+                ...
+
+        form.process()
+
+        widget = render_widget(f"access.{k}",enabled=service_enabled,form=form,mountpoint=mountpoint)
+        widgets.append(widget[0])
 
     return render_template("access.html",active_page="access",services=widgets,csp_nonce=g.csp_nonce)
 
