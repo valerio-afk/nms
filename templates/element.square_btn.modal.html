@@ -1,0 +1,15 @@
+<div class="col-6">
+          <button type="button"
+                  modal-confirm
+                  modal-action="{{ btn_link}}"
+                  modal-method="{{ btn_method }}"
+                  modal-message="{{ btn_message }}"
+                  class="btn w-100 square-btn" {% if btn_disabled %} disabled {% endif %}>
+              {{ btn_icon }}
+
+          <div class="btn-title fw-bold">{{ btn_title }}</div>
+            <div class="btn-text mt-3">
+                {{ btn_text }}
+            </div>
+          </button>
+</div>

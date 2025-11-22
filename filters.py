@@ -1,3 +1,4 @@
+from markdown import markdown
 from disk import DiskStatus
 
 def disk_charm(disk_status:DiskStatus):
@@ -22,3 +23,6 @@ def human_readable_bytes(bytes:int):
         i+=1
 
     return f"{bytes:.2f}{magnitutes[i]}"
+
+def markdown_filter(s):
+    return markdown(s,extensions=["extra"])

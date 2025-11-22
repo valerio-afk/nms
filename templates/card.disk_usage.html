@@ -22,9 +22,16 @@
   <div>
       {{ used | human_readable_bytes }} / {{ total | human_readable_bytes }}
   </div>
+
 </div>
 
 
+{% if not mounted %}
+<div class="mt-5">
+  {% set callout_text = "<p>The disk array is not mounted. You will not be able to access your data.</p><p>Go to <a href=\""~ url_for('main.disk_management') ~"\">Disk Management</a> and mount it.</p>" %}
+  {% include "callout.warning.html" %}
+</div>
+{% endif %}
 
   <script nonce="{{ csp_nonce }}">
     GlobalRefresher.register("{{ card_id }}","{{ url_for('main.async_widget_disk_usage') }}");

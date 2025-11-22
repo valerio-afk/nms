@@ -18,6 +18,18 @@
         {% set btn_link = url_for('main.restart_systemd') %}
         {% include "element.square_btn.html" %}
 
+        {% if encrypted %}
+            {% set btn_icon = "<i class=\"bi bi-key-fill\"></i>" | safe %}
+            {% set btn_title = "Download Encryption Key" %}
+            {% set btn_method = "POST" %}
+            {% set btn_modal = True %}
+            {% set btn_message = "The encryption key is what keeps your data safe.\nYou may need it if you perform a factory reset and want to keep accessing your data.\n\n**Do not disclose it to anyone!**" %}
+            {% set btn_link = url_for('main.get_tank_key') %}
+            {% include "element.square_btn.html" %}
+        {% endif %}
+
+        {% set btn_modal = False %}
+
     </div>
 </div>
 

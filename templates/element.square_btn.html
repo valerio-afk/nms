@@ -8,7 +8,12 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           {% endif %}
       {% endif %}
-          <button type="{{ 'submit' if btn_link else 'button' }}" class="btn w-100 square-btn" {% if btn_disabled %} disabled {% endif %}>
+          <button type="{{ 'submit' if btn_link else 'button' }}"
+                  {% if btn_modal %}
+                  modal-confirm
+                  modal-message="{{ btn_message }}"
+                  {% endif %}
+                  class="btn w-100 square-btn" {% if btn_disabled %} disabled {% endif %}>
               {{ btn_icon }}
 
           <div class="btn-title fw-bold">{{ btn_title }}</div>

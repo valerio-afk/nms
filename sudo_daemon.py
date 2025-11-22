@@ -4,11 +4,13 @@ import json
 import pwd
 import struct
 import socket
+import base64
+import subprocess
 from constants import SOCK_PATH
 from importlib import import_module
 from socketserver import UnixStreamServer, StreamRequestHandler
 from nms_utils import setup_logger
-from cmdl import LocalCommandLineTransaction, CommandLineTransaction
+from cmdl import LocalCommandLineTransaction, CommandLineTransaction, ZFSList
 
 ALLOWED_UID = None
 LOGGER = None
@@ -75,12 +77,49 @@ def run_commands(commands):
     return outputs
 
 
+def get_key(fname):
+    if (os.path.isabs(fname) and (fname.startswith("/root"))):
+        path = fname
+    else:
+        path = os.path.join("/","root",fname)
 
 
+    result = subprocess.run(
+        ["sudo", "cat", path],
+        stdout=subprocess.PIPE,
+        check=True
+    )
+
+
+    encoded_key = base64.b64encode(result.stdout).decode("ascii")
+
+    return {"key_path":path, "key":encoded_key}
+
+
+def ch_perms(pool,dataset,group):
+    fs = f"{pool}/{dataset}"
+
+    trans = LocalCommandLineTransaction(ZFSList())
+    output = trans.run()
+
+    if ((not trans.success) or (len(output)!=1)):
+        raise Exception("Unable to get ZFS information")
+
+    d = json.loads(output[0].get("stdout",{}))
+
+    mountpoint = d.get("datasets",{}).get(fs,{}).get("properties",{}).get("mountpoint",{}).get("value",None)
+
+    if mountpoint is None:
+        raise Exception(f"Unable to retrieve a valid mount point for `{fs}`")
+
+    subprocess.run(["sudo","chown", f":{group}", "-R", mountpoint])
+    subprocess.run(["sudo","chmod", "770", "-R", mountpoint])
 
 
 ALLOWED_ACTIONS = {
-    "run": run_commands
+    "run": run_commands,
+    "get-key": get_key,
+    "ch_tank_perm": ch_perms
 }
 
 def get_uid_for_user(username):

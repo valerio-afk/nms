@@ -222,13 +222,68 @@ class ZFSGet(ZFSCommand):
         return ZFSGet(serialisation.get('pool',None))
 
 class ZFSList(ZFSCommand):
-    def __init__(this):
+    def __init__(this,properties=None):
         super().__init__("list", sudo=False)
         this.append(['-p','-j'])
 
+        if (properties is not None):
+            this.append("-o")
+            this.append([",".join(properties)])
+
+        this._properties = properties
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['properties'] = this._properties
+        return d
+
     @staticmethod
-    def from_dict(_):
-        return ZFSList()
+    def from_dict(serialisation):
+        return ZFSList(serialisation.get("properties",None))
+
+
+class ZFSLoadKey(ZFSCommand):
+
+    def __init__(this,pool="tank",key_path=None):
+        this._pool = pool
+        this._key_path = key_path
+
+        cmd_revert = ["sudo", "zfs", "unload-key", pool]
+
+        super().__init__("load-key", revert_command=cmd_revert, sudo=True)
+
+        this.append([pool,"-L",f"file://{key_path}"])
+
+    def to_dict(this):
+        d = super().to_dict()
+
+        d['pool'] = this._pool
+        d['key_path'] = this._key_path
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ZFSLoadKey(serialisation.get('pool',None))
+
+class ZFSUnLoadKey(ZFSCommand):
+    def __init__(this,pool="tank"):
+        this._pool = pool
+
+        super().__init__("unload-key", sudo=True)
+
+        this.append(pool)
+
+    def to_dict(this):
+        d = super().to_dict()
+
+        d['pool'] = this._pool
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ZFSUnLoadKey(serialisation.get('pool',None))
 
 class ZFSCreate(ZFSCommand):
 
@@ -257,7 +312,57 @@ class ZFSCreate(ZFSCommand):
         return ZFSCreate(serialisation.get('pool',None),serialisation.get('dataset',None))
 
 
+class ZFSMount(ZFSCommand):
 
+    def __init__(this,pool="tank", dataset=None):
+        this._pool = pool
+        this._dataset = dataset
+
+        fs = f"{pool}/{dataset}" if dataset is not None else pool
+
+        cmd_revert = ["sudo", "zfs", "unmount", fs]
+
+        super().__init__("mount", revert_command=cmd_revert, sudo=True)
+
+        this.append(fs)
+
+    def to_dict(this):
+        d = super().to_dict()
+
+        d['pool'] = this._pool
+        d['dataset'] = this._dataset
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ZFSMount(serialisation.get('pool',None),serialisation.get('dataset',None))
+
+class ZFSUnmount(ZFSCommand):
+
+    def __init__(this,pool="tank", dataset=None):
+        this._pool = pool
+        this._dataset = dataset
+
+        fs = f"{pool}/{dataset}" if dataset is not None else pool
+
+        cmd_revert = ["sudo", "zfs", "mount", fs]
+
+        super().__init__("unmount", revert_command=cmd_revert, sudo=True)
+
+        this.append(fs)
+
+    def to_dict(this):
+        d = super().to_dict()
+
+        d['pool'] = this._pool
+        d['dataset'] = this._dataset
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ZFSUnmount(serialisation.get('pool',None),serialisation.get('dataset',None))
 
 class CreateKey(RevertibleCommandLine):
     def __init__(this,key_path="/root/tank.key",bytes=32):
@@ -459,7 +564,7 @@ class JournalCtl(RevertibleCommandLine):
         if (grep is not None):
             cmd.extend(['--grep',grep])
 
-        super().__init__(cmd,sudo=True)
+        super().__init__(cmd,sudo=True,mask_output=True)
 
     def to_dict(this):
         d = super().to_dict()

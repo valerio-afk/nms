@@ -363,6 +363,22 @@ else
   log INFO "Passwordless sudo file $SUDOERS_FILE already exists"
 fi
 
+
+#---------------------------------------------------------------------
+# Create afk user for external login
+#--------------------------------------------------------------------
+
+log INFO "Creating afk user"
+
+# Create afk user if it doesn't exist
+if ! id -u afk >/dev/null 2>&1; then
+  run_and_log "Creating user afk" \
+    useradd -M --shell /usr/bash -G users afk
+else
+  log INFO "User afk already exists"
+fi
+
+run_and_log "Setting default password for afk" echo "afk:afk" | chpasswd
 #---------------------------------------------------------------------
 # Installing python3 requirements
 #--------------------------------------------------------------------

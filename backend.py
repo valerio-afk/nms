@@ -6,9 +6,11 @@ import psutil
 import socket
 import platform
 import datetime
+import base64
 from collections import OrderedDict
 from cmdl import CreateKey, ZPoolCreate, ZFSCreate, RemoteCommandLineTransaction, ZpoolScrub, Reboot, \
-    Shutdown, JournalCtl, SystemCtlRestart, ZpoolList, ZpoolStatus, ZFSGet, ZFSList, LSBLK
+    Shutdown, JournalCtl, SystemCtlRestart, ZpoolList, ZpoolStatus, ZFSGet, ZFSList, LSBLK, ZFSLoadKey, ZFSMount, \
+    ZFSUnLoadKey, ZFSUnmount
 from constants import KEYPATH, POOLNAME, DATASETNAME
 from flask_daemons import NetIOCounter, ScrubStateChecker
 from disk import Disk,DiskStatus
@@ -66,6 +68,9 @@ class NMSBackend:
         for daemon in this._daemons.values():
             if (daemon is not None):
                 daemon.start()
+
+        if (this.is_pool_configured() and (not this.is_mounted)):
+            this.mount()
 
     def _sys_username_changed(this,service):
         this._cfg['access']['services']['ssh']['sys_user'] = service.get("username")
@@ -177,6 +182,10 @@ class NMSBackend:
         return this._cfg['pool'].get("name", None)
 
     @property
+    def dataset_name(this):
+        return this._cfg.get("dataset", None)
+
+    @property
     def get_pool_capacity(this):
         if (not this.is_pool_configured()):
             return None
@@ -208,6 +217,10 @@ class NMSBackend:
     @property
     def has_encryption(this):
         return False if this._cfg['pool'].get("encrypted", None) is None else True
+
+    @property
+    def key_filename(this):
+        return this._cfg['pool'].get("encrypted", None)
 
     @property
     def has_compression(this):
@@ -264,6 +277,81 @@ class NMSBackend:
         ifaces.sort(key=lambda x:x.name)
 
         return ifaces
+
+    @property
+    def is_mounted(this):
+        cmd = ZFSList(properties=['mounted'])
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            cmd
+        )
+        output = trans.run()
+
+        if (len(output)==1):
+            d = json.loads(output[0].get("stdout",{}))
+            tank = this.pool_name
+            dataset = this.dataset_name
+
+            if ((tank is not None) and (dataset is not None)):
+                mounted = d.get('datasets',{}).get(f"{tank}/{dataset}",{}).get("properties",{}).get("mounted",{}).get("value","no")
+                return mounted.lower() != "no"
+            return False
+        else:
+            raise Exception("Could not be determined if the disk array is mounted")
+
+    def mount(this):
+        if (not this.is_pool_configured()):
+            raise Exception("Disk array not configured")
+
+        cmds = []
+
+        if (this.has_encryption):
+            cmds.append(ZFSLoadKey(this.pool_name, this.key_filename))
+
+        cmds.append(ZFSMount(this.pool_name))
+        cmds.append(ZFSMount(this.pool_name, this.dataset_name))
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            *cmds
+        )
+
+        trans.run()
+
+        if (not trans.success):
+            raise Exception("Unable to mount disk array")
+
+    def unmount(this):
+        if (not this.is_pool_configured()):
+            raise Exception("Disk array not configured")
+
+        cmds = [
+            ZFSUnmount(this.pool_name,this.dataset_name),
+            ZFSUnmount(this.pool_name)
+        ]
+
+        if (this.has_encryption):
+            cmds.append(ZFSUnLoadKey(this.pool_name))
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            *cmds
+        )
+
+        trans.run()
+
+        if (not trans.success):
+            raise Exception("Unable to unmount disk array")
+
+
+
 
     @property
     def get_access_services(this):
@@ -326,6 +414,66 @@ class NMSBackend:
         this._cfg['pool']['disks'] = [d.serialise() for d in disks]
 
         this.flush_config()
+
+        this.change_permissions()
+
+    def change_permissions(this):
+        if (this.is_mounted):
+            message = {
+                "action": "ch_tank_perm",
+                "args": {"pool": this.pool_name,"dataset":this.dataset_name,"group":"users"}
+            }
+
+            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            s.settimeout(5)
+            s.connect(SOCK_PATH)
+
+            s.sendall(json.dumps(message, default=lambda x: x.to_dict()).encode() + b'\n')
+
+            response = b""
+            while True:
+                chunk = s.recv(4096)
+                if not chunk:
+                    break
+                response += chunk
+                if b"\n" in chunk:
+                    break
+
+            s.close()
+
+
+    def get_tank_key(this):
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(5)
+        s.connect(SOCK_PATH)
+
+        key_fullpath = this.key_filename
+        key_path, key_fname = os.path.split(key_fullpath)
+
+        message = {
+            "action": "get-key",
+            "args": {"fname": key_fname}
+        }
+
+        s.sendall(json.dumps(message, default=lambda x: x.to_dict()).encode() + b'\n')
+
+        response = b""
+        while True:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            response += chunk
+            if b"\n" in chunk:
+                break
+
+        s.close()
+
+        d = json.loads(response.decode("utf-8").strip())
+
+        if (d.get('key_path',"") == key_fullpath):
+            key = base64.b64decode(d.get("key",""))
+            return key
+
 
     def reboot(this):
 
@@ -423,11 +571,6 @@ class NMSBackend:
             },
             "dataset": None,
             "access": {
-                "login":
-                    {
-                        "username": "afk",
-                        "password": hash_password("admin"),
-                    },
                 "services":
                     {
                         "sftp": False,

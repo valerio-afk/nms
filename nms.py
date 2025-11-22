@@ -1,8 +1,7 @@
 import datetime
-
-from celery.worker.control import active
-from flask import render_template, redirect, url_for, jsonify, request, flash, Blueprint, g
-
+import os
+from flask import render_template, redirect, url_for, jsonify, request, flash, Blueprint, g, send_file
+from io import BytesIO
 from forms import AccessServiceForm
 from widget import render_widget,get_widgets_html,get_widgets_css_files
 from backend import BACKEND, LogFilter
@@ -18,7 +17,7 @@ def widget_disk_usage():
 
     capacity = int(used/total*1000)/10 if total > 0 else 0
 
-    return render_widget("disk_usage",used=used, total=total, capacity=capacity)
+    return render_widget("disk_usage",used=used, total=total, capacity=capacity,mounted=BACKEND.is_mounted)
 
 @bp.route('/async/widgets/disk_usage')
 def async_widget_disk_usage():
@@ -86,6 +85,28 @@ def scrub():
 
     return redirect(url_for("main.disk_management"))
 
+@bp.route("/disk/unmount",methods=['POST'])
+def unmount():
+    try:
+        BACKEND.unmount()
+    except Exception as e:
+        flash(str(e),"error")
+    else:
+        flash("Disk array unmounted successfully","success")
+
+    return redirect(url_for("main.disk_management"))
+
+
+@bp.route("/disk/mount",methods=['POST'])
+def mount():
+    try:
+        BACKEND.mount()
+    except Exception as e:
+        flash(str(e), "error")
+    else:
+        flash("Disk array mounted successfully", "success")
+
+    return redirect(url_for("main.disk_management"))
 
 
 @bp.route('/disks/new',methods=['POST'])
@@ -124,6 +145,7 @@ def disk_management():
                            pool=pool,
                            verify=verify,
                            scrub = scrub_report,
+                           mounted=BACKEND.is_mounted,
                            csp_nonce=g.csp_nonce
                            # check=check
                            )
@@ -244,13 +266,23 @@ def access():
 
 @bp.route("/advanced")
 def advanced():
-    return render_template("advanced.html",csp_nonce=g.csp_nonce,active_page="advanced")
+    return render_template("advanced.html",csp_nonce=g.csp_nonce,active_page="advanced",encrypted=BACKEND.has_encryption)
 
 @bp.route("/advanced/restart-systemd",methods=['POST'])
 def restart_systemd():
     flash("System services are being restarted. If the web interface glitched, that is a good sign it's working.")
     BACKEND.restart_systemd_services()
     return redirect(url_for("main.advanced"))
+
+@bp.route("/advanced/get-key",methods=['POST'])
+def get_tank_key():
+    key = BACKEND.get_tank_key()
+
+    if (key is None):
+        flash("Unable to retrieve the encryption key","error")
+        return redirect(url_for("main.advanced"))
+
+    return send_file(BytesIO(key),as_attachment=True,download_name=os.path.split(BACKEND.key_filename)[1],mimetype="application/octet-stream")
 
 @bp.route('/advanced/logs', defaults={'log': 'flask'})
 @bp.route('/advanced/logs/<string:log>')

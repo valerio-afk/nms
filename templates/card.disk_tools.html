@@ -34,6 +34,25 @@
 
         {% endif %}
 
+        {% if mounted %}
+
+            {% set btn_icon = "<i class=\"bi bi-database-fill\"></i>" | safe %}
+            {% set btn_title = "Unmount" %}
+
+            {% set btn_text = "Disk is mounted" %}
+            {% set btn_link = url_for('main.unmount') %}
+
+        {% else %}
+            {% set btn_icon = "<i class=\"bi bi-database-fill-x\"></i>" | safe %}
+            {% set btn_title = "Mount" %}
+
+            {% set btn_text = "Disk is unmounted" %}
+            {% set btn_link = url_for('main.mount') %}
+        {% endif %}
+
+
+        {% include "element.square_btn.html" %}
+
     </div>
 </div>
 

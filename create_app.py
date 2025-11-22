@@ -5,7 +5,7 @@ from flask import Flask, g
 from flask_wtf import CSRFProtect
 import base64
 
-from filters import human_readable_bytes, enabled_fmt,disk_charm
+from filters import human_readable_bytes, enabled_fmt, disk_charm, markdown_filter
 from nms import bp
 
 def generate_nonce(length=16):
@@ -24,6 +24,7 @@ def create_flask_app():
     app.add_template_filter(human_readable_bytes,"human_readable_bytes")
     app.add_template_filter(enabled_fmt, "enabled_fmt")
     app.add_template_filter(disk_charm, "disk_charm")
+    app.add_template_filter(markdown_filter,"md")
 
     app.secret_key = os.environ.get("NMS_SECRET_KEY")
 

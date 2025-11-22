@@ -24,34 +24,70 @@
 <script nonce="{{ csp_nonce }}">
 (function () {
   // Modal element and Bootstrap Modal instance
-  var modalEl = document.getElementById('ConfirmModal');
+  const modalEl = document.getElementById('ConfirmModal');
   if (!modalEl) return;
-  var bsModal = new bootstrap.Modal(modalEl, { backdrop: 'static' });
 
-  // Elements we will update
-  var messageEl = document.getElementById('ConfirmModalMessage');
-  var confirmModalForm = document.getElementById('ConfirmModalForm');
+  const bsModal = new bootstrap.Modal(modalEl, { backdrop: 'static' });
+
+  // Elements we update
+  const messageEl = document.getElementById('ConfirmModalMessage');
+  const confirmModalForm = document.getElementById('ConfirmModalForm');
+  const confirmButton = document.getElementById('ConfirmModalBtn');
+
+  // We store a reference to the form to be submitted
+  let pendingForm = null;
 
   document.addEventListener('click', function (ev) {
-    var trigger = ev.target.closest('[modal-confirm]');
-    if (!trigger) return; // not a logout trigger
+    const trigger = ev.target.closest('[modal-confirm]');
+    if (!trigger) return;
 
-    ev.preventDefault(); // don't follow the link
+    ev.preventDefault();
 
-    // read data attributes (use getAttribute to allow empty strings)
-    var message = trigger.getAttribute('modal-message') || 'Are you sure you want to log out?';
-    var action = trigger.getAttribute('modal-action'); // optional override
+    let message = trigger.getAttribute('modal-message')
+                   || 'Are you sure you want to proceed?';
 
-    // set modal message
-    if (messageEl) messageEl.textContent = message;
+    const md = new showdown.Converter()
+    message = md.makeHtml(message)
+    const actionOverride = trigger.getAttribute('modal-action');
 
-    // set form action if provided
-    if (action && confirmModalForm) {
-      confirmModalForm.action = action;
+    if (messageEl) messageEl.innerHTML = nl2br(message);
+
+    // CASE 1: <a modal-confirm href="...">
+    if (trigger.tagName.toLowerCase() === 'a') {
+      pendingForm = null; // make sure no old form stays
+      if (actionOverride && confirmModalForm) {
+        confirmModalForm.action = actionOverride;
+      } else if (confirmModalForm) {
+        confirmModalForm.action = trigger.href;
+      }
     }
 
-    // show modal
+    // CASE 2: <button modal-confirm inside a <form>>
+    if (trigger.tagName.toLowerCase() === 'button') {
+      pendingForm = trigger.closest('form');  // form to submit later
+      confirmModalForm.action = null;
+    }
+
     bsModal.show();
   });
+
+  // When user confirms the action
+  confirmButton.addEventListener('click', function (ev) {
+    ev.preventDefault()
+    if (pendingForm) {
+      // submit the form that had the modal-confirm button
+      pendingForm.submit();
+      pendingForm = null;
+      return;
+    }
+
+    // otherwise treat as standard modal (a link)
+    if (confirmModalForm && confirmModalForm.action) {
+      confirmModalForm.submit();
+    }
+
+  });
+
 })();
+
 </script>
