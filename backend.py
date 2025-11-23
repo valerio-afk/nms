@@ -84,9 +84,10 @@ class NMSBackend:
         for service,args in this._cfg.get("access",{}).get("services",{}).items():
             try:
                 cls = getattr(module,f"{service.upper()}Service")
-                args.update(account)
-                args['mountpoint'] = this.mountpoint
-                this._access_services[service] = cls(**args)
+                arguments = args.copy()
+                arguments.update(account)
+                arguments['mountpoint'] = this.mountpoint
+                this._access_services[service] = cls(**arguments)
             except AttributeError:
                 ... #service not implemented yet
 
