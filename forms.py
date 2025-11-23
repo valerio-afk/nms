@@ -20,3 +20,12 @@ class SSHServiceForm(AccessServiceForm):
 
 class FTPServiceForm(AccessServiceForm):
     ...
+
+
+class NFSServiceForm(AccessServiceForm):
+    ip = StringField("Hostname",validators=[DataRequired()])
+
+class SMBServiceForm(AccessServiceForm):
+    username = StringField("Username",validators=[DataRequired()])
+    password = PasswordField("Password")
+    confirm_password = PasswordField("Confirm Password", validators=[EqualTo('password', message='Passwords must match')])

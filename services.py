@@ -1,17 +1,22 @@
+import io
 import os.path
 import tempfile
+import re
+import configparser
 from abc import abstractmethod
 
 from cmdl import RemoteCommandLineTransaction, SystemCtlIsActive, ApplyPatch, UserModChangeUsername, GetEntShadow, \
     ChPasswd, SystemCtlUnmask, SystemCtlEnable, SystemCtlStart, SystemCtlDisable, SystemCtlMask, SystemCtlStop, \
-    SystemCtlRestart
+    SystemCtlRestart, ExportfsRA, SMBPasswd
 from constants import SOCK_PATH
 from nms_utils import make_diff, read_lines_from_file
 from pathlib import Path
 import socket
+import pwd
+import grp
 
 class SystemService:
-    def __init__(this,service_name, config_file=None):
+    def __init__(this,service_name, config_file=None,**kwargs):
         this._service_name = service_name
         this._config_file = config_file
         this._change_hooks = {}
@@ -42,7 +47,7 @@ class SystemService:
         this._pre_start_hooks.append(callback)
 
     @property
-    def name(this):
+    def service_names(this):
         return this._service_name
 
     @property
@@ -68,21 +73,26 @@ class SystemService:
 
     @property
     def is_active(this):
-        cmd = SystemCtlIsActive(this.name)
+        names = this.service_names
+
+        if (isinstance(names,str)):
+            cmds = [SystemCtlIsActive(names)]
+            n_services = 1
+        else:
+            cmds = [SystemCtlIsActive(n) for n in names]
+            n_services = len(cmds)
+
         trans = RemoteCommandLineTransaction(
             socket.AF_UNIX,
             socket.SOCK_STREAM,
             SOCK_PATH,
-            cmd
+            *cmds
         )
 
         results = trans.run()
 
-        if (len(results) == 1):
-            output = results[0]['stdout'].strip()
-            return output == "active"
-        else:
-            return False
+        return sum([r.get("stdout","").strip() == "active" for r in results]) == n_services
+
 
     def start(this):
         hooks = this._pre_start_hooks
@@ -90,12 +100,19 @@ class SystemService:
         for callback in hooks:
             callback(this)
 
+        names = this.service_names
+        cmds = []
 
-        cmds = [
-            SystemCtlUnmask(this.name),
-            SystemCtlEnable(this.name),
-            SystemCtlStart(this.name),
-        ]
+        if (isinstance(names, str)):
+            names = [names]
+
+
+        for n in names:
+            cmds.extend([
+                SystemCtlUnmask(n),
+                SystemCtlEnable(n),
+                SystemCtlStart(n),
+            ])
 
         trans = RemoteCommandLineTransaction(
             socket.AF_UNIX,
@@ -107,14 +124,21 @@ class SystemService:
         results = trans.run()
 
         if (not trans.success):
-            raise Exception(f"The service `{this.name}` could not be started: {[x.get('stderr','') for x in results]}")
+            raise Exception(f"The service(s) `{', '.join(names)}` could not be started: {[x.get('stderr', '') for x in results]}")
 
     def stop(this):
-        cmds = [
-            SystemCtlStop(this.name),
-            SystemCtlDisable(this.name),
-            SystemCtlMask(this.name),
-        ]
+        names = this.service_names
+        cmds = []
+
+        if (isinstance(names, str)):
+            names = [names]
+
+        for n in names:
+            cmds.extend([
+                SystemCtlStop(n),
+                SystemCtlDisable(n),
+                SystemCtlMask(n),
+            ])
 
         trans = RemoteCommandLineTransaction(
             socket.AF_UNIX,
@@ -126,16 +150,16 @@ class SystemService:
         results = trans.run()
 
         if (not trans.success):
-            raise Exception(f"The service `{this.name}` could not be started: {[x.get('stderr', '') for x in results]}")
+            raise Exception(f"The service(s) `{', '.join(names)}` could not be stopped: {[x.get('stderr', '') for x in results]}")
 
 class SSHService(SystemService):
     port:int
     username:str
     password:str
 
-    def __init__(this,service_name,sys_user):
-        super().__init__(service_name,"/etc/ssh/sshd_config")
-        this._username = sys_user
+    def __init__(this,service_name,username,**kwargs):
+        super().__init__(service_name,"/etc/ssh/sshd_config",**kwargs)
+        this._username = username
 
     def get_port(this):
         port = 22  # default
@@ -269,7 +293,7 @@ class SSHService(SystemService):
     def update(this, port, username, password, **kwargs):
         this._update_data(port, username, password)
 
-        cmd = SystemCtlRestart(this.name)
+        cmd = SystemCtlRestart(this.service_names)
 
         trans = RemoteCommandLineTransaction(
             socket.AF_UNIX,
@@ -280,7 +304,7 @@ class SSHService(SystemService):
         output = trans.run()
 
         if (not trans.success):
-            raise Exception(f"{this.name} could not be restarted")
+            raise Exception(f"{this.service_names} could not be restarted")
 
 
 
@@ -294,8 +318,8 @@ class FTPService(SystemService):
         "utf8_filesystem":"YES",
         "chroot_list_enable":"NO",
     }
-    def __init__(this,service_name):
-        super().__init__(service_name,config_file="/etc/vsftpd.conf")
+    def __init__(this,service_name, **kwargs):
+        super().__init__(service_name,config_file="/etc/vsftpd.conf",**kwargs)
 
     def _patch_configuration(this):
         cfg = FTPService.default_configuration.copy()
@@ -338,7 +362,7 @@ class FTPService(SystemService):
             )
 
             trans.run()
-            #os.remove(patch_fname)
+            os.remove(patch_fname)
 
     def enable(this,*args,**kwargs):
         this._patch_configuration()
@@ -346,3 +370,203 @@ class FTPService(SystemService):
 
     def disable(this,*args,**kwargs):
         this.stop()
+
+
+class NFSService(SystemService):
+    ip:str
+    default_options = ['rw','sync','no_subtree_check','all_squash']
+
+    def __init__(this,service_name,username,group,mountpoint=None,**kwargs):
+        super().__init__(service_name,"/etc/exports",**kwargs)
+        this._mountpoint = mountpoint
+        this._username = username
+        this._group = group
+
+    @property
+    def mountpoint(this):
+        return this._mountpoint
+
+    @property
+    def uid(this):
+        return pwd.getpwnam(this._username).pw_uid
+
+    @property
+    def gid(this):
+        return grp.getgrnam(this._group).gr_gid
+
+    def get_ip(this):
+        exports = read_lines_from_file(this.config_file)
+
+        hostname = None
+
+        for l in exports:
+            if (not l.startswith("#")):
+                if (this.mountpoint in l):
+                    parts = [p.strip() for p in l.split()]
+                    hosts = parts[1:]
+
+                    for h in hosts:
+                        m = re.match(r'^([^()]+)\(', h)
+                        if m:
+                            hostname = m.group(1).strip()
+                            break
+
+        return hostname
+
+    def set_ip(this,hostname):
+        if (this.mountpoint is None):
+            raise Exception("You cannot activate this service if you don't set up a new disk array")
+
+        exports = read_lines_from_file(this.config_file)
+        new_exports = exports.copy()
+
+        options = NFSService.default_options.copy()
+        options.extend([
+            f"anonuid={this.uid}",
+            f"anongid={this.gid}"
+        ])
+
+        new_line = f"{this.mountpoint}\t{hostname}({','.join(options)})\n"
+
+        for i,l in enumerate(exports):
+            if (not l.startswith("#")):
+                if (this.mountpoint in l):
+                    new_exports[i] = new_line
+                    break
+        else:
+            new_exports.append(new_line)
+
+        patch_text = make_diff(this.config_file, new_exports)
+
+        patch_fname = os.path.join(tempfile.gettempdir(), f"exports.patch")
+        Path(patch_fname).write_text(patch_text, encoding="utf-8", errors="surrogateescape")
+
+        cmd = ApplyPatch(patch_fname, this.config_file, sudo=True)
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            cmd
+        )
+
+        trans.run()
+        os.remove(patch_fname)
+
+    def enable(this,ip,**kwargs):
+        this.set("ip",ip)
+        this.start()
+
+    def start(this):
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            ExportfsRA()
+        )
+
+        trans.run()
+        super().start()
+
+    def disable(this,*args,**kwargs):
+        this.stop()
+
+    def update(this,ip,**kwargs):
+        this.disable()
+        this.enable(ip,**kwargs)
+
+
+class SMBService(SystemService):
+    username:str
+    SECTION = "NMS"
+
+    def __init__(this,username,mountpoint,service_name,**kwargs):
+        super().__init__(service_name,config_file="/etc/samba/smb.conf")
+        this._username = username
+        this._mountpoint = mountpoint
+
+    @property
+    def mountpoint(this):
+        return this._mountpoint
+
+    def get_username(this):
+        return this._username
+
+    def _patch_configuration(this, username):
+        if (this.mountpoint is None):
+            raise Exception("You cannot activate this service if you don't set up a new disk array")
+
+        config = configparser.ConfigParser()
+        config.read(this.config_file)
+
+        config[SMBService.SECTION] = {
+            'path': this.mountpoint,
+            'browseable': "yes",
+            'read only': 'no',
+            'valid users': username
+        }
+
+        new_output = io.StringIO()
+        config.write(new_output)
+
+        modified_file = new_output.getvalue()
+        new_output.close()
+
+        modified_lines = modified_file.splitlines(keepends=True)
+
+        patch_text = make_diff(this.config_file, modified_lines)
+
+        patch_fname = os.path.join(tempfile.gettempdir(), f"smb.conf.patch")
+        Path(patch_fname).write_text(patch_text, encoding="utf-8", errors="surrogateescape")
+
+        cmd = ApplyPatch(patch_fname, this.config_file, sudo=True)
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            cmd
+        )
+
+        trans.run()
+        os.remove(patch_fname)
+
+    def _smbpasswd(this,username,password=None,flag=None):
+        cmd = SMBPasswd(username=username,password=password,flag=flag)
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            cmd
+        )
+
+        trans.run()
+
+    def _update_password(this,username,password):
+        this._smbpasswd(username,password,flag=SMBPasswd.Flags.UPDATE)
+
+    def _delete_user(this,username):
+        this._smbpasswd(username,flag=SMBPasswd.Flags.DELETE)
+
+    def _add_user(this,username,password):
+        this._smbpasswd(username,password,flag=SMBPasswd.Flags.ADD)
+
+
+    def enable(this,username,password,**kwargs):
+        this._patch_configuration(username)
+
+        if (password is not None):
+            this._add_user(username,password)
+
+
+        this.start()
+
+    def disable(this,username,**kwargs):
+        this._delete_user(username)
+        this.stop()
+
+    def update(this,username,password,**kwargs):
+        this._patch_configuration(username)
+        if (password is not None):
+            this._update_password(username,password)
+
+        this.stop()
+        this.start()

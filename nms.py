@@ -2,10 +2,7 @@ import datetime
 import os
 from flask import render_template, redirect, url_for, jsonify, request, flash, Blueprint, g, send_file
 from io import BytesIO
-
 from importlib import import_module
-
-from forms import AccessServiceForm
 from widget import render_widget,get_widgets_html,get_widgets_css_files
 from backend import BACKEND, LogFilter
 from tasks import create_pool, NMSTask
@@ -284,7 +281,14 @@ def access():
 
         form.process()
 
-        widget = render_widget(f"access.{k}",enabled=service_enabled,form=form,mountpoint=mountpoint)
+        ip_range = request.remote_addr.split(".")
+        if (len(ip_range)==4):
+            ip_range = f"{ip_range[0]}.{ip_range[2]}.{ip_range[3]}.0/24"
+
+        if (ip_range is None):
+            ip_range = "*"
+
+        widget = render_widget(f"access.{k}",enabled=service_enabled,form=form,mountpoint=mountpoint,ip=request.remote_addr,ip_range=ip_range)
         widgets.append(widget[0])
 
     return render_template("access.html",active_page="access",services=widgets,csp_nonce=g.csp_nonce)

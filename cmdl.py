@@ -6,6 +6,7 @@ import os
 from abc import abstractmethod, ABC
 from enum import Enum
 
+
 class RevertibleCommandLine(ABC):
     def __init__(this, command, revert_command = None, tag=None, sudo=False,mask_output=False):
         this._command = command
@@ -879,3 +880,59 @@ class ChPasswd(RevertibleCommandLine):
             serialisation.get('$new_password', None),
             serialisation.get('$old_shadow', None),
         )
+
+class ExportfsRA(RevertibleCommandLine):
+    def __init__(this):
+        super().__init__(['exportfs','-ra'],sudo=True)
+
+    @staticmethod
+    def from_dict(_):
+        return ExportfsRA
+
+class SMBPasswd(RevertibleCommandLine):
+
+    class Flags(Enum):
+        ADD = '-a'
+        DELETE = '-x'
+        UPDATE = ''
+
+
+    def __init__(this,username,password=None,flag=Flags.UPDATE):
+        this._username=username
+        this._password=password
+        this._flag = flag if isinstance(flag,SMBPasswd.Flags) else SMBPasswd.Flags(flag)
+
+        super().__init__(['smbpasswd'],sudo=True)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['username'] = this._username
+        d['$password'] = this._password
+        d['flag'] = this._flag.value
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        flag = SMBPasswd.Flags(serialisation.get("flag",""))
+        return SMBPasswd(serialisation.get("username",None),serialisation.get("$password",None),flag)
+
+    def execute(this,revert=False):
+        if revert:
+            return None
+
+        cmd = this.command
+        cmd.append(this._flag.value)
+        cmd.append(this._username)
+
+        if (this._sudo):
+            cmd.insert(0,"sudo")
+
+        input = None if this._flag == SMBPasswd.Flags.DELETE else f"{this._password}\n{this._password}\n"
+
+
+        cmd = [x for x in cmd if len(x)>0]
+
+        output = subprocess.run(cmd,input=input,stdout=subprocess.PIPE,stderr=subprocess.PIPE, text=True)
+
+        return output

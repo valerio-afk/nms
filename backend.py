@@ -79,10 +79,13 @@ class NMSBackend:
 
     def _setup_access_services(this):
         module = import_module("services")
+        account = this._cfg.get("access",{}).get("account",{})
 
         for service,args in this._cfg.get("access",{}).get("services",{}).items():
             try:
                 cls = getattr(module,f"{service.upper()}Service")
+                args.update(account)
+                args['mountpoint'] = this.mountpoint
                 this._access_services[service] = cls(**args)
             except AttributeError:
                 ... #service not implemented yet
@@ -111,8 +114,15 @@ class NMSBackend:
 
 
     def _sys_username_changed(this,service):
-        this._cfg['access']['services']['ssh']['sys_user'] = service.get("username")
+        old_username = this._cfg['access']['account']['username']
+        this._cfg['access']['account']['username'] = service.get("username")
         this.flush_config()
+
+        smb = this._access_services.get("smb",None)
+
+
+        if ((smb is not None) and (smb.is_active)):
+            smb.disable(old_username)
 
     @property
     def config_filename(this):
@@ -632,6 +642,10 @@ class NMSBackend:
             },
             "dataset": None,
             "access": {
+                "account" : {
+                  "username": "tuttoweb",
+                  "group": "users"
+                },
                 "services":
                     {
                         "ftp": {
@@ -639,10 +653,9 @@ class NMSBackend:
                         },
                         "ssh": {
                             "service_name": "ssh.service",
-                            "sys_user": "afk",
                         },
-                        "nfs": False,
-                        "smb": False,
+                        "nfs": {"service_name":["rpcbind.service","nfs-server.service"]},
+                        "smb": {"service_name":["smbd.service","nmbd.service"]},
                         "web": False,
                     }
             },
