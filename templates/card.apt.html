@@ -1,0 +1,39 @@
+{% extends "card.html" %}
+
+{% block card_title %}System Updates{% endblock %}
+
+{% block card_content %}
+{% set enable_js = false %}
+
+<dl class="row">
+    <dt class="col-sm-5">Last check:</dt>
+    <dd class="col-sm-7">{{ last_update }}</dd>
+
+    <dt class="col-sm-5">Current updates: </dt>
+    <dd class="col-sm-7">{{ updates | length }}</dd>
+</dl>
+
+<form action="{{ url_for('main.apt_get') }}" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="row g-1">
+        <div class="col-12">
+            {% if state is none  %}
+
+                <button class="btn btn-success w-100" type="submit" name="action" value="update">Check for updates</button>
+            {% elif state == 'update' %}
+                {% set enable_js = true %}
+                <button class="btn btn-secondary w-100" type="submit" disabled>Checking for updates...</button>
+            {% endif %}
+        </div>
+      </div>
+</form>
+
+<script nonce="{{ csp_nonce }}">
+{% if enable_js %}
+    GlobalRefresher.register_once("{{ card_id }}","{{ url_for('main.async_widget_system_updates') }}");
+{% endif %}
+</script>
+
+{% endblock %}
+
+

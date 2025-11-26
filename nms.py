@@ -3,12 +3,38 @@ import os
 from flask import render_template, redirect, url_for, jsonify, request, flash, Blueprint, g, send_file
 from io import BytesIO
 from importlib import import_module
+
+from flask_wtf.csrf import generate_csrf
+
 from widget import render_widget,get_widgets_html,get_widgets_css_files
 from backend import BACKEND, LogFilter
-from tasks import create_pool, NMSTask
+from tasks import create_pool, NMSTask, apt_get_updates
 from decorators import wait
 
 bp = Blueprint('main',__name__)
+
+def widget_system_admin():
+
+    return render_widget("sys_admin",encrypted=BACKEND.has_encryption)
+
+def widget_system_updates():
+    apt = {
+        'csrf_token': generate_csrf(),
+        'last_update' : BACKEND.last_apt_time(),
+        'updates': BACKEND.get_updates,
+        'state': None
+    }
+
+    if (apt['last_update'] is not None):
+        apt['last_update'] = apt['last_update'].strftime("%c")
+
+    celery_tasks = BACKEND.get_tasks_by_path("/advanced/apt")
+
+    for t in celery_tasks:
+        if (t.action is not None):
+            apt['state'] = t.action
+
+    return render_widget("apt", **apt)
 
 def widget_disk_usage():
     pool_capacity = BACKEND.get_pool_capacity
@@ -18,6 +44,11 @@ def widget_disk_usage():
     capacity = int(used/total*1000)/10 if total > 0 else 0
 
     return render_widget("disk_usage",used=used, total=total, capacity=capacity,mounted=BACKEND.is_mounted)
+
+
+@bp.route('/async/widgets/apt')
+def async_widget_system_updates():
+    return widget_system_updates()[0]
 
 @bp.route('/async/widgets/disk_usage')
 def async_widget_disk_usage():
@@ -194,7 +225,7 @@ def check_tasks():
 
     tasks = BACKEND.get_tasks_by_path(path)
 
-    return jsonify(tasks)
+    return jsonify([t.id for t in tasks])
 
 
 @bp.route("/reboot", methods=['POST'])
@@ -236,6 +267,8 @@ def change_access_settings(service):
             match(form_action):
                 case "enable":
                     flash(f"Service { service.upper() } enabled successfully.","success")
+                case "update":
+                    flash(f"Service {service.upper()} settings updated successfully.", "success")
                 case "disable":
                     flash(f"Service {service.upper()} disabled successfully.", "success")
 
@@ -252,17 +285,6 @@ def change_access_settings(service):
 
 @bp.route("/access")
 def access():
-
-    # ssh_service = BACKEND.get_access_services['ssh']
-    # ssh_enabled = ssh_service.is_active
-    #
-    # ssh_form =  AccessServiceForm(enabled=ssh_enabled)
-    # ssh_form.port.default = ssh_service.get("port")
-    # ssh_form.username.default = ssh_service.get("username")
-    # ssh_form.process()
-    #
-    # ssh_widget = render_widget("access",service="ssh",service_enabled=ssh_enabled,form=ssh_form)
-
     forms = import_module("forms")
     widgets = []
     mountpoint  = BACKEND.mountpoint
@@ -271,6 +293,7 @@ def access():
         service_form_cls = getattr(forms,f"{k.upper()}ServiceForm")
         service_enabled = v.is_active
         form = service_form_cls(enabled=service_enabled)
+
 
         for prop in v.properties:
             try:
@@ -295,7 +318,18 @@ def access():
 
 @bp.route("/advanced")
 def advanced():
-    return render_template("advanced.html",csp_nonce=g.csp_nonce,active_page="advanced",encrypted=BACKEND.has_encryption)
+
+    dashboard_widgets = [
+        widget_system_admin(),
+        widget_system_updates()
+    ]
+
+    return render_template("advanced.html",
+                           csp_nonce=g.csp_nonce,
+                           widgets=get_widgets_html(dashboard_widgets),
+                           extra_css=get_widgets_css_files(dashboard_widgets),
+                           active_page="advanced"
+                           )
 
 @bp.route("/advanced/restart-systemd",methods=['POST'])
 def restart_systemd():
@@ -331,6 +365,18 @@ def system_logs(log):
     return render_template("advanced.logs.html",active=log,log_html=logs,csp_nonce=g.csp_nonce,active_page="advanced")
 
 
+@bp.route('/advanced/apt',methods=['POST'])
+@wait()
+def apt_get():
+
+    action = request.form.get("action",None)
+
+    if (action=="update"):
+        task = apt_get_updates.delay()
+        BACKEND.append_task(NMSTask(task.task_id,"/advanced/apt",action=action))
+    elif (action == "upgrade"):
+        ...
+    return redirect(url_for("main.advanced"))
 
 @bp.before_request
 def check_flash_messages_from_tasks():

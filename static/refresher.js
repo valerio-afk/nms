@@ -4,9 +4,15 @@ class PartialRefresher {
     this.intervalMs = intervalMs;
     this.timerId = null;
     this._inFlight = new Map(); // id -> Promise flag to avoid duplicates
+    this.once_ids = []
   }
 
   register(id, url) { this.targets.set(id, url); }
+  register_once(id, url)
+  {
+    this.register(id, url);
+    this.once_ids.push(id);
+  }
   unregister(id) { this.targets.delete(id); }
 
   start() {
@@ -20,7 +26,8 @@ class PartialRefresher {
   }
 
   async refreshAll() {
-    for (const [id, url] of this.targets.entries()) {
+    for (const [id, url] of this.targets.entries())
+    {
       // Skip if a fetch for this id is still in-flight
       if (this._inFlight.get(id)) continue;
       this._inFlight.set(id, true);
@@ -72,6 +79,13 @@ class PartialRefresher {
           this._inFlight.set(id, false);
         }
       })();
+
+      for (const id of this.once_ids)
+      {
+        this.unregister(id)
+      }
+
+      this.once_ids = []
     }
   }
 }

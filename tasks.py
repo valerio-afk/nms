@@ -5,9 +5,14 @@ from typing import Optional
 
 class NMSTask:
 
-    def __init__(this, task_id:str, page:Optional[str]=None):
+    def __init__(this, task_id:str, page:Optional[str]=None,action=None):
         this._task_id = task_id
         this._page = page
+        this._action = action
+
+    @property
+    def action(this):
+        return this._action
 
     @property
     def page(this):
@@ -41,3 +46,8 @@ def create_pool(redundancy, encryption,compression):
     BACKEND.create_pool(redundancy, encryption,compression)
 
     return "Disk array created successfully."
+
+@shared_task()
+def apt_get_updates():
+    BACKEND.get_apt_updates()
+    return "Updates retrieved successfully."

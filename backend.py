@@ -12,7 +12,7 @@ import base64
 from collections import OrderedDict
 from cmdl import CreateKey, ZPoolCreate, ZFSCreate, RemoteCommandLineTransaction, ZpoolScrub, Reboot, \
     Shutdown, JournalCtl, SystemCtlRestart, ZpoolList, ZpoolStatus, ZFSGet, ZFSList, LSBLK, ZFSLoadKey, ZFSMount, \
-    ZFSUnLoadKey, ZFSUnmount, UserModChangeHomeDir
+    ZFSUnLoadKey, ZFSUnmount, UserModChangeHomeDir, APTGetUpdate, APTGetUpgrade
 from constants import KEYPATH, POOLNAME, DATASETNAME
 from flask_daemons import NetIOCounter, ScrubStateChecker
 from disk import Disk,DiskStatus
@@ -20,7 +20,7 @@ from iface import NetworkInterface
 from enum import Enum
 from flask import flash
 from nms_utils import setup_logger, ansi_to_html
-from constants import SOCK_PATH
+from constants import SOCK_PATH, APT_LISTS
 import pwd
 
 hash_password = lambda pwd : hashlib.sha1(pwd.encode()).hexdigest()
@@ -93,6 +93,15 @@ class NMSBackend:
 
         this._access_services['ssh'].add_change_hook("username", this._sys_username_changed)
         this._access_services['ftp'].add_pre_start_hook(this._set_pwd)
+        this._access_services['web'].add_change_hook("port", this._web_port_changed)
+
+    def _web_port_changed(this,service):
+        d = this._cfg.get("access",{}).get("services",{}).get("web",{})
+        d['port'] = service.get("port")
+        this._cfg['access']['services']['web'] = d
+
+        this.flush_config()
+
 
     def _set_pwd(this, *args, **kwargs):
         if (this.is_pool_configured()):
@@ -116,10 +125,12 @@ class NMSBackend:
 
     def _sys_username_changed(this,service):
         old_username = this._cfg['access']['account']['username']
-        this._cfg['access']['account']['username'] = service.get("username")
+        new_username = service.get("username")
+        this._cfg['access']['account']['username'] = new_username
         this.flush_config()
 
         smb = this._access_services.get("smb",None)
+        smb.set("username",new_username)
 
 
         if ((smb is not None) and (smb.is_active)):
@@ -173,9 +184,9 @@ class NMSBackend:
 
         return sys_info
 
-    def get_tasks_by_path(this,path, pop=False):
+    def get_tasks_by_path(this,path):
         path = path.lower()
-        return [ t.task_id for t in this._celery_tasks if (not t.completed ) and path.startswith(t.page.lower()) ]
+        return [ t for t in this._celery_tasks if (not t.completed ) and path.startswith(t.page.lower()) ]
 
     def pop_completed_tasks(this, path=None):
         tasks = [t for t in this._celery_tasks if t.completed and ( (path is None) or path.lower().startswith(t.page.lower()))]
@@ -422,8 +433,9 @@ class NMSBackend:
         if (not trans.success):
             raise Exception("Unable to unmount disk array")
 
-
-
+    @property
+    def get_updates(this):
+        return [pkg for pkg in this._cfg.get("updates",{}).get("apt",[])]
 
     @property
     def get_access_services(this):
@@ -657,8 +669,11 @@ class NMSBackend:
                         },
                         "nfs": {"service_name":["rpcbind.service","nfs-server.service"]},
                         "smb": {"service_name":["smbd.service","nmbd.service"]},
-                        "web": False,
+                        "web": {"service_name": "filebrowser-server","port":8080},
                     }
+            },
+            "updates":{
+                "apt" : []
             },
             "systemd": {
                 "services": ['nmswebapp.service','celeryworker.service','sudodaemon.service']
@@ -834,6 +849,61 @@ class NMSBackend:
                 this._daemons['scrub_checker'] = daemon
                 daemon.start()
                 this._logger.info("Scrub checker thread started")
+
+    def get_apt_updates(this):
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            APTGetUpdate()
+        )
+
+        output = trans.run()
+
+
+        try:
+            if (trans.success):
+                trans = RemoteCommandLineTransaction(
+                    socket.AF_UNIX,
+                    socket.SOCK_STREAM,
+                    SOCK_PATH,
+                    APTGetUpgrade(dry_run=True)
+                )
+
+                output = trans.run()
+
+                if (trans.success):
+                    stdout = output[0].get("stdout","")
+
+                    updates = []
+
+                    for line in stdout.splitlines():
+                        if (line.startswith("Inst ")):
+                            pkg = line.split()
+
+                            if (len(pkg)>=2):
+                                updates.append(pkg[1])
+
+                    this._cfg['updates']['apt'] = updates
+                    this.flush_config()
+
+                else:
+                    raise Exception(output[0]['stdout'])
+            else:
+                raise Exception(output[0]['stdout'])
+        except Exception as e:
+            raise Exception(f"Could not get list of updates: {str(e)}")
+
+    def last_apt_time(this):
+        times = []
+        for fname in os.listdir(APT_LISTS):
+            path = os.path.join(APT_LISTS, fname)
+            if os.path.isfile(path):
+                times.append(os.path.getmtime(path))
+
+        if times:
+            return datetime.datetime.fromtimestamp(max(times))
+        return None
 
 
 

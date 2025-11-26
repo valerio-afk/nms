@@ -29,3 +29,6 @@ class SMBServiceForm(AccessServiceForm):
     username = StringField("Username",validators=[DataRequired()])
     password = PasswordField("Password")
     confirm_password = PasswordField("Confirm Password", validators=[EqualTo('password', message='Passwords must match')])
+
+class WEBServiceForm(AccessServiceForm):
+    port = IntegerField("Port",validators=[NumberRange(min=PORT_MIN,max=PORT_MAX,message=f"The port number must be between {PORT_MIN}-{PORT_MAX}")])

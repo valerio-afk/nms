@@ -48,24 +48,25 @@
 </form>
 
 <div class="mt-4">
-    <h4>Connecting using SSH</h4>
-    <div class="accordion" id="ssh_explanations">
+    <h4>Connecting using SMB</h4>
+    <div class="accordion" id="smb_explanations">
         <div class="accordion-item">
             <h2 class="accordion-header">
-                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#unix" aria-expanded="true" aria-controls="unix">
-                    Linux & MacOS
+                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#ubuntu" aria-expanded="true" aria-controls="ubuntu">
+                    Ubuntu (GUI)
                 </button>
             </h2>
-            <div id="unix" class="accordion-collapse collapse" data-bs-parent="#ssh_explanations">
+            <div id="ubuntu" class="accordion-collapse collapse" data-bs-parent="#smb_explanations">
                 <div class="accordion-body">
                     <ol>
-                        <li>Open the <strong>Terminal</strong> <i class="bi bi-terminal-fill"></i></li>
-                        <li>Type the following command <br/>
-                            <code>$ ssh {{ form.username.default }}@<strong>IP</strong> -p  </code>
-                        </li>
-                        <li>You should replace <code>IP</code> with the IP address you can find in the Network tab.</li>
-                        <li>The first time you connect, please accept the fingerprint by typing <code>yes</code>.</li>
-                        <li>Enter the password when asked.</li>
+                        <li>Open <code>Files</code>.</li>
+                        <li>Go to <code>Other locations</code>.</li>
+                        <li>Go to the textbox at the bottom saying <code>Enter server address...</code></li>
+                        <li>Type <code>smb://IP/NMS</code>. Replace <code>IP</code> with the IP address/hostname of this NAS (you can find in the Network tab).</li>
+                        <li>Press <code>Connect</code>.</li>
+                        <li>When prompted, selected <code>Registered user</code>.</li>
+                        <li>Type <code>{{ form.username.default }}</code> and the password you have set in the credential textboxes.</li>
+                        <li>Press <code>Connect</code>.</li>
                     </ol>
                 </div>
             </div>
@@ -73,19 +74,66 @@
 
         <div class="accordion-item">
             <h2 class="accordion-header">
-                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#windows" aria-expanded="true" aria-controls="windows">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#linux_smb" aria-expanded="true" aria-controls="linux_smb">
+                    Linux (most distributions)
+                </button>
+            </h2>
+            <div id="linux_smb" class="accordion-collapse collapse" data-bs-parent="#smb_explanations">
+                <div class="accordion-body">
+                    <ol>
+                        <li>Open the <strong>Terminal</strong> <i class="bi bi-terminal-fill"></i></li>
+                        <li>Install the Common Internet File System (<code>CIFS</code>) utilities if they are not already in there. Here there are some directions to it on major distributions:
+                            <ul>
+                                <li><strong>Ubuntu/Debian</strong>: <code>$ sudo apt install cifs-utils</code></li>
+                                <li><strong>Fedora/Red Hat/CentOS/AlmaLinux</strong>: <code>$ sudo dnf install cifs-utils</code></li>
+                                <li><strong>ArchLinux</strong>: <code>$ sudo pacman -S cifs-utils</code></li>
+                                <li><strong>OpenSUSE</strong>: <code>$ sudo zypper install cifs-utils</code></li>
+                            </ul>
+                        </li>
+                        <li>Create a mount directory in either <code>/media</code> or <code>/mnt</code>. For example<br />
+                            <code>$ sudo mkdir /media/nms</code>
+                        </li>
+                        <li>Type the following command <br/>
+                            <code>$ sudo mount -t cifs //SERVER/<strong>IP</strong>/NMS /media/nms -o username={{ form.username.default }}</code>
+                        </li>
+                        <li>You should replace <code>IP</code> with the IP address you can find in the Network tab.</li>
+                        <li>Type your password once asked.</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#macos_smb" aria-expanded="true" aria-controls="macos_smb">
+                    MacOS
+                </button>
+            </h2>
+            <div id="macos_smb" class="accordion-collapse collapse" data-bs-parent="#smb_explanations">
+                <div class="accordion-body">
+                    <ol>
+                        <li>Open <code>Finder</code>.</li>
+                        <li>In the menu on top, press <code>Go > Connect to Server</code>.</li>
+                        <li>From now on, you can follow similar steps as in <code>Ubuntu</code> starting from step (4).</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#windows_smb" aria-expanded="true" aria-controls="windows_smb">
                     Windows
                 </button>
             </h2>
-            <div id="windows" class="accordion-collapse collapse" data-bs-parent="#ssh_explanations">
+            <div id="windows_smb" class="accordion-collapse collapse" data-bs-parent="#smb_explanations">
                 <div class="accordion-body">
                     <ol>
-                        <li>Download <a href="https://www.putty.org/index.html" target="_blank">PuTTY</a>.</li>
-                        <li>Once you have opened PuTTY, select <code>SSH</code> in <em>Connection type</em>.</li>
-                        <li>Insert the IP of this NAS (you can find in the Network tab) in <code>Hostname</code>.</li>
-                        <li>Change <code>Port</code> with <code>{{ form.username.default }}</code></li>
-                        <li>Press <code>Open</code></li>
-                        <li>You will be asked for your <code>login</code> (username) and <code>password</code>.</li>
+                        <li>Open <code>File Manager</code></li>
+                        <li>In the textbox for the path, insert <code>\\IP\NMS</code>. Replace <code>IP</code> with the IP address/hostname of this NAS (you can find in the Network tab). Then, press <code>Enter</code> key.</li>
+                        <li>When prompted, insert your credential.</li>
+                        <li>Type <code>{{ form.username.default }}</code> and the password you have set.</li>
+                        <li>Press <code>Connect</code>.</li>
                     </ol>
                 </div>
             </div>

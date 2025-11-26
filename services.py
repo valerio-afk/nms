@@ -7,7 +7,7 @@ from abc import abstractmethod
 
 from cmdl import RemoteCommandLineTransaction, SystemCtlIsActive, ApplyPatch, UserModChangeUsername, GetEntShadow, \
     ChPasswd, SystemCtlUnmask, SystemCtlEnable, SystemCtlStart, SystemCtlDisable, SystemCtlMask, SystemCtlStop, \
-    SystemCtlRestart, ExportfsRA, SMBPasswd
+    SystemCtlRestart, ExportfsRA, SMBPasswd, DockerRun, DockerStop, DockerInspect
 from constants import SOCK_PATH
 from nms_utils import make_diff, read_lines_from_file
 from pathlib import Path
@@ -491,6 +491,9 @@ class SMBService(SystemService):
     def get_username(this):
         return this._username
 
+    def set_username(this,uname):
+        this._username = uname
+
     def _patch_configuration(this, username):
         if (this.mountpoint is None):
             raise Exception("You cannot activate this service if you don't set up a new disk array")
@@ -570,3 +573,86 @@ class SMBService(SystemService):
 
         this.stop()
         this.start()
+
+class WEBService(SystemService):
+    port:int
+    CONTAINER_NAME = "filebrowser/filebrowser"
+
+    def __init__(this,service_name,mountpoint,port,*args,**kwargs):
+        this._mountpoint = mountpoint
+        this._port = port
+        super().__init__(service_name)
+
+
+    def get_port(this):
+        return this._port
+
+    def set_port(this,value):
+        this._port = value
+
+    def start(this):
+        volumes = {
+            this._mountpoint:"/srv",
+            "/opt/filebrowser/db":"/database",
+            "/opt/filebrowser/config":"/config",
+        }
+
+        port = [(this.get_port(),80)]
+
+        docker_run = DockerRun(
+            container_name=WEBService.CONTAINER_NAME,
+            image_name = this.service_names,
+            port_forwarding=port,
+            mount = volumes
+        )
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            docker_run
+        )
+
+        trans.run()
+
+    def stop(this):
+        docker_stop = DockerStop(
+            container_name=this.service_names
+        )
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            docker_stop
+        )
+
+        trans.run()
+
+    def enable(this,port,**kwargs):
+        this.set("port",port)
+        this.start()
+
+    def disable(this,**kwargs):
+        this.stop()
+
+    @property
+    def is_active(this):
+        docker_inspect = DockerInspect(
+            container_name=this.service_names,
+            flags=['-f','{{.State.Status}}']
+        )
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            docker_inspect
+        )
+
+        output = trans.run()
+
+        if (trans.success):
+            return True if output[0].get("stdout","").strip() == "running" else False
+        else:
+            return False

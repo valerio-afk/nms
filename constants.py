@@ -6,6 +6,8 @@ DATASETNAME='data'
 
 KEYPATH='/root/tank.key'
 
+APT_LISTS = "/var/lib/apt/lists"
+
 ANSI_RESET = "\033[0m"
 ANSI_COLOURS = {
     "DEBUG": "\033[36m",     # Cyan

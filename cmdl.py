@@ -6,12 +6,9 @@ import os
 from abc import abstractmethod, ABC
 from enum import Enum
 
-
-class RevertibleCommandLine(ABC):
-    def __init__(this, command, revert_command = None, tag=None, sudo=False,mask_output=False):
+class CommandLine(ABC):
+    def __init__(this,command,sudo=False,mask_output=False):
         this._command = command
-        this._revert_command = revert_command
-        this._tag = tag
         this._sudo = sudo
         this._mask_output=mask_output
 
@@ -28,29 +25,24 @@ class RevertibleCommandLine(ABC):
         return this._command
 
     @property
-    def revert_command(this):
-        return this._revert_command
-
-    @property
     def mask_output(this):
         return this._mask_output
 
-    @property
-    def tag(this):
-        return this._tag
 
-    def execute(this,revert=False):
-        cmd = this.command if not revert else this.revert_command
+    def _execute(this,raw_cmd):
 
-        if (cmd is None):
+        if (raw_cmd is None):
             return None
 
         if (this._sudo):
-            cmd = ["sudo"] + cmd
+            raw_cmd = ["sudo"] + raw_cmd
 
-        output = subprocess.run(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE, text=True)
+        output = subprocess.run(raw_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
         return output
+
+    def execute(this,**kwargs):
+        return this._execute(this.command)
 
     def to_dict(this):
         return {"__class__":this.__class__.__name__}
@@ -62,6 +54,24 @@ class RevertibleCommandLine(ABC):
     @abstractmethod
     def from_dict(serialisation):
         pass
+
+
+class RevertibleCommandLine(CommandLine):
+    def __init__(this, command, revert_command = None, sudo=False,mask_output=False):
+        super().__init__(command,sudo,mask_output)
+
+        this._revert_command = revert_command
+
+
+    @property
+    def revert_command(this):
+        return this._revert_command
+
+    def execute(this,revert=False,**kwargs):
+        cmd = this.command if not revert else this.revert_command
+        return this._execute(cmd)
+
+
 
 
 class ZPoolCommand(RevertibleCommandLine):
@@ -507,7 +517,7 @@ class RemoteCommandLineTransaction(CommandLineTransaction):
         this._invoke_hooks(CommandLineTransaction.Hooks.PRE_RUN)
 
         s = socket.socket(this._address_family, this._type)
-        s.settimeout(5)
+        s.settimeout(20)
         s.connect(this._address)
 
 
@@ -531,14 +541,17 @@ class RemoteCommandLineTransaction(CommandLineTransaction):
 
         outputs = json.loads(response.decode("utf-8").strip())
 
-        this._success = sum([o['returncode'] for o in outputs]) == 0
-        this._invoke_hooks(CommandLineTransaction.Hooks.POST_RUN,outputs=outputs)
+        try:
+            this._success = sum([o['returncode'] for o in outputs]) == 0
+            this._invoke_hooks(CommandLineTransaction.Hooks.POST_RUN,outputs=outputs)
+        except TypeError as e:
+            raise Exception(outputs)
 
         return outputs
 
 
 
-class Shutdown(RevertibleCommandLine):
+class Shutdown(CommandLine):
     def __init__(this):
         super().__init__(['shutdown','-h','now'],sudo =True)
 
@@ -547,7 +560,7 @@ class Shutdown(RevertibleCommandLine):
         return Shutdown()
 
 
-class Reboot(RevertibleCommandLine):
+class Reboot(CommandLine):
     def __init__(this):
         super().__init__(['reboot'], sudo=True)
 
@@ -555,7 +568,7 @@ class Reboot(RevertibleCommandLine):
     def from_dict(_):
         return Reboot()
 
-class JournalCtl(RevertibleCommandLine):
+class JournalCtl(CommandLine):
     def __init__(this,service, grep=None):
         this._service = service
         this._grep = grep
@@ -603,7 +616,7 @@ class SystemCtlRestart(SystemCtl):
         super().__init__(service,"restart")
 
     def to_dict(this):
-        d = RevertibleCommandLine.to_dict(this)
+        d = CommandLine.to_dict(this)
         d['service'] = this._service
         return d
 
@@ -707,10 +720,7 @@ class SystemCtlStop(SystemCtl):
 
 
 
-
-
-
-class LSBLK(RevertibleCommandLine):
+class LSBLK(CommandLine):
 
     def __init__(this):
         super().__init__(command=["lsblk", "-J", "-b", "-o", "NAME,MODEL,SERIAL,TYPE,TRAN,SIZE,PATH"],sudo=False)
@@ -881,7 +891,7 @@ class ChPasswd(RevertibleCommandLine):
             serialisation.get('$old_shadow', None),
         )
 
-class ExportfsRA(RevertibleCommandLine):
+class ExportfsRA(CommandLine):
     def __init__(this):
         super().__init__(['exportfs','-ra'],sudo=True)
 
@@ -889,7 +899,7 @@ class ExportfsRA(RevertibleCommandLine):
     def from_dict(_):
         return ExportfsRA
 
-class SMBPasswd(RevertibleCommandLine):
+class SMBPasswd(CommandLine):
 
     class Flags(Enum):
         ADD = '-a'
@@ -936,3 +946,158 @@ class SMBPasswd(RevertibleCommandLine):
         output = subprocess.run(cmd,input=input,stdout=subprocess.PIPE,stderr=subprocess.PIPE, text=True)
 
         return output
+
+
+class APTGet(CommandLine):
+    def __init__(this,subcommand,flags=None):
+        cmd = ['apt-get']
+
+        if (flags is not None):
+            cmd+=flags
+
+        cmd.append(subcommand)
+
+        super().__init__(cmd,sudo=True)
+        this._subcommand = subcommand
+        this._flags = flags
+
+class APTGetUpdate(APTGet):
+    def __init__(this):
+        super().__init__("update")
+
+    @staticmethod
+    def from_dict(_):
+        return APTGetUpdate()
+
+class APTGetUpgrade(APTGet):
+    def __init__(this,dry_run=False,yes=True):
+        flags = []
+
+        if (dry_run):
+            flags.append("--just-print")
+        elif (yes):
+            flags.append("-y")
+
+
+        super().__init__("upgrade",flags)
+        this._yes = yes
+        this._dry_run = dry_run
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['yes'] = this._yes
+        d['dry_run'] = this._dry_run
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return APTGetUpgrade(
+            serialisation.get("dry_run",False),
+            serialisation.get("yes",True)
+        )
+
+class Docker(RevertibleCommandLine):
+    def __init__(this,subcommand,flags=None,container_name=None,revert_command=None):
+        cmd = ["docker",subcommand]
+
+        if (flags is not None):
+            cmd.extend(flags)
+
+        if (container_name is not None):
+            cmd.append(container_name)
+
+        super().__init__(cmd,sudo=True,revert_command=revert_command)
+
+        this._container_name = container_name
+
+    def to_dict(this):
+        d = super().to_dict()
+
+        d['container_name'] = this._container_name
+
+        return d
+
+class DockerRun(Docker):
+    def __init__(this,container_name,mount=None,port_forwarding=None,image_name=None,detach=True,remove=True):
+
+        this._mount = mount
+        this._port_forwarding=port_forwarding
+        this._image_name = image_name
+        this._detach = detach
+        this._remove = remove
+
+        flags = []
+
+        if (mount is not None):
+            for volume,host_path in mount.items():
+                flags.extend(['-v',f"{volume}:{host_path}"])
+
+        if (port_forwarding is not None):
+            for p in port_forwarding:
+                flags.extend(['-p',":".join([str(x) for x in p])])
+
+        if (image_name is not None):
+            flags.extend(['--name',image_name])
+
+        if (detach):
+            flags.append("-d")
+
+        if (remove):
+            flags.append('--rm')
+
+        revert_cmd = ['docker','stop',image_name] if image_name is not None else None
+
+        super().__init__("run",flags,container_name,revert_command=revert_cmd)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['mount'] = this._mount
+        d['port_forwarding'] = this._port_forwarding
+        d['image_name'] = this._image_name
+        d['detach'] = this._detach
+        d['remove'] = this._remove
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return DockerRun(
+            serialisation.get("container_name",None),
+            serialisation.get("mount", None),
+            serialisation.get("port_forwarding", None),
+            serialisation.get("image_name", None),
+            serialisation.get("detach", True),
+            serialisation.get("remove", True),
+        )
+
+class DockerStop(Docker):
+    def __init__(this,container_name):
+        super().__init__("stop",container_name=container_name)
+
+    @staticmethod
+    def from_dict(serialisation):
+        return DockerStop(
+            serialisation.get("container_name",None),
+        )
+
+
+class DockerInspect(Docker):
+    def __init__(this,container_name,flags):
+        super().__init__(subcommand="inspect",
+                         container_name=container_name,
+                         flags=flags)
+        this._flags = flags
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['flags'] = this._flags
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return DockerInspect(
+            serialisation.get("container_name",None),
+            serialisation.get("flags", None),
+        )

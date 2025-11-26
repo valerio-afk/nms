@@ -1,0 +1,40 @@
+{% extends "card.html" %}
+
+{% block card_title %}WEB <span class="float-end">{{ enabled | enabled_fmt | safe }}</span>{% endblock %}
+
+{% block card_content %}
+
+<form action="{{ url_for('main.change_access_settings',service='web') }}" method="POST">
+    {{ form.hidden_tag() }}
+
+    <div class="mb-3 row">
+      <div class="col-sm-4 col-form-label">{{ form.port.label }}</div>
+      <div class="col-sm-8">
+        {{ form.port(class="form-control",readonly=enabled) }}
+      </div>
+    </div>
+
+    {% if enabled %}
+    <div class="row g-1">
+        <div class="col-12">
+            <button class="btn btn-danger w-100" type="submit" name="action" value="disable">Disable</button>
+        </div>
+      </div>
+    {% else %}
+      <div class="row g-1">
+        <div class="col-12">
+            <button class="btn btn-success w-100" type="submit" name="action" value="enable">Enable</button>
+        </div>
+    </div>
+    {% endif %}
+</form>
+
+<div class="mt-4">
+    <h4>Connecting using WEB</h4>
+
+
+
+</div>
+{% endblock %}
+
+

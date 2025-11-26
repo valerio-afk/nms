@@ -300,6 +300,21 @@ else
 fi
 
 #---------------------------------------------------------------------
+# Install Docker and pull Redis image
+#--------------------------------------------------------------------
+
+log INFO "Pulling FileBrowser image for docker"
+
+# Pull Redis container image
+if command -v docker >/dev/null 2>&1; then
+  run_and_log "Pulling filebrowser Docker image" docker pull filebrowser/filebrowser
+  log INFO "filebrowser image downloaded successfully"
+else
+  log ERROR "Docker not found after installation — cannot pull filebrowser image"
+fi
+
+
+#---------------------------------------------------------------------
 # Create www-data user/group for web server with docker access
 #--------------------------------------------------------------------
 
