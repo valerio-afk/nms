@@ -3,12 +3,13 @@ import os.path
 import tempfile
 import re
 import configparser
+import json
 from abc import abstractmethod
 
 from cmdl import RemoteCommandLineTransaction, SystemCtlIsActive, ApplyPatch, UserModChangeUsername, GetEntShadow, \
     ChPasswd, SystemCtlUnmask, SystemCtlEnable, SystemCtlStart, SystemCtlDisable, SystemCtlMask, SystemCtlStop, \
-    SystemCtlRestart, ExportfsRA, SMBPasswd, DockerRun, DockerStop, DockerInspect
-from constants import SOCK_PATH
+    SystemCtlRestart, ExportfsRA, SMBPasswd, DockerRun, DockerStop, DockerInspect, DockerRemove
+from constants import SOCK_PATH,FILEBROWSER
 from nms_utils import make_diff, read_lines_from_file
 from pathlib import Path
 import socket
@@ -591,10 +592,34 @@ class WEBService(SystemService):
         this._port = value
 
     def start(this):
+
+        message = {
+            "action": "filebrowser-setup",
+            "args": {}
+        }
+
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(5)
+        s.connect(SOCK_PATH)
+
+        s.sendall(json.dumps(message, default=lambda x: x.to_dict()).encode() + b'\n')
+
+        response = b""
+        while True:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            response += chunk
+            if b"\n" in chunk:
+                break
+
+        s.close()
+
+
         volumes = {
             this._mountpoint:"/srv",
-            "/opt/filebrowser/db":"/database",
-            "/opt/filebrowser/config":"/config",
+            FILEBROWSER['database']:"/database",
+            FILEBROWSER['config']:"/config",
         }
 
         port = [(this.get_port(),80)]
@@ -603,7 +628,10 @@ class WEBService(SystemService):
             container_name=WEBService.CONTAINER_NAME,
             image_name = this.service_names,
             port_forwarding=port,
-            mount = volumes
+            mount = volumes,
+            remove=False,
+            restart="unless-stopped",
+            user=("www-data","www-data")
         )
 
         trans = RemoteCommandLineTransaction(
@@ -616,15 +644,17 @@ class WEBService(SystemService):
         trans.run()
 
     def stop(this):
-        docker_stop = DockerStop(
-            container_name=this.service_names
-        )
+
+        cmds = [
+            DockerStop(container_name=this.service_names),
+            DockerRemove(container_name=this.service_names)
+        ]
 
         trans = RemoteCommandLineTransaction(
             socket.AF_UNIX,
             socket.SOCK_STREAM,
             SOCK_PATH,
-            docker_stop
+            *cmds
         )
 
         trans.run()

@@ -6,7 +6,7 @@ import struct
 import socket
 import base64
 import subprocess
-from constants import SOCK_PATH
+from constants import SOCK_PATH, FILEBROWSER
 from importlib import import_module
 from socketserver import UnixStreamServer, StreamRequestHandler
 from nms_utils import setup_logger
@@ -116,10 +116,71 @@ def ch_perms(pool,dataset,group):
     subprocess.run(["sudo","chmod", "770", "-R", mountpoint])
 
 
+def filebrowser_setup():
+    if (not os.path.exists(FILEBROWSER['database'])):
+        output = subprocess.run([
+            'sudo',
+            'mkdir',
+            '-p',
+            FILEBROWSER['database']
+        ],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+
+        if (output.returncode!=0):
+            raise Exception(output.stderr)
+
+        subprocess.run([
+            'sudo',
+            'chown',
+            'www-data:www-data',
+            FILEBROWSER['database']
+        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    if (not os.path.exists(FILEBROWSER['config'])):
+        output = subprocess.run([
+            'sudo',
+            'mkdir',
+            '-p',
+            FILEBROWSER['config']
+        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        if (output.returncode != 0):
+            raise Exception(output.stderr)
+
+        subprocess.run([
+            'sudo',
+            'chown',
+            'www-data:www-data',
+            FILEBROWSER['config']
+        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    output = subprocess.run([
+            'sudo',
+            'docker',
+            'exec',
+            'filebrowser-server',
+            'filebrowser',
+            'config',
+            'cat'
+        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    if (output.returncode!=0):
+        subprocess.run([
+            'sudo',
+            'docker',
+            'exec',
+            '--user=www-data:www-data',
+            'filebrowser-server',
+            'filebrowser',
+            'config',
+            '-d', '/database/filebrowser.db',
+            'init'
+        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
 ALLOWED_ACTIONS = {
     "run": run_commands,
     "get-key": get_key,
-    "ch_tank_perm": ch_perms
+    "ch_tank_perm": ch_perms,
+    "filebrowser-setup": filebrowser_setup
 }
 
 def get_uid_for_user(username):

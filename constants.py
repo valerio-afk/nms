@@ -46,3 +46,8 @@ SOCK_DIR = "/tmp"
 SOCK_FILE= "privileged_cmdl.sock"
 
 SOCK_PATH = os.path.join(SOCK_DIR,SOCK_FILE)
+
+FILEBROWSER = {
+    "database": "/opt/filebrowser/db",
+    "config": "/opt/filebrowser/config"
+}

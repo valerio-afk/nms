@@ -1019,13 +1019,22 @@ class Docker(RevertibleCommandLine):
         return d
 
 class DockerRun(Docker):
-    def __init__(this,container_name,mount=None,port_forwarding=None,image_name=None,detach=True,remove=True):
+    def __init__(this,container_name,
+                 mount=None,
+                 port_forwarding=None,
+                 image_name=None,
+                 detach=True,
+                 remove=True,
+                 restart="no",
+                 user=None):
 
         this._mount = mount
         this._port_forwarding=port_forwarding
         this._image_name = image_name
         this._detach = detach
         this._remove = remove
+        this._restart = restart
+        this._user = user
 
         flags = []
 
@@ -1046,6 +1055,15 @@ class DockerRun(Docker):
         if (remove):
             flags.append('--rm')
 
+        if (restart):
+            flags.extend(["--restart",restart])
+
+        if (user):
+            if (isinstance(user,str)):
+                flags.extend([f'--user={user}'])
+            else:
+                flags.extend([f'--user={":".join(user)}'])
+
         revert_cmd = ['docker','stop',image_name] if image_name is not None else None
 
         super().__init__("run",flags,container_name,revert_command=revert_cmd)
@@ -1057,6 +1075,8 @@ class DockerRun(Docker):
         d['image_name'] = this._image_name
         d['detach'] = this._detach
         d['remove'] = this._remove
+        d['restart'] = this._restart
+        d['user'] = this._user
 
         return d
 
@@ -1069,11 +1089,23 @@ class DockerRun(Docker):
             serialisation.get("image_name", None),
             serialisation.get("detach", True),
             serialisation.get("remove", True),
+            serialisation.get("restart", True),
+            serialisation.get("user", None),
         )
 
 class DockerStop(Docker):
     def __init__(this,container_name):
         super().__init__("stop",container_name=container_name)
+
+    @staticmethod
+    def from_dict(serialisation):
+        return DockerStop(
+            serialisation.get("container_name",None),
+        )
+
+class DockerRemove(Docker):
+    def __init__(this,container_name):
+        super().__init__("rm",container_name=container_name)
 
     @staticmethod
     def from_dict(serialisation):
