@@ -18,6 +18,13 @@
         {% set btn_link = url_for('main.restart_systemd') %}
         {% include "element.square_btn.html" %}
 
+        {% set btn_icon = "<i class=\"bi  bi-shield-fill-x\"></i>" | safe %}
+        {% set btn_title = "Reset Admin Login" %}
+        {% set btn_method = "POST" %}
+        {% set btn_link = url_for('main.reset_otp') %}
+        {% set btn_message = "Are you sure you want to reset the adminstrator login credentials?" %}
+        {% include "element.square_btn.modal.html" %}
+
         {% if encrypted %}
             {% set btn_icon = "<i class=\"bi bi-key-fill\"></i>" | safe %}
             {% set btn_title = "Download Encryption Key" %}

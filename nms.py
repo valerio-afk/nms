@@ -1,14 +1,15 @@
 import datetime
 import os
-from flask import render_template, redirect, url_for, jsonify, request, flash, Blueprint, g, send_file
+import pyotp
+import qrcode
+import time
+from flask import render_template, redirect, url_for, jsonify, request, flash, Blueprint, g, send_file, session
 from io import BytesIO
 from importlib import import_module
-
 from flask_wtf.csrf import generate_csrf
-
 from widget import render_widget,get_widgets_html,get_widgets_css_files
 from backend import BACKEND, LogFilter
-from tasks import create_pool, NMSTask, apt_get_updates
+from tasks import create_pool, NMSTask, apt_get_updates, apt_get_upgrade
 from decorators import wait
 
 bp = Blueprint('main',__name__)
@@ -331,6 +332,12 @@ def advanced():
                            active_page="advanced"
                            )
 
+@bp.route("/advanced/reset-otp",methods=['POST'])
+def reset_otp():
+    session.clear()
+    BACKEND.set_otp_secret(None)
+    return redirect(url_for("main.login"))
+
 @bp.route("/advanced/restart-systemd",methods=['POST'])
 def restart_systemd():
     flash("System services are being restarted. If the web interface glitched, that is a good sign it's working.")
@@ -365,6 +372,78 @@ def system_logs(log):
     return render_template("advanced.logs.html",active=log,log_html=logs,csp_nonce=g.csp_nonce,active_page="advanced")
 
 
+@bp.route("/login",methods=['GET','POST'])
+def login():
+    authenticated = False
+    if (BACKEND.is_otp_configured):
+
+        if (request.method == 'POST'):
+            otp = request.form.get("otp")
+
+            BACKEND.logger.info(f"Login request. OTP: {otp}")
+
+            if (BACKEND.verify_otp(otp)):
+                session["authenticated"] = True
+                session["login_time"] = time.time()
+                session["last_activity"] = time.time()
+                session["ip"] = request.remote_addr
+                authenticated = True
+                BACKEND.logger.info(f"OTP accepted")
+            else:
+                BACKEND.logger.warning(f"Invalid OTP")
+
+        elif session.get("authenticated",False):
+            authenticated = True
+
+        if authenticated:
+            return redirect(url_for("main.dashboard"))
+
+        return render_template("login.html",csp_nonce=g.csp_nonce,csrf_token= generate_csrf())
+    else:
+        return redirect(url_for("main.configure_otp"))
+
+@bp.route("/login/config",methods=['GET','POST'])
+def configure_otp():
+
+    if (BACKEND.is_otp_configured):
+        return redirect(url_for("main.login"))
+
+    if (request.method == 'POST'):
+        secret = session.get("pending_otp_secret")
+        if secret is not None:
+            del session['pending_otp_secret']
+            BACKEND.set_otp_secret(secret)
+            return redirect(url_for("main.login"))
+
+
+    secret = pyotp.random_base32()
+    session['pending_otp_secret'] = secret
+
+    return render_template("login.otp.html",csrf_token= generate_csrf())
+
+@bp.route("/login/config/show_qrcode")
+def otp_qr():
+    secret = session.get("pending_otp_secret")
+    if not secret:
+        return "Setup not started", 400
+
+    totp = pyotp.TOTP(secret)
+    uri = totp.provisioning_uri(
+        issuer_name="NMS"
+    )
+
+    img = qrcode.make(uri)
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return send_file(buf, mimetype="image/png")
+
+
+@bp.route("/logout",methods=['POST'])
+def logout():
+    session.clear()
+    return redirect("/login")
+
 @bp.route('/advanced/apt',methods=['POST'])
 @wait()
 def apt_get():
@@ -375,7 +454,8 @@ def apt_get():
         task = apt_get_updates.delay()
         BACKEND.append_task(NMSTask(task.task_id,"/advanced/apt",action=action))
     elif (action == "upgrade"):
-        ...
+        task = apt_get_upgrade.delay()
+        BACKEND.append_task(NMSTask(task.task_id, "/advanced/apt", action=action))
     return redirect(url_for("main.advanced"))
 
 @bp.before_request
@@ -391,6 +471,22 @@ def check_flash_messages_from_tasks():
 
     if (reload_config):
         BACKEND.load_configuration_file()
+
+@bp.before_request
+def require_login():
+
+    last_activity = session.get("last_activity",None)
+
+    if (last_activity is not None):
+        current_time = time.time()
+        if ((current_time - last_activity) > 300):
+            session.clear()
+        else:
+            session["last_activity"] = current_time
+
+    if request.endpoint not in ("main.login", "static","main.configure_otp","main.otp_qr"):
+        if session.get("authenticated") is not True:
+            return redirect(url_for("main.login"))
 
 @bp.after_request
 def scrub_checker(response):

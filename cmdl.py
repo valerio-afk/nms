@@ -422,6 +422,39 @@ class Chmod(RevertibleCommandLine):
     def from_dict(serialisation):
         return Chmod(serialisation.get('flags',None),serialisation.get('path',None),sudo=serialisation.get('sudo',False))
 
+class Chown(RevertibleCommandLine):
+    def __init__(this,uid,gid,path,sudo=False):
+        this._uid = uid
+        this._gid = gid
+        this._path = path
+
+        current_uid = os.stat(path).st_uid
+        current_gid = os.stat(path).st_gid
+
+        revert_cmd = ["chown",f"{current_uid}:{current_gid}",path]
+
+        cmd = ["chown",str(uid) if gid is None else f"{uid}:{gid}",path]
+
+        super().__init__(cmd,revert_command=revert_cmd,sudo=sudo)
+
+    def to_dict(this):
+        d = super().to_dict()
+
+        d['uid'] = this._uid
+        d['gid'] = this._gid
+        d['path'] = this._path
+        d['sudo'] = this._sudo
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return Chown(
+            serialisation.get('uid',None),
+            serialisation.get('gid', None),
+            serialisation.get('path',None),
+            sudo=serialisation.get('sudo',False))
+
 class CommandLineTransaction:
     class Hooks(Enum):
         PRE_RUN = 0
@@ -1021,6 +1054,7 @@ class Docker(RevertibleCommandLine):
 class DockerRun(Docker):
     def __init__(this,container_name,
                  mount=None,
+                 envvars = None,
                  port_forwarding=None,
                  image_name=None,
                  detach=True,
@@ -1029,6 +1063,7 @@ class DockerRun(Docker):
                  user=None):
 
         this._mount = mount
+        this._envvars = envvars
         this._port_forwarding=port_forwarding
         this._image_name = image_name
         this._detach = detach
@@ -1041,6 +1076,10 @@ class DockerRun(Docker):
         if (mount is not None):
             for volume,host_path in mount.items():
                 flags.extend(['-v',f"{volume}:{host_path}"])
+
+        if (envvars is not None):
+            for k,v in envvars.items():
+                flags.extend(['--env',f"{k}={v}"])
 
         if (port_forwarding is not None):
             for p in port_forwarding:
@@ -1071,6 +1110,7 @@ class DockerRun(Docker):
     def to_dict(this):
         d = super().to_dict()
         d['mount'] = this._mount
+        d['envvars'] = this._envvars
         d['port_forwarding'] = this._port_forwarding
         d['image_name'] = this._image_name
         d['detach'] = this._detach
@@ -1085,6 +1125,7 @@ class DockerRun(Docker):
         return DockerRun(
             serialisation.get("container_name",None),
             serialisation.get("mount", None),
+            serialisation.get("envvars", None),
             serialisation.get("port_forwarding", None),
             serialisation.get("image_name", None),
             serialisation.get("detach", True),

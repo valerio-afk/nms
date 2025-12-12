@@ -1,0 +1,30 @@
+.otp-input
+{
+    width: 3rem;
+    height: 3rem;
+    font-size: 1.5rem;
+    text-align: center;
+    margin: 0 0.25rem;
+}
+
+.otp-box
+{
+    max-width:400px;
+    mih-height: 200px;
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.otp-box img
+{
+    width:100%;
+}
+
+body
+{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 60vh;         /* full screen height */
+    margin: 0;
+}

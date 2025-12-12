@@ -3,3 +3,7 @@ psutil >= 7.0.0
 celery[redis] >= 5.5.3
 flask-wtf >= 1.2.2
 markdown >= 3.10
+pyotp >= 2.9.0
+qrcode >= 8.2
+pillow >= 11.2.1
+watchdog >= 6.0.0

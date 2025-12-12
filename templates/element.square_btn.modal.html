@@ -1,4 +1,8 @@
 <div class="col-6">
+    <form action="{{ btn_link }}" method="{{ btn_method }}">
+        {% if btn_method.upper() == 'POST' %}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {% endif %}
           <button type="button"
                   modal-confirm
                   modal-action="{{ btn_link}}"
@@ -12,4 +16,5 @@
                 {{ btn_text }}
             </div>
           </button>
+    </form>
 </div>

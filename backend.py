@@ -1,9 +1,12 @@
 import os
+import pyotp
 import hashlib
 import json
 import subprocess
+import grp
 from importlib import import_module
-
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 import psutil
 import socket
 import platform
@@ -12,7 +15,7 @@ import base64
 from collections import OrderedDict
 from cmdl import CreateKey, ZPoolCreate, ZFSCreate, RemoteCommandLineTransaction, ZpoolScrub, Reboot, \
     Shutdown, JournalCtl, SystemCtlRestart, ZpoolList, ZpoolStatus, ZFSGet, ZFSList, LSBLK, ZFSLoadKey, ZFSMount, \
-    ZFSUnLoadKey, ZFSUnmount, UserModChangeHomeDir, APTGetUpdate, APTGetUpgrade
+    ZFSUnLoadKey, ZFSUnmount, UserModChangeHomeDir, APTGetUpdate, APTGetUpgrade, Chown
 from constants import KEYPATH, POOLNAME, DATASETNAME
 from flask_daemons import NetIOCounter, ScrubStateChecker
 from disk import Disk,DiskStatus
@@ -49,7 +52,18 @@ class TaskStatus(Enum):
     SUCCESSFUL=1
     FAILED=-1
 
-class NMSBackend:
+
+class OwnershipHandler():
+    def __init__(this,uid,gid):
+        this._uid = uid
+        this._gid = gid
+
+        super().__init__()
+
+
+
+
+class NMSBackend(FileSystemEventHandler):
 
     def __init__(this,config_file="nms.json"):
         this._config_file = config_file
@@ -57,6 +71,8 @@ class NMSBackend:
         this._celery_tasks = []
         this._daemons = {'net_counters':NetIOCounter(),'scrub_checker':None}
         this._logger = setup_logger("NMS BACKEND")
+        this._watchdog = None
+
 
 
         try:
@@ -69,6 +85,7 @@ class NMSBackend:
         this._access_services={}
 
         this._setup_access_services()
+        this._start_tank_observer()
 
         for daemon in this._daemons.values():
             if (daemon is not None):
@@ -80,6 +97,7 @@ class NMSBackend:
     def _setup_access_services(this):
         module = import_module("services")
         account = this._cfg.get("access",{}).get("account",{})
+
 
         for service,args in this._cfg.get("access",{}).get("services",{}).items():
             try:
@@ -106,7 +124,7 @@ class NMSBackend:
     def _set_pwd(this, *args, **kwargs):
         if (this.is_pool_configured()):
             mp = this.mountpoint
-            username = this._cfg.get("access",{}).get("services").get("ssh",{}).get("sys_user",None)
+            username = this._cfg.get("access",{}).get("services").get("account",{}).get("username",None)
 
             if (username is not None):
                 current_pwd = pwd.getpwnam(username).pw_dir
@@ -140,8 +158,30 @@ class NMSBackend:
     def config_filename(this):
         return this._config_file
 
+    @property
+    def logger(this):
+        return this._logger
+
     def append_task(this,task):
         this._celery_tasks.append(task)
+
+    @property
+    def is_otp_configured(this):
+        return this._cfg['access'].get("otp_secret",None) is not None
+
+    def set_otp_secret(this,secret):
+        this._cfg['access']['otp_secret'] = secret
+        this.flush_config()
+
+    def verify_otp(this,otp):
+        secret = this._cfg['access'].get('otp_secret',None)
+
+        if (secret is not None):
+            totp = pyotp.TOTP(secret)
+            return totp.verify(otp)
+
+        return False
+
 
     @property
     def blocked_pages(this):
@@ -357,7 +397,7 @@ class NMSBackend:
 
             if ((tank is not None) and (dataset is not None)):
                 return d.get('datasets', {}).get(f"{tank}/{dataset}", {}).get("properties", {}).get("mountpoint",{}).get("value",None)
-            return False
+            return None
         else:
             raise Exception("Could not be determined the mountpoint")
 
@@ -500,6 +540,7 @@ class NMSBackend:
         this.flush_config()
 
         this.change_permissions()
+        this._start_tank_observer()
 
     def change_permissions(this):
         if (this.is_mounted):
@@ -633,6 +674,8 @@ class NMSBackend:
         return None
 
 
+
+
     def create_default_config_file(this):
         this._logger.info(f"Creating default configuration file")
         cfg = {
@@ -656,20 +699,21 @@ class NMSBackend:
             "dataset": None,
             "access": {
                 "account" : {
+                  "otp_secret": None,
                   "username": "tuttoweb",
                   "group": "users"
                 },
                 "services":
                     {
-                        "ftp": {
-                            "service_name": "vsftpd.service"
-                        },
                         "ssh": {
                             "service_name": "ssh.service",
                         },
+                        "ftp": {
+                            "service_name": "vsftpd.service"
+                        },
                         "nfs": {"service_name":["rpcbind.service","nfs-server.service"]},
                         "smb": {"service_name":["smbd.service","nmbd.service"]},
-                        "web": {"service_name": "filebrowser-server","port":8080},
+                        "web": {"service_name": "directorylister-server","port":8080},
                     }
             },
             "updates":{
@@ -894,6 +938,39 @@ class NMSBackend:
         except Exception as e:
             raise Exception(f"Could not get list of updates: {str(e)}")
 
+    def get_apt_upgrade(this):
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            APTGetUpdate()
+        )
+
+        output = trans.run()
+
+
+        try:
+            if (trans.success):
+                trans = RemoteCommandLineTransaction(
+                    socket.AF_UNIX,
+                    socket.SOCK_STREAM,
+                    SOCK_PATH,
+                    APTGetUpgrade(dry_run=False)
+                )
+
+                output = trans.run()
+
+                if (trans.success):
+                    this._cfg['updates']['apt'] = []
+                    this.flush_config()
+
+                else:
+                    raise Exception(output[0]['stdout'])
+            else:
+                raise Exception(output[0]['stdout'])
+        except Exception as e:
+            raise Exception(f"Could not install system updates: {str(e)}")
+
     def last_apt_time(this):
         times = []
         for fname in os.listdir(APT_LISTS):
@@ -905,6 +982,44 @@ class NMSBackend:
             return datetime.datetime.fromtimestamp(max(times))
         return None
 
+    def change_ownership(this, path):
+        account = this._cfg.get("access", {}).get("account", {})
+
+        try:
+            uid = pwd.getpwnam(account.get("username","")).pw_uid
+            gid = grp.getgrnam(account.get("group","")).gr_gid
+
+            trans = RemoteCommandLineTransaction(
+                socket.AF_UNIX,
+                socket.SOCK_STREAM,
+                SOCK_PATH,
+                Chown(uid,gid,path,True)
+            )
+
+            output = trans.run()
+
+            if (trans.success):
+                this._logger.info(f"Changed ownership: {path}")
+            else:
+                this._logger.error(f"Error while changing ownership: {output['stderr']}")
+
+        except Exception as e:
+            this._logger.error(f"Error while changing ownership: {str(e)}")
+
+
+    def on_created(this, event):
+            this.change_ownership(event.src_path)
+
+    def on_modified(this, event):
+            this.change_ownership(event.src_path)
+
+    def _start_tank_observer(this):
+        path = this.mountpoint
+
+        if ((this._watchdog is None) and (path is not None)):
+            this._watchdog = Observer()
+            this._watchdog.schedule(this,path,recursive=True)
+            this._watchdog.start()
 
 
 BACKEND = NMSBackend()

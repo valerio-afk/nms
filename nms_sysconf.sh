@@ -254,6 +254,16 @@ else
   log WARN "raspi-config not found — skipping raspi network configuration"
 fi
 
+#---------------------------------------------------------------------
+# nginx
+#--------------------------------------------------------------------
+log INFO "Installing `nginx`"
+
+# Install nginx
+DEBIAN_FRONTEND=noninteractive run_and_log "apt-get install nginx" \
+  apt-get install -y nginx
+
+
 
 #---------------------------------------------------------------------
 # Install Docker and pull Redis image

@@ -3,7 +3,7 @@ import os.path
 import tempfile
 import re
 import configparser
-import json
+import pwd, grp
 from abc import abstractmethod
 
 from cmdl import RemoteCommandLineTransaction, SystemCtlIsActive, ApplyPatch, UserModChangeUsername, GetEntShadow, \
@@ -577,11 +577,19 @@ class SMBService(SystemService):
 
 class WEBService(SystemService):
     port:int
-    CONTAINER_NAME = "filebrowser/filebrowser"
+    CONTAINER_NAME = "directorylister/directorylister"
+    ENV = {
+        "HIDE_DOT_FILES": "false",
+        "HOME_TEXT": "NMS",
+        "SITE_TITLE": "NAS Management System Web Access"
 
-    def __init__(this,service_name,mountpoint,port,*args,**kwargs):
+    }
+
+    def __init__(this,service_name,mountpoint,port,username,group,*args,**kwargs):
         this._mountpoint = mountpoint
         this._port = port
+        this._username = username
+        this._group = group
         super().__init__(service_name)
 
 
@@ -593,45 +601,61 @@ class WEBService(SystemService):
 
     def start(this):
 
-        message = {
-            "action": "filebrowser-setup",
-            "args": {}
-        }
-
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.settimeout(5)
-        s.connect(SOCK_PATH)
-
-        s.sendall(json.dumps(message, default=lambda x: x.to_dict()).encode() + b'\n')
-
-        response = b""
-        while True:
-            chunk = s.recv(4096)
-            if not chunk:
-                break
-            response += chunk
-            if b"\n" in chunk:
-                break
-
-        s.close()
+        # message = {
+        #     "action": "filebrowser-setup",
+        #     "args": {}
+        # }
+        #
+        # s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        # s.settimeout(5)
+        # s.connect(SOCK_PATH)
+        #
+        # s.sendall(json.dumps(message, default=lambda x: x.to_dict()).encode() + b'\n')
+        #
+        # response = b""
+        # while True:
+        #     chunk = s.recv(4096)
+        #     if not chunk:
+        #         break
+        #     response += chunk
+        #     if b"\n" in chunk:
+        #         break
+        #
+        # s.close()
 
 
         volumes = {
-            this._mountpoint:"/srv",
-            FILEBROWSER['database']:"/database",
-            FILEBROWSER['config']:"/config",
+            this._mountpoint:"/data",
         }
 
         port = [(this.get_port(),80)]
+
+        docker_remove = DockerRemove(container_name=this.service_names)
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            docker_remove
+        )
+        trans.run()
+
+        user_info = pwd.getpwnam(this._username)
+        group_info = grp.getgrnam(this._group)
+
+        uid = user_info.pw_uid
+        gid = group_info.gr_gid
+
 
         docker_run = DockerRun(
             container_name=WEBService.CONTAINER_NAME,
             image_name = this.service_names,
             port_forwarding=port,
+            envvars=WEBService.ENV,
             mount = volumes,
             remove=False,
             restart="unless-stopped",
-            user=("www-data","www-data")
+            user=("www-data",str(gid))
         )
 
         trans = RemoteCommandLineTransaction(

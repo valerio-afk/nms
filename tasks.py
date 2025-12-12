@@ -50,4 +50,9 @@ def create_pool(redundancy, encryption,compression):
 @shared_task()
 def apt_get_updates():
     BACKEND.get_apt_updates()
-    return "Updates retrieved successfully."
+    return "System update retrieved successfully."
+
+@shared_task()
+def apt_get_upgrade():
+    BACKEND.get_apt_upgrade()
+    return "System update completed successfully."
