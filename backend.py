@@ -5,8 +5,8 @@ import json
 import subprocess
 import grp
 from importlib import import_module
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
+# from watchdog.observers import Observer
+# from watchdog.events import FileSystemEventHandler
 import psutil
 import socket
 import platform
@@ -63,7 +63,7 @@ class OwnershipHandler():
 
 
 
-class NMSBackend(FileSystemEventHandler):
+class NMSBackend:#(FileSystemEventHandler):
 
     def __init__(this,config_file="nms.json"):
         this._config_file = config_file
@@ -85,7 +85,7 @@ class NMSBackend(FileSystemEventHandler):
         this._access_services={}
 
         this._setup_access_services()
-        this._start_tank_observer()
+        # this._start_tank_observer()
 
         for daemon in this._daemons.values():
             if (daemon is not None):
@@ -112,10 +112,26 @@ class NMSBackend(FileSystemEventHandler):
         this._access_services['ssh'].add_change_hook("username", this._sys_username_changed)
         this._access_services['ftp'].add_pre_start_hook(this._set_pwd)
         this._access_services['web'].add_change_hook("port", this._web_port_changed)
+        this._access_services['web'].add_change_hook("credential", this._web_credentials_changed)
+        this._access_services['web'].add_change_hook("authentication", this._web_authentication_changed)
 
     def _web_port_changed(this,service):
         d = this._cfg.get("access",{}).get("services",{}).get("web",{})
         d['port'] = service.get("port")
+        this._cfg['access']['services']['web'] = d
+
+        this.flush_config()
+
+    def _web_credentials_changed(this,service):
+        d = this._cfg.get("access",{}).get("services",{}).get("web",{})
+        d['credential'] = service.get("credential")
+        this._cfg['access']['services']['web'] = d
+
+        this.flush_config()
+
+    def _web_authentication_changed(this,service):
+        d = this._cfg.get("access",{}).get("services",{}).get("web",{})
+        d['authentication'] = service.get("authentication")
         this._cfg['access']['services']['web'] = d
 
         this.flush_config()
@@ -540,7 +556,7 @@ class NMSBackend(FileSystemEventHandler):
         this.flush_config()
 
         this.change_permissions()
-        this._start_tank_observer()
+        # this._start_tank_observer()
 
     def change_permissions(this):
         if (this.is_mounted):
@@ -713,7 +729,12 @@ class NMSBackend(FileSystemEventHandler):
                         },
                         "nfs": {"service_name":["rpcbind.service","nfs-server.service"]},
                         "smb": {"service_name":["smbd.service","nmbd.service"]},
-                        "web": {"service_name": "directorylister-server","port":8080},
+                        "web": {
+                            "service_name": "ifm-server",
+                            "port":8080,
+                            "authentication": False,
+                            "credential": "afk:$2y$10$WSpWpteVT3wt6oDPSZlmnOTT9g3/tcKmpWED26IFlHNx/27B/I.Wq"
+                        },
                     }
             },
             "updates":{
@@ -1007,19 +1028,20 @@ class NMSBackend(FileSystemEventHandler):
             this._logger.error(f"Error while changing ownership: {str(e)}")
 
 
-    def on_created(this, event):
-            this.change_ownership(event.src_path)
-
-    def on_modified(this, event):
-            this.change_ownership(event.src_path)
-
-    def _start_tank_observer(this):
-        path = this.mountpoint
-
-        if ((this._watchdog is None) and (path is not None)):
-            this._watchdog = Observer()
-            this._watchdog.schedule(this,path,recursive=True)
-            this._watchdog.start()
+    # def on_created(this, event):
+    #     this.change_ownership(event.src_path)
+    #
+    # def on_modified(this, event):
+    #     this.change_ownership(event.src_path)
+    #
+    # def _start_tank_observer(this):
+    #     path = this.mountpoint
+    #
+    #     if ((this._watchdog is None) and (path is not None)):
+    #         this._watchdog = Observer()
+    #         this._watchdog.schedule(this,path,recursive=True)
+    #         this._watchdog.start()
+    #         this._logger.info("Tank Directory Observer started")
 
 
 BACKEND = NMSBackend()

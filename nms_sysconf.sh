@@ -310,19 +310,39 @@ else
 fi
 
 #---------------------------------------------------------------------
-# Install Docker and pull Redis image
-#--------------------------------------------------------------------
+# Clone IFM Git repository and build Docker image
+#---------------------------------------------------------------------
 
-log INFO "Pulling FileBrowser image for docker"
+GIT_REPO_URL="https://github.com/misterunknown/ifm.git"
+REPO_NAME="$(basename "$GIT_REPO_URL" .git)"
+REPO_DIR="/opt/$REPO_NAME"
+DOCKER_IMAGE_NAME="ifm:latest"
 
-# Pull Redis container image
-if command -v docker >/dev/null 2>&1; then
-  run_and_log "Pulling filebrowser Docker image" docker pull filebrowser/filebrowser
-  log INFO "filebrowser image downloaded successfully"
-else
-  log ERROR "Docker not found after installation — cannot pull filebrowser image"
+log INFO "Preparing to clone repository $GIT_REPO_URL into $REPO_DIR"
+
+# Ensure git is available
+if ! command -v git >/dev/null 2>&1; then
+  log INFO "git not found, installing"
+  DEBIAN_FRONTEND=noninteractive run_and_log "apt-get install git" \
+    apt-get install -y git
 fi
 
+# Clone repository if not already present
+if [ ! -d "$REPO_DIR/.git" ]; then
+  run_and_log "Cloning repository $GIT_REPO_URL" \
+    git clone "$GIT_REPO_URL" "$REPO_DIR"
+else
+  log INFO "Repository already exists at $REPO_DIR, skipping clone"
+fi
+
+# Build Docker image from repository
+if command -v docker >/dev/null 2>&1; then
+  log INFO "Building Docker image $DOCKER_IMAGE_NAME from $REPO_DIR"
+  run_and_log "docker build $DOCKER_IMAGE_NAME" \
+    docker build -t "$DOCKER_IMAGE_NAME" "$REPO_DIR"
+else
+  log ERROR "Docker not available — cannot build image"
+fi
 
 #---------------------------------------------------------------------
 # Create www-data user/group for web server with docker access

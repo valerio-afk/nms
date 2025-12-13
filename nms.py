@@ -479,7 +479,7 @@ def require_login():
 
     if (last_activity is not None):
         current_time = time.time()
-        if ((current_time - last_activity) > 300):
+        if ((current_time - last_activity) > (60*30)):
             session.clear()
         else:
             session["last_activity"] = current_time
