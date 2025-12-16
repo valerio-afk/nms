@@ -1,19 +1,6 @@
-<!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NAS Management System</title>
+{% extends "login.html" %}
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap-5.3.8-dist/css/bootstrap.min.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap-icons-1.13.1/bootstrap-icons.min.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='login.css') }}">
-  {% for css in extra_css %}
-    <link rel="stylesheet" href="{{ url_for('static', filename=css) }}">
-  {% endfor %}
-</head>
-<body>
+{% block content %}
 <div class="otp-box card">
     <h4 class="mb-3">Scan QR Code in your authenticator app</h4>
 
@@ -27,5 +14,4 @@
     </form>
 </div>
 
-</body>
-</html>
+{% endblock %}

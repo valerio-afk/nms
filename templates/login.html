@@ -14,62 +14,9 @@
   {% endfor %}
 </head>
 <body>
-<div class="otp-box card">
-    <h4 class="mb-3">Enter OTP to log in</h4>
 
-    <form method="POST" id="otpForm" action="{{ url_for('main.login') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <div class="d-flex justify-content-center mb-3">
-            {% for i in range(6) %}
-            <input
-                type="text"
-                maxlength="1"
-                autocomplete="off"
-                class="form-control otp-input"
-                inputmode="numeric"
-                pattern="[0-9]*"
-                id="otp{{ i }}"
-                name="digit{{ i }}"
-                required
-            >
-            {% endfor %}
-        </div>
-
-        <!-- Hidden field that stores concatenated OTP -->
-        <input type="hidden" name="otp" id="otpFull">
-
-        <button class="btn btn-success w-100">Login</button>
-    </form>
-</div>
-
-
-<script nonce="{{ csp_nonce }}">
-    const inputs = document.querySelectorAll(".otp-input");
-
-    // Auto-advance and auto-backspace behaviour
-    inputs.forEach((input, index) => {
-        input.addEventListener("input", function () {
-            this.value = this.value.replace(/\D/, ""); // allow digits only
-
-            if (this.value && index < inputs.length - 1) {
-                inputs[index + 1].focus();
-            }
-        });
-
-        input.addEventListener("keydown", function (e) {
-            if (e.key === "Backspace" && !this.value && index > 0) {
-                inputs[index - 1].focus();
-            }
-        });
-    });
-
-    // On submit: combine digits into hidden field
-    document.getElementById("otpForm").addEventListener("submit", function () {
-        let otp = "";
-        inputs.forEach(i => otp += (i.value || ""));
-        document.getElementById("otpFull").value = otp;
-    });
-</script>
+    {% block content %}
+    {% endblock %}
 
 </body>
 </html>

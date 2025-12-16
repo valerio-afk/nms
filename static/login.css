@@ -7,6 +7,16 @@
     margin: 0 0.25rem;
 }
 
+span.dash
+{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5em;
+  font-weight: bold;
+  margin: 0 0.5em;
+}
+
 .otp-box
 {
     max-width:400px;

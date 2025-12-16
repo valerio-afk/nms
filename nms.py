@@ -3,10 +3,12 @@ import os
 import pyotp
 import qrcode
 import time
-from flask import render_template, redirect, url_for, jsonify, request, flash, Blueprint, g, send_file, session
+from flask import render_template, redirect, url_for, jsonify, request, flash, Blueprint, g, send_file, session, abort
 from io import BytesIO
 from importlib import import_module
-from flask_wtf.csrf import generate_csrf
+from flask_wtf.csrf import generate_csrf, validate_csrf
+from wtforms import ValidationError
+
 from widget import render_widget,get_widgets_html,get_widgets_css_files
 from backend import BACKEND, LogFilter
 from tasks import create_pool, NMSTask, apt_get_updates, apt_get_upgrade
@@ -37,6 +39,10 @@ def widget_system_updates():
 
     return render_widget("apt", **apt)
 
+def widget_danger_zone():
+
+    return render_widget("danger_zone")
+
 def widget_disk_usage():
     pool_capacity = BACKEND.get_pool_capacity
     used = pool_capacity['used']
@@ -45,6 +51,7 @@ def widget_disk_usage():
     capacity = int(used/total*1000)/10 if total > 0 else 0
 
     return render_widget("disk_usage",used=used, total=total, capacity=capacity,mounted=BACKEND.is_mounted)
+
 
 
 @bp.route('/async/widgets/apt')
@@ -322,7 +329,8 @@ def advanced():
 
     dashboard_widgets = [
         widget_system_admin(),
-        widget_system_updates()
+        widget_system_updates(),
+        widget_danger_zone()
     ]
 
     return render_template("advanced.html",
@@ -372,12 +380,33 @@ def system_logs(log):
     return render_template("advanced.logs.html",active=log,log_html=logs,csp_nonce=g.csp_nonce,active_page="advanced")
 
 
+@bp.route('/advanced/format',methods=['POST'])
+def format():
+    authorisation = session.get("dz_authorisation",None)
+
+    if (authorisation is None):
+        return redirect(url_for("main.reauth",operation="format"))
+
+    else:
+        if (time.time() - authorisation['timestamp']) < 60:
+            return "Ok boomer"
+        else:
+            flash("Authorisation token expired","error")
+            return redirect(url_for("main.advanced"))
+
+
 @bp.route("/login",methods=['GET','POST'])
 def login():
     authenticated = False
     if (BACKEND.is_otp_configured):
 
         if (request.method == 'POST'):
+            try:
+                validate_csrf(request.form.get("csrf_token"))
+            except ValidationError:
+                raise Exception("CSRF validation failed")
+                abort(400)
+
             otp = request.form.get("otp")
 
             BACKEND.logger.info(f"Login request. OTP: {otp}")
@@ -398,7 +427,40 @@ def login():
         if authenticated:
             return redirect(url_for("main.dashboard"))
 
-        return render_template("login.html",csp_nonce=g.csp_nonce,csrf_token= generate_csrf())
+        return render_template("login.auth.html",csp_nonce=g.csp_nonce,csrf_token= generate_csrf())
+    else:
+        return redirect(url_for("main.configure_otp"))
+
+@bp.route("/login/reauth/<string:operation>",methods=['GET','POST'])
+def reauth  (operation):
+
+    if (BACKEND.is_otp_configured):
+
+        if (request.method == 'POST'):
+            try:
+                validate_csrf(request.form.get("csrf_token"))
+            except ValidationError:
+                raise Exception("CSRF validation failed")
+                abort(400)
+
+            otp = request.form.get("otp")
+
+            BACKEND.logger.info(f"Login request. OTP: {otp}")
+
+            if (BACKEND.verify_otp(otp)):
+                session["dz_authorisation"] = {"time":time.time(),"timestamp":time.time(),"operation":operation}
+                BACKEND.logger.info(f"OTP accepted")
+                flash("OTP Accepted. Please press again the button of the desired dangerous operation to continue",
+                      "success")
+            else:
+                BACKEND.logger.warning(f"Invalid OTP")
+                flash("Invalid OTP","error")
+
+
+
+            return redirect(url_for("main.advanced"))
+
+        return render_template("login.reauth.html",csp_nonce=g.csp_nonce,csrf_token= generate_csrf())
     else:
         return redirect(url_for("main.configure_otp"))
 
@@ -442,7 +504,7 @@ def otp_qr():
 @bp.route("/logout",methods=['POST'])
 def logout():
     session.clear()
-    return redirect("/login")
+    return redirect(url_for("main.login"))
 
 @bp.route('/advanced/apt',methods=['POST'])
 @wait()
@@ -474,7 +536,6 @@ def check_flash_messages_from_tasks():
 
 @bp.before_request
 def require_login():
-
     last_activity = session.get("last_activity",None)
 
     if (last_activity is not None):
@@ -485,11 +546,19 @@ def require_login():
             session["last_activity"] = current_time
 
     if request.endpoint not in ("main.login", "static","main.configure_otp","main.otp_qr"):
-        if session.get("authenticated") is not True:
+        if session.get("authenticated",False) is not True:
             return redirect(url_for("main.login"))
+
 
 @bp.after_request
 def scrub_checker(response):
 
     BACKEND.check_scrub_status()
+    return response
+
+@bp.after_request
+def no_cache(response):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     return response

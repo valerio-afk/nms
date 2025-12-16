@@ -1,0 +1,29 @@
+{% extends "card.html" %}
+
+{% block card_title %}<i class="bi bi-exclamation-triangle-fill"></i> Danger Zone{% endblock %}
+
+{% block card_content %}
+
+<div class="container">
+    <div class="row g-3">
+        {% set btn_icon = "<i class=\"bi bi-database-fill-x\"></i>" | safe %}
+        {% set btn_title = "Format Disk Array" %}
+        {% set btn_method = "POST" %}
+        {% set btn_link = url_for('main.format') %}
+        {% include "element.square_btn.html" %}
+
+        {% set btn_icon = "<i class=\"bi bi-radioactive\"></i>" | safe %}
+        {% set btn_title = "Delete Disk Array" %}
+        {% set btn_method = "POST" %}
+        {% set btn_link = url_for('main.dashboard') %}
+        {% include "element.square_btn.html" %}
+
+
+    </div>
+</div>
+
+
+
+{% endblock %}
+
+

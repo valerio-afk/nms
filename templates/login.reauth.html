@@ -1,0 +1,74 @@
+{% extends "login.html" %}
+
+{% block content %}
+<div class="otp-box card">
+    <h4 class="mb-3">Enter OTP to confirm</h4>
+
+    <p>The operation you are going to do is extremely risky and will delete all of your data.</p>
+    <p>If you wish to continue (and you are sure what you are doing), enter your OTP and press again the button of the operation you wanted to do.</p>
+    <p>Good luck!</p>
+
+    <form method="POST" id="otpForm" action="{{ request.url }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="d-flex justify-content-center mb-3">
+            {% for i in range(6) %}
+            <input
+                type="text"
+                maxlength="1"
+                autocomplete="off"
+                class="form-control otp-input"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                id="otp{{ i }}"
+                name="digit{{ i }}"
+                required
+            >
+
+            {% if i==2 %}
+            <span class="dash"> - </span>
+            {% endif %}
+
+            {% endfor %}
+        </div>
+
+        <!-- Hidden field that stores concatenated OTP -->
+        <input type="hidden" name="otp" id="otpFull">
+
+        <button class="btn btn-danger w-100">Yes, I am sure</button>
+    </form>
+</div>
+
+
+<script nonce="{{ csp_nonce }}">
+    const inputs = document.querySelectorAll(".otp-input");
+
+    // Auto-advance and auto-backspace behaviour
+    inputs.forEach((input, index) => {
+        input.addEventListener("input", function () {
+            this.value = this.value.replace(/\D/, ""); // allow digits only
+
+            if (this.value)
+            {
+              if (index < inputs.length - 1)
+              {
+                inputs[index + 1].focus();
+              }
+             }
+        });
+
+        input.addEventListener("keydown", function (e) {
+            if (e.key === "Backspace" && !this.value && index > 0) {
+                inputs[index - 1].focus();
+            }
+        });
+    });
+
+    // On submit: combine digits into hidden field
+    document.getElementById("otpForm").addEventListener("submit", function () {
+        let otp = "";
+        inputs.forEach(i => otp += (i.value || ""));
+        document.getElementById("otpFull").value = otp;
+    });
+</script>
+
+{% endblock %}

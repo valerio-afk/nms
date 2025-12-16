@@ -64,6 +64,16 @@ div.card, .card-header
     background-color: #4E4A9B;
 }
 
+div#danger_zone div.card, div#danger_zone .card-header
+{
+    background-color: #4D1205;
+}
+
+div#danger_zone button.square-btn
+{
+    background-color: #AD290B;
+}
+
 .card-header
 {
     border-bottom:0px;

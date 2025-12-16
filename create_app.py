@@ -3,6 +3,8 @@ import os
 from celery import Celery, Task
 from flask import Flask, g
 from flask_wtf import CSRFProtect
+from flask_session import Session
+import redis
 import base64
 
 from filters import human_readable_bytes, enabled_fmt, disk_charm, markdown_filter
@@ -14,6 +16,7 @@ def generate_nonce(length=16):
 def create_flask_app():
     app = Flask("NMS")
     app.register_blueprint(bp)
+
     app.config.from_mapping(
         CELERY=dict(
             broker_url="redis://localhost:6379/0",
@@ -27,6 +30,24 @@ def create_flask_app():
     app.add_template_filter(markdown_filter,"md")
 
     app.secret_key = os.environ.get("NMS_SECRET_KEY")
+
+    if not app.secret_key:
+        raise RuntimeError("NMS_SECRET_KEY environment variable is not set")
+
+    app.config.update(
+        SESSION_TYPE="redis",
+        SESSION_PERMANENT=False,
+        SESSION_USE_SIGNER=True,
+
+        SESSION_REDIS=redis.Redis(
+            host="localhost",
+            port=6379,
+            db=2,
+        ),
+    )
+
+    Session(app)
+
 
     @app.before_request
     def set_csp_nonce():
