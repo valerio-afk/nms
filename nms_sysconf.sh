@@ -497,6 +497,7 @@ Type=simple
 User=www-data
 Group=www-data
 WorkingDirectory=/nms
+Environment="NMS_SECRET_KEY=${SECRET_KEY}"
 ExecStart=/opt/python3/bin/celery -A app.celery_app worker
 Restart=on-failure
 RestartSec=5s

@@ -6,7 +6,7 @@ import struct
 import socket
 import base64
 import subprocess
-from constants import SOCK_PATH, FILEBROWSER
+from constants import SOCK_PATH, FILEBROWSER, KEYPATH
 from importlib import import_module
 from socketserver import UnixStreamServer, StreamRequestHandler
 from nms_utils import setup_logger
@@ -116,71 +116,101 @@ def ch_perms(pool,dataset,group):
     subprocess.run(["sudo","chmod", "770", "-R", mountpoint])
 
 
-def filebrowser_setup():
-    if (not os.path.exists(FILEBROWSER['database'])):
-        output = subprocess.run([
-            'sudo',
-            'mkdir',
-            '-p',
-            FILEBROWSER['database']
-        ],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+# def filebrowser_setup():
+#     if (not os.path.exists(FILEBROWSER['database'])):
+#         output = subprocess.run([
+#             'sudo',
+#             'mkdir',
+#             '-p',
+#             FILEBROWSER['database']
+#         ],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+#
+#         if (output.returncode!=0):
+#             raise Exception(output.stderr)
+#
+#         subprocess.run([
+#             'sudo',
+#             'chown',
+#             'www-data:www-data',
+#             FILEBROWSER['database']
+#         ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+#
+#     if (not os.path.exists(FILEBROWSER['config'])):
+#         output = subprocess.run([
+#             'sudo',
+#             'mkdir',
+#             '-p',
+#             FILEBROWSER['config']
+#         ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+#
+#         if (output.returncode != 0):
+#             raise Exception(output.stderr)
+#
+#         subprocess.run([
+#             'sudo',
+#             'chown',
+#             'www-data:www-data',
+#             FILEBROWSER['config']
+#         ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+#
+#     output = subprocess.run([
+#             'sudo',
+#             'docker',
+#             'exec',
+#             'filebrowser-server',
+#             'filebrowser',
+#             'config',
+#             'cat'
+#         ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+#
+#     if (output.returncode!=0):
+#         subprocess.run([
+#             'sudo',
+#             'docker',
+#             'exec',
+#             '--user=www-data:www-data',
+#             'filebrowser-server',
+#             'filebrowser',
+#             'config',
+#             '-d', '/database/filebrowser.db',
+#             'init'
+#         ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-        if (output.returncode!=0):
-            raise Exception(output.stderr)
 
-        subprocess.run([
-            'sudo',
-            'chown',
-            'www-data:www-data',
-            FILEBROWSER['database']
-        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+def import_key(key,filename):
+    decoded_key = base64.b64decode(key)
 
-    if (not os.path.exists(FILEBROWSER['config'])):
-        output = subprocess.run([
-            'sudo',
-            'mkdir',
-            '-p',
-            FILEBROWSER['config']
-        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc = subprocess.run(
+        ["sudo", "tee", filename],
+        input=decoded_key,
+        stdout=subprocess.DEVNULL,  # avoid echoing back
+        stderr=subprocess.PIPE,
+        check=True,
+    )
 
-        if (output.returncode != 0):
-            raise Exception(output.stderr)
+    if (proc.returncode != 0):
+        raise Exception(proc.stderr.decode())
 
-        subprocess.run([
-            'sudo',
-            'chown',
-            'www-data:www-data',
-            FILEBROWSER['config']
-        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-    output = subprocess.run([
-            'sudo',
-            'docker',
-            'exec',
-            'filebrowser-server',
-            'filebrowser',
-            'config',
-            'cat'
-        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+def rm_mountpoint(mountpoint):
+    assert(mountpoint.startswith("/"))
 
-    if (output.returncode!=0):
-        subprocess.run([
-            'sudo',
-            'docker',
-            'exec',
-            '--user=www-data:www-data',
-            'filebrowser-server',
-            'filebrowser',
-            'config',
-            '-d', '/database/filebrowser.db',
-            'init'
-        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    parts = mountpoint.split("/")
+
+    for i in range(len(parts)-1,0,-1):
+        path = "/".join(parts[:i])
+        path = path.strip()
+
+        if (path!="/"):
+            subprocess.run(["sudo", "rmdir", path])
 
 ALLOWED_ACTIONS = {
     "run": run_commands,
     "get-key": get_key,
     "ch_tank_perm": ch_perms,
-    "filebrowser-setup": filebrowser_setup
+    "import-key": import_key,
+    "rm-mountpoint": rm_mountpoint,
+    #"filebrowser-setup": filebrowser_setup
 }
 
 def get_uid_for_user(username):

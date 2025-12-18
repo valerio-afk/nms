@@ -41,13 +41,13 @@
             <button class="btn btn-success w-100" type="submit" name="action" value="update">Update settings</button>
         </div>
         <div class="col-6">
-            <button class="btn btn-danger w-100" type="submit" name="action" value="disable">Disable {{ service | upper }}</button>
+            <button class="btn btn-danger w-100" type="submit" name="action" value="disable">Disable</button>
         </div>
       </div>
     {% else %}
       <div class="row g-1">
         <div class="col-12">
-            <button class="btn btn-success w-100" type="submit" name="action" value="enable">Enable {{ service | upper }}</button>
+            <button class="btn btn-success w-100" type="submit" name="action" value="enable" {{ "" if mountpoint else "disabled" }}>Enable</button>
         </div>
     </div>
     {% endif %}

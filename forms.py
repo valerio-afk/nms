@@ -1,7 +1,24 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, IntegerField,PasswordField,BooleanField
+from wtforms import StringField, IntegerField,PasswordField,BooleanField, SelectMultipleField, HiddenField, FileField
 from wtforms.validators import DataRequired,NumberRange, EqualTo, Regexp,StopValidation
-from constants import PORT_MIN,PORT_MAX
+from wtforms.widgets.core import CheckboxInput, ListWidget
+
+from constants import PORT_MIN,PORT_MAX, POOLNAME,DATASETNAME
+
+class ToggleInput(CheckboxInput):
+
+    def __call__(this,field,**kwargs):
+        classes = kwargs.get("class","")
+
+        classes += " form-check-input"
+
+        kwargs['class'] = classes.strip()
+
+        return f"<span class='form-switch me-2'>{super().__call__(field,**kwargs)}</span>"
+
+class MultiCheckboxField(SelectMultipleField):
+	widget			= ListWidget(prefix_label=False)
+	option_widget	= ToggleInput()
 
 class DependentDataRequired(DataRequired):
     def __init__(self, fieldnames, message=None):
@@ -17,6 +34,35 @@ class DependentDataRequired(DataRequired):
             super().__call__(form, field)
         else:
             raise StopValidation()
+
+class AtLeastOneField:
+    def __init__(this,message=None):
+        this._message = message
+
+    def __call__(this, form, field):
+        if (not field.data) or (len(field.data) == 0):
+            raise StopValidation(this._message)
+
+class CreatePoolForm(FlaskForm):
+    redundancy = BooleanField("Redundancy")
+    encryption = BooleanField("Encryption")
+    compression = BooleanField("Compression")
+    pool_name = StringField("Pool Name",validators=[DataRequired()], default=POOLNAME)
+    dataset_name = StringField("Dataset Name", validators=[DataRequired()], default=DATASETNAME)
+    disks = MultiCheckboxField("Disks",validators=[AtLeastOneField("You must select at least one disk to create a pool")])
+
+    def __init__(this,disks,*args, **kwargs):
+        super().__init__(*args,**kwargs)
+
+        this.disks.choices = [(d,d) for d in disks]
+
+        if not this.is_submitted():
+            this.disks.default = [x[0] for x in this.disks.choices]
+            this.process()
+
+class ImportPoolForm(FlaskForm):
+    key = FileField("Key")
+
 
 class AccessServiceForm(FlaskForm):
     def __init__(this, enabled):

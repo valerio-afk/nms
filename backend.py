@@ -4,18 +4,21 @@ import hashlib
 import json
 import subprocess
 import grp
+import re
 from importlib import import_module
-# from watchdog.observers import Observer
-# from watchdog.events import FileSystemEventHandler
 import psutil
 import socket
 import platform
 import datetime
 import base64
 from collections import OrderedDict
+
+from werkzeug.utils import secure_filename
+
 from cmdl import CreateKey, ZPoolCreate, ZFSCreate, RemoteCommandLineTransaction, ZpoolScrub, Reboot, \
     Shutdown, JournalCtl, SystemCtlRestart, ZpoolList, ZpoolStatus, ZFSGet, ZFSList, LSBLK, ZFSLoadKey, ZFSMount, \
-    ZFSUnLoadKey, ZFSUnmount, UserModChangeHomeDir, APTGetUpdate, APTGetUpgrade, Chown
+    ZFSUnLoadKey, ZFSUnmount, UserModChangeHomeDir, APTGetUpdate, APTGetUpgrade, Chown, ZFSDestroy, ZPoolLabelClear, \
+    ZPoolImport, ZPoolExport, Wipefs, ZPoolDestroy
 from constants import KEYPATH, POOLNAME, DATASETNAME
 from flask_daemons import NetIOCounter, ScrubStateChecker
 from disk import Disk,DiskStatus
@@ -92,7 +95,10 @@ class NMSBackend:#(FileSystemEventHandler):
                 daemon.start()
 
         if (this.is_pool_configured() and (not this.is_mounted)):
-            this.mount()
+            try:
+                this.mount()
+            except:
+                ...
 
     def _setup_access_services(this):
         module = import_module("services")
@@ -460,14 +466,36 @@ class NMSBackend:#(FileSystemEventHandler):
             *cmds
         )
 
-        trans.run()
+        output = trans.run()
 
         if (not trans.success):
-            raise Exception("Unable to mount disk array")
+            error = "\n".join([o['stderr'] for o in output])
+            raise Exception(f"Unable to mount disk array: {error}")
+
+    def detach(this):
+        if (not this.is_pool_configured()):
+            raise Exception("Disk array not configured")
+
+        cmds = [ZPoolExport(this.pool_name)]
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            *cmds
+        )
+
+        output = trans.run()
+
+        if (not trans.success):
+            error = "\n".join([o['stderr'] for o in output])
+            raise Exception(f"Unable to unmount disk array: {error}")
 
     def unmount(this):
         if (not this.is_pool_configured()):
             raise Exception("Disk array not configured")
+
+        this.disable_all_access_services()
 
         cmds = [
             ZFSUnmount(this.pool_name,this.dataset_name),
@@ -484,10 +512,11 @@ class NMSBackend:#(FileSystemEventHandler):
             *cmds
         )
 
-        trans.run()
+        output = trans.run()
 
         if (not trans.success):
-            raise Exception("Unable to unmount disk array")
+            error = "\n".join([o['stderr'] for o in output])
+            raise Exception(f"Unable to unmount disk array: {error}")
 
     @property
     def get_updates(this):
@@ -497,16 +526,250 @@ class NMSBackend:#(FileSystemEventHandler):
     def get_access_services(this):
         return  this._access_services
 
-    def create_pool(this,redundancy:bool, encryption:bool, compression:bool):
+    def simulate_format(this):
+        if (not this.is_pool_configured()):
+            raise Exception("Disk array not configured")
+
+        this.disable_all_access_services()
+
+        try:
+            this.unmount()
+        except:
+            ...
+
+        tank = this.pool_name
+        dataset = this.dataset_name
+
+        commands = [
+            ZFSDestroy(tank,dataset),
+            ZFSCreate(tank,dataset)
+        ]
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            *commands
+        )
+        output = trans.run()
+
+        if (not trans.success):
+            errors = "\n ".join([x["stderr"] for x in output])
+            raise Exception(errors)
+
+    def disable_all_access_services(this):
+        for name, s in this._access_services.items():
+            if s.is_active:
+                try:
+                    s.disable()
+                except:
+                    raise Exception(f"Unable to disable {name.upper()} service. Please disable it manually.")
+
+
+    def destroy_tank(this):
+        if (not this.is_pool_configured()):
+            raise Exception("Disk array not configured")
+
+        this.disable_all_access_services()
+
+        mountpoint = this.mountpoint
+
+        try:
+            this.unmount()
+        except:
+            ...
+
+        tank = this.pool_name
+        dataset = this.dataset_name
+
+        commands = [
+            ZFSDestroy(tank,dataset),
+            ZPoolDestroy(tank)
+        ]
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            *commands
+        )
+        output = trans.run()
+
+        if (not trans.success):
+            errors = "\n ".join([x["stderr"] for x in output])
+            raise Exception(errors)
+
+        this._cfg['pool']= {
+            "name": None,
+            "encrypted": None,
+            "redundancy": False,
+            "compressed": False,
+            "disks": [],
+            "tools": {
+                "scrub": {
+                    "ongoing": False,
+                    "last": None
+                },
+            }
+        }
+
+        this._cfg["dataset"] = None
+
+        this.flush_config()
+
+        this.rm_mountpoint(mountpoint)
+
+    def rm_mountpoint(this,mountpoint):
+        if (this.is_pool_configured()):
+            raise Exception("Disk array is configured")
+
+        if (this.is_mounted):
+            raise Exception("Disk array is already mounted")
+
+        message = {
+            "action": "rm-mountpoint",
+            "args": {"mountpoint": mountpoint}
+        }
+
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(5)
+        s.connect(SOCK_PATH)
+
+        s.sendall(json.dumps(message, default=lambda x: x.to_dict()).encode() + b'\n')
+
+        response = b""
+        while True:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            response += chunk
+            if b"\n" in chunk:
+                break
+
+        s.close()
+
+
+
+
+    def get_importable_pools(this):
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            ZPoolImport(),
+        )
+
+        output = trans.run()
+
+        if (not trans.success):
+            raise Exception("Unable to get importable pools")
+
+        result = output[0]['stdout']
+
+        pools = []
+        current_pool = None
+        in_config = False
+        read_status_action = False
+
+        for line in result.splitlines():
+            line = line.rstrip()
+
+            # pool name
+            m = re.match(r"\s*pool:\s+(\S+)", line)
+            if m:
+                current_pool = {
+                    "name": m.group(1),
+                    "disks": [],
+                    "message": "",
+                    "state": None
+                }
+                pools.append(current_pool)
+                in_config = False
+                continue
+
+            line = line.strip()
+
+            # start of config section
+            if line == "config:":
+                in_config = True
+                read_status_action = False
+                continue
+
+            if (line.startswith("status:") or line.startswith("action:")) and current_pool:
+                read_status_action = True
+                _,message = line.split(":",1)
+                current_pool["message"] += " "+message.strip()
+                continue
+            elif read_status_action:
+                current_pool["message"] += " " + line
+                continue
+
+            if (line.startswith("state:") and current_pool):
+                _,state = line.split(":",1)
+                current_pool["state"] = state.strip()
+                continue
+
+            if not in_config or current_pool is None:
+                continue
+
+
+            # disk lines are indented and have ONLINE/DEGRADED/etc
+            m = re.match(r"(\S+)\s+(ONLINE|DEGRADED|FAULTED|OFFLINE|UNAVAIL)", line)
+            if m:
+                dev = m.group(1)
+
+                # skip vdevs like mirror-0, raidz1-0, etc
+                if (not re.match(r"(mirror|raidz)\S*", dev)) and (current_pool["name"] not in line):
+
+                    output = subprocess.run(['find','/dev','-name',f"*{dev}"],capture_output=True)
+
+                    if output.returncode == 0:
+                        lines = output.stdout.decode('utf8').splitlines()
+                        if (len(lines)>0):
+                            dev = lines[0].strip()
+
+                    current_pool["disks"].append(dev)
+
+        for d in pools:
+            d['message'] = d['message'].strip()
+
+        return pools
+
+    def create_pool(this,
+                    poolname:str,
+                    datasetname:str,
+                    redundancy:bool,
+                    encryption:bool,
+                    compression:bool,
+                    disks:list):
 
         if this.is_pool_configured():
             raise Exception("The disk array is already configured.")
 
-        disks = [d for d in this.get_disks() if d.status == DiskStatus.NEW]
-        disks_path = [d.path for d in disks]
+        disks_objs = [d for d in this.get_disks() if d.status == DiskStatus.NEW]
 
         if redundancy and (len(disks)<3):
             raise Exception("You must have at least 3 disks connected to opt in redundancy.")
+
+        for disk in disks:
+            trans = RemoteCommandLineTransaction(
+                socket.AF_UNIX,
+                socket.SOCK_STREAM,
+                SOCK_PATH,
+                ZPoolLabelClear(disk),
+            )
+
+            trans.run()
+
+            if (not trans.success):
+                RemoteCommandLineTransaction(
+                    socket.AF_UNIX,
+                    socket.SOCK_STREAM,
+                    SOCK_PATH,
+                    Wipefs(disk),
+                ).run()
+
 
 
         commands = []
@@ -516,13 +779,9 @@ class NMSBackend:#(FileSystemEventHandler):
             keygen = CreateKey(enc_key)
             commands.append(keygen)
 
-        poolname = POOLNAME
-        datasetname = DATASETNAME
 
-        # for dev in disks_path:
-        #     commands.append(ZPoolLabelClear(dev))
 
-        commands.append(ZPoolCreate(disks_path,redundancy,enc_key,compression,poolname))
+        commands.append(ZPoolCreate(disks,redundancy,enc_key,compression,poolname))
         commands.append(ZFSCreate(poolname,datasetname))
 
         trans = RemoteCommandLineTransaction(
@@ -551,7 +810,7 @@ class NMSBackend:#(FileSystemEventHandler):
         if (compression):
             this._cfg['pool']['compressed'] = True
 
-        this._cfg['pool']['disks'] = [d.serialise() for d in disks]
+        this._cfg['pool']['disks'] = [d.serialise() for d in disks_objs if d.path in disks]
 
         this.flush_config()
 
@@ -614,6 +873,80 @@ class NMSBackend:#(FileSystemEventHandler):
         if (d.get('key_path',"") == key_fullpath):
             key = base64.b64decode(d.get("key",""))
             return key
+
+    def import_tank_key(this, handle):
+
+        base64_bytes = base64.b64encode(handle)
+        base64_string = base64_bytes.decode('utf-8')
+
+
+        message = {
+            "action": "import-key",
+            "args":
+                {
+                    "key": base64_string,
+                    "filename": KEYPATH
+                 }
+        }
+
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(5)
+        s.connect(SOCK_PATH)
+
+        s.sendall(json.dumps(message, default=lambda x: x.to_dict()).encode() + b'\n')
+
+        response = b""
+        while True:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            response += chunk
+            if b"\n" in chunk:
+                break
+
+        s.close()
+
+        d = json.loads(response.decode("utf-8").strip())
+
+        if (d is not None):
+
+            error = d.get("error",None)
+
+            if (error is not None):
+                raise Exception(error)
+
+
+    def import_pool(this,poolname,load_key=False):
+        command = [ZPoolImport(poolname)]
+
+        if (load_key):
+            command.append(ZFSLoadKey(poolname,KEYPATH))
+
+        trans = RemoteCommandLineTransaction(socket.AF_UNIX,
+                                             socket.SOCK_STREAM,
+                                             SOCK_PATH, *command)
+
+        output = trans.run()
+
+        if (not trans.success):
+            raise Exception(output[0]['stderr'])
+
+
+        this.init_pool()
+
+        try:
+            this.mount()
+        except Exception as e:
+            RemoteCommandLineTransaction(socket.AF_UNIX,
+                                         socket.SOCK_STREAM,
+                                         SOCK_PATH, ZPoolExport(poolname)).run()
+
+            this.load_configuration_file() #revert to previous state
+
+            raise Exception(str(e))
+
+
+        this.flush_config()
 
 
     def reboot(this):
@@ -700,16 +1033,12 @@ class NMSBackend:#(FileSystemEventHandler):
                 "encrypted": None,
                 "redundancy": False,
                 "compressed": False,
-                "disks": {},
+                "disks": [],
                 "tools": {
                     "scrub": {
                         "ongoing" : False,
                         "last" : None
                     },
-                    # "verify": {
-                    #     "ongoing": False,
-                    #     "last": None
-                    # }
                 }
             },
             "dataset": None,
@@ -788,6 +1117,14 @@ class NMSBackend:#(FileSystemEventHandler):
 
             vdevs = d.get("pools",{}).get(pool_name,{}).get("vdevs",{}).get(pool_name,{}).get("vdevs",{})
 
+            if (len(vdevs)==1):
+                # check if raidz is enabled
+                value = list(vdevs.keys())[0]
+
+                if (vdevs[value]['vdev_type']=='raidz'):
+                    this._cfg['pool']['redundancy'] = True
+                    vdevs = vdevs[value].get("vdevs",{})
+
             if (len(vdevs) > 0):
                 disks = [ sd for sd in vdevs.keys() ]
                 disks.sort()
@@ -832,7 +1169,6 @@ class NMSBackend:#(FileSystemEventHandler):
                     d_prop = json.loads(prop_output.stdout)
                     pool_properties = d_prop.get('datasets',{}).get(pool_name,{}).get("properties",{})
                     if (len(pool_properties) > 0):
-                        # TODO redundancy
                         # check compression
                         this._cfg['pool']['compressed'] = True if (pool_properties['compression']['value'].lower() != "off") else False
                         # check for encryption
@@ -1026,6 +1362,8 @@ class NMSBackend:#(FileSystemEventHandler):
 
         except Exception as e:
             this._logger.error(f"Error while changing ownership: {str(e)}")
+
+
 
 
     # def on_created(this, event):

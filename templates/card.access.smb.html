@@ -11,7 +11,7 @@
       <div class="col-sm-4 col-form-label">{{ form.username.label }}</div>
       <div class="col-sm-8">
         {{ form.username(class="form-control",readonly=True) }}
-        <div>The username is the same as in the <code>SSH</code> service. If the username is changed, <code>SMB</code> will be disabled.</div>
+        <div class="form-text">The username is the same as in the <code>SSH</code> service. If the username is changed, <code>SMB</code> will be disabled.</div>
       </div>
     </div>
 
@@ -41,7 +41,7 @@
     {% else %}
       <div class="row g-1">
         <div class="col-12">
-            <button class="btn btn-success w-100" type="submit" name="action" value="enable">Enable</button>
+            <button class="btn btn-success w-100" type="submit" name="action" value="enable" {{ "" if mountpoint else "disabled" }}>Enable</button>
         </div>
     </div>
     {% endif %}

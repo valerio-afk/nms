@@ -100,10 +100,74 @@ class ZPoolLabelClear(ZPoolCommand):
         return ZPoolLabelClear(serialisation.get('disk',None))
 
 
+class ZPoolDestroy(ZPoolCommand):
+    def __init__(this,tank_name="tank",force=True):
+        super().__init__("destroy",sudo=True)
+
+        this._tank_name = tank_name
+        this._force = force
+
+        if (force):
+            this.append("-f")
+
+        this.append(tank_name)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['tank_name'] = this._tank_name
+        d['force'] = this._force
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ZPoolDestroy(serialisation.get('tank_name',None),serialisation.get("force",False))
+
+class ZPoolImport(ZPoolCommand):
+    def __init__(this,tank_name = None):
+        revert = None
+        this._tank_name = tank_name
+
+        if (tank_name is not None):
+            revert = ['zpool','export',tank_name]
+
+        super().__init__("import", sudo=True,revert_command=revert)
+
+        if (tank_name is not None):
+            this.append(tank_name)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['tank_name'] = this._tank_name
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ZPoolImport(serialisation.get('tank_name',None))
+
+class ZPoolExport(ZPoolCommand):
+    def __init__(this,tank_name):
+
+        this._tank_name = tank_name
+        revert = ['zpool','import',tank_name]
+
+        super().__init__("export", sudo=True,revert_command=revert)
+
+        this.append(tank_name)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['tank_name'] = this._tank_name
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ZPoolExport(serialisation.get('tank_name',None))
 
 class ZPoolCreate(ZPoolCommand):
     def __init__(this,disks,redundancy,encryption,compression,tank_name="tank"):
-        cmd_revert = ["sudo", "zpool", "-f", "destroy", tank_name]
+        cmd_revert = ["sudo", "zpool", "destroy", "-f", tank_name]
 
         super().__init__("create", revert_command=cmd_revert,sudo=True)
 
@@ -134,9 +198,6 @@ class ZPoolCreate(ZPoolCommand):
         if (disks is not None):
 
             this.append(this._disks)
-
-
-
 
     def to_dict(this):
         d = super().to_dict()
@@ -321,6 +382,30 @@ class ZFSCreate(ZFSCommand):
     @staticmethod
     def from_dict(serialisation):
         return ZFSCreate(serialisation.get('pool',None),serialisation.get('dataset',None))
+
+class ZFSDestroy(ZFSCommand):
+
+    def __init__(this, pool="tank", dataset="data"):
+        this._pool = pool
+        this._dataset = dataset
+
+        fs = f"{pool}/{dataset}"
+
+        super().__init__("destroy", sudo=True)
+
+        this.append(fs)
+
+    def to_dict(this):
+        d = super().to_dict()
+
+        d['pool'] = this._pool
+        d['dataset'] = this._dataset
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ZFSDestroy(serialisation.get('pool',None),serialisation.get('dataset',None))
 
 
 class ZFSMount(ZFSCommand):
@@ -981,6 +1066,31 @@ class SMBPasswd(CommandLine):
         return output
 
 
+class Wipefs(CommandLine):
+    def __init__(this,dev,all=True):
+        this._dev = dev
+        this._all = all
+
+        cmd = ["wipefs"]
+
+        if (all):
+            cmd.append("-a")
+
+        cmd.append(dev)
+
+        super().__init__(cmd,sudo=True)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['dev'] = this._dev
+        d['all'] = this._all
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return Wipefs(serialisation.get("dev",None),serialisation.get("all",True))
+
 class APTGet(CommandLine):
     def __init__(this,subcommand,flags=None):
         cmd = ['apt-get']
@@ -1174,3 +1284,5 @@ class DockerInspect(Docker):
             serialisation.get("container_name",None),
             serialisation.get("flags", None),
         )
+
+

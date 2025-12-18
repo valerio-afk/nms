@@ -402,7 +402,7 @@ class NFSService(SystemService):
 
         for l in exports:
             if (not l.startswith("#")):
-                if (this.mountpoint in l):
+                if (this.mountpoint) and (this.mountpoint in l):
                     parts = [p.strip() for p in l.split()]
                     hosts = parts[1:]
 

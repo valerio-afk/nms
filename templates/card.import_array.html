@@ -1,0 +1,45 @@
+{% extends "card.html" %}
+
+{% block card_title %}Import {{ pool }}  {% if warning %}<span title="{{ warning }}" data-bs-toggle="tooltip" class="float-end">⚠️</span>{% endif %}{% endblock %}
+
+{% block card_content %}
+
+<p >
+  The following disks belong to the existing disk array <em>{{ pool }}:</em>
+</p>
+
+<ul class="list-group">
+    {% for disk in disks %}
+        <li class="list-group-item">{{ disk }}</li>
+    {% endfor %}
+</ul>
+
+<form action="{{ url_for('main.import_pool',pool=pool) }}" method="POST" class="mt-4" enctype="multipart/form-data">
+    {{ import_pool_form.hidden_tag() }}
+
+    <div class="row align-items-center mb-1">
+        <div class="col-sm-2 col-form-label">
+            {{ import_pool_form.key.label() }}
+        </div>
+      <div class="col-sm-10">
+          {{ import_pool_form.key(class="form-control") }}
+       </div>
+  </div>
+
+    <div class="row mb-3">
+        <div class="column">
+            <div class="form-text">If this disk array was encrypted and you have the key, please upload it. If you lost your key, there is no way to recover this array.</div>
+            <div class="form-text">If this disk array was not encrypted, just leave it blank.</div>
+        </div>
+    </div>
+
+
+
+  <button type="submit" class="btn btn-info w-100">Import {{ pool }}</button>
+</form>
+
+
+
+{% endblock %}
+
+

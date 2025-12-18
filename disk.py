@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import  Enum
-import json
+import subprocess
 
 class DiskStatus(Enum):
     NEW       = 0
@@ -29,8 +29,24 @@ class Disk:
         return {
             "model": this.model,
             "serial": this.serial,
+            "path": this.path,
+            "physical_path": this.physical_path,
         }
 
     def __eq__(this, other):
         if (isinstance(other,Disk)):
             return (other.model == this.model) and (other.serial == this.serial)
+
+    @property
+    def physical_path(this):
+        try:
+            result = subprocess.run(
+                ["udevadm", "info", "--query=symlink", f"--name={this.path}"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            symlinks = result.stdout.split()
+            return ["/dev/" + s for s in symlinks if s.startswith("disk/by-path/")]
+        except subprocess.CalledProcessError:
+            return []

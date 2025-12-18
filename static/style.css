@@ -225,3 +225,10 @@ span.help
   background: rgba(255,255,255,0.1);
   border-radius: 4px;
 }
+
+
+ul#disks, ol#disks {
+    list-style: none;
+    padding-left: 0; /* optional, removes indentation */
+    margin-left: 0;  /* optional */
+}

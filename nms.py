@@ -9,6 +9,8 @@ from importlib import import_module
 from flask_wtf.csrf import generate_csrf, validate_csrf
 from wtforms import ValidationError
 
+from constants import KEYPATH
+from forms import CreatePoolForm, ImportPoolForm
 from widget import render_widget,get_widgets_html,get_widgets_css_files
 from backend import BACKEND, LogFilter
 from tasks import create_pool, NMSTask, apt_get_updates, apt_get_upgrade
@@ -44,11 +46,18 @@ def widget_danger_zone():
     return render_widget("danger_zone")
 
 def widget_disk_usage():
-    pool_capacity = BACKEND.get_pool_capacity
-    used = pool_capacity['used']
-    total = pool_capacity['total']
+    try:
+        pool_capacity = BACKEND.get_pool_capacity
+        used = pool_capacity['used']
+        total = pool_capacity['total']
+        capacity = int(used / total * 1000) / 10 if total > 0 else 0
+    except Exception as e:
+        flash(f"Error while retrieving disk array usage information: {str(e)}","error")
+        used = 0
+        total = 0
+        capacity = 0
 
-    capacity = int(used/total*1000)/10 if total > 0 else 0
+
 
     return render_widget("disk_usage",used=used, total=total, capacity=capacity,mounted=BACKEND.is_mounted)
 
@@ -151,14 +160,52 @@ def mount():
 @bp.route('/disks/new',methods=['POST'])
 @wait()
 def new_pool():
+    disks = BACKEND.get_disks()
+    form = CreatePoolForm([d.path for d in disks])
 
-    redundancy = 'redundancy' in request.form  # True if checked, False if not
-    encryption = 'encryption' in request.form
-    compression = 'compression' in request.form
+    if (form.validate_on_submit()):
+        redundancy = form.redundancy.data
+        encryption = form.encryption.data
+        compression = form.compression.data
 
-    task = create_pool.delay(redundancy,encryption,compression)
-    BACKEND.append_task(NMSTask(task.task_id,"/disks"))
+        pool_name = form.pool_name.data
+        dataset_name = form.dataset_name.data
+
+        disks = form.disks.data
+
+        task = create_pool.delay(pool_name,dataset_name,redundancy,encryption,compression,disks)
+        BACKEND.append_task(NMSTask(task.task_id,"/disks"))
+
+    else:
+        flash("Form validation failed.","error")
+
     return redirect(url_for("main.disk_management"))
+
+@bp.route('/disk/import/<string:pool>',methods=['POST'])
+def import_pool(pool):
+    form = ImportPoolForm()
+
+    if form.validate_on_submit():
+        try:
+            load_key = False
+            if (form.key.data):
+
+                key_data = form.key.data.read()
+
+                BACKEND.import_tank_key(key_data)
+                load_key = True
+
+            BACKEND.import_pool(pool,load_key)
+
+            flash(f"Pool {pool} imported successfully.","success")
+
+        except Exception as e:
+            flash(f"Error while importing {pool}: {str(e)}","error")
+            raise e
+
+    return redirect(url_for("main.disk_management"))
+
+
 
 
 @bp.route('/disks')
@@ -166,6 +213,11 @@ def new_pool():
 def disk_management():
     disks = BACKEND.get_disks()
     pool = BACKEND.is_pool_configured()
+
+    importable_pools = BACKEND.get_importable_pools()
+    imports = [
+        (p['name'],p['disks'], p['message'] if p['state']!="ONLINE" else None , ImportPoolForm()) for p in importable_pools
+    ]
 
     verify = BACKEND.get_scrub_info
 
@@ -178,13 +230,17 @@ def disk_management():
 
 
 
+
+
     return render_template("disk_mngt.html",
                            active_page="disk",
                            disks=disks,
                            pool=pool,
+                           imported_pools=imports,
                            verify=verify,
                            scrub = scrub_report,
                            mounted=BACKEND.is_mounted,
+                           new_pool_form = CreatePoolForm([d.path for d in disks]),
                            csp_nonce=g.csp_nonce
                            # check=check
                            )
@@ -297,6 +353,9 @@ def access():
     widgets = []
     mountpoint  = BACKEND.mountpoint
 
+    if (not BACKEND.is_pool_configured()):
+        flash("You need to configure your disk array before enabling any access services","error")
+
     for k,v in BACKEND.get_access_services.items():
         service_form_cls = getattr(forms,f"{k.upper()}ServiceForm")
         service_enabled = v.is_active
@@ -329,9 +388,11 @@ def advanced():
 
     dashboard_widgets = [
         widget_system_admin(),
-        widget_system_updates(),
-        widget_danger_zone()
+        widget_system_updates()
     ]
+
+    if BACKEND.is_pool_configured():
+        dashboard_widgets.append(widget_danger_zone())
 
     return render_template("advanced.html",
                            csp_nonce=g.csp_nonce,
@@ -382,17 +443,61 @@ def system_logs(log):
 
 @bp.route('/advanced/format',methods=['POST'])
 def format():
-    authorisation = session.get("dz_authorisation",None)
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        raise Exception("CSRF validation failed")
+        abort(400)
+
+    authorisation = session.pop("dz_authorisation",None)
 
     if (authorisation is None):
         return redirect(url_for("main.reauth",operation="format"))
 
     else:
         if (time.time() - authorisation['timestamp']) < 60:
-            return "Ok boomer"
+            if (authorisation['operation'] == "format"):
+                try:
+                    BACKEND.simulate_format()
+                    flash("Disk array formatted.","success")
+                except Exception as e:
+                    flash(f"Error while formatting disk array: {str(e)}","error")
+            else:
+                flash(f"Invalid authorisation", "error")
+
         else:
             flash("Authorisation token expired","error")
-            return redirect(url_for("main.advanced"))
+
+        return redirect(url_for("main.advanced"))
+
+@bp.route('/advanced/destroy',methods=['POST'])
+def zpool_destroy():
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        raise Exception("CSRF validation failed")
+        abort(400)
+
+    authorisation = session.pop("dz_authorisation",None)
+
+    if (authorisation is None):
+        return redirect(url_for("main.reauth",operation="destroy"))
+
+    else:
+        if (time.time() - authorisation['timestamp']) < 60:
+            if (authorisation['operation'] == "destroy"):
+                try:
+                    BACKEND.destroy_tank()
+                    flash("Disk array deleted.","success")
+                except Exception as e:
+                    flash(f"Error while deleting disk array: {str(e)}","error")
+            else:
+                flash(f"Invalid authorisation", "error")
+
+        else:
+            flash("Authorisation token expired","error")
+
+        return redirect(url_for("main.advanced"))
 
 
 @bp.route("/login",methods=['GET','POST'])
@@ -450,7 +555,7 @@ def reauth  (operation):
             if (BACKEND.verify_otp(otp)):
                 session["dz_authorisation"] = {"time":time.time(),"timestamp":time.time(),"operation":operation}
                 BACKEND.logger.info(f"OTP accepted")
-                flash("OTP Accepted. Please press again the button of the desired dangerous operation to continue",
+                flash("OTP Accepted. Please press again the button of the desired dangerous operation to continue.",
                       "success")
             else:
                 BACKEND.logger.warning(f"Invalid OTP")

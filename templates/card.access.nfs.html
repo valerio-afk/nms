@@ -29,13 +29,13 @@
             <button class="btn btn-success w-100" type="submit" name="action" value="update">Update settings</button>
         </div>
         <div class="col-6">
-            <button class="btn btn-danger w-100" type="submit" name="action" value="disable">Disable {{ service | upper }}</button>
+            <button class="btn btn-danger w-100" type="submit" name="action" value="disable">Disable</button>
         </div>
       </div>
     {% else %}
       <div class="row g-1">
         <div class="col-12">
-            <button class="btn btn-success w-100" type="submit" name="action" value="enable">Enable {{ service | upper }}</button>
+            <button class="btn btn-success w-100" type="submit" name="action" value="enable" {{ "" if mountpoint else "disabled" }}>Enable</button>
         </div>
     </div>
     {% endif %}
@@ -98,28 +98,30 @@
             </div>
         </div>
 
-        <div class="accordion-item">
-            <h2 class="accordion-header">
-                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#windows_nfs" aria-expanded="true" aria-controls="windows_nfs">
-                    Windows
-                </button>
-            </h2>
-            <div id="windows_nfs" class="accordion-collapse collapse" data-bs-parent="#nfs_explanations">
-                <div class="accordion-body">
-                    <ol>
-                        <li>Go to <code>Control Panel > Programs</code></li>
-                        <li>On the left side, press <code>Turn Windows features on or off</code>.</li>
-                        <li>Make sure that <code>Services for NFS</code> is checked. Then press <code>OK</code>.</li>
-                        <li>Open <code>Powershell</code>.</li>
-                         <li>Type the following command <br/>
-                            <code>mount -o anon \\<strong>IP</strong>\{{ mountpoint.replace("/","\\") }} Z:</code>
-                        </li>
-                        <li>You should replace <code>IP</code> with the IP address you can find in the Network tab.</li>
-                        <li>You can choose a different unit letter than <code>Z:</code>.</li>
-                    </ol>
+        {% if mountpoint %}
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#windows_nfs" aria-expanded="true" aria-controls="windows_nfs">
+                        Windows
+                    </button>
+                </h2>
+                <div id="windows_nfs" class="accordion-collapse collapse" data-bs-parent="#nfs_explanations">
+                    <div class="accordion-body">
+                        <ol>
+                            <li>Go to <code>Control Panel > Programs</code></li>
+                            <li>On the left side, press <code>Turn Windows features on or off</code>.</li>
+                            <li>Make sure that <code>Services for NFS</code> is checked. Then press <code>OK</code>.</li>
+                            <li>Open <code>Powershell</code>.</li>
+                             <li>Type the following command <br/>
+                                <code>mount -o anon \\<strong>IP</strong>\{{ mountpoint.replace("/","\\") }} Z:</code>
+                            </li>
+                            <li>You should replace <code>IP</code> with the IP address you can find in the Network tab.</li>
+                            <li>You can choose a different unit letter than <code>Z:</code>.</li>
+                        </ol>
+                    </div>
                 </div>
             </div>
-        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

@@ -73,3 +73,5 @@ def ansi_to_html(text):
     # Ensure all spans closed at the end
     converted += '</span>' * 10
     return converted
+
+

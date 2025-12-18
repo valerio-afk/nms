@@ -42,8 +42,8 @@ class NMSTask:
 
 
 @shared_task()
-def create_pool(redundancy, encryption,compression):
-    BACKEND.create_pool(redundancy, encryption,compression)
+def create_pool(pool,dataset, redundancy, encryption,compression,disks):
+    BACKEND.create_pool(pool,dataset, redundancy, encryption,compression,disks)
 
     return "Disk array created successfully."
 
