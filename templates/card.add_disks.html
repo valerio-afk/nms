@@ -1,0 +1,46 @@
+{% extends "card.html" %}
+
+{% block card_title %}Add Disk{% endblock %}
+
+{% block card_content %}
+
+<p>
+  You can add one of these disks to your array.
+</p>
+
+<div class="alert alert-warning" role="alert">
+  If your disk array is using redundancy, please be aware of the following:
+    <ul>
+        <li>This operation is experimental. Make sure your data is backed up.</li>
+        <li>Depending on the size of your disk array and its current capacity, this operation can take several hours.</li>
+        <li>Do not switch off your device if you proceed.</li>
+    </ul>
+</div>
+
+<form action="{{ url_for('main.add_disk') }}" method="POST" class="ps-3 pe-3">
+    {{ attachable_disks.hidden_tag() }}
+
+    <div class="mb-3 row">
+      <div class="col-sm-6 col-form-label">{{ attachable_disks.disks.label }}</div>
+      <div class="col-sm-6">
+          <ul id="disks">
+              {% for disk in attachable_disks.disks %}
+              <li>
+                  <div class="form-check">
+                      {{ disk(class="form-check-input") }}
+                      <label class="form-check-label" for="{{ disk.id }}" >{{ disk.label.text }}</label>
+                  </div>
+              </li>
+            {% endfor %}
+          </ul>
+      </div>
+    </div>
+
+  <button type="submit" class="btn btn-info w-100">Add Disk to Array</button>
+</form>
+
+
+
+{% endblock %}
+
+

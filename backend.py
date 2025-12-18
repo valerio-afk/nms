@@ -18,7 +18,7 @@ from werkzeug.utils import secure_filename
 from cmdl import CreateKey, ZPoolCreate, ZFSCreate, RemoteCommandLineTransaction, ZpoolScrub, Reboot, \
     Shutdown, JournalCtl, SystemCtlRestart, ZpoolList, ZpoolStatus, ZFSGet, ZFSList, LSBLK, ZFSLoadKey, ZFSMount, \
     ZFSUnLoadKey, ZFSUnmount, UserModChangeHomeDir, APTGetUpdate, APTGetUpgrade, Chown, ZFSDestroy, ZPoolLabelClear, \
-    ZPoolImport, ZPoolExport, Wipefs, ZPoolDestroy
+    ZPoolImport, ZPoolExport, Wipefs, ZPoolDestroy, ZPoolAdd, ZPoolAttach
 from constants import KEYPATH, POOLNAME, DATASETNAME
 from flask_daemons import NetIOCounter, ScrubStateChecker
 from disk import Disk,DiskStatus
@@ -268,33 +268,87 @@ class NMSBackend:#(FileSystemEventHandler):
             this._logger.error(f"Configuration file `{this.config_filename}` not found")
             raise FileNotFoundError(f"Configuration file {this.config_filename} does not exist")
 
-    def get_disks(this):
-        pool_disks = this._cfg['pool'].get("disks",[])
+
+    def get_pool_disks(this):
+        pool_disks = this._cfg['pool'].get("disks", [])
+
+
+        return [
+            Disk(
+                name=d['name'],
+                model=d['model'],
+                serial=d['serial'],
+                size=d['size'],
+                path=d['path'],
+                status=None
+            )
+            for d in pool_disks
+        ]
+
+    def get_system_disks(this):
         lsblk = LSBLK()
         lsblk_output = lsblk.execute()
         lsblk_disks = json.loads(lsblk_output.stdout)
 
         sata_disks = [x for x in lsblk_disks['blockdevices'] if x['tran'] == 'sata']
 
-        detected_disks = []
-        for d in sata_disks:
-            status = DiskStatus.NEW
+        return [
+            Disk(name=d['name'],
+                 model=d['model'],
+                 serial=d['serial'],
+                 size=d['size'],
+                 path=d['path'],
+                 status=None
+                )
+            for d in sata_disks
+        ]
 
-            for disk_in_pool in pool_disks:
-                if (disk_in_pool['model'] == d['model']) and (disk_in_pool['serial'] == d['serial']):
-                    status=DiskStatus.ONLINE
-                    break
+    def get_disks(this):
+        pool_disks = this.get_pool_disks()
+        system_disks = this.get_system_disks()
 
-            disk = Disk(name=d['name'],
-                        model=d['model'],
-                        serial=d['serial'],
-                        size=d['size'],
-                        path=d['path'],
-                        status=status
-                        )
-            detected_disks.append(disk)
+        detected_disks = list(set(system_disks).intersection(set(pool_disks)))
 
-        detected_disks.sort(key=lambda x : x.name)
+
+        #check if any disk is new
+        for disk in system_disks:
+            if (disk not in detected_disks):
+                disk.status = DiskStatus.NEW
+                detected_disks.append(disk)
+            else:
+                #TODO: check with zpool if the disk is corrupted/faulted
+                for d in detected_disks:
+                    if d == disk:
+                        d.status = DiskStatus.ONLINE
+                        break
+
+
+        #detect if a disk is offline
+        for disk in pool_disks:
+            if (disk not in detected_disks):
+                disk.status = DiskStatus.OFFLINE
+                detected_disks.append(disk)
+
+
+        # detected_disks = []
+        # for d in sata_disks:
+        #     status = DiskStatus.NEW
+        #
+        #     for disk_in_pool in pool_disks:
+        #         if (disk_in_pool['model'] == d['model']) and (disk_in_pool['serial'] == d['serial']):
+        #             status=DiskStatus.ONLINE
+        #             break
+        #
+        #     disk = Disk(name=d['name'],
+        #                 model=d['model'],
+        #                 serial=d['serial'],
+        #                 size=d['size'],
+        #                 path=d['path'],
+        #                 status=status
+        #                 )
+        #     detected_disks.append(disk)
+
+        detected_disks.sort(key=lambda x : x.path)
 
 
         return detected_disks
@@ -1180,6 +1234,68 @@ class NMSBackend:#(FileSystemEventHandler):
                                 key_location = key_location[len("file://"):]
 
                             this._cfg['pool']['encrypted'] = key_location
+
+
+    def expand_pool(this,new_device):
+        cmd = None
+        if this.has_redundancy:
+            status = ZpoolStatus(this.pool_name)
+            output = status.execute()
+
+            if (output.returncode == 0):
+                d = json.loads(output.stdout)
+
+                vdevs = d.get("pools", {}).get(this.pool_name, {}).get("vdevs", {}).get(this.pool_name, {}).get("vdevs", {})
+
+                if (len(vdevs) == 1):
+                    # check if raidz is enabled
+                    value = list(vdevs.keys())[0]
+
+                    if (vdevs[value]['vdev_type'] == 'raidz'):
+                        cmd = ZPoolAttach(this.pool_name, vdevs[value]['name'],new_device)
+
+            assert(cmd is not None,"Unable to attach new device to disk array.")
+
+        else:
+            cmd = ZPoolAdd(this.pool_name,new_device)
+
+        trans = RemoteCommandLineTransaction(socket.AF_UNIX,
+                                             socket.SOCK_STREAM,
+                                             SOCK_PATH, cmd)
+
+        output = trans.run()
+
+        if (not trans.success):
+            raise Exception(f"Unable to attach new device to disk array: {output[0]['stderr']}")
+
+        #todo: add new disk to configuration
+
+    @property
+    def get_attachable_disks(this):
+
+        disks = [d for d in this.get_disks() if d.status == DiskStatus.NEW]
+        config_disk = this.get_pool_disks()
+
+        physical_paths = []
+
+        for d in config_disk:
+            physical_paths.extend(d.physical_path)
+
+        physical_paths = set(physical_paths)
+        attachable_disks = []
+
+        # raise Exception([disks,config_disk])
+
+        for d in disks:
+
+            if (len(physical_paths.intersection(set(d.physical_path)))==0):
+                attachable_disks.append(d)
+
+#         raise Exception(attachable_disks)
+
+        return attachable_disks
+
+
 
 
 

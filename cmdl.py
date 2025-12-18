@@ -99,6 +99,56 @@ class ZPoolLabelClear(ZPoolCommand):
     def from_dict(serialisation):
         return ZPoolLabelClear(serialisation.get('disk',None))
 
+class ZPoolAttach(ZPoolCommand):
+
+    def __init__(this,tank,vdev,device):
+        this._tank = tank
+        this._vdev = vdev
+        this._device = device
+
+        super().__init__("attach",sudo=True)
+
+        this.append([tank,vdev,device])
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['tank'] = this._tank
+        d['vdev'] = this._vdev
+        d['device'] = this._device
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ZPoolAttach(
+            serialisation.get('tank', None),
+            serialisation.get("vdev", None),
+            serialisation.get("device",None)
+        )
+
+
+class ZPoolAdd(ZPoolCommand):
+
+    def __init__(this, tank,  device):
+        this._tank = tank
+        this._device = device
+
+        super().__init__("add", sudo=True)
+
+        this.append([tank, device])
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['tank'] = this._tank
+        d['device'] = this._device
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ZPoolAdd(
+            serialisation.get('tank', None),
+            serialisation.get("device", None)
+        )
+
 
 class ZPoolDestroy(ZPoolCommand):
     def __init__(this,tank_name="tank",force=True):

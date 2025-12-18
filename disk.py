@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import  Enum
+from typing import Optional
 import subprocess
 
 class DiskStatus(Enum):
@@ -15,27 +16,31 @@ class DiskStatus(Enum):
             case DiskStatus.OFFLINE: return "Offline"
             case DiskStatus.CORRUPTED: return "Corrupted/Damaged"
 
-
-@dataclass(frozen=True)
+@dataclass
 class Disk:
     name:str
     model:str
     serial:str
     size:int
-    status:DiskStatus
+    status:Optional[DiskStatus]
     path:str
 
     def serialise(this):
         return {
+            "name":this.name,
             "model": this.model,
             "serial": this.serial,
+            "size": this.size,
             "path": this.path,
             "physical_path": this.physical_path,
         }
 
     def __eq__(this, other):
         if (isinstance(other,Disk)):
-            return (other.model == this.model) and (other.serial == this.serial)
+            return other.serial == this.serial
+
+    def __hash__(this):
+        return hash(this.serial)
 
     @property
     def physical_path(this):
@@ -50,3 +55,4 @@ class Disk:
             return ["/dev/" + s for s in symlinks if s.startswith("disk/by-path/")]
         except subprocess.CalledProcessError:
             return []
+

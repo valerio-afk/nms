@@ -1,5 +1,6 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, IntegerField,PasswordField,BooleanField, SelectMultipleField, HiddenField, FileField
+from wtforms.fields.choices import RadioField
 from wtforms.validators import DataRequired,NumberRange, EqualTo, Regexp,StopValidation
 from wtforms.widgets.core import CheckboxInput, ListWidget
 
@@ -42,6 +43,19 @@ class AtLeastOneField:
     def __call__(this, form, field):
         if (not field.data) or (len(field.data) == 0):
             raise StopValidation(this._message)
+
+class AddDisksForm(FlaskForm):
+    disks = RadioField("Disks",validators=[DataRequired()])
+
+    def __init__(this,disks,*args, **kwargs):
+        super().__init__(*args,**kwargs)
+
+        this.disks.choices = [(d,d) for d in disks]
+
+        if not this.is_submitted():
+            if (len(this.disks.choices) > 0):
+                this.disks.default = this.disks.choices[0][0]
+            this.process()
 
 class CreatePoolForm(FlaskForm):
     redundancy = BooleanField("Redundancy")

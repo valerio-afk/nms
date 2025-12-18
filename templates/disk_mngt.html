@@ -28,6 +28,10 @@
                 {% include "card.import_array.html" %}
             {% endfor %}
         {% endif %}
+
+        {% if attachable_disks %}
+            {% include "card.add_disks.html" %}
+        {% endif %}
     </div>
 
 {% else %}

@@ -9,8 +9,7 @@ from importlib import import_module
 from flask_wtf.csrf import generate_csrf, validate_csrf
 from wtforms import ValidationError
 
-from constants import KEYPATH
-from forms import CreatePoolForm, ImportPoolForm
+from forms import CreatePoolForm, ImportPoolForm, AddDisksForm
 from widget import render_widget,get_widgets_html,get_widgets_css_files
 from backend import BACKEND, LogFilter
 from tasks import create_pool, NMSTask, apt_get_updates, apt_get_upgrade
@@ -206,18 +205,49 @@ def import_pool(pool):
     return redirect(url_for("main.disk_management"))
 
 
+@bp.route('/disks/add', methods=['POST'])
+def add_disk():
+    attachable_disks = BACKEND.get_attachable_disks
+    form = AddDisksForm([d.path for d in attachable_disks])
+
+    if (form.validate_on_submit()):
+        try:
+            BACKEND.expand_pool(form.disks.data)
+            flash(f"Adding {form.disks.data} to your pool completed.")
+        except Exception as e:
+            flash(f"Error while adding {form.disks.data}: {str(e)}", "error")
+    else:
+        flash(f"Unable to process the form: {form.errors}","error")
+
+    return redirect(url_for("main.disk_management"))
 
 
 @bp.route('/disks')
 @wait(redirect_to="/disks/new/wait")
 def disk_management():
     disks = BACKEND.get_disks()
-    pool = BACKEND.is_pool_configured()
+    attachable_disks = BACKEND.get_attachable_disks
 
     importable_pools = BACKEND.get_importable_pools()
     imports = [
         (p['name'],p['disks'], p['message'] if p['state']!="ONLINE" else None , ImportPoolForm()) for p in importable_pools
     ]
+
+    parameters = {
+        "active_page": "disk",
+        "disks": disks,
+        "pool": BACKEND.is_pool_configured(),
+        "imports": imports,
+        "csp_nonce": g.csp_nonce,
+        "attachable_disks": None if len(attachable_disks)==0 else AddDisksForm([d.path for d in attachable_disks]),
+    }
+
+    if (parameters['pool'] == False):
+        parameters['new_pool_form'] = CreatePoolForm([d.path for d in disks]),
+    else:
+        parameters['mounted'] = BACKEND.is_mounted
+        parameters['scrub'] = BACKEND.get_last_scrub_report()
+
 
     verify = BACKEND.get_scrub_info
 
@@ -226,24 +256,11 @@ def disk_management():
     else:
         verify['last'] = datetime.datetime.fromtimestamp(verify['last']).strftime("%c")
 
-    scrub_report = BACKEND.get_last_scrub_report()
+    parameters['verify'] = verify
 
 
 
-
-
-    return render_template("disk_mngt.html",
-                           active_page="disk",
-                           disks=disks,
-                           pool=pool,
-                           imported_pools=imports,
-                           verify=verify,
-                           scrub = scrub_report,
-                           mounted=BACKEND.is_mounted,
-                           new_pool_form = CreatePoolForm([d.path for d in disks]),
-                           csp_nonce=g.csp_nonce
-                           # check=check
-                           )
+    return render_template("disk_mngt.html", **parameters)
 
 
 @bp.route('/disks/new/wait')
