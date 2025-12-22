@@ -3,8 +3,9 @@ from wtforms import StringField, IntegerField,PasswordField,BooleanField, Select
 from wtforms.fields.choices import RadioField
 from wtforms.validators import DataRequired,NumberRange, EqualTo, Regexp,StopValidation
 from wtforms.widgets.core import CheckboxInput, ListWidget
-
+from disk import Disk
 from constants import PORT_MIN,PORT_MAX, POOLNAME,DATASETNAME
+from typing import List
 
 class ToggleInput(CheckboxInput):
 
@@ -47,10 +48,13 @@ class AtLeastOneField:
 class AddDisksForm(FlaskForm):
     disks = RadioField("Disks",validators=[DataRequired()])
 
-    def __init__(this,disks,*args, **kwargs):
+    def __init__(this,disks:List[Disk],*args, **kwargs):
         super().__init__(*args,**kwargs)
 
-        this.disks.choices = [(d,d) for d in disks]
+        this.disks.choices = [(
+            d.physical_paths[0] if isinstance(d.physical_paths, list) else d.physical_paths,
+            d.path
+        ) for d in disks]
 
         if not this.is_submitted():
             if (len(this.disks.choices) > 0):
@@ -65,10 +69,10 @@ class CreatePoolForm(FlaskForm):
     dataset_name = StringField("Dataset Name", validators=[DataRequired()], default=DATASETNAME)
     disks = MultiCheckboxField("Disks",validators=[AtLeastOneField("You must select at least one disk to create a pool")])
 
-    def __init__(this,disks,*args, **kwargs):
+    def __init__(this,disks:List[Disk],*args, **kwargs):
         super().__init__(*args,**kwargs)
 
-        this.disks.choices = [(d,d) for d in disks]
+
 
         if not this.is_submitted():
             this.disks.default = [x[0] for x in this.disks.choices]

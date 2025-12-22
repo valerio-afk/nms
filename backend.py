@@ -11,15 +11,13 @@ import socket
 import platform
 import datetime
 import base64
+
 from collections import OrderedDict
-
-from werkzeug.utils import secure_filename
-
 from cmdl import CreateKey, ZPoolCreate, ZFSCreate, RemoteCommandLineTransaction, ZpoolScrub, Reboot, \
     Shutdown, JournalCtl, SystemCtlRestart, ZpoolList, ZpoolStatus, ZFSGet, ZFSList, LSBLK, ZFSLoadKey, ZFSMount, \
     ZFSUnLoadKey, ZFSUnmount, UserModChangeHomeDir, APTGetUpdate, APTGetUpgrade, Chown, ZFSDestroy, ZPoolLabelClear, \
     ZPoolImport, ZPoolExport, Wipefs, ZPoolDestroy, ZPoolAdd, ZPoolAttach
-from constants import KEYPATH, POOLNAME, DATASETNAME
+from constants import KEYPATH
 from flask_daemons import NetIOCounter, ScrubStateChecker
 from disk import Disk,DiskStatus
 from iface import NetworkInterface
@@ -27,6 +25,7 @@ from enum import Enum
 from flask import flash
 from nms_utils import setup_logger, ansi_to_html
 from constants import SOCK_PATH, APT_LISTS
+from typing import List
 import pwd
 
 hash_password = lambda pwd : hashlib.sha1(pwd.encode()).hexdigest()
@@ -796,7 +795,7 @@ class NMSBackend:#(FileSystemEventHandler):
                     redundancy:bool,
                     encryption:bool,
                     compression:bool,
-                    disks:list):
+                    disks:list) -> None:
 
         if this.is_pool_configured():
             raise Exception("The disk array is already configured.")
@@ -864,7 +863,9 @@ class NMSBackend:#(FileSystemEventHandler):
         if (compression):
             this._cfg['pool']['compressed'] = True
 
-        this._cfg['pool']['disks'] = [d.serialise() for d in disks_objs if d.path in disks]
+        this._cfg['pool']['disks'] = []
+
+        this._cfg['pool']['disks'] = [d.serialise() for d in disks_objs if d.has_any_paths(disks)]
 
         this.flush_config()
 
@@ -1236,8 +1237,20 @@ class NMSBackend:#(FileSystemEventHandler):
                             this._cfg['pool']['encrypted'] = key_location
 
 
-    def expand_pool(this,new_device):
+    def expand_pool(this,new_device:str) -> None:
         cmd = None
+
+        disks = this.get_attachable_disks
+
+        new_disk_obj = [ d for d in disks if d.has_path(new_device)]
+
+        if (len(new_disk_obj)!=1):
+            raise Exception(f"Could not retrieve information for the disk: {new_device}")
+
+        new_disk_obj = new_disk_obj.pop()
+
+        this.disable_all_access_services()
+
         if this.has_redundancy:
             status = ZpoolStatus(this.pool_name)
             output = status.execute()
@@ -1268,10 +1281,13 @@ class NMSBackend:#(FileSystemEventHandler):
         if (not trans.success):
             raise Exception(f"Unable to attach new device to disk array: {output[0]['stderr']}")
 
-        #todo: add new disk to configuration
+        this._cfg["pool"]["disks"].append(new_disk_obj.serialise())
+        this.flush_config()
+
+
 
     @property
-    def get_attachable_disks(this):
+    def get_attachable_disks(this) -> List[Disk]:
 
         disks = [d for d in this.get_disks() if d.status == DiskStatus.NEW]
         config_disk = this.get_pool_disks()
@@ -1279,7 +1295,7 @@ class NMSBackend:#(FileSystemEventHandler):
         physical_paths = []
 
         for d in config_disk:
-            physical_paths.extend(d.physical_path)
+            physical_paths.extend(d.physical_paths)
 
         physical_paths = set(physical_paths)
         attachable_disks = []
@@ -1288,7 +1304,7 @@ class NMSBackend:#(FileSystemEventHandler):
 
         for d in disks:
 
-            if (len(physical_paths.intersection(set(d.physical_path)))==0):
+            if (len(physical_paths.intersection(set(d.physical_paths)))==0):
                 attachable_disks.append(d)
 
 #         raise Exception(attachable_disks)

@@ -3,7 +3,8 @@ import os
 import pyotp
 import qrcode
 import time
-from flask import render_template, redirect, url_for, jsonify, request, flash, Blueprint, g, send_file, session, abort
+from flask import render_template, redirect, url_for, jsonify, request, flash, Blueprint, g, send_file, session, abort, \
+    Response
 from io import BytesIO
 from importlib import import_module
 from flask_wtf.csrf import generate_csrf, validate_csrf
@@ -158,9 +159,9 @@ def mount():
 
 @bp.route('/disks/new',methods=['POST'])
 @wait()
-def new_pool():
+def new_pool() -> Response:
     disks = BACKEND.get_disks()
-    form = CreatePoolForm([d.path for d in disks])
+    form = CreatePoolForm(disks)
 
     if (form.validate_on_submit()):
         redundancy = form.redundancy.data
@@ -176,7 +177,7 @@ def new_pool():
         BACKEND.append_task(NMSTask(task.task_id,"/disks"))
 
     else:
-        flash("Form validation failed.","error")
+        flash(f"Form validation failed: {form.errors}","error")
 
     return redirect(url_for("main.disk_management"))
 
@@ -208,14 +209,15 @@ def import_pool(pool):
 @bp.route('/disks/add', methods=['POST'])
 def add_disk():
     attachable_disks = BACKEND.get_attachable_disks
-    form = AddDisksForm([d.path for d in attachable_disks])
+    form = AddDisksForm(attachable_disks)
 
     if (form.validate_on_submit()):
         try:
             BACKEND.expand_pool(form.disks.data)
             flash(f"Adding {form.disks.data} to your pool completed.")
         except Exception as e:
-            flash(f"Error while adding {form.disks.data}: {str(e)}", "error")
+            flash(f"Error while adding {form.disks.data}: {str(e)}"
+                  , "error")
     else:
         flash(f"Unable to process the form: {form.errors}","error")
 
@@ -239,15 +241,15 @@ def disk_management():
         "pool": BACKEND.is_pool_configured(),
         "imports": imports,
         "csp_nonce": g.csp_nonce,
-        "attachable_disks": None if len(attachable_disks)==0 else AddDisksForm([d.path for d in attachable_disks]),
     }
 
+
     if (parameters['pool'] == False):
-        parameters['new_pool_form'] = CreatePoolForm([d.path for d in disks]),
+        parameters['new_pool_form'] = CreatePoolForm(disks)
     else:
         parameters['mounted'] = BACKEND.is_mounted
         parameters['scrub'] = BACKEND.get_last_scrub_report()
-
+        parameters["attachable_disks"] = None if len(attachable_disks) == 0 else AddDisksForm(attachable_disks)
 
     verify = BACKEND.get_scrub_info
 
