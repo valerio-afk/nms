@@ -8,7 +8,7 @@ import redis
 import base64
 
 from filters import human_readable_bytes, enabled_fmt, disk_charm, markdown_filter
-from nms import bp
+from frontend import frontend as bp
 
 def generate_nonce(length=16):
     return base64.b64encode(os.urandom(length)).decode('ascii').rstrip('=')

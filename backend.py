@@ -11,22 +11,26 @@ import socket
 import platform
 import datetime
 import base64
+from inotify_simple import INotify, flags
 
 from collections import OrderedDict
+from celery.result import AsyncResult
 from cmdl import CreateKey, ZPoolCreate, ZFSCreate, RemoteCommandLineTransaction, ZpoolScrub, Reboot, \
     Shutdown, JournalCtl, SystemCtlRestart, ZpoolList, ZpoolStatus, ZFSGet, ZFSList, LSBLK, ZFSLoadKey, ZFSMount, \
     ZFSUnLoadKey, ZFSUnmount, UserModChangeHomeDir, APTGetUpdate, APTGetUpgrade, Chown, ZFSDestroy, ZPoolLabelClear, \
     ZPoolImport, ZPoolExport, Wipefs, ZPoolDestroy, ZPoolAdd, ZPoolAttach
 from constants import KEYPATH
-from flask_daemons import NetIOCounter, ScrubStateChecker
+from flask_daemons import NetIOCounter, ScrubStateChecker, CheckConfigFile
 from disk import Disk,DiskStatus
 from iface import NetworkInterface
 from enum import Enum
 from flask import flash
 from nms_utils import setup_logger, ansi_to_html
 from constants import SOCK_PATH, APT_LISTS
-from typing import List
+from typing import List,Tuple, Optional
+from datetime import timedelta
 import pwd
+
 
 hash_password = lambda pwd : hashlib.sha1(pwd.encode()).hexdigest()
 
@@ -34,6 +38,50 @@ __version__ = "0.1dev"
 
 def scrub_finished_hook():
     flash("Disk array verification completed","success")
+
+
+class NMSTask:
+
+    def __init__(this, task_id:str,
+                       page:Optional[str]=None,
+                       action:Optional[str]=None,
+                       tag:Optional[str]=None):
+        this._task_id = task_id
+        this._page = page
+        this._action = action
+        this._tag = tag
+
+    @property
+    def action(this) -> Optional[str]:
+        return this._action
+
+    @property
+    def tag(this) -> Optional[str]:
+        return this._tag
+
+    @property
+    def page(this) -> Optional[str]:
+        return this._page
+
+    @property
+    def task_id(this) -> str:
+        return this._task_id
+
+    @property
+    def completed(this) -> bool:
+        return AsyncResult(this.task_id).ready()
+
+    @property
+    def successful(this) -> bool:
+        return AsyncResult(this.task_id).successful()
+
+    @property
+    def failed(this) -> bool:
+        return AsyncResult(this.task_id).failed()
+
+    @property
+    def result(this) -> AsyncResult:
+        return AsyncResult(this.task_id).result
 
 
 class LogFilter(Enum):
@@ -62,20 +110,23 @@ class OwnershipHandler():
 
         super().__init__()
 
-
-
-
 class NMSBackend:#(FileSystemEventHandler):
+    def __new__(cls):
+        if not hasattr(cls, 'instance'):
+            cls.instance = super(NMSBackend, cls).__new__(cls)
+        return cls.instance
 
     def __init__(this,config_file="nms.json"):
         this._config_file = config_file
         this._cfg = {}
         this._celery_tasks = []
-        this._daemons = {'net_counters':NetIOCounter(),'scrub_checker':None}
+        this._daemons = {
+            'net_counters':NetIOCounter(),
+            'scrub_checker':None,
+            'inotify': CheckConfigFile(config_file,this.load_configuration_file),
+        }
         this._logger = setup_logger("NMS BACKEND")
         this._watchdog = None
-
-
 
         try:
             this.load_configuration_file()
@@ -202,6 +253,10 @@ class NMSBackend:#(FileSystemEventHandler):
             return totp.verify(otp)
 
         return False
+
+    @property
+    def get_tasks(this) -> List[NMSTask]:
+        return [t for t in this._celery_tasks]
 
 
     @property
@@ -1250,6 +1305,7 @@ class NMSBackend:#(FileSystemEventHandler):
         new_disk_obj = new_disk_obj.pop()
 
         this.disable_all_access_services()
+        this.unmount()
 
         if this.has_redundancy:
             status = ZpoolStatus(this.pool_name)
@@ -1284,10 +1340,47 @@ class NMSBackend:#(FileSystemEventHandler):
         this._cfg["pool"]["disks"].append(new_disk_obj.serialise())
         this.flush_config()
 
+    @property
+    def get_array_expansion_status(this) -> Tuple[Optional[float], Optional[timedelta], bool]:
 
+        if (not this.is_pool_configured()):
+            raise Exception(f"Disk array not configured yet.")
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            ZpoolStatus(this.pool_name)
+        )
+
+        output = trans.run()
+
+
+        if (not trans.success):
+            raise Exception(f"Unable to get array expansion status: {output[0]['stderr']}")
+
+        zpool_output = output[0]['stdout']
+
+        in_progress = re.search(
+            r'([\d.]+)%\s+done,\s+([\d:]+)\s+to\s+go',
+            zpool_output
+        )
+
+        if in_progress:
+            percent = float(in_progress.group(1))
+            h, m, s = map(int, in_progress.group(2).split(":"))
+            return percent, timedelta(hours=h, minutes=m, seconds=s), False
+
+        completed = re.search(r'expand:\s+expanded', zpool_output)
+        if completed:
+            return 100.0, timedelta(0), True
+
+        return None, None, False
 
     @property
     def get_attachable_disks(this) -> List[Disk]:
+
+
 
         disks = [d for d in this.get_disks() if d.status == DiskStatus.NEW]
         config_disk = this.get_pool_disks()
@@ -1514,4 +1607,4 @@ class NMSBackend:#(FileSystemEventHandler):
     #         this._logger.info("Tank Directory Observer started")
 
 
-BACKEND = NMSBackend()
+

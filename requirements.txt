@@ -6,7 +6,6 @@ markdown >= 3.10
 pyotp >= 2.9.0
 qrcode >= 8.2
 pillow >= 11.2.1
-watchdog >= 6.0.0
 bcrypt >= 5.0.0
 flask-session >= 0.8.0
 redis >= 5.2.1

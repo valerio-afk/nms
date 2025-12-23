@@ -1,9 +1,11 @@
+from typing import Callable
+from abc import abstractmethod
+from cmdl import ZpoolStatus
+import os
 import threading, time
 import psutil
 import json
-from abc import abstractmethod
 
-from cmdl import ZpoolStatus
 
 
 class NMSThread:
@@ -101,3 +103,25 @@ class ScrubStateChecker(NMSThread):
 
         if (this.completion_handler is not None):
             this.completion_handler()
+
+class CheckConfigFile(NMSThread):
+    def __init__(this,filename:str, callback:Callable,interval:float=1):
+        super().__init__()
+        this._filename = filename
+        this._callback = callback
+        this._interval = interval
+
+    def run(this):
+        last_mtime = None
+
+        while (this.is_running):
+            try:
+                mtime = os.stat(this._filename).st_mtime
+                if ((last_mtime is not None) and (mtime != last_mtime)):
+                    this._callback()
+
+                last_mtime = mtime
+            except:
+                ...
+
+            time.sleep(this._interval)
