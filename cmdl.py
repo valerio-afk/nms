@@ -287,9 +287,9 @@ class ZpoolJsonSubCommand(ZPoolCommand):
 
     @staticmethod
     def from_dict(serialisation):
-        return ZpoolScrub(serialisation.get('pool',None))
+        return ZPoolScrub(serialisation.get('pool', None))
 
-class ZpoolScrub(ZPoolCommand):
+class ZPoolScrub(ZPoolCommand):
     def __init__(this, pool):
         super().__init__(subcommand="scrub",sudo=True)
         this._pool = pool
@@ -303,13 +303,13 @@ class ZpoolScrub(ZPoolCommand):
 
     @staticmethod
     def from_dict(serialisation):
-        return ZpoolScrub(serialisation.get('pool',None))
+        return ZPoolScrub(serialisation.get('pool', None))
 
-class ZpoolList(ZpoolJsonSubCommand):
+class ZPoolList(ZpoolJsonSubCommand):
     def __init__(this, pool):
         super().__init__(subcommand="list",pool=pool,sudo=False)
 
-class ZpoolStatus(ZpoolJsonSubCommand):
+class ZPoolStatus(ZpoolJsonSubCommand):
     def __init__(this, pool):
         super().__init__(subcommand="status",pool=pool,sudo=False)
 
@@ -1116,7 +1116,7 @@ class SMBPasswd(CommandLine):
         return output
 
 
-class Wipefs(CommandLine):
+class WipeFS(CommandLine):
     def __init__(this,dev,all=True):
         this._dev = dev
         this._all = all
@@ -1139,7 +1139,7 @@ class Wipefs(CommandLine):
 
     @staticmethod
     def from_dict(serialisation):
-        return Wipefs(serialisation.get("dev",None),serialisation.get("all",True))
+        return WipeFS(serialisation.get("dev", None), serialisation.get("all", True))
 
 class APTGet(CommandLine):
     def __init__(this,subcommand,flags=None):

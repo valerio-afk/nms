@@ -1,0 +1,53 @@
+{% extends "index.html" %}
+
+{% block title %}We are working for you...{% endblock %}
+
+{% block content %}
+
+<div class="progress" role="progressbar" aria-label="Disk array expansion" aria-valuenow="10" aria-valuemin="0" aria-valuemax="100">
+  <div class="progress-bar progress-bar-striped" id="progressbar">10%</div>
+</div>
+
+<div class="wait-msg">
+    <p id="progress-msg"></p>
+</div>
+
+{% if refresh_to %}
+<script src="{{ url_for('static', filename='wait_until.js') }}"></script>
+<script nonce="{{ csp_nonce }}">
+    function manageProgressBar(data)
+    {
+      if (data.message)
+      {
+        document.getElementById("progress-msg").textContent = data.message;
+      }
+
+      if (data.progress)
+      {
+        const value = Math.max(0, Math.min(100, data.progress));
+        const bar = document.getElementById("progressbar");
+
+        bar.style.width = value + "%";
+        bar.textContent = value + "%";
+
+        if (value == 100)
+        {
+            return true;
+        }
+      }
+
+       return false;
+    }
+
+
+    const waiter = new WaitUntil('{{ refresh_to }}', {
+        csrf_token: '{{ csrf_token() }}',
+        endpoint: '{{ url_for("main.check_task_by_id",task_id=task_id) }}',
+        callback: manageProgressBar
+    });
+    waiter.startPolling(2000);
+</script>
+
+{% endif %}
+
+{% endblock %}

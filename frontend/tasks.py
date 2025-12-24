@@ -1,3 +1,4 @@
+from time import sleep
 from celery import shared_task
 from . import BACKEND
 
@@ -30,8 +31,27 @@ def expand_pool(self, new_device):
         if (perc is None) or (time is None):
             raise Exception("Unable to get array expansion status")
         else:
-            self.update_state(state="PROGRESS", meta={"current":perc,"eta":time})
+
+            total_seconds = int(time.total_seconds())
+
+            hours, remainder = divmod(total_seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+
+            eta = ""
+            if hours > 0:
+                eta = f"{hours}"
+            if minutes > 0:
+                eta += f"{minutes}m"
+            else:
+                eta += f"{seconds}s"
+
+            self.update_state(state="PROGRESS", meta={
+                "progress":round(perc),
+                "message": f"Disk expansion is expected to take {eta}"
+            })
             done = success
+
+        sleep(1)
 
     return "Disk array expanded successfully."
 

@@ -1,9 +1,10 @@
 from . import frontend as bp, BACKEND, NMSTask
-from forms import ImportPoolForm, CreatePoolForm, AddDisksForm
-from datetime import datetime
-from frontend.decorators import wait
-from flask import g, render_template, redirect, url_for, flash, Response
 from .tasks import  expand_pool, create_pool
+from datetime import datetime
+from flask import g, render_template, redirect, url_for, flash, Response
+from forms import ImportPoolForm, CreatePoolForm, AddDisksForm
+from frontend.decorators import wait
+from typing import Union
 
 
 
@@ -54,7 +55,7 @@ def disk_management() -> str:
 # ACTION PAGES
 
 @bp.route('/disks/add', methods=['POST'])
-def add_disk() -> str:
+def add_disk() -> Response:
     attachable_disks = BACKEND.get_attachable_disks
     form = AddDisksForm(attachable_disks)
 
@@ -91,7 +92,7 @@ def new_pool() -> Response:
         disks = form.disks.data
 
         task = create_pool.delay(pool_name,dataset_name,redundancy,encryption,compression,disks)
-        BACKEND.append_task(NMSTask(task.task_id,"/disks"),tag="new_pool")
+        BACKEND.append_task(NMSTask(task.task_id,"/disks",tag="new_disk"))
 
     else:
         flash(f"Form validation failed: {form.errors}","error")
@@ -161,7 +162,26 @@ def mount() -> Response:
 def new_pool_wait() -> str:
     return render_template("wait.indeterminate.html",
                            active_page="disk",
-                           refresh_to="/disks",
+                           refresh_to=url_for("main.disk_management"),
                            extra_css=["pacman.css"],
                            csp_nonce=g.csp_nonce,
                            waiting_message="The creation of a new disk array may take some time. Please wait...")
+
+@bp.route('/disks/add/wait')
+def add_disk_wait() -> Union[str,Response]:
+    tasks = BACKEND.get_tasks
+    add_disk_task = None
+
+    for task in tasks:
+        if task.tag == "add_disk":
+            add_disk_task = task
+
+
+    if add_disk_task is None:
+        return redirect(url_for("main.disk_management"))
+
+    return render_template("wait.determinate.html",
+                           active_page="disk",
+                           refresh_to=url_for("main.disk_management"),
+                           task_id=add_disk_task.task_id,
+                           csp_nonce=g.csp_nonce)

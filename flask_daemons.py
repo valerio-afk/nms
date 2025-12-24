@@ -1,6 +1,6 @@
 from typing import Callable
 from abc import abstractmethod
-from cmdl import ZpoolStatus
+from cmdl import ZPoolStatus
 import os
 import threading, time
 import psutil
@@ -82,7 +82,7 @@ class ScrubStateChecker(NMSThread):
 
     def run(this):
         while (this.is_running):
-            output = ZpoolStatus(this.pool).execute()
+            output = ZPoolStatus(this.pool).execute()
 
             if (output.returncode == 0):
                 d = json.loads(output.stdout)

@@ -1,12 +1,12 @@
-import os
-import time
-from io import BytesIO
 from flask import render_template, redirect, url_for, request, flash, g, send_file, session, abort
 from flask_wtf.csrf import generate_csrf, validate_csrf
-from wtforms import ValidationError
+from frontend import  BACKEND, LogFilter, frontend as bp, NMSTask
+from frontend.tasks import apt_get_updates, apt_get_upgrade
+from io import BytesIO
 from widget import render_widget,get_widgets_html,get_widgets_css_files
-from .tasks import apt_get_updates, apt_get_upgrade
-from . import  BACKEND, LogFilter, frontend as bp, NMSTask
+from wtforms import ValidationError
+import os
+import time
 
 
 def widget_system_admin():

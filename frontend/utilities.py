@@ -14,18 +14,15 @@ def check_tasks():
 
     return jsonify([t.id for t in tasks])
 
-@bp.route('/check_tasks/<int:id>', methods=['POST'])
-def check_task_by_id(task_id:int) -> Response:
-    data = request.get_json()
+@bp.route('/check_tasks/<string:task_id>', methods=['POST'])
+def check_task_by_id(task_id:str) -> Response:
 
-    if not data or 'path' not in data:
-        return jsonify({"error": "Missing 'path' parameter"}), 400
+    task = BACKEND.get_task_by_id(task_id)
 
-    path = data['path']
+    if task is None:
+        return jsonify({"progress": 100})
 
-    tasks = BACKEND.get_tasks_by_path(path)
-
-    return jsonify([t.id for t in tasks])
+    return jsonify(task.data)
 
 
 @bp.route("/reboot", methods=['POST'])

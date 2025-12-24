@@ -1,3 +1,14 @@
+function indeterminateWaitChecker(data)
+{
+    // Expect data to be an array (the API returns a list)
+    if (Array.isArray(data) && data.length === 0)
+    {
+        return true;
+     }
+
+     return false;
+}
+
 /**
  * WaitUntil
  *
@@ -25,6 +36,7 @@ class WaitUntil {
     this.endpoint = opts.endpoint || '/check_tasks';
     this.contentType = opts.contentType || 'application/json';
     this.csrf_token = opts.csrf_token || null;
+    this.callback = opts.callback || indeterminateWaitChecker;
     this._pollTimer = null;
     this._stopped = false;
   }
@@ -36,7 +48,8 @@ class WaitUntil {
    * @returns {Promise<{redirected: boolean, data: any}>}
    */
   async checkOnce() {
-    try {
+    try
+    {
       const res = await fetch(this.endpoint, {
         method: 'POST',
         headers: { 'Content-Type': this.contentType, 'X-CSRFToken': this.csrf_token },
@@ -50,17 +63,17 @@ class WaitUntil {
       }
 
       const data = await res.json();
+      const r = this.callback(data)
 
-      // Expect data to be an array (the API returns a list)
-      if (Array.isArray(data) && data.length === 0) {
-        // redirect to the requested path
-        window.location.href = this.path;
-        return { redirected: true, data };
+      if (r)
+      {
+         window.location.href = this.path;
       }
 
-      // non-empty list -> do nothing
-      return { redirected: false, data };
-    } catch (err) {
+      return { redirected: r, data };
+    }
+    catch (err)
+    {
       console.error('WaitUntil: request failed', err);
       return { redirected: false, data: null };
     }
