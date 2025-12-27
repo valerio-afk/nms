@@ -14,7 +14,8 @@ class DiskStatus(Enum):
             case DiskStatus.NEW: return "New"
             case DiskStatus.ONLINE: return "Online"
             case DiskStatus.OFFLINE: return "Offline"
-            case DiskStatus.CORRUPTED: return "Corrupted/Damaged"
+            case DiskStatus.CORRUPTED: return "Corrupted"
+
 
 @dataclass
 class Disk:

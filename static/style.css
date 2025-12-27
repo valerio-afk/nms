@@ -74,6 +74,14 @@ div#danger_zone button.square-btn
     background-color: #AD290B;
 }
 
+div#danger_zone select
+{
+    background-color: #AD290B;
+    font-weight: bold;
+    border:0;
+    border-top: 1px solid #731B07;
+}
+
 .card-header
 {
     border-bottom:0px;
@@ -107,17 +115,33 @@ span.help
     font-size:0.9em;
 }
 
+.square-btn-wrapper {
+  aspect-ratio: 1 / 1;
+    max-width: 200px;
+  max-height: 200px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.square-btn-wrapper > * {
+  min-height: 0;
+}
+
+.square-btn-wrapper select {
+  height: 50px;            /* Bootstrap-ish height */
+}
+
 .square-btn {
-      aspect-ratio: 1 / 1; /* keeps it square */
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      padding: 1rem;
-      text-align: center;
-      background-color: #6764b5;
-      max-width: 200px;
-      max-height:200px;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+
+  padding: 1rem;
+  background-color: #6764b5;
+  text-align: center;
  }
 
 .nav-tabs .nav-item a
@@ -231,4 +255,18 @@ ul#disks, ol#disks {
     list-style: none;
     padding-left: 0; /* optional, removes indentation */
     margin-left: 0;  /* optional */
+}
+
+.rounded-top
+{
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+  border-bottom: none;
+}
+
+.rounded-bottom
+{
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  margin-top: -1px; /* overlap 1px border */
 }

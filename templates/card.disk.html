@@ -9,8 +9,16 @@
 <h4>{{ disk.size | human_readable_bytes }}</h4>
 <h4>{{ disk.path }}</h4>
 
-
-
+{% if disk.status.value == -2 %}
+<form action="{{ url_for('main.replace_disk') }}" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<div class="row g-1">
+    <div class="col-12">
+        <button class="btn btn-warning w-100" type="submit" name="disk" value="{{ disk.path }}">Replace</button>
+    </div>
+</div>
+</form>
+{% endif %}
 {% endblock %}
 
 

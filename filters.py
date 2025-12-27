@@ -8,7 +8,7 @@ def disk_charm(disk_status:DiskStatus):
         case DiskStatus.NEW: return "✴️"
         case DiskStatus.ONLINE: return "🟢"
         case DiskStatus.OFFLINE: return "🔴"
-        case DiskStatus.CORRUPTED: return "⚫"
+        case DiskStatus.CORRUPTED: return "⚠️"
 
 def enabled_fmt(status:bool):
     fmt = "Enabled" if status else "Disabled"

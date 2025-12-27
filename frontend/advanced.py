@@ -7,6 +7,7 @@ from frontend.tasks import apt_get_updates, apt_get_upgrade
 from io import BytesIO
 from widget import render_widget,get_widgets_html,get_widgets_css_files
 from wtforms import ValidationError
+from urllib.parse import quote, unquote
 import os
 import time
 
@@ -35,8 +36,11 @@ def widget_system_updates():
     return render_widget("apt", **apt)
 
 def widget_danger_zone():
+    disks = BACKEND.get_system_disks()
 
-    return render_widget("danger_zone")
+    choices = [(d.path, d.name) for d in disks]
+
+    return render_widget("danger_zone",disks=choices)
 
 
 @bp.route('/async/widgets/apt')
@@ -165,7 +169,71 @@ def zpool_destroy():
 
         return redirect(url_for("main.advanced"))
 
+@bp.route('/advanced/recover',methods=['POST'])
+def zpool_recover():
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        flash("CSRF validation failed","error")
+        return redirect(url_for("main.advanced"))
 
+    authorisation = session.pop("dz_authorisation",None)
+
+    if (authorisation is None):
+        return redirect(url_for("main.reauth",operation="recover"))
+
+    else:
+        if (time.time() - authorisation['timestamp']) < 60:
+            if (authorisation['operation'] == "recover"):
+                try:
+                    BACKEND.recover()
+                    flash("Disk array recovery attempted.","success")
+                except Exception as e:
+                    flash(f"Error while recovering the disk array: {str(e)}","error")
+            else:
+                flash(f"Invalid authorisation", "error")
+
+        else:
+            flash("Authorisation token expired","error")
+
+        return redirect(url_for("main.advanced"))
+
+@bp.route('/advanced/format_disk',methods=['POST'])
+def zpool_format_disk():
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        flash("CSRF validation failed","error")
+        return redirect(url_for("main.advanced"))
+
+    authorisation = session.pop("dz_authorisation",None)
+
+    option = request.form.get("option",None)
+
+    if option is None:
+        raise Exception("Invalid disk to format")
+
+    auth_code = quote(f"format:{option.replace("/","+")}")
+
+
+    if (authorisation is None):
+        return redirect(url_for("main.reauth",operation=auth_code))
+
+    else:
+        if (time.time() - authorisation['timestamp']) < 60:
+            if (authorisation['operation'] == unquote(auth_code)):
+                try:
+                    BACKEND.format_disk(option)
+                    flash(f"Disk {option} formatted successfully.","success")
+                except Exception as e:
+                    flash(f"Error while formatting {option}: {str(e)}","error")
+            else:
+                flash(f"Invalid authorisation", "error")
+
+        else:
+            flash("Authorisation token expired","error")
+
+        return redirect(url_for("main.advanced"))
 
 
 @bp.route('/advanced/apt',methods=['POST'])

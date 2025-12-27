@@ -1,8 +1,10 @@
 
-from cmdl import LSBLK
+from constants import SOCK_PATH
+from cmdl import LSBLK, WipeFS, RemoteCommandLineTransaction, ZPoolLabelClear
 from disk import DiskStatus, Disk
 from typing import List
 import json
+import socket
 
 
 
@@ -22,7 +24,7 @@ class DiskMixin:
                  serial=d['serial'],
                  size=d['size'],
                  path=d['path'],
-                 status=None
+                 status=DiskStatus.ONLINE,
                 )
             for d in sata_disks
         ]
@@ -38,12 +40,6 @@ class DiskMixin:
             if (disk not in detected_disks):
                 disk.status = DiskStatus.NEW
                 detected_disks.append(disk)
-            else:
-                #TODO: check with zpool if the disk is corrupted/faulted
-                for d in detected_disks:
-                    if d == disk:
-                        d.status = DiskStatus.ONLINE
-                        break
 
 
         #detect if a disk is offline
@@ -58,3 +54,37 @@ class DiskMixin:
 
 
         return detected_disks
+
+    def _format_disk(this,device:str)-> None:
+
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH,
+            ZPoolLabelClear(device),
+        )
+
+        trans.run()
+
+        if (not trans.success):
+            trans = RemoteCommandLineTransaction(
+                socket.AF_UNIX,
+                socket.SOCK_STREAM,
+                SOCK_PATH,
+                WipeFS(device),
+            )
+
+            output = trans.run()
+
+            if (not trans.success):
+                raise Exception(output[0].get("stderr", None))
+
+    def format_disk(this,device:str)->None:
+        pool = this.pool_name
+        import_key = this.has_encryption
+        this.detach()
+
+        this._format_disk(device)
+
+        this.import_pool(pool,import_key)
+

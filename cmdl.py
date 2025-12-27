@@ -5,6 +5,7 @@ from tempfile import gettempdir
 import os
 from abc import abstractmethod, ABC
 from enum import Enum
+from typing import Optional
 
 class CommandLine(ABC):
     def __init__(this,command,sudo=False,mask_output=False):
@@ -83,6 +84,8 @@ class ZPoolCommand(RevertibleCommandLine):
         super().__init__(cmd,**kwargs)
 
 
+
+
 class ZPoolLabelClear(ZPoolCommand):
     def __init__(this,disk):
         this._disk = disk
@@ -125,6 +128,34 @@ class ZPoolAttach(ZPoolCommand):
             serialisation.get("device",None)
         )
 
+class ZPoolReplace(ZPoolCommand):
+
+    def __init__(this,tank:str,device:str,new_device:Optional[str]=None):
+        this._tank = tank
+        this._device = device
+        this._new_device = new_device
+
+        super().__init__("replace",sudo=True)
+
+        this.append([tank,device])
+
+        if (new_device is not None):
+            this.append(new_device)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['tank'] = this._tank
+        d['device'] = this._device
+        d['new_device'] = this._new_device
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ZPoolAttach(
+            serialisation.get('tank', None),
+            serialisation.get("device",None),
+            serialisation.get("new_device", None)
+        )
 
 class ZPoolAdd(ZPoolCommand):
 
@@ -307,6 +338,30 @@ class ZPoolScrub(ZPoolCommand):
     @staticmethod
     def from_dict(serialisation):
         return ZPoolScrub(serialisation.get('pool', None))
+
+class ZPoolClear(ZPoolCommand):
+    def __init__(this, pool:str, recovery_mode:bool=False,**kwargs):
+        super().__init__(subcommand="clear", sudo=True,**kwargs)
+        this._pool = pool
+        this._recovery_mode = recovery_mode
+
+        if (recovery_mode):
+            this.append(["-F"])
+
+        this.append(this._pool)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['pool'] = this._pool
+        d['recovery_mode'] = this._recovery_mode
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ZPoolClear(serialisation.get('pool', None),
+                          serialisation.get('recovery_mode', False))
+
+
 
 class ZPoolList(ZpoolJsonSubCommand):
     def __init__(this, pool,**kwargs):

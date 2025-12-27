@@ -1,0 +1,34 @@
+<div class="col-6">
+      {% if btn_link %}
+          {% if not btn_method %}
+            {% set btn_method = 'POST' %}
+          {% endif %}
+      <form action="{{ btn_link }}" method="{{ btn_method }}">
+          {% if btn_method.upper() == 'POST' %}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {% endif %}
+      {% endif %}
+          <div class="w-100" >
+              <div class="square-btn-wrapper">
+                  <button
+                    type="{{ 'submit' if btn_link else 'button' }}"
+                    class="btn w-100 square-btn rounded-top {% if btn_disabled %} disabled {% endif %}"
+                    {% if btn_modal %}
+                      modal-confirm
+                      modal-message="{{ btn_message }}"
+                    {% endif %}
+                  >
+                    {{ btn_icon }}
+                    <div class="btn-title fw-bold">{{ btn_title }}</div>
+                    <div class="btn-text mt-3">{{ btn_text }}</div>
+                  </button>
+
+                  <select class="form-select w-100 rounded-bottom" aria-label="Select option" name="option">
+                    {% for k,v in btn_choices %}
+                      <option value="{{ k }}">{{ v }}</option>
+                    {% endfor %}
+                  </select>
+              </div>
+          </div>
+      {% if btn_link %} </form> {% endif %}
+</div>

@@ -2,11 +2,12 @@ from . import frontend as bp, BACKEND
 from .tasks import  expand_pool, create_pool
 from backend.tasks import NMSTask
 from datetime import datetime
-from flask import g, render_template, redirect, url_for, flash, Response
+from flask import g, render_template, redirect, url_for, flash, Response, request
+from flask_wtf.csrf import validate_csrf
 from forms import ImportPoolForm, CreatePoolForm, AddDisksForm
 from frontend.decorators import wait
 from typing import Union
-
+from wtforms import ValidationError
 
 
 # MAIN PAGE
@@ -154,6 +155,25 @@ def mount() -> Response:
 
     return redirect(url_for("main.disk_management"))
 
+@bp.route("/disk/replace",methods=['POST'])
+def replace_disk():
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+        disk = request.form.get("disk")
+
+        if (disk is None):
+            flash("Invalid disk to replace", "error")
+        else:
+            BACKEND.replace(disk)
+    except ValidationError:
+        flash("CSRF validation failed", "error")
+    except Exception as e:
+        flash(f"Unable to replace disk: {str(e)}", "error")
+
+
+    return redirect(url_for("main.disk_management"))
+
+
 
 # WAIT PAGES
 
@@ -184,3 +204,4 @@ def add_disk_wait() -> Union[str,Response]:
                            refresh_to=url_for("main.disk_management"),
                            task_id=add_disk_task.task_id,
                            csp_nonce=g.csp_nonce)
+

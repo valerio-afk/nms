@@ -1,11 +1,11 @@
 from cmdl import ZPoolExport, RemoteCommandLineTransaction, ZFSDestroy, ZPoolDestroy, \
     ZPoolList, ZPoolImport, ZPoolCreate, ZPoolLabelClear, ZFSCreate, WipeFS, CreateKey, \
     ZPoolStatus, ZPoolAdd, ZPoolAttach, LSBLK, ZFSList, ZFSGet, ZFSLoadKey, CommandLine, \
-    LocalCommandLineTransaction
+    LocalCommandLineTransaction, ZPoolClear, ZPoolReplace
 from constants import SOCK_PATH, KEYPATH
 from datetime import timedelta
 from disk import DiskStatus, Disk
-from typing import Tuple, Optional, List, Dict
+from typing import Tuple, Optional, List, Dict, Callable
 import base64
 import json
 import os
@@ -13,7 +13,7 @@ import re
 import socket
 import subprocess
 
-
+remove_partition:Callable[[str],str] = lambda path : re.sub(r"-part[0-9]$","",path)
 
 class PoolMixin:
 
@@ -164,13 +164,24 @@ class PoolMixin:
                         .get("vdevs", {})
 
 
-                paths = [re.sub(r"-part[0-9]$","",d['path']) for d in disks.values()]
+                paths = [remove_partition(d['path']) for d in disks.values()]
 
                 attached_disks = [ x for x in this.get_system_disks() if x.has_any_paths(paths) ]
                 detached_disks = []
 
+                for d in attached_disks:
+                    for x in disks.values():
+                        path = x.get('path',None)
+                        if path is not None:
+                            path = remove_partition(path)
+                            if d.has_path(path):
+                                if (x.get("state",None) != "ONLINE"):
+                                    d.status = DiskStatus.CORRUPTED
+                                else:
+                                    d.status = DiskStatus.ONLINE
+
                 for d in disks.values():
-                    if (d.get("state",None) == 'CANT_OPEN') or (d.get("not_present",0)==1):
+                    if (d.get("not_present",0)==1):
                         detached_disks.append(Disk(
                             name=d.get("name"),
                             model="Removed disk",
@@ -178,6 +189,15 @@ class PoolMixin:
                             size=None,
                             path=d.get("was",None),
                             status=DiskStatus.OFFLINE
+                        ))
+                    elif (d.get("state",None) == "REMOVED"):
+                        detached_disks.append(Disk(
+                            name = d.get("name"),
+                            model = "Removed disk",
+                            serial = "N/A",
+                            size = int(d.get("phys_space","0")),
+                            path = d.get("path", None),
+                            status = DiskStatus.OFFLINE
                         ))
 
                 return attached_disks + detached_disks
@@ -365,28 +385,11 @@ class PoolMixin:
         if this.is_pool_configured():
             raise Exception("The disk array is already configured.")
 
-        disks_objs = [d for d in this.get_disks() if d.status == DiskStatus.NEW]
-
         if redundancy and (len(disks)<3):
             raise Exception("You must have at least 3 disks connected to opt in redundancy.")
 
         for disk in disks:
-            trans = RemoteCommandLineTransaction(
-                socket.AF_UNIX,
-                socket.SOCK_STREAM,
-                SOCK_PATH,
-                ZPoolLabelClear(disk),
-            )
-
-            trans.run()
-
-            if (not trans.success):
-                RemoteCommandLineTransaction(
-                    socket.AF_UNIX,
-                    socket.SOCK_STREAM,
-                    SOCK_PATH,
-                    WipeFS(disk),
-                ).run()
+            this._format_disk(disk)
 
 
 
@@ -430,7 +433,7 @@ class PoolMixin:
 
         this.cfg['pool']['disks'] = []
 
-        this.cfg['pool']['disks'] = [d.serialise() for d in disks_objs if d.has_any_paths(disks)]
+        # this.cfg['pool']['disks'] = [d.serialise() for d in disks_objs if d.has_any_paths(disks)]
 
         this.flush_config()
 
@@ -711,3 +714,25 @@ class PoolMixin:
                 return root.get("msgid",None)
 
 
+    def recover(this) -> None:
+        trans = RemoteCommandLineTransaction(
+            socket.AF_UNIX,
+            socket.SOCK_STREAM,
+            SOCK_PATH, ZPoolClear(this.pool_name,True)
+        )
+
+        output = trans.run()
+
+        if (not trans.success):
+            raise Exception(f"Unable to recover disk array: {output[0]['stderr']}")
+
+
+    def replace(this, old_dev:str, new_dev:Optional[str]=None) -> None:
+        trans = RemoteCommandLineTransaction(socket.AF_UNIX,
+                                             socket.SOCK_STREAM,
+                                             SOCK_PATH, ZPoolReplace(this.pool_name,old_dev,new_dev))
+
+        output = trans.run()
+
+        if (not trans.success):
+            raise Exception(f"Unable to replace disk: {output[0]['stderr']}")

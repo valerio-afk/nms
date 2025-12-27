@@ -3,6 +3,7 @@
         {% if btn_method.upper() == 'POST' %}
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           {% endif %}
+        <div class="square-btn-wrapper">
           <button type="button"
                   modal-confirm
                   modal-action="{{ btn_link}}"
@@ -16,5 +17,6 @@
                 {{ btn_text }}
             </div>
           </button>
+        </div>
     </form>
 </div>
