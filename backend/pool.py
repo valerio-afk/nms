@@ -1,12 +1,11 @@
-from abc import abstractmethod
-from backend.config import ConfigMixin
 from cmdl import ZPoolExport, RemoteCommandLineTransaction, ZFSDestroy, ZPoolDestroy, \
     ZPoolList, ZPoolImport, ZPoolCreate, ZPoolLabelClear, ZFSCreate, WipeFS, CreateKey, \
-    ZPoolStatus, ZPoolAdd, ZPoolAttach, LSBLK, ZFSList, ZFSGet, ZFSLoadKey, CommandLine
+    ZPoolStatus, ZPoolAdd, ZPoolAttach, LSBLK, ZFSList, ZFSGet, ZFSLoadKey, CommandLine, \
+    LocalCommandLineTransaction
 from constants import SOCK_PATH, KEYPATH
 from datetime import timedelta
 from disk import DiskStatus, Disk
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Dict
 import base64
 import json
 import os
@@ -15,57 +14,33 @@ import socket
 import subprocess
 
 
-class PoolMixin (ConfigMixin):
 
+class PoolMixin:
 
-    @abstractmethod
-    def disable_all_access_services(this):
-        ...
-
-    @abstractmethod
-    def unmount(this):
-        ...
-
-    @abstractmethod
-    def rm_mountpoint(this, mountpoint):
-        ...
-
-    @abstractmethod
-    def change_permission(this):
-        ...
 
     @property
-    @abstractmethod
-    def mountpoint(this):
-        ...
+    def pool_name(this) -> str:
+        return this.cfg['pool'].get("name", None)
 
     @property
-    @abstractmethod
-    def dataset_name(this):
-        ...
+    def has_redundancy(this) -> bool:
+        return this.cfg['pool'].get("redundancy",False)
 
     @property
-    def pool_name(this):
-        return this._cfg['pool'].get("name", None)
+    def has_encryption(this) -> bool:
+        return False if this.cfg['pool'].get("encrypted", None) is None else True
 
     @property
-    def has_redundancy(this):
-        return this._cfg['pool'].get("redundancy",False)
+    def has_compression(this) -> bool:
+        return this.cfg['pool'].get("compressed", False)
 
     @property
-    def has_encryption(this):
-        return False if this._cfg['pool'].get("encrypted", None) is None else True
+    def key_filename(this) -> str:
+        return this.cfg['pool'].get("encrypted", None)
+
 
     @property
-    def key_filename(this):
-        return this._cfg['pool'].get("encrypted", None)
-
-    @property
-    def has_compression(this):
-        return this._cfg['pool'].get("compressed", False)
-
-    @property
-    def get_pool_capacity(this):
+    def get_pool_capacity(this) -> Dict[str, int]:
         if (not this.is_pool_configured()):
             return None
 
@@ -98,7 +73,7 @@ class PoolMixin (ConfigMixin):
             socket.AF_UNIX,
             socket.SOCK_STREAM,
             SOCK_PATH,
-            ZPoolStatus(this.pool_name)
+            ZPoolStatus(this.pool_name,show_json=False)
         )
 
         output = trans.run()
@@ -108,12 +83,16 @@ class PoolMixin (ConfigMixin):
 
         zpool_output = output[0]['stdout']
 
+        this.logger.warning(zpool_output)
+
+        # todo: 0.00% done, (copy is slow, no estimated time)
         in_progress = re.search(
             r'([\d.]+)%\s+done,\s+([\d:]+)\s+to\s+go',
             zpool_output
         )
 
         if in_progress:
+            this.logger.warning("expansion in progress")
             percent = float(in_progress.group(1))
             h, m, s = map(int, in_progress.group(2).split(":"))
             return percent, timedelta(hours=h, minutes=m, seconds=s), False
@@ -144,18 +123,52 @@ class PoolMixin (ConfigMixin):
 
         return attachable_disks
 
+    def get_pool_disks(this) -> List[Disk]:
+        trans = LocalCommandLineTransaction(ZPoolStatus(this.pool_name))
+        output = trans.run()
 
-    def get_pool_options(this):
+        if (trans.success) and (len(output) == 1):
+            stdout = output[0].get('stdout',None)
+
+            try:
+                d = json.loads(stdout)
+                pool_name = this.pool_name
+
+                if (this.has_redundancy):
+                    disks = d.get("pools",{}) \
+                            .get(pool_name,{}) \
+                            .get("vdevs",{}) \
+                            .get(pool_name,{}) \
+                            .get("vdevs",{}) \
+                            .popitem()[1] \
+                            .get("vdevs",{})
+                else:
+                    disks = d.get("pools", {}) \
+                        .get(pool_name, {}) \
+                        .get("vdevs", {}) \
+                        .get(pool_name, {}) \
+                        .get("vdevs", {})
+
+
+                paths = [re.sub(r"-part[0-9]$","",d['path']) for d in disks.values()]
+
+                return [ x for x in this.get_system_disks() if x.has_any_paths(paths) ]
+            except Exception as e:
+                raise Exception(e)
+
+        return []
+
+    def get_pool_options(this) -> List[Tuple[str,bool]]:
         return [
             ("Redundancy", this.has_redundancy),
             ("Encryption", this.has_encryption),
             ("Compression", this.has_compression),
         ]
 
-    def is_pool_configured(this):
-        return True if this._cfg['pool'].get("name",None) is not None else False
+    def is_pool_configured(this) -> bool:
+        return True if this.cfg['pool'].get("name",None) is not None else False
 
-    def detach(this):
+    def detach(this) -> None:
         if (not this.is_pool_configured()):
             raise Exception("Disk array not configured")
 
@@ -174,7 +187,7 @@ class PoolMixin (ConfigMixin):
             error = "\n".join([o['stderr'] for o in output])
             raise Exception(f"Unable to unmount disk array: {error}")
 
-    def destroy_tank(this):
+    def destroy_tank(this) -> None:
         if (not this.is_pool_configured()):
             raise Exception("Disk array not configured")
 
@@ -207,7 +220,7 @@ class PoolMixin (ConfigMixin):
             errors = "\n ".join([x["stderr"] for x in output])
             raise Exception(errors)
 
-        this._cfg['pool']= {
+        this.cfg['pool']= {
             "name": None,
             "encrypted": None,
             "redundancy": False,
@@ -221,13 +234,13 @@ class PoolMixin (ConfigMixin):
             }
         }
 
-        this._cfg["dataset"] = None
+        this.cfg["dataset"] = None
 
         this.flush_config()
 
         this.rm_mountpoint(mountpoint)
 
-    def get_importable_pools(this):
+    def get_importable_pools(this) -> dict:
 
         trans = RemoteCommandLineTransaction(
             socket.AF_UNIX,
@@ -374,28 +387,28 @@ class PoolMixin (ConfigMixin):
             else:
                 raise Exception(output[-1].get('stderr',None))
 
-        this._cfg['pool']['name'] = poolname
-        this._cfg['dataset'] = datasetname
+        this.cfg['pool']['name'] = poolname
+        this.cfg['dataset'] = datasetname
 
         if (redundancy):
-            this._cfg['pool']['redundancy'] = True
+            this.cfg['pool']['redundancy'] = True
 
         if (encryption):
-            this._cfg['pool']['encrypted'] = enc_key
+            this.cfg['pool']['encrypted'] = enc_key
 
         if (compression):
-            this._cfg['pool']['compressed'] = True
+            this.cfg['pool']['compressed'] = True
 
-        this._cfg['pool']['disks'] = []
+        this.cfg['pool']['disks'] = []
 
-        this._cfg['pool']['disks'] = [d.serialise() for d in disks_objs if d.has_any_paths(disks)]
+        this.cfg['pool']['disks'] = [d.serialise() for d in disks_objs if d.has_any_paths(disks)]
 
         this.flush_config()
 
         this.change_permissions()
         # this._start_tank_observer()
 
-    def get_tank_key(this):
+    def get_tank_key(this) -> bytes:
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         s.settimeout(5)
         s.connect(SOCK_PATH)
@@ -427,7 +440,7 @@ class PoolMixin (ConfigMixin):
             key = base64.b64decode(d.get("key",""))
             return key
 
-    def import_tank_key(this, handle):
+    def import_tank_key(this, handle) -> None:
 
         base64_bytes = base64.b64encode(handle)
         base64_string = base64_bytes.decode('utf-8')
@@ -505,7 +518,7 @@ class PoolMixin (ConfigMixin):
 
 
 
-    def init_pool(this):
+    def init_pool(this) -> None:
 
         pool_name = None
         dataset_name = None
@@ -547,7 +560,7 @@ class PoolMixin (ConfigMixin):
                 value = list(vdevs.keys())[0]
 
                 if (vdevs[value]['vdev_type']=='raidz'):
-                    this._cfg['pool']['redundancy'] = True
+                    this.cfg['pool']['redundancy'] = True
                     vdevs = vdevs[value].get("vdevs",{})
 
             if (len(vdevs) > 0):
@@ -579,13 +592,14 @@ class PoolMixin (ConfigMixin):
                                  status=DiskStatus.ONLINE
                                  )
 
+
                             disks_in_pool.append(disk_dev)
 
-                this._cfg['pool']['disks'] = [d.serialise() for d in disks_in_pool]
+                this.cfg['pool']['disks'] = [d.serialise() for d in disks_in_pool]
 
 
-                this._cfg['pool']['name'] = pool_name
-                this._cfg['dataset'] = dataset_name
+                this.cfg['pool']['name'] = pool_name
+                this.cfg['dataset'] = dataset_name
 
                 pool_properties = ZFSGet(pool_name)
                 prop_output = pool_properties.execute()
@@ -595,7 +609,7 @@ class PoolMixin (ConfigMixin):
                     pool_properties = d_prop.get('datasets',{}).get(pool_name,{}).get("properties",{})
                     if (len(pool_properties) > 0):
                         # check compression
-                        this._cfg['pool']['compressed'] = True if (pool_properties['compression']['value'].lower() != "off") else False
+                        this.cfg['pool']['compressed'] = True if (pool_properties['compression']['value'].lower() != "off") else False
                         # check for encryption
                         enc_enabled = pool_properties['encryption']['value'].lower() != "off"
 
@@ -604,7 +618,7 @@ class PoolMixin (ConfigMixin):
                             if key_location.startswith("file://"):
                                 key_location = key_location[len("file://"):]
 
-                            this._cfg['pool']['encrypted'] = key_location
+                            this.cfg['pool']['encrypted'] = key_location
 
 
     def expand_pool(this,new_device:str) -> None:
@@ -652,5 +666,5 @@ class PoolMixin (ConfigMixin):
         if (not trans.success):
             raise Exception(f"Unable to attach new device to disk array: {output[0]['stderr']}")
 
-        this._cfg["pool"]["disks"].append(new_disk_obj.serialise())
+        this.cfg["pool"]["disks"].append(new_disk_obj.serialise())
         this.flush_config()

@@ -269,11 +269,13 @@ class ZPoolCreate(ZPoolCommand):
 
 
 class ZpoolJsonSubCommand(ZPoolCommand):
-    def __init__(this,subcommand,pool,**kwargs):
+    def __init__(this,subcommand,pool,show_json=True,**kwargs):
         super().__init__(subcommand=subcommand, **kwargs)
         this._pool = pool
+        this._show_json = show_json
 
-        this.append(['-p', '-j'])
+        if (show_json):
+            this.append(['-p', '-j'])
 
         if (pool is not None):
             this.append(this._pool)
@@ -282,6 +284,7 @@ class ZpoolJsonSubCommand(ZPoolCommand):
         d = super().to_dict()
 
         d['pool'] = this._pool
+        d['show_json'] = this._show_json
 
         return d
 
@@ -306,16 +309,16 @@ class ZPoolScrub(ZPoolCommand):
         return ZPoolScrub(serialisation.get('pool', None))
 
 class ZPoolList(ZpoolJsonSubCommand):
-    def __init__(this, pool):
-        super().__init__(subcommand="list",pool=pool,sudo=False)
+    def __init__(this, pool,**kwargs):
+        super().__init__(subcommand="list",pool=pool,sudo=False,**kwargs)
 
 class ZPoolStatus(ZpoolJsonSubCommand):
-    def __init__(this, pool):
-        super().__init__(subcommand="status",pool=pool,sudo=False)
+    def __init__(this, pool,**kwargs):
+        super().__init__(subcommand="status",pool=pool,sudo=False,**kwargs)
 
 class ZpoolGet(ZpoolJsonSubCommand):
-    def __init__(this, pool):
-        super().__init__(subcommand="get",pool=None,sudo=False)
+    def __init__(this, pool,**kwargs):
+        super().__init__(subcommand="get",pool=None,sudo=False,**kwargs)
         this._pool = pool
 
         this.append(["all", pool])

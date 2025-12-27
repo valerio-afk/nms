@@ -72,6 +72,10 @@ class CreatePoolForm(FlaskForm):
     def __init__(this,disks:List[Disk],*args, **kwargs):
         super().__init__(*args,**kwargs)
 
+        this.disks.choices = [(
+            d.physical_paths[0] if isinstance(d.physical_paths, list) else d.physical_paths,
+            d.path
+        ) for d in disks]
 
 
         if not this.is_submitted():

@@ -2,6 +2,8 @@ import logging
 import os.path
 import sys
 from datetime import datetime
+from logging import Logger
+
 from constants import ANSI_RESET, ANSI_COLOURS,ANSI2HTML_MAP, ANSI_RE
 from pathlib import Path
 import difflib
@@ -18,7 +20,7 @@ class ColourFormatter(logging.Formatter):
         formatted = f"{color}[{record.name}] [{record.levelname}] [{dt}] {record.getMessage()}{reset}"
         return formatted
 
-def setup_logger(name: str, level=logging.INFO):
+def setup_logger(name: str, level=logging.INFO) -> Logger:
     logger = logging.getLogger(name)
     logger.setLevel(level)
 

@@ -1,6 +1,4 @@
-from abc import abstractmethod
-from backend.config import ConfigMixin
-from backend.pool import PoolMixin
+
 from cmdl import RemoteCommandLineTransaction, ZFSList, ZFSUnmount, ZFSLoadKey, ZFSUnLoadKey, ZFSMount, CommandLine, \
     ZFSCreate, ZFSDestroy
 from constants import SOCK_PATH
@@ -9,11 +7,12 @@ import json
 import socket
 
 
-class DatasetMixin (PoolMixin):
+
+class DatasetMixin:
 
     @property
     def dataset_name(this) -> Optional[str]:
-        return this._cfg.get("dataset", None)
+        return this.cfg.get("dataset", None)
 
     @property
     def mountpoint(this) -> Optional[str]:
@@ -67,7 +66,7 @@ class DatasetMixin (PoolMixin):
         else:
             raise Exception("Could not be determined if the disk array is mounted")
 
-    def mount(this):
+    def mount(this) -> None:
         if (not this.is_pool_configured()):
             raise Exception("Disk array not configured")
 
@@ -94,7 +93,7 @@ class DatasetMixin (PoolMixin):
 
 
 
-    def unmount(this):
+    def unmount(this) -> None:
         if (not this.is_pool_configured()):
             raise Exception("Disk array not configured")
 
@@ -121,7 +120,7 @@ class DatasetMixin (PoolMixin):
             error = "\n".join([o['stderr'] for o in output])
             raise Exception(f"Unable to unmount disk array: {error}")
 
-    def simulate_format(this):
+    def simulate_format(this) -> None:
         if (not this.is_pool_configured()):
             raise Exception("Disk array not configured")
 
@@ -152,7 +151,7 @@ class DatasetMixin (PoolMixin):
             errors = "\n ".join([x["stderr"] for x in output])
             raise Exception(errors)
 
-    def rm_mountpoint(this, mountpoint):
+    def rm_mountpoint(this, mountpoint) -> None:
         if (this.is_pool_configured()):
             raise Exception("Disk array is configured")
 

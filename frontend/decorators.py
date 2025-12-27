@@ -12,10 +12,11 @@ def wait(redirect_to:Optional[str]=None, tag:Optional[str]=None) -> Callable:
             for task in BACKEND.get_tasks:
                 if path.startswith(task.page):
                     if (tag is None) or (task.tag == tag):
-                        if redirect_to is not None:
-                            return redirect(redirect_to)
-                        else:
-                            abort(403)
+                        if not task.completed:
+                            if redirect_to is not None:
+                                return redirect(redirect_to)
+                            else:
+                                abort(403)
 
             # no match -> call original view
             return view_func(*args, **kwargs)

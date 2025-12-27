@@ -1,11 +1,7 @@
 import json
 import os
-from abc import abstractmethod
 
-from backend.logger import LoggerMixin
-
-
-class ConfigMixin (LoggerMixin):
+class ConfigMixin:
     def __init__(this,*args,**kwargs):
         config_file = kwargs.pop('config_file',None)
 
@@ -26,10 +22,14 @@ class ConfigMixin (LoggerMixin):
             this.create_default_config_file()
 
     @property
-    def config_filename(this):
+    def cfg(this) -> dict:
+        return this._cfg
+
+    @property
+    def config_filename(this) -> str:
         return this._config_file
 
-    def load_configuration_file(this):
+    def load_configuration_file(this) -> None:
         this.logger.info(f"Loading configuration file `{this.config_filename}`")
         if os.path.exists(this.config_filename):
             with open(this.config_filename, "r") as h:
@@ -39,7 +39,7 @@ class ConfigMixin (LoggerMixin):
             this.logger.error(f"Configuration file `{this.config_filename}` not found")
             raise FileNotFoundError(f"Configuration file {this.config_filename} does not exist")
 
-    def create_default_config_file(this):
+    def create_default_config_file(this) -> None:
         this.logger.info(f"Creating default configuration file")
         cfg = {
             "pool" : {
@@ -47,7 +47,7 @@ class ConfigMixin (LoggerMixin):
                 "encrypted": None,
                 "redundancy": False,
                 "compressed": False,
-                "disks": [],
+                # "disks": [],
                 "tools": {
                     "scrub": {
                         "ongoing" : False,
@@ -94,7 +94,7 @@ class ConfigMixin (LoggerMixin):
 
         this.flush_config()
 
-    def flush_config(this):
+    def flush_config(this) -> None:
         this.logger.info(f"Flushing configuration file `{this.config_filename}`")
         try:
             with open(this.config_filename,"w") as h:
@@ -102,9 +102,5 @@ class ConfigMixin (LoggerMixin):
                 this.logger.info(f"Configuration file `{this.config_filename}` flushed correctly")
         except Exception as e:
             this.logger.error(f"Unable to flush the configuration file `{this.config_filename}`: {str(e)}")
-
-    @abstractmethod
-    def init_pool(this):
-        ...
 
 

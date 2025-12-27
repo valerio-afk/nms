@@ -1,4 +1,4 @@
-from backend.daemons import DaemonsMixin
+
 from cmdl import RemoteCommandLineTransaction, Reboot, Shutdown, SystemCtlRestart,APTGetUpdate, APTGetUpgrade
 from collections import OrderedDict
 from constants import SOCK_PATH, APT_LISTS
@@ -16,7 +16,7 @@ def get_cpu_name():
                 return line.split(": ")[1].strip()
     return "Unknown CPU"
 
-class SystemMixin (DaemonsMixin):
+class SystemMixin:
     @property
     def system_information(this) -> Dict[str, str]:
         from . import __version__

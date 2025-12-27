@@ -1,5 +1,7 @@
-from abc import abstractmethod
-from backend.config import ConfigMixin
+
+from typing import Dict
+
+
 from cmdl import ZPoolScrub, RemoteCommandLineTransaction, ZPoolStatus
 from constants import SOCK_PATH
 from flask import flash
@@ -12,7 +14,8 @@ import socket
 def scrub_finished_hook():
     flash("Disk array verification completed","success")
 
-class DaemonsMixin(ConfigMixin):
+
+class DaemonsMixin():
 
     def __init__(this,*args,**kwargs):
         super().__init__(*args,**kwargs)
@@ -22,29 +25,24 @@ class DaemonsMixin(ConfigMixin):
             'inotify': CheckConfigFile(this.config_filename,this.load_configuration_file),
         }
 
-    @property
-    @abstractmethod
-    def pool_name(this):
-        ...
 
     @property
-    def get_net_counters(this):
+    def get_net_counters(this)  -> Dict[str,int]:
         net_io = this._daemons['net_counters']
         return {"received": net_io.bytes_received, "sent": net_io.bytes_sent}
 
     @property
-    def get_scrub_info(this):
-        return {k: v for k, v in this._cfg['pool'].get('tools', {}).get('scrub', {}).items()}
+    def get_scrub_info(this) -> Dict[str,str]:
+        return {k: v for k, v in this.cfg['pool'].get('tools', {}).get('scrub', {}).items()}
 
 
-
-    def check_scrub_status(this):
-        if (this._cfg['pool']['tools']['scrub']['ongoing'] == True):
+    def check_scrub_status(this) -> None:
+        if (this.cfg['pool']['tools']['scrub']['ongoing'] == True):
             daemon:ScrubStateChecker = this._daemons['scrub_checker']
 
             if (daemon is not None):
                 if (not daemon.is_running):
-                    this._cfg['pool']['tools']['scrub']['ongoing'] = False
+                    this.cfg['pool']['tools']['scrub']['ongoing'] = False
                     this.flush_config()
                     this._daemons['scrub_checker'] = None
                     this._logger.info(f"Scrub checker thread terminated {daemon.completion_handler}")
@@ -55,7 +53,7 @@ class DaemonsMixin(ConfigMixin):
                 daemon.start()
                 this._logger.info("Scrub checker thread started")
 
-    def get_last_scrub_report(this):
+    def get_last_scrub_report(this) -> Dict[str,str]:
         output = ZPoolStatus(this.pool_name).execute()
 
 
@@ -79,7 +77,7 @@ class DaemonsMixin(ConfigMixin):
 
         return None
 
-    def start_scrub(this):
+    def start_scrub(this) -> None:
         pool = this.pool_name
 
         if (pool is None):
@@ -98,7 +96,7 @@ class DaemonsMixin(ConfigMixin):
         if (output[0]['returncode']!=0):
             raise Exception (output[0]['stderr'])
 
-        this._cfg['pool']['tools']['scrub']['ongoing'] = True
-        this._cfg['pool']['tools']['scrub']['last'] = datetime.datetime.now().timestamp()
+        this.cfg['pool']['tools']['scrub']['ongoing'] = True
+        this.cfg['pool']['tools']['scrub']['last'] = datetime.datetime.now().timestamp()
 
         this.flush_config()

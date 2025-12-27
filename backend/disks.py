@@ -1,10 +1,15 @@
-from backend.config import ConfigMixin
+
 from cmdl import LSBLK
 from disk import DiskStatus, Disk
+from typing import List
 import json
 
-class DiskMixin(ConfigMixin):
-    def get_system_disks(this):
+
+
+class DiskMixin:
+
+    @staticmethod
+    def get_system_disks() -> List[Disk]:
         lsblk = LSBLK()
         lsblk_output = lsblk.execute()
         lsblk_disks = json.loads(lsblk_output.stdout)
@@ -22,29 +27,11 @@ class DiskMixin(ConfigMixin):
             for d in sata_disks
         ]
 
-    def get_pool_disks(this):
-        pool_disks = this._cfg['pool'].get("disks", [])
-
-
-        return [
-            Disk(
-                name=d['name'],
-                model=d['model'],
-                serial=d['serial'],
-                size=d['size'],
-                path=d['path'],
-                status=None
-            )
-            for d in pool_disks
-        ]
-
-
-    def get_disks(this):
+    def get_disks(this) -> List[Disk]:
         pool_disks = this.get_pool_disks()
         system_disks = this.get_system_disks()
 
         detected_disks = list(set(system_disks).intersection(set(pool_disks)))
-
 
         #check if any disk is new
         for disk in system_disks:

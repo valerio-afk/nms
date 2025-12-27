@@ -1,55 +1,38 @@
 from .access_services import AccessServicesMixin
 from .auth import AuthMixin
+from .config import ConfigMixin
 from .daemons import DaemonsMixin
 from .dataset import DatasetMixin
 from .disks import DiskMixin
 from .fs import FSMixin
+from .logger import LoggerMixin
 from .pool import PoolMixin
 from .system import SystemMixin
 from .tasks import TaskMixin
-from .utils import  LogFilter
-from cmdl import CreateKey, ZPoolCreate, ZFSCreate, RemoteCommandLineTransaction, ZPoolScrub, Reboot, \
-    Shutdown, JournalCtl, SystemCtlRestart, ZPoolList, ZPoolStatus, ZFSGet, ZFSList, LSBLK, ZFSLoadKey, ZFSMount, \
-    ZFSUnLoadKey, ZFSUnmount,  APTGetUpdate, APTGetUpgrade, Chown, ZFSDestroy, ZPoolLabelClear, \
-    ZPoolImport, ZPoolExport, WipeFS, ZPoolDestroy, ZPoolAdd, ZPoolAttach
-from constants import KEYPATH
-from constants import SOCK_PATH, APT_LISTS
-from datetime import timedelta
-from disk import Disk,DiskStatus
-
-from flask import flash
-
 from iface import NetworkInterface
-from nms_utils import  ansi_to_html
-from typing import List,Tuple, Optional
-import base64
-import datetime
-import grp
 import hashlib
-import json
-import os
 import psutil
-import pwd
-import re
 import socket
 import subprocess
 
 hash_password = lambda pwd : hashlib.sha1(pwd.encode()).hexdigest()
 
-
-
 class NMSBackend(
     AccessServicesMixin,
-    DatasetMixin,
-    SystemMixin,
     AuthMixin,
-    TaskMixin,
+    ConfigMixin,
+    DaemonsMixin,
+    DatasetMixin,
     DiskMixin,
-    FSMixin
+    FSMixin,
+    LoggerMixin,
+    PoolMixin,
+    SystemMixin,
+    TaskMixin,
 ):
-    def __new__(cls):
+    def __new__(cls,*args,**kwargs):
         if not hasattr(cls, 'instance'):
-            cls.instance = super(NMSBackend, cls).__new__(cls)
+            cls.instance = super(NMSBackend, cls).__new__(cls,*args,**kwargs)
         return cls.instance
 
     def __init__(this,*args,**kwargs):

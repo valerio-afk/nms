@@ -5,7 +5,7 @@
 {% block content %}
 
 <div class="progress" role="progressbar" aria-label="Disk array expansion" aria-valuenow="10" aria-valuemin="0" aria-valuemax="100">
-  <div class="progress-bar progress-bar-striped" id="progressbar">10%</div>
+  <div class="progress-bar progress-bar-striped" id="progressbar">0%</div>
 </div>
 
 <div class="wait-msg">
@@ -45,7 +45,7 @@
         endpoint: '{{ url_for("main.check_task_by_id",task_id=task_id) }}',
         callback: manageProgressBar
     });
-    waiter.startPolling(2000);
+    waiter.startPolling(1000);
 </script>
 
 {% endif %}

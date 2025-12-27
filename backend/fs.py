@@ -2,29 +2,14 @@ import grp
 import json
 import pwd
 import socket
-from abc import abstractmethod
 
-from backend.logger import LoggerMixin
 from cmdl import RemoteCommandLineTransaction, Chown
 from constants import SOCK_PATH
 
-class FSMixin(LoggerMixin):
-    @property
-    @abstractmethod
-    def pool_name(this):
-        ...
 
-    @property
-    @abstractmethod
-    def is_mounted(this):
-        ...
+class FSMixin:
 
-    @property
-    @abstractmethod
-    def dataset_name(this):
-        ...
-
-    def change_ownership(this, path):
+    def change_ownership(this, path:str) -> None:
         account = this._cfg.get("access", {}).get("account", {})
 
         try:
@@ -48,7 +33,7 @@ class FSMixin(LoggerMixin):
         except Exception as e:
             this.logger.error(f"Error while changing ownership: {str(e)}")
 
-    def change_permissions(this):
+    def change_permissions(this) -> None:
         if (this.is_mounted):
             message = {
                 "action": "ch_tank_perm",

@@ -1,11 +1,12 @@
-from backend.config import ConfigMixin
+from typing import  Dict
+from services import SystemService
 from constants import SOCK_PATH
 from cmdl import UserModChangeHomeDir, RemoteCommandLineTransaction
 from importlib import import_module
 import pwd
 import socket
 
-class AccessServicesMixin(ConfigMixin):
+class AccessServicesMixin:
 
     def __init__(this,*args,**kwargs):
         super().__init__(*args, **kwargs)
@@ -13,12 +14,12 @@ class AccessServicesMixin(ConfigMixin):
         this._access_services = {}
         this._setup_access_services()
 
-    def _setup_access_services(this):
+    def _setup_access_services(this) -> None:
         module = import_module("services")
-        account = this._cfg.get("access",{}).get("account",{})
+        account = this.cfg.get("access",{}).get("account",{})
 
 
-        for service,args in this._cfg.get("access",{}).get("services",{}).items():
+        for service,args in this.cfg.get("access",{}).get("services",{}).items():
             try:
                 cls = getattr(module,f"{service.upper()}Service")
                 arguments = args.copy()
@@ -34,32 +35,32 @@ class AccessServicesMixin(ConfigMixin):
         this._access_services['web'].add_change_hook("credential", this._web_credentials_changed)
         this._access_services['web'].add_change_hook("authentication", this._web_authentication_changed)
 
-    def _web_port_changed(this, service):
-        d = this._cfg.get("access", {}).get("services", {}).get("web", {})
+    def _web_port_changed(this, service) -> None:
+        d = this.cfg.get("access", {}).get("services", {}).get("web", {})
         d['port'] = service.get("port")
-        this._cfg['access']['services']['web'] = d
+        this.cfg['access']['services']['web'] = d
 
         this.flush_config()
 
-    def _web_credentials_changed(this, service):
-        d = this._cfg.get("access", {}).get("services", {}).get("web", {})
+    def _web_credentials_changed(this, service) -> None:
+        d = this.cfg.get("access", {}).get("services", {}).get("web", {})
         d['credential'] = service.get("credential")
-        this._cfg['access']['services']['web'] = d
+        this.cfg['access']['services']['web'] = d
 
         this.flush_config()
 
-    def _web_authentication_changed(this, service):
-        d = this._cfg.get("access", {}).get("services", {}).get("web", {})
+    def _web_authentication_changed(this, service) -> None:
+        d = this.cfg.get("access", {}).get("services", {}).get("web", {})
         d['authentication'] = service.get("authentication")
-        this._cfg['access']['services']['web'] = d
+        this.cfg['access']['services']['web'] = d
 
         this.flush_config()
 
 
-    def _sys_username_changed(this,service):
-        old_username = this._cfg['access']['account']['username']
+    def _sys_username_changed(this,service) -> None:
+        old_username = this.cfg['access']['account']['username']
         new_username = service.get("username")
-        this._cfg['access']['account']['username'] = new_username
+        this.cfg['access']['account']['username'] = new_username
         this.flush_config()
 
         smb = this._access_services.get("smb",None)
@@ -69,10 +70,10 @@ class AccessServicesMixin(ConfigMixin):
         if ((smb is not None) and (smb.is_active)):
             smb.disable(old_username)
 
-    def _set_pwd(this, *args, **kwargs):
+    def _set_pwd(this, *args, **kwargs) -> None:
         if (this.is_pool_configured()):
             mp = this.mountpoint
-            username = this._cfg.get("access",{}).get("services").get("account",{}).get("username",None)
+            username = this.cfg.get("access",{}).get("services").get("account",{}).get("username",None)
 
             if (username is not None):
                 current_pwd = pwd.getpwnam(username).pw_dir
@@ -89,10 +90,10 @@ class AccessServicesMixin(ConfigMixin):
                     trans.run()
 
     @property
-    def get_access_services(this):
+    def get_access_services(this) -> Dict[str, SystemService]    :
         return  this._access_services
 
-    def disable_all_access_services(this):
+    def disable_all_access_services(this) -> None:
         for name, s in this._access_services.items():
             if s.is_active:
                 try:

@@ -61,12 +61,10 @@ def add_disk() -> Response:
 
     if (form.validate_on_submit()):
         try:
-            #BACKEND.expand_pool(form.disks.data)
+            task = expand_pool.delay(form.disks.data)
+            BACKEND.append_task(NMSTask(task.task_id, "/disks", tag="add_disk"))
 
-            task = expand_pool.delay(form.disk.data)
-            BACKEND.append_task(NMSTask(task.task_id, "/advanced/apt", tag="add_disk"))
-
-            flash(f"Adding {form.disks.data} to your pool completed.")
+            flash(f"Adding {form.disks.data} to your pool. This operation can take long")
         except Exception as e:
             flash(f"Error while adding {form.disks.data}: {str(e)}"
                   , "error")
