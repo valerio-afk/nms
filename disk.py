@@ -21,7 +21,7 @@ class Disk:
     name:str
     model:str
     serial:str
-    size:int
+    size:Optional[int]
     status:Optional[DiskStatus]
     path:str
 

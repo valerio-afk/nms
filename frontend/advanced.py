@@ -1,6 +1,8 @@
 from flask import render_template, redirect, url_for, request, flash, g, send_file, session, abort
 from flask_wtf.csrf import generate_csrf, validate_csrf
-from frontend import  BACKEND, LogFilter, frontend as bp, NMSTask
+from frontend import  BACKEND, frontend as bp
+from backend.tasks import NMSTask
+from backend.logger import LogFilter
 from frontend.tasks import apt_get_updates, apt_get_upgrade
 from io import BytesIO
 from widget import render_widget,get_widgets_html,get_widgets_css_files

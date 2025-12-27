@@ -1,8 +1,9 @@
 import time
+from constants import MSGID
 from typing import Optional
-
 from flask import Blueprint, flash, session, redirect, Response ,url_for, request
-from backend import NMSBackend, NMSTask, LogFilter
+from backend import NMSBackend
+from urllib.parse import urlparse
 
 BACKEND:NMSBackend = NMSBackend()
 frontend:Blueprint = Blueprint('main',__name__)
@@ -23,6 +24,14 @@ def check_flash_messages_from_tasks() -> None:
         BACKEND.load_configuration_file()
 
 @frontend.before_request
+def check_pool_warnings() -> None:
+    msgid = BACKEND.get_pool_status_id()
+    if (msgid is not None):
+        message = MSGID.get(msgid,None)
+        if (message is not None):
+            flash(message[1], message[0])
+
+@frontend.before_request
 def require_login() -> Optional[Response]:
     last_activity = session.get("last_activity",None)
 
@@ -35,7 +44,15 @@ def require_login() -> Optional[Response]:
 
     if request.endpoint not in ("main.login", "static","main.configure_otp","main.otp_qr"):
         if session.get("authenticated",False) is not True:
-            return redirect(url_for("main.login"))
+            redirection = request.full_path
+            parsed = urlparse(redirection)
+
+            redirect_params = {}
+
+            if (parsed.path != url_for('main.login')):
+                redirect_params["next"] = parsed.path
+
+            return redirect(url_for("main.login",**redirect_params))
 
 
 @frontend.after_request

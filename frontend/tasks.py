@@ -25,30 +25,39 @@ def expand_pool(self, new_device):
 
     done = False
 
+    sleep(0.5)
+
     while not done:
         perc,time,success = BACKEND.get_array_expansion_status
 
-        if (perc is None) or (time is None):
+        if (perc is None) and (time is None):
             raise Exception("Unable to get array expansion status")
         else:
 
-            total_seconds = int(time.total_seconds())
+            if (time is not None):
+                total_seconds = int(time.total_seconds())
 
-            hours, remainder = divmod(total_seconds, 3600)
-            minutes, seconds = divmod(remainder, 60)
+                hours, remainder = divmod(total_seconds, 3600)
+                minutes, seconds = divmod(remainder, 60)
 
-            eta = ""
-            if hours > 0:
-                eta = f"{hours}"
-            if minutes > 0:
-                eta += f"{minutes}m"
+                eta = ""
+                if hours > 0:
+                    eta = f"{hours}"
+                if minutes > 0:
+                    eta += f"{minutes}m"
+                else:
+                    eta += f"{seconds}s"
+
+                self.update_state(state="PROGRESS", meta={
+                    "progress":round(perc),
+                    "message": f"Disk expansion is expected to take {eta}"
+                })
             else:
-                eta += f"{seconds}s"
+                self.update_state(state="PROGRESS", meta={
+                    "progress": round(perc),
+                    "message": "Disk expansion in progress"
+                })
 
-            self.update_state(state="PROGRESS", meta={
-                "progress":round(perc),
-                "message": f"Disk expansion is expected to take {eta}"
-            })
             done = success
 
         sleep(1)

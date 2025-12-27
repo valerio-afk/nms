@@ -1,5 +1,6 @@
-from . import frontend as bp, BACKEND, NMSTask
+from . import frontend as bp, BACKEND
 from .tasks import  expand_pool, create_pool
+from backend.tasks import NMSTask
 from datetime import datetime
 from flask import g, render_template, redirect, url_for, flash, Response
 from forms import ImportPoolForm, CreatePoolForm, AddDisksForm

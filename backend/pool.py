@@ -85,19 +85,33 @@ class PoolMixin:
 
         this.logger.warning(zpool_output)
 
-        # todo: 0.00% done, (copy is slow, no estimated time)
-        in_progress = re.search(
+
+        # Case 1: percentage + ETA available
+        with_eta = re.search(
             r'([\d.]+)%\s+done,\s+([\d:]+)\s+to\s+go',
-            zpool_output
+            zpool_output,
+            re.IGNORECASE
         )
 
-        if in_progress:
-            this.logger.warning("expansion in progress")
-            percent = float(in_progress.group(1))
-            h, m, s = map(int, in_progress.group(2).split(":"))
-            return percent, timedelta(hours=h, minutes=m, seconds=s), False
+        if with_eta:
+            pct = float(with_eta.group(1))
+            h, m, s = map(int, with_eta.group(2).split(":"))
+            return pct, timedelta(hours=h, minutes=m, seconds=s), False
 
-        completed = re.search(r'expand:\s+expanded', zpool_output)
+        # Case 2: percentage but ETA explicitly unavailable
+        no_eta = re.search(
+            r'([\d.]+)%\s+done,.*no\s+estimated\s+time',
+            zpool_output,
+            re.IGNORECASE
+        )
+
+        if no_eta:
+            pct = float(no_eta.group(1))
+            return pct, None, False
+
+        # case 3: done
+        completed = re.search(r'expand:\s+expanded', zpool_output,
+            re.IGNORECASE)
         if completed:
             return 100.0, timedelta(0), True
 
@@ -152,7 +166,22 @@ class PoolMixin:
 
                 paths = [re.sub(r"-part[0-9]$","",d['path']) for d in disks.values()]
 
-                return [ x for x in this.get_system_disks() if x.has_any_paths(paths) ]
+                attached_disks = [ x for x in this.get_system_disks() if x.has_any_paths(paths) ]
+                detached_disks = []
+
+                for d in disks.values():
+                    if (d.get("state",None) == 'CANT_OPEN') or (d.get("not_present",0)==1):
+                        detached_disks.append(Disk(
+                            name=d.get("name"),
+                            model="Removed disk",
+                            serial="N/A",
+                            size=None,
+                            path=d.get("was",None),
+                            status=DiskStatus.OFFLINE
+                        ))
+
+                return attached_disks + detached_disks
+
             except Exception as e:
                 raise Exception(e)
 
@@ -668,3 +697,17 @@ class PoolMixin:
 
         this.cfg["pool"]["disks"].append(new_disk_obj.serialise())
         this.flush_config()
+
+    def get_pool_status_id(this) -> Optional[str]:
+        if (this.is_pool_configured()):
+            pool = this.pool_name
+            trans = LocalCommandLineTransaction(ZPoolStatus(pool))
+            output = trans.run()
+            if (trans.success) and (len(output) > 0):
+                output = output[0].get("stdout",{})
+                d = json.loads(output)
+
+                root = d.get("pools", {}).get(pool,{})
+                return root.get("msgid",None)
+
+

@@ -18,7 +18,7 @@
         <tbody>
         {% for disk in disks %}
         <tr>
-            <td>{{ disk.name }}</td>
+            <td>{{ disk.name | truncate(8,True) }}</td>
             <td>{{ disk.model }}</td>
             <td>{{ disk.size | human_readable_bytes }}</td>
             <td><span title="{{ disk.status }}">{{ disk.status | disk_charm }}</span></td>

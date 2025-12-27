@@ -66,6 +66,9 @@
             {% if category == "error" %}
                 {% set callout_text = msg %}
                 {% include "callout.error.html" %}
+            {% elif category == "warning" %}
+              {% set callout_text = msg %}
+              {% include "callout.warning.html" %}
             {% elif category == "success" %}
               {% set callout_text = msg %}
               {% include "callout.success.html" %}

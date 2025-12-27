@@ -1,3 +1,5 @@
+from typing import Optional
+
 from markdown import markdown
 from disk import DiskStatus
 
@@ -13,7 +15,11 @@ def enabled_fmt(status:bool):
     badge = "success" if status else "danger"
     return f'<span class="badge bg-{badge}">{fmt}</span>'
 
-def human_readable_bytes(bytes:int):
+def human_readable_bytes(bytes:Optional[int]) -> str:
+
+    if (bytes is None):
+        return ""
+
     magnitutes = ["B", "KB", "MB", "GB", "TB"]
 
     i = 0

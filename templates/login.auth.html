@@ -4,7 +4,7 @@
 <div class="otp-box card">
     <h4 class="mb-3">Enter OTP to log in</h4>
 
-    <form method="POST" id="otpForm" action="{{ url_for('main.login') }}">
+    <form method="POST" id="otpForm" action="{{ request.url }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="d-flex justify-content-center mb-3">
             {% for i in range(6) %}

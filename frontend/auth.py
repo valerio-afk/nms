@@ -17,6 +17,7 @@ def login() -> Union[Response,str]:
     if (BACKEND.is_otp_configured):
 
         if (request.method == 'POST'):
+
             try:
                 validate_csrf(request.form.get("csrf_token"))
             except ValidationError:
@@ -41,7 +42,8 @@ def login() -> Union[Response,str]:
             authenticated = True
 
         if authenticated:
-            return redirect(url_for("main.dashboard"))
+            next_url = request.args.get("next")
+            return redirect(next_url or url_for("main.dashboard"))
 
         return render_template("login.auth.html",csp_nonce=g.csp_nonce,csrf_token= generate_csrf())
     else:
