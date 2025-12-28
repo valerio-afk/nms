@@ -18,17 +18,18 @@ import subprocess
 hash_password = lambda pwd : hashlib.sha1(pwd.encode()).hexdigest()
 
 class NMSBackend(
+    LoggerMixin,
+    ConfigMixin,
     AccessServicesMixin,
     AuthMixin,
-    ConfigMixin,
     DaemonsMixin,
     DatasetMixin,
     DiskMixin,
     FSMixin,
-    LoggerMixin,
     PoolMixin,
     SystemMixin,
     TaskMixin,
+
 ):
     def __new__(cls,*args,**kwargs):
         if not hasattr(cls, 'instance'):

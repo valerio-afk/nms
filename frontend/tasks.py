@@ -21,7 +21,10 @@ def apt_get_upgrade() -> str:
 
 @shared_task(bind=True)
 def expand_pool(self, new_device):
-    BACKEND.expand_pool(new_device)
+    try:
+        BACKEND.expand_pool(new_device)
+    except Exception as e:
+        raise RuntimeError(str(e))
 
     done = False
 
@@ -31,7 +34,7 @@ def expand_pool(self, new_device):
         perc,time,success = BACKEND.get_array_expansion_status
 
         if (perc is None) and (time is None):
-            raise Exception("Unable to get array expansion status")
+            raise RuntimeError("Unable to get array expansion status")
         else:
 
             if (time is not None):

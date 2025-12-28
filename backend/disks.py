@@ -24,34 +24,32 @@ class DiskMixin:
                  serial=d['serial'],
                  size=d['size'],
                  path=d['path'],
-                 status=DiskStatus.ONLINE,
+                 status=DiskStatus.NEW,
                 )
             for d in sata_disks
         ]
 
     def get_disks(this) -> List[Disk]:
+
         pool_disks = this.get_pool_disks()
         system_disks = this.get_system_disks()
 
-        detected_disks = list(set(system_disks).intersection(set(pool_disks)))
+        detected_disks = []
 
-        #check if any disk is new
-        for disk in system_disks:
-            if (disk not in detected_disks):
-                disk.status = DiskStatus.NEW
-                detected_disks.append(disk)
-
-
-        #detect if a disk is offline
-        for disk in pool_disks:
-            if (disk not in detected_disks):
-                disk.status = DiskStatus.OFFLINE
-                detected_disks.append(disk)
+        for sys_disk in system_disks:
+            for pool_disk in pool_disks:
+                if (sys_disk==pool_disk):
+                    detected_disks.append(pool_disk)
 
 
+        for d in detected_disks:
+            pool_disks.remove(d)
+            system_disks.remove(d)
 
-        detected_disks.sort(key=lambda x : x.path)
+        detected_disks.extend(system_disks)
+        detected_disks.extend(pool_disks)
 
+        detected_disks.sort(key=lambda x : x.physical_paths)
 
         return detected_disks
 
@@ -81,10 +79,9 @@ class DiskMixin:
 
     def format_disk(this,device:str)->None:
         pool = this.pool_name
-        import_key = this.has_encryption
         this.detach()
 
         this._format_disk(device)
 
-        this.import_pool(pool,import_key)
+        this.import_pool(pool,False)
 

@@ -9,9 +9,8 @@ from nms_utils import ansi_to_html
 class LoggerMixin:
 
     def __init__(this,*args,**kwargs):
-        super().__init__(*args, **kwargs)
         this._logger = setup_logger("NMS BACKEND")
-
+        super().__init__(*args, **kwargs)
 
     @property
     def logger(this):

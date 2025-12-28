@@ -21,6 +21,14 @@ def create_flask_app():
         CELERY=dict(
             broker_url="redis://localhost:6379/0",
             result_backend="redis://localhost:6379/1",
+            broker_transport_options={
+                "global_keyprefix": "celery:broker:"
+            },
+
+            result_backend_transport_options={
+                "global_keyprefix": "celery:result:"
+            },
+
         ),
     )
 
@@ -38,6 +46,7 @@ def create_flask_app():
         SESSION_TYPE="redis",
         SESSION_PERMANENT=False,
         SESSION_USE_SIGNER=True,
+        SESSION_KEY_PREFIX="flask:session:",
 
         SESSION_REDIS=redis.Redis(
             host="localhost",

@@ -16,7 +16,6 @@ def check_tasks():
 
 @bp.route('/check_tasks/<string:task_id>', methods=['POST'])
 def check_task_by_id(task_id:str) -> Response:
-
     task = BACKEND.get_task_by_id(task_id)
 
     if task is None:

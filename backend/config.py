@@ -1,3 +1,5 @@
+from disk import Disk, DiskStatus
+from typing import List
 import json
 import os
 
@@ -14,12 +16,12 @@ class ConfigMixin:
         this._config_file = config_file
         this._cfg = {}
 
-        super().__init__(*args, **kwargs)
-
         try:
             this.load_configuration_file()
         except FileNotFoundError as e:
             this.create_default_config_file()
+
+        super().__init__(*args, **kwargs)
 
     @property
     def cfg(this) -> dict:
@@ -104,3 +106,25 @@ class ConfigMixin:
             this.logger.error(f"Unable to flush the configuration file `{this.config_filename}`: {str(e)}")
 
 
+    def get_configured_disks(this) -> List[Disk]:
+        conf_disks = this.cfg.get("pool",{}).get("disks",{})
+
+        disks = []
+
+        for d in conf_disks:
+            cfg_disk = Disk(
+                name = d["name"],
+                model = d["model"],
+                serial = d["serial"],
+                path = d["path"],
+                size = d["size"],
+                status=DiskStatus.NEW
+            )
+
+            cfg_disk.cached_physical_paths = d["physical_paths"]
+
+            disks.append(cfg_disk)
+
+
+
+        return disks

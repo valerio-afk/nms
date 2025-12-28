@@ -14,7 +14,7 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <div class="row g-1">
     <div class="col-12">
-        <button class="btn btn-warning w-100" type="submit" name="disk" value="{{ disk.path }}">Replace</button>
+        <button class="btn btn-warning w-100" type="submit" name="disk" value="{{ disk.physical_paths[0] }}">Replace</button>
     </div>
 </div>
 </form>

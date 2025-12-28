@@ -1,4 +1,6 @@
 import time
+import traceback
+
 from constants import MSGID
 from typing import Optional
 from flask import Blueprint, flash, session, redirect, Response ,url_for, request
@@ -11,17 +13,17 @@ frontend:Blueprint = Blueprint('main',__name__)
 
 @frontend.before_request
 def check_flash_messages_from_tasks() -> None:
-    tasks = BACKEND.pop_completed_tasks()
-
+    tasks = BACKEND.get_completed_tasks()
     reload_config = False
 
     for t in tasks:
-        flash(t.result,"success" if t.successful else "error")
+        flash(str(t.result),"success" if t.successful else "error")
         reload_config = True
 
 
     if (reload_config):
         BACKEND.load_configuration_file()
+        BACKEND.remove_completed_tasks()
 
 @frontend.before_request
 def check_pool_warnings() -> None:
@@ -67,5 +69,10 @@ def no_cache(response) -> Response:
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
     return response
+
+# @frontend.after_request
+# def debug_session(response):
+#     BACKEND.logger.error(f"SESSION CONTENT: {session}")
+#     return response
 
 from . import dashboard, access, disks, utilities, auth, advanced

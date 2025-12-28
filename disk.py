@@ -26,6 +26,9 @@ class Disk:
     status:Optional[DiskStatus]
     path:str
 
+    def __post_init__(this) -> None:
+        this.cached_physical_paths: List[str] = []
+
     def serialise(this) -> Dict[str, Union[str,Iterable[str]]]:
         return {
             "name":this.name,
@@ -66,5 +69,5 @@ class Disk:
             symlinks = result.stdout.split()
             return sorted(["/dev/" + s for s in symlinks if s.startswith("disk/by-path/")])
         except subprocess.CalledProcessError:
-            return []
+            return this.cached_physical_paths
 

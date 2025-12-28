@@ -17,6 +17,11 @@ remove_partition:Callable[[str],str] = lambda path : re.sub(r"-part[0-9]$","",pa
 
 class PoolMixin:
 
+    def __init__(this, *args,**kwargs) -> None:
+        if (not this.is_pool_present() and this.is_pool_configured()):
+                this.deconfigure_pool()
+
+        super().__init__(*args, **kwargs)
 
     @property
     def pool_name(this) -> str:
@@ -119,7 +124,7 @@ class PoolMixin:
 
     @property
     def get_attachable_disks(this) -> List[Disk]:
-        disks = [d for d in this.get_disks() if d.status == DiskStatus.NEW]
+        disks = [d for d in this.get_system_disks() if d.status == DiskStatus.NEW]
         config_disk = this.get_pool_disks()
 
         physical_paths = []
@@ -175,30 +180,41 @@ class PoolMixin:
                         if path is not None:
                             path = remove_partition(path)
                             if d.has_path(path):
-                                if (x.get("state",None) != "ONLINE"):
-                                    d.status = DiskStatus.CORRUPTED
-                                else:
-                                    d.status = DiskStatus.ONLINE
+                                match (x.get("state")):
+                                    case 'ONLINE':
+                                        d.status = DiskStatus.ONLINE
+                                    case 'OFFLINE':
+                                        d.status = DiskStatus.OFFLINE
+                                    case _:
+                                        d.status = DiskStatus.CORRUPTED
 
                 for d in disks.values():
-                    if (d.get("not_present",0)==1):
-                        detached_disks.append(Disk(
+                    if (d.get("not_present",0)==1) or (d.get("state",None) == "REMOVED"):
+                        old_path = d.get("path",None)
+                        if path is None:
+                            old_path = d.get("was","")
+
+                        old_path = remove_partition(old_path)
+
+                        offline_disk = Disk(
                             name=d.get("name"),
                             model="Removed disk",
                             serial="N/A",
-                            size=None,
-                            path=d.get("was",None),
+                            size=int(d.get("phys_space","0")),
+                            path=d.get("was",""),
                             status=DiskStatus.OFFLINE
-                        ))
-                    elif (d.get("state",None) == "REMOVED"):
-                        detached_disks.append(Disk(
-                            name = d.get("name"),
-                            model = "Removed disk",
-                            serial = "N/A",
-                            size = int(d.get("phys_space","0")),
-                            path = d.get("path", None),
-                            status = DiskStatus.OFFLINE
-                        ))
+                        )
+
+                        for cfg_disk in this.get_configured_disks():
+                            if cfg_disk.has_path(old_path):
+                                offline_disk.name = cfg_disk.name
+                                offline_disk.model = cfg_disk.model
+                                offline_disk.serial = cfg_disk.serial
+                                offline_disk.size = cfg_disk.size
+                                offline_disk.cached_physical_paths = cfg_disk.cached_physical_paths
+
+                        detached_disks.append(offline_disk)
+
 
                 return attached_disks + detached_disks
 
@@ -216,6 +232,15 @@ class PoolMixin:
 
     def is_pool_configured(this) -> bool:
         return True if this.cfg['pool'].get("name",None) is not None else False
+
+    def is_pool_present(this) -> bool:
+        if (not this.is_pool_configured()):
+            return False
+
+        trans = LocalCommandLineTransaction(ZPoolStatus(this.pool_name))
+        trans.run()
+
+        return trans.success
 
     def detach(this) -> None:
         if (not this.is_pool_configured()):
@@ -269,23 +294,7 @@ class PoolMixin:
             errors = "\n ".join([x["stderr"] for x in output])
             raise Exception(errors)
 
-        this.cfg['pool']= {
-            "name": None,
-            "encrypted": None,
-            "redundancy": False,
-            "compressed": False,
-            "disks": [],
-            "tools": {
-                "scrub": {
-                    "ongoing": False,
-                    "last": None
-                },
-            }
-        }
-
-        this.cfg["dataset"] = None
-
-        this.flush_config()
+        this.deconfigure_pool()
 
         this.rm_mountpoint(mountpoint)
 
@@ -385,6 +394,8 @@ class PoolMixin:
         if this.is_pool_configured():
             raise Exception("The disk array is already configured.")
 
+        disks_objs = [d for d in this.get_disks() if d.status == DiskStatus.NEW]
+
         if redundancy and (len(disks)<3):
             raise Exception("You must have at least 3 disks connected to opt in redundancy.")
 
@@ -433,7 +444,7 @@ class PoolMixin:
 
         this.cfg['pool']['disks'] = []
 
-        # this.cfg['pool']['disks'] = [d.serialise() for d in disks_objs if d.has_any_paths(disks)]
+        this.cfg['pool']['disks'] = [d.serialise() for d in disks_objs if d.has_any_paths(disks)]
 
         this.flush_config()
 
@@ -736,3 +747,23 @@ class PoolMixin:
 
         if (not trans.success):
             raise Exception(f"Unable to replace disk: {output[0]['stderr']}")
+
+
+    def deconfigure_pool(this) -> None:
+        this.cfg['pool'] = {
+            "name": None,
+            "encrypted": None,
+            "redundancy": False,
+            "compressed": False,
+            "disks": [],
+            "tools": {
+                "scrub": {
+                    "ongoing": False,
+                    "last": None
+                },
+            }
+        }
+
+        this.cfg["dataset"] = None
+
+        this.flush_config()

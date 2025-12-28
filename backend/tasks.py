@@ -1,10 +1,11 @@
 from .utils import NMSTask
 from typing import List, Optional
+import traceback
 
 class TaskMixin:
     def __init__(this,*args,**kwargs):
-        super().__init__(*args,**kwargs)
         this._celery_tasks: List[NMSTask] = []
+        super().__init__(*args, **kwargs)
 
     @property
     def get_tasks(this) -> List[NMSTask]:
@@ -28,15 +29,14 @@ class TaskMixin:
 
         return None
 
-    def pop_completed_tasks(this, path=None):
-        remaining = []
+    def get_completed_tasks(this, path=None):
         completed = []
 
         for t in this._celery_tasks:
             if t.completed and ((path is None) or path.lower().startswith(t.page.lower())):
                 completed.append(t)
-            else:
-                remaining.append(t)
 
-        this._celery_tasks = remaining
         return completed
+
+    def remove_completed_tasks(this):
+        this._celery_tasks = [t for t in this._celery_tasks if not t.completed]
