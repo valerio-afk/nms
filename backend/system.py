@@ -2,6 +2,7 @@
 from cmdl import RemoteCommandLineTransaction, Reboot, Shutdown, SystemCtlRestart,APTGetUpdate, APTGetUpgrade
 from collections import OrderedDict
 from constants import SOCK_PATH, APT_LISTS
+from flask_babel import _
 from typing import Optional, List, Dict
 import datetime
 import os
@@ -27,11 +28,11 @@ class SystemMixin:
         boot_ts = psutil.boot_time()  # epoch seconds when system booted
         boot_dt = datetime.datetime.fromtimestamp(boot_ts)
 
-        sys_info['Uptime'] = f"Since {boot_dt.strftime("%A, %d %B %Y at %H:%M")}"
+        sys_info[_('Uptime')] = f"{_("Since")} {boot_dt.strftime("%A, %d %B %Y at %H:%M")}"
 
         # NMS version
 
-        sys_info['NMS Version'] = __version__
+        sys_info[_('NMS Version')] = __version__
         # CPU
 
         sys_info['CPU'] = f"{get_cpu_name()} with {psutil.cpu_count(logical=True)} core(s)"

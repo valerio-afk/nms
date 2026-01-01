@@ -1,19 +1,19 @@
 {% extends "card.html" %}
 
-{% block card_title %}Add Disk{% endblock %}
+{% block card_title %}{{ _("Add Disk") }}{% endblock %}
 
 {% block card_content %}
 
 <p>
-  You can add one of these disks to your array.
+  {{ _("You can add one of these disks to your array.") }}
 </p>
 
 <div class="alert alert-warning" role="alert">
-  If your disk array is using redundancy, please be aware of the following:
+  {{ _("If your disk array is using redundancy, please be aware of the following:") }}
     <ul>
-        <li>This operation is experimental. Make sure your data is backed up.</li>
-        <li>Depending on the size of your disk array and its current capacity, this operation can take several hours.</li>
-        <li>Do not switch off your device if you proceed.</li>
+        <li>{{ _("This operation is experimental. Make sure your data is backed up.") }}</li>
+        <li>{{ _("Depending on the size of your disk array and its current capacity, this operation can take several hours.") }}</li>
+        <li>{{ _("Do not switch off your device if you proceed.") }}</li>
     </ul>
 </div>
 
@@ -36,7 +36,7 @@
       </div>
     </div>
 
-  <button type="submit" class="btn btn-info w-100">Add Disk to Array</button>
+  <button type="submit" class="btn btn-info w-100">{{ _("Add Disk to Array") }}</button>
 </form>
 
 

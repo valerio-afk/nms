@@ -1,6 +1,6 @@
 {% extends "card.html" %}
 
-{% block card_title %}<i class="bi bi-pie-chart-fill"></i> Disk Usage{% endblock %}
+{% block card_title %}<i class="bi bi-pie-chart-fill"></i> {{ _("Storage Usage") }}{% endblock %}
 
 {% block card_content %}
 
@@ -28,7 +28,7 @@
 
 {% if not mounted %}
 <div class="mt-5">
-  {% set callout_text = "<p>The disk array is not mounted. You will not be able to access your data.</p><p>Go to <a href=\""~ url_for('main.disk_management') ~"\">Disk Management</a> and mount it.</p>" %}
+  {% set callout_text = "<p>"|safe ~ _("The disk array is not mounted. You will not be able to access your data.") ~"</p><p>"|safe ~ _("Go to %(disk_mngt)s and mount it.",disk_mngt="<a href=\""|safe~ url_for('main.disk_management') ~"\">"|safe~ _("Disk Management") ~"</a>"|safe) ~ "</p>"|safe %}
   {% include "callout.warning.html" %}
 </div>
 {% endif %}

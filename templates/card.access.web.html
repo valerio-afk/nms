@@ -47,24 +47,24 @@
         {% if enabled %}
     <div class="row g-1">
         <div class="col-12">
-            <button class="btn btn-danger w-100" type="submit" name="action" value="disable">Disable</button>
+            <button class="btn btn-danger w-100" type="submit" name="action" value="disable">{{ _("Disable") }}</button>
         </div>
     </div>
     {% else %}
       <div class="row g-1">
         <div class="col-12">
-            <button class="btn btn-success w-100" type="submit" name="action" value="enable" {{ "" if mountpoint else "disabled" }}>Enable</button>
+            <button class="btn btn-success w-100" type="submit" name="action" value="enable" {{ "" if mountpoint else "disabled" }}>{{ _("Enable") }}</button>
         </div>
     </div>
     {% endif %}
 </form>
 
 <div class="mt-4">
-    <h4>Connecting using WEB</h4>
+    <h4>{{  _("Connecting using %(service)s",service="WEB") }}</h4>
 
     <ol>
-        <li>Using this browser, go to <code>http://IP:{{ form.port.data }}</code>. Replace <code>IP</code> with the IP address/hostname of this NAS (you can find in the Network tab).</li>
-        <li>If using authentication, the default password is <code>afk</code> (if not changed).</li>
+        <li>{{ _("Using this browser, go to %(st_code)shttp://IP:%(port)i%(e_code)s. Replace %(st_code)sIP%(e_code)s with the IP address/hostname of this NAS (you can find in the Network tab).",port=form.port.data,st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
+        <li>{{ _("If using authentication, the default password is %(st_code)safk%(e_code)s (if not changed).",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
     </ol>
 
 </div>

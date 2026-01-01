@@ -3,35 +3,34 @@
 {% block card_title %}FTP <span class="float-end">{{ enabled | enabled_fmt | safe }}</span>{% endblock %}
 
 {% block card_content %}
-
 <form action="{{ url_for('main.change_access_settings',service='ftp') }}" method="POST">
     {{ form.hidden_tag() }}
 
     {% if enabled %}
     <div class="row g-1">
         <div class="col-12">
-            <button class="btn btn-danger w-100" type="submit" name="action" value="disable">Disable </button>
+            <button class="btn btn-danger w-100" type="submit" name="action" value="disable">{{ _("Disable") }} </button>
         </div>
       </div>
     {% else %}
       <div class="row g-1">
         <div class="col-12">
-            <button class="btn btn-success w-100" type="submit" name="action" value="enable" {{ "" if mountpoint else "disabled" }}>Enable </button>
+            <button class="btn btn-success w-100" type="submit" name="action" value="enable" {{ "" if mountpoint else "disabled" }}> {{ _("Enable") }} </button>
         </div>
     </div>
     {% endif %}
 </form>
 
 <div class="mt-4">
-    <h4>Connecting using FTP</h4>
+    <h4>{{  _("Connecting using %(service)s",service="FTP") }}</h4>
 
     <ol>
-        <li>Download an FTP Client. There are many available with pros and cons. If you are not sure what to use, download <a href="https://filezilla-project.org" target="_blank">FileZilla</a>, as it's cross-platform.</li>
-        <li>Insert the IP of this NAS (you can find in the Network tab) in <code>Host</code>.</li>
-        <li>The <code>username</code> and <code>password</code> to use are the same as you set for the <code>SSH</code> service (SSH service is not required to be enabled, but they share the same username).</li>
-        <li>Leave the <code>Port</code> either blank or the default value you find.</li>
-        <li>Press <code>Quickconnect</code> (or equivalent for your FTP client).</li>
-        <li>Transfer files inside <code>{{ mountpoint }}</code></li>
+        <li>{% trans fz_start='<a href="https://filezilla-project.org" target="_blank">'|safe, fz_end="</a>"|safe %}Download an FTP Client. There are many available with pros and cons. If you are not sure what to use, download {{ fz_start }}FileZilla{{ fz_end }}, as it's cross-platform.{% endtrans %}</li>
+        <li>{% trans st_code="<code>"|safe,e_code="</code>"|safe %}Insert the IP of this NAS (you can find in the Network tab) in {{ st_code }}Host{{ e_code }}.{% endtrans %}</li>
+        <li>{% trans st_code="<code>"|safe,e_code="</code>"|safe %}The {{ st_code }}username{{ e_code }} and {{ st_code }}password{{ e_code }} to use here are the same as you set for the {{ st_code }}SSH{{ e_code }} service (SSH service is not required to be enabled, but they share the same username).{% endtrans %}</li>
+        <li>{% trans st_code="<code>"|safe,e_code="</code>"|safe %}Leave the {{ st_code }}Port{{ e_code }} either blank or the default value you already find there.{% endtrans %}</li>
+        <li>{% trans st_code="<code>"|safe,e_code="</code>"|safe %}Press {{ st_code }}Quickconnect{{ e_code }} (or equivalent for your FTP client).{% endtrans %}</li>
+        <li>{% trans st_code="<code>"|safe,e_code="</code>"|safe, mountpoint=mountpoint %}Transfer files inside {{ st_code }}{{ mountpoint }}{{ e_code }}{% endtrans %}</li>
     </ol>
 
 

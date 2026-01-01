@@ -2,11 +2,11 @@
 
 {% block content %}
 <div class="otp-box card">
-    <h4 class="mb-3">Enter OTP to confirm</h4>
+    <h4 class="mb-3">{{ _("Enter OTP to confirm") }}</h4>
 
-    <p>The operation you are going to do is extremely risky and will delete all of your data.</p>
-    <p>If you wish to continue (and you are sure what you are doing), enter your OTP and press again the button of the operation you wanted to do.</p>
-    <p>Good luck!</p>
+    <p>{% trans %}The operation you are going to do is extremely risky and will delete all of your data.{% endtrans %}</p>
+    <p>{% trans %}If you wish to continue (and you are sure what you are doing), enter your OTP and press again the button of the operation you wanted to do.{% endtrans %}</p>
+    <p>{% trans %}Good luck!{% endtrans %}</p>
 
     <form method="POST" id="otpForm" action="{{ request.url }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -34,7 +34,7 @@
         <!-- Hidden field that stores concatenated OTP -->
         <input type="hidden" name="otp" id="otpFull">
 
-        <button class="btn btn-danger w-100">Yes, I am sure</button>
+        <button class="btn btn-danger w-100">{{  _("Yes, I am sure") }}</button>
     </form>
 </div>
 

@@ -2,7 +2,7 @@
 
 {% block content %}
 <div class="otp-box card">
-    <h4 class="mb-3">Enter OTP to log in</h4>
+    <h4 class="mb-3">{{  _("Enter OTP to log in") }}</h4>
 
     <form method="POST" id="otpForm" action="{{ request.url }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -30,7 +30,7 @@
         <!-- Hidden field that stores concatenated OTP -->
         <input type="hidden" name="otp" id="otpFull">
 
-        <button class="btn btn-success w-100">Login</button>
+        <button class="btn btn-success w-100">{{  _("Login") }}</button>
     </form>
 </div>
 

@@ -4,8 +4,10 @@ from backend.tasks import NMSTask
 from datetime import datetime
 from flask import g, render_template, redirect, url_for, flash, Response, request
 from flask_wtf.csrf import validate_csrf
+from flask_babel import _
 from forms import ImportPoolForm, CreatePoolForm, AddDisksForm
 from frontend.decorators import wait
+from pySMART import Device
 from typing import Union
 from wtforms import ValidationError
 
@@ -20,15 +22,21 @@ def disk_management() -> str:
     attachable_disks = BACKEND.get_attachable_disks
 
     importable_pools = BACKEND.get_importable_pools()
-    imports = [
-        (p['name'],p['disks'], p['message'] if p['state']!="ONLINE" else None , ImportPoolForm()) for p in importable_pools
-    ]
+
+    imports = []
+
+    for p in importable_pools:
+        if (p['state'] == "ONLINE"):
+            imports.append((p['name'],p['disks'], None, ImportPoolForm()))
+        else:
+            flash(f"Disk array {p['name']} unrecoverable error: {p['message']}","error")
+
 
     parameters = {
         "active_page": "disk",
         "disks": disks,
         "pool": BACKEND.is_pool_configured(),
-        "imports": imports,
+        "imported_pools": imports,
         "csp_nonce": g.csp_nonce,
     }
 
@@ -52,6 +60,18 @@ def disk_management() -> str:
 
 
     return render_template("disk_mngt.html", **parameters)
+
+@bp.route('/disks/smart', methods=['POST'])
+def smart_disk() -> str:
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        flash("CSRF validation failed","error")
+        return redirect(url_for("main.advanced"))
+
+    d = BACKEND.smart_info(request.form.get("disk"))
+
+    return render_template("disk_smart.html", disk = d)
 
 
 # ACTION PAGES
@@ -95,7 +115,9 @@ def new_pool() -> Response:
         BACKEND.append_task(NMSTask(task.task_id,"/disks",tag="new_disk"))
 
     else:
-        flash(f"Form validation failed: {form.errors}","error")
+        for e in form.errors:
+            for err in form.errors[e]:
+                flash(f"{err}","error")
 
     return redirect(url_for("main.disk_management"))
 
@@ -184,7 +206,8 @@ def new_pool_wait() -> str:
                            refresh_to=url_for("main.disk_management"),
                            extra_css=["pacman.css"],
                            csp_nonce=g.csp_nonce,
-                           waiting_message="The creation of a new disk array may take some time. Please wait...")
+                           hide_flash=True,
+                           waiting_message=_("The creation of a new disk array may take some time. Please wait..."))
 
 @bp.route('/disks/add/wait')
 def add_disk_wait() -> Union[str,Response]:

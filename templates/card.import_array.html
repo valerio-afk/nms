@@ -1,11 +1,12 @@
 {% extends "card.html" %}
 
-{% block card_title %}Import {{ pool }}  {% if warning %}<span title="{{ warning }}" data-bs-toggle="tooltip" class="float-end">⚠️</span>{% endif %}{% endblock %}
+{% block card_title %}{{ _("Import %(st_em)s%(pool)s%(e_em)s",st_em="<em>"|safe,e_em="</em>"|safe,pool=pool) }} {% if warning %}<span title="{{ warning }}" data-bs-toggle="tooltip" class="float-end">⚠️</span>{% endif %}{% endblock %}
+
 
 {% block card_content %}
 
-<p >
-  The following disks belong to the existing disk array <em>{{ pool }}:</em>
+<p>
+  {{ _("The following disks belong to the existing disk array %(st_em)s%(pool)s%(e_em)s:",st_em="<em>"|safe,e_em="</em>"|safe,pool=pool) }}
 </p>
 
 <ul class="list-group">
@@ -28,14 +29,14 @@
 
     <div class="row mb-3">
         <div class="column">
-            <div class="form-text">If this disk array was encrypted and you have the key, please upload it. If you lost your key, there is no way to recover this array.</div>
-            <div class="form-text">If this disk array was not encrypted, just leave it blank.</div>
+            <div class="form-text">{{ _("If this disk array was encrypted and you have the key, please upload it. If you lost your key, there is no way to recover this array.") }}</div>
+            <div class="form-text">{{ _("If this disk array was not encrypted, just leave it blank.") }}</div>
         </div>
     </div>
 
 
 
-  <button type="submit" class="btn btn-info w-100">Import {{ pool }}</button>
+  <button type="submit" class="btn btn-info w-100">{{ _("Import %(pool)s",pool=pool) }}</button>
 </form>
 
 

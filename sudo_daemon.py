@@ -6,11 +6,12 @@ import struct
 import socket
 import base64
 import subprocess
-from constants import SOCK_PATH, FILEBROWSER, KEYPATH
+from constants import SOCK_PATH
 from importlib import import_module
 from socketserver import UnixStreamServer, StreamRequestHandler
 from nms_utils import setup_logger
 from cmdl import LocalCommandLineTransaction, CommandLineTransaction, ZFSList
+from pySMART import Device
 
 ALLOWED_UID = None
 LOGGER = None
@@ -204,12 +205,24 @@ def rm_mountpoint(mountpoint):
         if (path!="/"):
             subprocess.run(["sudo", "rmdir", path])
 
+
+def smart_info(device:str) -> dict:
+    info_fields = [ "dev_reference","name","serial","vendor","capacity","dev_interface","family","firmware","interface","is_ssd",
+                   "sector_size","logical_sector_size","physical_sector_size","temperature","smart_capable","smart_enabled"]
+    d = Device(device)
+
+    return {
+        f: v for f in info_fields if d is not None and ((v:=getattr(d, f)) is not None)
+    }
+
+
 ALLOWED_ACTIONS = {
     "run": run_commands,
     "get-key": get_key,
     "ch_tank_perm": ch_perms,
     "import-key": import_key,
     "rm-mountpoint": rm_mountpoint,
+    "smart-info": smart_info,
     #"filebrowser-setup": filebrowser_setup
 }
 

@@ -16,7 +16,7 @@ class DiskMixin:
         lsblk_output = lsblk.execute()
         lsblk_disks = json.loads(lsblk_output.stdout)
 
-        sata_disks = [x for x in lsblk_disks['blockdevices'] if x['tran'] == 'sata']
+        sata_disks = [x for x in lsblk_disks['blockdevices'] if x['tran'] in ['sata','spi']]
 
         return [
             Disk(name=d['name'],
@@ -85,3 +85,28 @@ class DiskMixin:
 
         this.import_pool(pool,False)
 
+
+    def smart_info(this, device:str)->dict:
+        message = {
+            "action": "smart-info",
+            "args": {"device": device},
+        }
+
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(5)
+        s.connect(SOCK_PATH)
+
+        s.sendall(json.dumps(message, default=lambda x: x.to_dict()).encode() + b'\n')
+
+        response = b""
+        while True:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            response += chunk
+            if b"\n" in chunk:
+                break
+
+        s.close()
+
+        return json.loads(response.decode())

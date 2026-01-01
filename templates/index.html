@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NAS Management System :: {% block title %}Dashboard{% endblock %}</title>
+  <title>NAS Management System :: {% block title %} {{ _("Dashboard") }} {% endblock %}</title>
 
   <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap-5.3.8-dist/css/bootstrap.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap-icons-1.13.1/bootstrap-icons.min.css') }}">
@@ -21,60 +21,89 @@
     <div class="container">
       <ul class="navbar-nav">
         <li class="nav-item">
-          <a href="{{ url_for('main.dashboard') }}" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" id="nav-dashboard"> <i class="bi bi-speedometer2"></i> Dashboard</a>
+          <a href="{{ url_for('main.dashboard') }}" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" id="nav-dashboard"> <i class="bi bi-speedometer2"></i>
+              {{ _("Dashboard") }}</a>
         </li>
         <li class="nav-item">
-          <a href="{{ url_for('main.disk_management') }}" class="nav-link {% if active_page == 'disk' %}active{% endif %}" id="nav-disk"> <i class="bi bi-hdd-rack-fill"></i> Disk Management</a>
+          <a href="{{ url_for('main.disk_management') }}" class="nav-link {% if active_page == 'disk' %}active{% endif %}" id="nav-disk"> <i class="bi bi-hdd-rack-fill"></i> {{ _("Disk Management") }}</a>
         </li>
         <li class="nav-item">
-          <a href="#" class="nav-link {% if active_page == 'network' %}active{% endif %}" id="nav-network"><i class="bi bi-link-45deg"></i> Network</a>
+          <a href="#" class="nav-link {% if active_page == 'network' %}active{% endif %}" id="nav-network"><i class="bi bi-link-45deg"></i> {{ _("Network") }}</a>
         </li>
         <li class="nav-item">
-          <a href="{{ url_for('main.access') }}" class="nav-link {% if active_page == 'access' %}active{% endif %}" id="nav-access"><i class="bi bi-terminal-fill"></i> Access</a>
+          <a href="{{ url_for('main.access') }}" class="nav-link {% if active_page == 'access' %}active{% endif %}" id="nav-access"><i class="bi bi-terminal-fill"></i> {{ _("Remote Access") }}</a>
         </li>
         <li class="nav-item">
-          <a href="{{ url_for('main.advanced') }}" class="nav-link {% if active_page == 'advanced' %}active{% endif %}" id="nav-advanced"><i class="bi bi-gear-fill"></i> Advanced</a>
+          <a href="{{ url_for('main.advanced') }}" class="nav-link {% if active_page == 'advanced' %}active{% endif %}" id="nav-advanced"><i class="bi bi-gear-fill"></i> {{ _("Advanced") }}</a>
         </li>
       </ul>
 
-      <ul class="navbar-nav ms-auto">
-      <li class="nav-item dropdown">
-        <a
-          class="nav-link"
-          href="#"
-          id="userMenu"
-          role="button"
-          data-bs-toggle="dropdown"
-          aria-expanded="false"
-        >
-          <i class="bi bi-power"></i>
-        </a>
-        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenu">
-          <li><a class="dropdown-item" href="#" modal-confirm modal-message="Are you sure you want to log out?" modal-action="/logout">Logout</a></li>
-          <li class="dropdown-divider"></li>
-          <li><a class="dropdown-item" href="#" modal-confirm modal-message="Are you sure you want to reboot the system?" modal-action="/reboot">Reboot</a></li>
-          <li><a class="dropdown-item" href="#" modal-confirm modal-message="Are you sure you want to power off the system?" modal-action="/shutdown">Shutdown</a></li>
+    <div class="ms-auto d-flex align-items-center gap-2" id="nav-right-side">
+        <div class="dropdown ms-auto">
+          <button
+            class="btn btn-outline-secondary dropdown-toggle"
+            type="button"
+            id="languageDropdown"
+            data-bs-toggle="dropdown"
+            aria-expanded="false"
+          >
+            {{ current_language }}
+          </button>
+
+          <ul class="dropdown-menu" aria-labelledby="languageDropdown">
+            {% for lang,lbl in langs.items() %}
+                <li>
+                  <a class="dropdown-item language-option" href="{{ language_url(lang) }}"
+                     data-lang="{{ lang }}">
+                     {{ lbl[0] }} {{ lbl[1] }}
+                  </a>
+                </li>
+            {% endfor %}
+          </ul>
+        </div>
+
+
+          <ul class="navbar-nav">
+          <li class="nav-item dropdown">
+            <a
+              class="nav-link"
+              href="#"
+              id="userMenu"
+              role="button"
+              data-bs-toggle="dropdown"
+              aria-expanded="false"
+            >
+              <i class="bi bi-power"></i>
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenu">
+              <li><a class="dropdown-item" href="#" modal-confirm modal-message="{{ _("Are you sure you want to log out?") }}" modal-action="/logout">{{ _("Logout") }}</a></li>
+              <li class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="#" modal-confirm modal-message="{{ _("Are you sure you want to reboot the system?") }}" modal-action="/reboot">{{ _("Reboot") }}</a></li>
+              <li><a class="dropdown-item" href="#" modal-confirm modal-message="{{ _("Are you sure you want to power off the system?") }}" modal-action="/shutdown">{{ _("Shutdown") }}</a></li>
+            </ul>
+          </li>
         </ul>
-      </li>
-    </ul>
+        </div>
     </div>
   </nav>
 
   <div id="page-content">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% for category,msg in messages %}
-            {% if category == "error" %}
-                {% set callout_text = msg %}
-                {% include "callout.error.html" %}
-            {% elif category == "warning" %}
-              {% set callout_text = msg %}
-              {% include "callout.warning.html" %}
-            {% elif category == "success" %}
-              {% set callout_text = msg %}
-              {% include "callout.success.html" %}
-            {% endif %}
-        {% endfor %}
-    {% endwith %}
+    {% if (hide_flash is not defined) or (hide_flash)  %}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category,msg in messages %}
+                {% if category == "error" %}
+                    {% set callout_text = msg %}
+                    {% include "callout.error.html" %}
+                {% elif category == "warning" %}
+                  {% set callout_text = msg %}
+                  {% include "callout.warning.html" %}
+                {% elif category == "success" %}
+                  {% set callout_text = msg %}
+                  {% include "callout.success.html" %}
+                {% endif %}
+            {% endfor %}
+        {% endwith %}
+    {% endif %}
 
     {% block content %}
     {% endblock %}

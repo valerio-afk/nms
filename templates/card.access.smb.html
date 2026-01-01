@@ -11,7 +11,7 @@
       <div class="col-sm-4 col-form-label">{{ form.username.label }}</div>
       <div class="col-sm-8">
         {{ form.username(class="form-control",readonly=True) }}
-        <div class="form-text">The username is the same as in the <code>SSH</code> service. If the username is changed, <code>SMB</code> will be disabled.</div>
+        <div class="form-text">{{ _("The username is the same as in the %(st_code)sSSH%(e_code)s service. If the username is changed, %(st_code)sSMB%(e_code)s will be disabled.",st_code="<code>"|safe,e_code="</code>"|safe)}}</div>
       </div>
     </div>
 
@@ -32,28 +32,28 @@
     {% if enabled %}
       <div class="row g-2">
         <div class="col-6">
-            <button class="btn btn-success w-100" type="submit" name="action" value="update">Change password</button>
+            <button class="btn btn-success w-100" type="submit" name="action" value="update">{{ _("Change Password") }}</button>
         </div>
         <div class="col-6">
-            <button class="btn btn-danger w-100" type="submit" name="action" value="disable">Disable</button>
+            <button class="btn btn-danger w-100" type="submit" name="action" value="disable">{{ _("Disable") }}</button>
         </div>
       </div>
     {% else %}
       <div class="row g-1">
         <div class="col-12">
-            <button class="btn btn-success w-100" type="submit" name="action" value="enable" {{ "" if mountpoint else "disabled" }}>Enable</button>
+            <button class="btn btn-success w-100" type="submit" name="action" value="enable" {{ "" if mountpoint else "disabled" }}>{{ _("Enable") }}</button>
         </div>
     </div>
     {% endif %}
 </form>
 
 <div class="mt-4">
-    <h4>Connecting using SMB</h4>
+    <h4>{{ _("Connecting using %(service)s",service="SMB") }}</h4>
     <div class="accordion" id="smb_explanations">
         <div class="accordion-item">
             <h2 class="accordion-header">
                 <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#ubuntu" aria-expanded="true" aria-controls="ubuntu">
-                    Ubuntu (GUI)
+                    <i class="bi bi-ubuntu"></i>&nbsp;&nbsp;Ubuntu (GUI)
                 </button>
             </h2>
             <div id="ubuntu" class="accordion-collapse collapse" data-bs-parent="#smb_explanations">
@@ -62,11 +62,14 @@
                         <li>Open <code>Files</code>.</li>
                         <li>Go to <code>Other locations</code>.</li>
                         <li>Go to the textbox at the bottom saying <code>Enter server address...</code></li>
-                        <li>Type <code>smb://IP/NMS</code>. Replace <code>IP</code> with the IP address/hostname of this NAS (you can find in the Network tab).</li>
-                        <li>Press <code>Connect</code>.</li>
-                        <li>When prompted, selected <code>Registered user</code>.</li>
-                        <li>Type <code>{{ form.username.default }}</code> and the password you have set in the credential textboxes.</li>
-                        <li>Press <code>Connect</code>.</li>
+                        {% set gui_steps %}
+                            <li>{{ _("Type %(st_code)ssmb://IP/NMS%(e_code)s. Replace %(st_code)sIP%(e_code)s with the IP address/hostname of this NAS (you can find in the Network tab).",st_code="<code>"|safe,e_code="</code>"|safe)}}</li>
+                            <li>{{ _("Press %(st_code)sConnect%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
+                            <li>{{ _("When prompted, selected %(st_code)sRegistered user%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe)}}</li>
+                            <li>{{ _("Type %(st_code)s%(uname)s%(e_code)s and the password you have set for this service.",st_code="<code>"|safe,e_code="</code>"|safe,uname=form.username.default) }}</li>
+                            <li>{{ _("Press %(st_code)sConnect%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
+                        {% endset %}
+                        {{ gui_steps }}
                     </ol>
                 </div>
             </div>
@@ -75,14 +78,14 @@
         <div class="accordion-item">
             <h2 class="accordion-header">
                 <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#linux_smb" aria-expanded="true" aria-controls="linux_smb">
-                    Linux (most distributions)
+                    <i class="bi bi-tux"></i>&nbsp;&nbsp;Linux ({{ _("most distributions")}})
                 </button>
             </h2>
             <div id="linux_smb" class="accordion-collapse collapse" data-bs-parent="#smb_explanations">
                 <div class="accordion-body">
                     <ol>
-                        <li>Open the <strong>Terminal</strong> <i class="bi bi-terminal-fill"></i></li>
-                        <li>Install the Common Internet File System (<code>CIFS</code>) utilities if they are not already in there. Here there are some directions to it on major distributions:
+                        <li>{{ _("Open the %(st_st)sTerminal%(e_st)s %(icon)s",st_st="<strong>"|safe,e_st="</strong>"|safe,icon='<i class="bi bi-terminal-fill"></i>'|safe) }}</li>
+                        <li>{{ _("Install the Common Internet File System (%(st_code)sCIFS%(e_code)s) utilities if they are not already in there. Here there are some directions to it on major distributions:",st_code="<code>"|safe,e_code="</code>"|safe) }}
                             <ul>
                                 <li><strong>Ubuntu/Debian</strong>: <code>$ sudo apt install cifs-utils</code></li>
                                 <li><strong>Fedora/Red Hat/CentOS/AlmaLinux</strong>: <code>$ sudo dnf install cifs-utils</code></li>
@@ -90,14 +93,14 @@
                                 <li><strong>OpenSUSE</strong>: <code>$ sudo zypper install cifs-utils</code></li>
                             </ul>
                         </li>
-                        <li>Create a mount directory in either <code>/media</code> or <code>/mnt</code>. For example<br />
+                        <li>{{ _("Create a mount directory in either %(st_code)s/media%(e_code)s or %(st_code)s/mnt%(e_code)s. For example",st_code="<code>"|safe,e_code="</code>"|safe) }}<br />
                             <code>$ sudo mkdir /media/nms</code>
                         </li>
-                        <li>Type the following command <br/>
+                        <li>{{ _("Type the following command") }} <br/>
                             <code>$ sudo mount -t cifs //SERVER/<strong>IP</strong>/NMS /media/nms -o username={{ form.username.default }}</code>
                         </li>
-                        <li>You should replace <code>IP</code> with the IP address you can find in the Network tab.</li>
-                        <li>Type your password once asked.</li>
+                        <li>{{ _("You should replace %(st_code)sIP%(e_code)s with the IP address you can find in the Network tab.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
+                        <li>{{ _("Type your password once asked.") }}</li>
                     </ol>
                 </div>
             </div>
@@ -106,15 +109,15 @@
         <div class="accordion-item">
             <h2 class="accordion-header">
                 <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#macos_smb" aria-expanded="true" aria-controls="macos_smb">
-                    MacOS
+                    <i class="bi bi-apple"></i>&nbsp;&nbsp;macOS
                 </button>
             </h2>
             <div id="macos_smb" class="accordion-collapse collapse" data-bs-parent="#smb_explanations">
                 <div class="accordion-body">
                     <ol>
-                        <li>Open <code>Finder</code>.</li>
-                        <li>In the menu on top, press <code>Go > Connect to Server</code>.</li>
-                        <li>From now on, you can follow similar steps as in <code>Ubuntu</code> starting from step (4).</li>
+                        <li>{{ _("Open %(st_code)sFinder%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
+                        <li>{{ _("In the menu on top, press %(st_code)sGo > Connect to Server%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
+                        {{ gui_steps }}
                     </ol>
                 </div>
             </div>
@@ -123,17 +126,17 @@
         <div class="accordion-item">
             <h2 class="accordion-header">
                 <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#windows_smb" aria-expanded="true" aria-controls="windows_smb">
-                    Windows
+                    <i class="bi bi-windows"></i>&nbsp;&nbsp;Windows
                 </button>
             </h2>
             <div id="windows_smb" class="accordion-collapse collapse" data-bs-parent="#smb_explanations">
                 <div class="accordion-body">
                     <ol>
-                        <li>Open <code>File Manager</code></li>
-                        <li>In the textbox for the path, insert <code>\\IP\NMS</code>. Replace <code>IP</code> with the IP address/hostname of this NAS (you can find in the Network tab). Then, press <code>Enter</code> key.</li>
-                        <li>When prompted, insert your credential.</li>
-                        <li>Type <code>{{ form.username.default }}</code> and the password you have set.</li>
-                        <li>Press <code>Connect</code>.</li>
+                        <li>{{ _("Open %(st_code)sFile Manager%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
+                        <li>{% trans st_code="<code>"|safe,e_code="</code>"|safe %}In the textbox for the path, insert {{ st_code }}\\IP\NMS{{ e_code }}. Replace {{ st_code }}IP{{ e_code }} with the IP address/hostname of this NAS (you can find in the Network tab). Then, press {{ st_code }}Enter{{ e_code }} key.{% endtrans %}</li>
+                        <li>{{ _("When prompted, insert your credential.") }}</li>
+                        <li>{{ _("Type %(st_code)s%(uname)s%(e_code)s and the password you have set for this service.",st_code="<code>"|safe,e_code="</code>"|safe,uname=form.username.default) }}</li>
+                         <li>{{ _("Press %(st_code)sConnect%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
                     </ol>
                 </div>
             </div>

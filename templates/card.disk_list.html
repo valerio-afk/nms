@@ -1,6 +1,6 @@
 {% extends "card.html" %}
 
-{% block card_title %}<i class="bi bi-hdd-stack-fill"></i> Disk List{% endblock %}
+{% block card_title %}<i class="bi bi-hdd-stack-fill"></i> {{ _("Disk List") }}{% endblock %}
 
 {% block card_content %}
 
@@ -8,9 +8,9 @@
     <table class="table table-striped" id="disk_list">
         <thead>
             <tr>
-                <th>Name</th>
-                <th>Model</th>
-                <th>Size</th>
+                <th>{{ _("Name") }}</th>
+                <th>{{ _("Model") }}</th>
+                <th>{{ _("Size") }}</th>
                 <th></th>
             </tr>
         </thead>
@@ -30,13 +30,13 @@
     {% if pool_options %}
         <dl class="row">
           {% for lbl,status in pool_options %}
-          <dt class="col-sm-4">{{ lbl }}:</dt>
-          <dd class="col-sm-8">{{ status | enabled_fmt | safe }}</dd>
+          <dt class="col-sm-6">{{ lbl }}:</dt>
+          <dd class="col-sm-6">{{ status | enabled_fmt | safe }}</dd>
           {% endfor %}
         </dl>
      {% else %}
 
-        {% set callout_text = "No disk array configuration found. Go to <a href=\""~ url_for('main.disk_management') ~"\">Disk Management</a> to configure your disk array." %}
+        {% set callout_text = _("No disk array configuration found.") ~ " " ~ _("Go to %(disk_mngt)s to configure your disk array.",disk_mngt="<a href=\""|safe~ url_for('main.disk_management') ~"\">"|safe~ _("Disk Management") ~"</a>"|safe) %}
         {% include "callout.warning.html" %}
 
 

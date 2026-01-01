@@ -1,0 +1,27 @@
+{% extends "index.html" %}
+
+{% block title %}{{ _("Disk Diagnostic") }}{% endblock %}
+
+{% block content %}
+    <h3>{{ _("Disk Information") }}: {{ disk.dev_reference }}</h3>
+
+    {% for k,v in disk.items() %}
+        {% if k != "dev_reference" %}
+            {% if (v is not none) %}
+                {% if (v is not string) or ( (v is string) and ((v|length) > 0)) %}
+                    <dl class="row">
+                        <dt class="col-sm-4">{{ k|smart_label }} :</dt>
+                        <dd class="col-sm-8">
+                            {%  if v is boolean %}
+                                {{ v|boolean_fmt|safe }}
+                            {% else %}
+                                {{ v }}
+                            {% endif %}
+                        </dd>
+                    </dl>
+                {% endif %}
+            {% endif %}
+        {% endif %}
+   {% endfor %}
+
+{% endblock %}

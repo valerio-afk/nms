@@ -47,11 +47,6 @@ SOCK_FILE= "privileged_cmdl.sock"
 
 SOCK_PATH = os.path.join(SOCK_DIR,SOCK_FILE)
 
-FILEBROWSER = {
-    "database": "/opt/filebrowser/db",
-    "config": "/opt/filebrowser/config"
-}
-
 MSGID = {
     "ZFS-8000-2Q" : ("warning", "One or more disks cannot be opened. As you have redundancy activated, you can still use your disk array. Run a diagnostic to see if the disk is getting faulted and replace if necessary. Alternatively, you can format it in the Advanced page."),
     "ZFS-8000-3C" : ("error", "One or more disks cannot be opened. Your disk array CANNOT be used in this state. Run a diagnostic to see if the disk is getting faulted and replace if necessary. Alternatively, you can format it in the Advanced page (this can likely cause data loss)."),
@@ -62,4 +57,9 @@ MSGID = {
     "ZFS-8000-9P" : ("warning", "One or more disks appear to experience some problems. No imminent actions are required at the moment. However, you should investigate which disk(s) is getting old and consider replacing it."),
     "ZFS-8000-A5" : ("error", "Your disk array seems to be too old and cannot be used anymore."),
     "ZFS-8000-ER" : ("warning", "Your disk array is experiencing some format issues. To solve this issue, press `Verify` in the Disk Management page."),
+}
+
+LANGS = {
+    'en' : ('🇬🇧','English'),
+    'it' : ('🇮🇹','Italiano')
 }

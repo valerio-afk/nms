@@ -5,6 +5,7 @@ from cmdl import ZPoolExport, RemoteCommandLineTransaction, ZFSDestroy, ZPoolDes
 from constants import SOCK_PATH, KEYPATH
 from datetime import timedelta
 from disk import DiskStatus, Disk
+from flask_babel import _
 from typing import Tuple, Optional, List, Dict, Callable
 import base64
 import json
@@ -20,6 +21,9 @@ class PoolMixin:
     def __init__(this, *args,**kwargs) -> None:
         if (not this.is_pool_present() and this.is_pool_configured()):
                 this.deconfigure_pool()
+        else:
+            if (this.is_a_pool_present() and (not this.is_pool_configured())):
+                this.init_pool()
 
         super().__init__(*args, **kwargs)
 
@@ -73,6 +77,9 @@ class PoolMixin:
 
         if (not this.is_pool_configured()):
             raise Exception(f"Disk array not configured yet.")
+
+        if (not this.has_redundancy):
+            return 100.0, timedelta(0), True
 
         trans = RemoteCommandLineTransaction(
             socket.AF_UNIX,
@@ -225,9 +232,9 @@ class PoolMixin:
 
     def get_pool_options(this) -> List[Tuple[str,bool]]:
         return [
-            ("Redundancy", this.has_redundancy),
-            ("Encryption", this.has_encryption),
-            ("Compression", this.has_compression),
+            (_("Redundancy"), this.has_redundancy),
+            (_("Encryption"), this.has_encryption),
+            (_("Compression"), this.has_compression),
         ]
 
     def is_pool_configured(this) -> bool:
@@ -241,6 +248,18 @@ class PoolMixin:
         trans.run()
 
         return trans.success
+
+    def is_a_pool_present(this) -> bool:
+        zfs_list = ZFSList()
+        zfs_list_output = zfs_list.execute()
+
+        if (zfs_list_output.returncode == 0):
+            output = zfs_list_output.stdout
+            d = json.loads(output)
+
+            return len(d.get("datasets",{})) > 0
+
+        return False
 
     def detach(this) -> None:
         if (not this.is_pool_configured()):
@@ -368,13 +387,16 @@ class PoolMixin:
 
                 # skip vdevs like mirror-0, raidz1-0, etc
                 if (not re.match(r"(mirror|raidz)\S*", dev)) and (current_pool["name"] not in line):
-
                     output = subprocess.run(['find','/dev','-name',f"*{dev}"],capture_output=True)
 
                     if output.returncode == 0:
                         lines = output.stdout.decode('utf8').splitlines()
                         if (len(lines)>0):
                             dev = lines[0].strip()
+
+                            parts = dev.split(os.path.sep)
+                            if (len(parts)>2):
+                                dev = os.path.realpath(dev)
 
                     current_pool["disks"].append(dev)
 
@@ -544,7 +566,8 @@ class PoolMixin:
         this.init_pool()
 
         try:
-            this.mount()
+            if (not this.is_mounted):
+                this.mount()
         except Exception as e:
             RemoteCommandLineTransaction(socket.AF_UNIX,
                                          socket.SOCK_STREAM,

@@ -1,0 +1,846 @@
+# Translations template for PROJECT.
+# Copyright (C) 2026 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-01-01 17:09+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: disk.py:15
+msgid "New"
+msgstr "Nuovo"
+
+#: disk.py:16
+msgid "Online"
+msgstr ""
+
+#: disk.py:17
+msgid "Offline"
+msgstr ""
+
+#: disk.py:18
+msgid "Corrupted"
+msgstr "Corrotto"
+
+#: filters.py:15
+msgid "Enabled"
+msgstr ""
+
+#: filters.py:15
+msgid "Disabled"
+msgstr ""
+
+#: filters.py:20 templates/modal.confirm.html:18
+msgid "Yes"
+msgstr ""
+
+#: filters.py:20
+msgid "No"
+msgstr ""
+
+#: filters.py:45
+msgid "Device"
+msgstr ""
+
+#: filters.py:47
+msgid "Is SSD"
+msgstr ""
+
+#: filters.py:49
+msgid "Interface"
+msgstr ""
+
+#: backend/pool.py:235 forms.py:66
+msgid "Redundancy"
+msgstr ""
+
+#: backend/pool.py:236 forms.py:67
+msgid "Encryption"
+msgstr ""
+
+#: backend/pool.py:237 forms.py:68
+msgid "Compression"
+msgstr ""
+
+#: forms.py:69
+msgid "Pool Name"
+msgstr ""
+
+#: forms.py:70
+msgid "Dataset Name"
+msgstr ""
+
+#: forms.py:71
+msgid "Disks"
+msgstr ""
+
+#: forms.py:71
+msgid "You must select at least one disk to create an array"
+msgstr ""
+
+#: forms.py:87
+msgid "Key"
+msgstr ""
+
+#: forms.py:104 forms.py:122
+msgid "Port"
+msgstr ""
+
+#: forms.py:104 forms.py:122
+#, python-format
+msgid "The port number must be between %(port_min)s-%(port_max)s"
+msgstr ""
+
+#: forms.py:105 forms.py:117 forms.py:123
+msgid "Username"
+msgstr ""
+
+#: forms.py:105 forms.py:125
+msgid ""
+"Invalid username: must start with a letter or _, and contain only "
+"lowercase letters, digits, _ or -."
+msgstr ""
+
+#: forms.py:106 forms.py:118 forms.py:126
+msgid "Password"
+msgstr ""
+
+#: forms.py:107 forms.py:119 forms.py:127
+msgid "Confirm Password"
+msgstr ""
+
+#: forms.py:107 forms.py:119 forms.py:128
+msgid "Passwords must match"
+msgstr ""
+
+#: forms.py:114
+msgid "Hostname"
+msgstr ""
+
+#: forms.py:124
+msgid "You must specify a username if authentication is enabled."
+msgstr ""
+
+#: forms.py:129
+msgid "Authentication:"
+msgstr ""
+
+#: backend/system.py:31
+msgid "Uptime"
+msgstr ""
+
+#: backend/system.py:35
+msgid "NMS Version"
+msgstr ""
+
+#: frontend/disks.py:210
+msgid "The creation of a new disk array may take some time. Please wait..."
+msgstr ""
+
+#: templates/access.html:3 templates/index.html:34
+msgid "Remote Access"
+msgstr ""
+
+#: templates/advanced.html:3 templates/index.html:37
+msgid "Advanced"
+msgstr ""
+
+#: templates/advanced.logs.html:3 templates/card.sys_admin.html:10
+msgid "System Logs"
+msgstr ""
+
+#: templates/advanced.logs.html:9
+msgid "Web App"
+msgstr ""
+
+#: templates/advanced.logs.html:12
+msgid "Backend"
+msgstr ""
+
+#: templates/advanced.logs.html:15
+msgid "Worker Manager"
+msgstr ""
+
+#: templates/advanced.logs.html:18
+msgid "System Manager"
+msgstr ""
+
+#: templates/card.access.ftp.html:12 templates/card.access.nfs.html:32
+#: templates/card.access.smb.html:38 templates/card.access.ssh.html:44
+#: templates/card.access.web.html:50
+msgid "Disable"
+msgstr ""
+
+#: templates/card.access.ftp.html:18 templates/card.access.nfs.html:38
+#: templates/card.access.smb.html:44 templates/card.access.ssh.html:50
+#: templates/card.access.web.html:56
+msgid "Enable"
+msgstr ""
+
+#: templates/card.access.ftp.html:25 templates/card.access.nfs.html:45
+#: templates/card.access.smb.html:51 templates/card.access.ssh.html:57
+#: templates/card.access.web.html:63
+#, python-format
+msgid "Connecting using %(service)s"
+msgstr ""
+
+#: templates/card.access.ftp.html:28
+#, python-format
+msgid ""
+"Download an FTP Client. There are many available with pros and cons. If "
+"you are not sure what to use, download %(fz_start)sFileZilla%(fz_end)s, "
+"as it's cross-platform."
+msgstr ""
+
+#: templates/card.access.ftp.html:29
+#, python-format
+msgid ""
+"Insert the IP of this NAS (you can find in the Network tab) in "
+"%(st_code)sHost%(e_code)s."
+msgstr ""
+
+#: templates/card.access.ftp.html:30
+#, python-format
+msgid ""
+"The %(st_code)susername%(e_code)s and %(st_code)spassword%(e_code)s to "
+"use here are the same as you set for the %(st_code)sSSH%(e_code)s service"
+" (SSH service is not required to be enabled, but they share the same "
+"username)."
+msgstr ""
+
+#: templates/card.access.ftp.html:31
+#, python-format
+msgid ""
+"Leave the %(st_code)sPort%(e_code)s either blank or the default value you"
+" already find there."
+msgstr ""
+
+#: templates/card.access.ftp.html:32
+#, python-format
+msgid ""
+"Press %(st_code)sQuickconnect%(e_code)s (or equivalent for your FTP "
+"client)."
+msgstr ""
+
+#: templates/card.access.ftp.html:33
+#, python-format
+msgid "Transfer files inside %(st_code)s%(mountpoint)s%(e_code)s"
+msgstr ""
+
+#: templates/card.access.nfs.html:15
+msgid ""
+"Enter the IP address (or a range of IPs) of the device you want to allow "
+"to mount your disk array via NFS. If you use DNS, you may also enter a "
+"hostname instead of an IP. Examples: "
+msgstr ""
+
+#: templates/card.access.nfs.html:17
+msgid "allows only your current device."
+msgstr ""
+
+#: templates/card.access.nfs.html:18
+msgid "allows any device in your LAN."
+msgstr ""
+
+#: templates/card.access.nfs.html:20
+msgid ""
+"If you have a VPN service enabled, remember that your VPN IP will be "
+"different from the local network IP, so you will need to allow that IP "
+"(or VPN subnet) instead."
+msgstr ""
+
+#: templates/card.access.nfs.html:50 templates/card.access.smb.html:81
+msgid "most distributions"
+msgstr ""
+
+#: templates/card.access.nfs.html:56 templates/card.access.nfs.html:87
+#: templates/card.access.smb.html:87 templates/card.access.ssh.html:68
+#, python-format
+msgid "Open the %(st_st)sTerminal%(e_st)s %(icon)s"
+msgstr ""
+
+#: templates/card.access.nfs.html:57
+#, python-format
+msgid ""
+"Install %(st_code)snfs%(e_code)s client if it's not already in there. "
+"Here there are some directions to it on major distributions:"
+msgstr ""
+
+#: templates/card.access.nfs.html:65 templates/card.access.smb.html:96
+#, python-format
+msgid ""
+"Create a mount directory in either %(st_code)s/media%(e_code)s or "
+"%(st_code)s/mnt%(e_code)s. For example"
+msgstr ""
+
+#: templates/card.access.nfs.html:68 templates/card.access.nfs.html:91
+#: templates/card.access.nfs.html:115 templates/card.access.smb.html:99
+#: templates/card.access.ssh.html:69
+msgid "Type the following command"
+msgstr ""
+
+#: templates/card.access.nfs.html:71 templates/card.access.nfs.html:94
+#: templates/card.access.nfs.html:118 templates/card.access.smb.html:102
+#: templates/card.access.ssh.html:72
+#, python-format
+msgid ""
+"You should replace %(st_code)sIP%(e_code)s with the IP address you can "
+"find in the Network tab."
+msgstr ""
+
+#: templates/card.access.nfs.html:72 templates/card.access.nfs.html:95
+#, python-format
+msgid ""
+"Adapt %(st_code)s/media/nms%(e_code)s as per step (%(step)i) if you used "
+"a different setup."
+msgstr ""
+
+#: templates/card.access.nfs.html:88
+#, python-format
+msgid "Create a mount directory in %(st_code)s/Volumes%(e_code)s. For example"
+msgstr ""
+
+#: templates/card.access.nfs.html:114
+#, python-format
+msgid "Open %(st_code)sPowershell%(e_code)s."
+msgstr ""
+
+#: templates/card.access.nfs.html:119
+#, python-format
+msgid "You can choose a different unit letter than %(st_code)sZ:%(e_code)s."
+msgstr ""
+
+#: templates/card.access.smb.html:14
+#, python-format
+msgid ""
+"The username is the same as in the %(st_code)sSSH%(e_code)s service. If "
+"the username is changed, %(st_code)sSMB%(e_code)s will be disabled."
+msgstr ""
+
+#: templates/card.access.smb.html:35
+msgid "Change Password"
+msgstr ""
+
+#: templates/card.access.smb.html:66
+#, python-format
+msgid ""
+"Type %(st_code)ssmb://IP/NMS%(e_code)s. Replace %(st_code)sIP%(e_code)s "
+"with the IP address/hostname of this NAS (you can find in the Network "
+"tab)."
+msgstr ""
+
+#: templates/card.access.smb.html:67 templates/card.access.smb.html:70
+#: templates/card.access.smb.html:139
+#, python-format
+msgid "Press %(st_code)sConnect%(e_code)s."
+msgstr ""
+
+#: templates/card.access.smb.html:68
+#, python-format
+msgid "When prompted, selected %(st_code)sRegistered user%(e_code)s."
+msgstr ""
+
+#: templates/card.access.smb.html:69 templates/card.access.smb.html:138
+#, python-format
+msgid ""
+"Type %(st_code)s%(uname)s%(e_code)s and the password you have set for "
+"this service."
+msgstr ""
+
+#: templates/card.access.smb.html:88
+#, python-format
+msgid ""
+"Install the Common Internet File System (%(st_code)sCIFS%(e_code)s) "
+"utilities if they are not already in there. Here there are some "
+"directions to it on major distributions:"
+msgstr ""
+
+#: templates/card.access.smb.html:103 templates/card.access.ssh.html:74
+msgid "Type your password once asked."
+msgstr ""
+
+#: templates/card.access.smb.html:118
+#, python-format
+msgid "Open %(st_code)sFinder%(e_code)s."
+msgstr ""
+
+#: templates/card.access.smb.html:119
+#, python-format
+msgid "In the menu on top, press %(st_code)sGo > Connect to Server%(e_code)s."
+msgstr ""
+
+#: templates/card.access.smb.html:135
+#, python-format
+msgid "Open %(st_code)sFile Manager%(e_code)s."
+msgstr ""
+
+#: templates/card.access.smb.html:136
+#, python-format
+msgid ""
+"In the textbox for the path, insert %(st_code)s\\\\IP\\NMS%(e_code)s. "
+"Replace %(st_code)sIP%(e_code)s with the IP address/hostname of this NAS "
+"(you can find in the Network tab). Then, press %(st_code)sEnter%(e_code)s"
+" key."
+msgstr ""
+
+#: templates/card.access.smb.html:137
+msgid "When prompted, insert your credential."
+msgstr ""
+
+#: templates/card.access.ssh.html:41
+msgid "Update settings"
+msgstr ""
+
+#: templates/card.access.ssh.html:73
+#, python-format
+msgid ""
+"The first time you connect, please accept the fingerprint by typing "
+"%(st_code)syes%(e_code)s."
+msgstr ""
+
+#: templates/card.access.ssh.html:89
+#, python-format
+msgid "Download %(putty)s."
+msgstr ""
+
+#: templates/card.access.ssh.html:90
+#, python-format
+msgid ""
+"Once you have opened PuTTY, select %(st_code)sSSH%(e_code)s in "
+"%(st_em)sConnection type%(e_em)s."
+msgstr ""
+
+#: templates/card.access.ssh.html:91
+#, python-format
+msgid ""
+"Insert the IP of this NAS (you can find in the Network tab) in "
+"%(st_code)sHostname%(e_code)s."
+msgstr ""
+
+#: templates/card.access.ssh.html:92
+#, python-format
+msgid "Change %(st_code)sPort%(e_code)s with %(st_code)s%(port)i%(e_code)s."
+msgstr ""
+
+#: templates/card.access.ssh.html:93
+#, python-format
+msgid "Press %(st_code)sOpen%(e_code)s."
+msgstr ""
+
+#: templates/card.access.ssh.html:94
+#, python-format
+msgid ""
+"You will be asked for your %(st_code)slogin%(e_code)s (username) and "
+"%(st_code)spassword%(e_code)s."
+msgstr ""
+
+#: templates/card.access.web.html:66
+#, python-format
+msgid ""
+"Using this browser, go to %(st_code)shttp://IP:%(port)i%(e_code)s. "
+"Replace %(st_code)sIP%(e_code)s with the IP address/hostname of this NAS "
+"(you can find in the Network tab)."
+msgstr ""
+
+#: templates/card.access.web.html:67
+#, python-format
+msgid ""
+"If using authentication, the default password is %(st_code)safk%(e_code)s"
+" (if not changed)."
+msgstr ""
+
+#: templates/card.access_list.html:3
+msgid "Access Services"
+msgstr ""
+
+#: templates/card.add_disks.html:3
+msgid "Add Disk"
+msgstr ""
+
+#: templates/card.add_disks.html:8
+msgid "You can add one of these disks to your array."
+msgstr ""
+
+#: templates/card.add_disks.html:12
+msgid "If your disk array is using redundancy, please be aware of the following:"
+msgstr ""
+
+#: templates/card.add_disks.html:14
+msgid "This operation is experimental. Make sure your data is backed up."
+msgstr ""
+
+#: templates/card.add_disks.html:15
+msgid ""
+"Depending on the size of your disk array and its current capacity, this "
+"operation can take several hours."
+msgstr ""
+
+#: templates/card.add_disks.html:16
+msgid "Do not switch off your device if you proceed."
+msgstr ""
+
+#: templates/card.add_disks.html:39
+msgid "Add Disk to Array"
+msgstr ""
+
+#: templates/card.apt.html:3
+msgid "System Updates"
+msgstr ""
+
+#: templates/card.apt.html:9 templates/card.disk_tools.html:26
+msgid "Last check:"
+msgstr ""
+
+#: templates/card.apt.html:12
+msgid "Current updates:"
+msgstr ""
+
+#: templates/card.apt.html:21
+msgid "Check for updates"
+msgstr ""
+
+#: templates/card.apt.html:24
+msgid "Checking for updates..."
+msgstr ""
+
+#: templates/card.apt.html:33
+msgid "List of packages to update"
+msgstr ""
+
+#: templates/card.apt.html:48
+msgid "Update"
+msgstr ""
+
+#: templates/card.apt.html:51
+msgid "Updating in progress..."
+msgstr ""
+
+#: templates/card.danger_zone.html:3
+msgid "Danger Zone"
+msgstr ""
+
+#: templates/card.danger_zone.html:10
+msgid "Format Disk Array"
+msgstr ""
+
+#: templates/card.danger_zone.html:16
+msgid "Delete Disk Array"
+msgstr ""
+
+#: templates/card.danger_zone.html:22
+msgid "Attempt Recovery"
+msgstr ""
+
+#: templates/card.danger_zone.html:28
+msgid "Format Disk"
+msgstr ""
+
+#: templates/card.disk.html:3
+msgid "Disk"
+msgstr ""
+
+#: templates/card.disk.html:17
+msgid "Replace"
+msgstr ""
+
+#: templates/card.disk.html:27
+msgid "Check disk health"
+msgstr ""
+
+#: templates/card.disk_list.html:3
+msgid "Disk List"
+msgstr ""
+
+#: templates/card.disk_list.html:11
+msgid "Name"
+msgstr ""
+
+#: templates/card.disk_list.html:12
+msgid "Model"
+msgstr ""
+
+#: templates/card.disk_list.html:13
+msgid "Size"
+msgstr ""
+
+#: templates/card.disk_list.html:39
+msgid "No disk array configuration found."
+msgstr ""
+
+#: templates/card.disk_list.html:39
+#, python-format
+msgid "Go to %(disk_mngt)s to configure your disk array."
+msgstr ""
+
+#: templates/card.disk_list.html:39 templates/card.disk_usage.html:31
+#: templates/disk_mngt.html:3 templates/index.html:28
+msgid "Disk Management"
+msgstr ""
+
+#: templates/card.disk_tools.html:3
+msgid "Disk Tools"
+msgstr ""
+
+#: templates/card.disk_tools.html:10
+msgid "Verify"
+msgstr ""
+
+#: templates/card.disk_tools.html:12
+msgid "Last verification:"
+msgstr ""
+
+#: templates/card.disk_tools.html:16
+msgid "Verification in progress..."
+msgstr ""
+
+#: templates/card.disk_tools.html:24
+msgid "Check & Fix"
+msgstr ""
+
+#: templates/card.disk_tools.html:30
+msgid "Checking & Fixing in progress..."
+msgstr ""
+
+#: templates/card.disk_tools.html:40
+msgid "Unmount"
+msgstr ""
+
+#: templates/card.disk_tools.html:42
+msgid "Disk array is mounted"
+msgstr ""
+
+#: templates/card.disk_tools.html:47
+msgid "Mount"
+msgstr ""
+
+#: templates/card.disk_tools.html:49
+msgid "Disk array is unmounted"
+msgstr ""
+
+#: templates/card.disk_usage.html:3
+msgid "Storage Usage"
+msgstr ""
+
+#: templates/card.disk_usage.html:31
+msgid "The disk array is not mounted. You will not be able to access your data."
+msgstr ""
+
+#: templates/card.disk_usage.html:31
+#, python-format
+msgid "Go to %(disk_mngt)s and mount it."
+msgstr ""
+
+#: templates/card.import_array.html:3
+#, python-format
+msgid "Import %(st_em)s%(pool)s%(e_em)s"
+msgstr ""
+
+#: templates/card.import_array.html:9
+#, python-format
+msgid ""
+"The following disks belong to the existing disk array "
+"%(st_em)s%(pool)s%(e_em)s:"
+msgstr ""
+
+#: templates/card.import_array.html:32
+msgid ""
+"If this disk array was encrypted and you have the key, please upload it. "
+"If you lost your key, there is no way to recover this array."
+msgstr ""
+
+#: templates/card.import_array.html:33
+msgid "If this disk array was not encrypted, just leave it blank."
+msgstr ""
+
+#: templates/card.import_array.html:39
+#, python-format
+msgid "Import %(pool)s"
+msgstr ""
+
+#: templates/card.network_list.html:3 templates/index.html:31
+msgid "Network"
+msgstr ""
+
+#: templates/card.new_array.html:3
+msgid "Create New Array"
+msgstr ""
+
+#: templates/card.new_array.html:21
+msgid ""
+"Protects data by distributing it across multiple disks with RAIDZ1 "
+"parity, allowing recovery if a single disk fails. It requires a minimum "
+"of 3 disks"
+msgstr ""
+
+#: templates/card.new_array.html:39
+msgid ""
+"Secures data by encoding it so only authorised users with the key can "
+"access the information stored on your array."
+msgstr ""
+
+#: templates/card.new_array.html:57
+msgid ""
+"Reduces storage space by automatically compressing data before writing it"
+" to disk, saving disk space."
+msgstr ""
+
+#: templates/card.new_array.html:69
+msgid "Advanced Options"
+msgstr ""
+
+#: templates/card.new_array.html:100
+msgid "Create Array"
+msgstr ""
+
+#: templates/card.scrub_report.html:3
+msgid "Last Verification Report"
+msgstr ""
+
+#: templates/card.sys_admin.html:3
+msgid "System Administration"
+msgstr ""
+
+#: templates/card.sys_admin.html:16
+msgid "Restart System Services"
+msgstr ""
+
+#: templates/card.sys_admin.html:22
+msgid "Reset Admin Login"
+msgstr ""
+
+#: templates/card.sys_admin.html:25
+msgid "Are you sure you want to reset the adminstrator login credentials?"
+msgstr ""
+
+#: templates/card.sys_admin.html:30
+msgid "Download Encryption Key"
+msgstr ""
+
+#: templates/card.sys_admin.html:33
+msgid ""
+"The encryption key is what keeps your data safe.\n"
+"You may need it if you perform a factory reset and want to keep accessing"
+" your data.\n"
+"\n"
+"**Do not disclose it to anyone!**"
+msgstr ""
+
+#: templates/card.system_info.html:3
+msgid "System Information"
+msgstr ""
+
+#: templates/card.system_info.html:19
+msgid "CPU Load:"
+msgstr ""
+
+#: templates/card.system_info.html:25
+msgid "RAM Usage:"
+msgstr ""
+
+#: templates/card.system_info.html:34
+msgid "Network:"
+msgstr ""
+
+#: templates/dashboard.html:3 templates/index.html:6 templates/index.html:25
+msgid "Dashboard"
+msgstr ""
+
+#: templates/disk_smart.html:3
+msgid "Disk Diagnostic"
+msgstr ""
+
+#: templates/disk_smart.html:6
+msgid "Disk Information"
+msgstr ""
+
+#: templates/index.html:79
+msgid "Are you sure you want to log out?"
+msgstr ""
+
+#: templates/index.html:79
+msgid "Logout"
+msgstr ""
+
+#: templates/index.html:81
+msgid "Are you sure you want to reboot the system?"
+msgstr ""
+
+#: templates/index.html:81
+msgid "Reboot"
+msgstr ""
+
+#: templates/index.html:82
+msgid "Are you sure you want to power off the system?"
+msgstr ""
+
+#: templates/index.html:82
+msgid "Shutdown"
+msgstr ""
+
+#: templates/login.auth.html:5
+msgid "Enter OTP to log in"
+msgstr ""
+
+#: templates/login.auth.html:33
+msgid "Login"
+msgstr ""
+
+#: templates/login.otp.html:5
+msgid "Scan QR Code in your authenticator app"
+msgstr ""
+
+#: templates/login.otp.html:13
+msgid "I have scanned it"
+msgstr ""
+
+#: templates/login.reauth.html:5
+msgid "Enter OTP to confirm"
+msgstr ""
+
+#: templates/login.reauth.html:7
+msgid ""
+"The operation you are going to do is extremely risky and will delete all "
+"of your data."
+msgstr ""
+
+#: templates/login.reauth.html:8
+msgid ""
+"If you wish to continue (and you are sure what you are doing), enter your"
+" OTP and press again the button of the operation you wanted to do."
+msgstr ""
+
+#: templates/login.reauth.html:9
+msgid "Good luck!"
+msgstr ""
+
+#: templates/login.reauth.html:37
+msgid "Yes, I am sure"
+msgstr ""
+
+#: templates/modal.confirm.html:5
+msgid "Confirm"
+msgstr ""
+
+#: templates/modal.confirm.html:6
+msgid "Close"
+msgstr ""
+
+#: templates/modal.confirm.html:14
+msgid "Cancel"
+msgstr ""
+
+#: templates/warning.no_hdd.html:2
+msgid "No hard drive inserted!"
+msgstr ""
+

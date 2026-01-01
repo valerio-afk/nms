@@ -1,19 +1,19 @@
 {% extends "card.html" %}
 
-{% block card_title %}<i class="bi bi-tools"></i> Disk Tools{% endblock %}
+{% block card_title %}<i class="bi bi-tools"></i> {{ _("Disk Tools") }}{% endblock %}
 
 {% block card_content %}
 
 <div class="container">
     <div class="row g-3">
         {% set btn_icon = "<i class=\"bi bi-search-heart\"></i>" | safe %}
-        {% set btn_title = "Verify" %}
+        {% set btn_title = _("Verify") %}
         {% set btn_link = url_for('main.scrub') %}
-        {% set btn_text = "Last verification: " ~ verify['last'] %}
+        {% set btn_text = _("Last verification:") ~ " " ~ verify['last'] %}
 
         {% if verify['ongoing'] %}
           {% set btn_disabled=True %}
-          {% set btn_text = "Verification in progress..." %}
+          {% set btn_text = _("Verification in progress...") %}
         {% endif %}
 
         {% include "element.square_btn.html" %}
@@ -21,13 +21,13 @@
         {% if (redundancy) and (redundancy==True) %}
 
             {% set btn_icon = "<i class=\"bi bi-database-fill-check\"></i>" | safe %}
-            {% set btn_title = "Check & Fix" %}
+            {% set btn_title = _("Check & Fix") %}
 
-            {% set btn_text = "Last check: " ~ check['last'] %}
+            {% set btn_text = _("Last check:") ~ " " ~ check['last'] %}
 
             {% if check['ongoing'] %}
               {% set btn_disabled=True %}
-              {% set btn_text = "Checking & Fixing in progress..." %}
+              {% set btn_text = _("Checking & Fixing in progress...") %}
             {% endif %}
 
             {% include "element.square_btn.html" %}
@@ -37,19 +37,18 @@
         {% if mounted %}
 
             {% set btn_icon = "<i class=\"bi bi-database-fill\"></i>" | safe %}
-            {% set btn_title = "Unmount" %}
+            {% set btn_title = _("Unmount") %}
 
-            {% set btn_text = "Disk is mounted" %}
+            {% set btn_text = _("Disk array is mounted") %}
             {% set btn_link = url_for('main.unmount') %}
 
         {% else %}
             {% set btn_icon = "<i class=\"bi bi-database-fill-x\"></i>" | safe %}
-            {% set btn_title = "Mount" %}
+            {% set btn_title = _("Mount") %}
 
-            {% set btn_text = "Disk is unmounted" %}
+            {% set btn_text = _("Disk array is unmounted") %}
             {% set btn_link = url_for('main.mount') %}
         {% endif %}
-
 
         {% include "element.square_btn.html" %}
 

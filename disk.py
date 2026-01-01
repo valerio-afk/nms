@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import  Enum
+from flask_babel import _
 from typing import Optional, List, Dict, Union, Any, Iterable
 import subprocess
 
@@ -11,10 +12,10 @@ class DiskStatus(Enum):
 
     def __str__(this) -> str:
         match (this):
-            case DiskStatus.NEW: return "New"
-            case DiskStatus.ONLINE: return "Online"
-            case DiskStatus.OFFLINE: return "Offline"
-            case DiskStatus.CORRUPTED: return "Corrupted"
+            case DiskStatus.NEW: return _("New")
+            case DiskStatus.ONLINE: return _("Online")
+            case DiskStatus.OFFLINE: return _("Offline")
+            case DiskStatus.CORRUPTED: return _("Corrupted")
 
 
 @dataclass

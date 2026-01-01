@@ -1,14 +1,31 @@
 import os
 
 from celery import Celery, Task
-from flask import Flask, g
+from flask import Flask, g, request
 from flask_wtf import CSRFProtect
 from flask_session import Session
 import redis
 import base64
+from flask_babel import Babel
 
-from filters import human_readable_bytes, enabled_fmt, disk_charm, markdown_filter
+import constants
+from filters import human_readable_bytes, enabled_fmt, disk_charm, markdown_filter, smart_label, boolean_fmt
 from frontend import frontend as bp
+
+babel = Babel()
+
+
+def get_locale():
+    lang = request.args.get('lang')
+    if lang in constants.LANGS.keys():
+        return lang
+
+    lang_cookie = request.cookies.get("lang")
+
+    if lang_cookie in constants.LANGS.keys():
+        return lang_cookie
+
+    return 'en'  # default
 
 def generate_nonce(length=16):
     return base64.b64encode(os.urandom(length)).decode('ascii').rstrip('=')
@@ -16,6 +33,8 @@ def generate_nonce(length=16):
 def create_flask_app():
     app = Flask("NMS")
     app.register_blueprint(bp)
+    app.config['BABEL_DEFAULT_LOCALE'] = 'en'
+    app.config['BABEL_SUPPORTED_LOCALES'] = ['en', 'it']
 
     app.config.from_mapping(
         CELERY=dict(
@@ -34,8 +53,10 @@ def create_flask_app():
 
     app.add_template_filter(human_readable_bytes,"human_readable_bytes")
     app.add_template_filter(enabled_fmt, "enabled_fmt")
+    app.add_template_filter(boolean_fmt, "boolean_fmt")
     app.add_template_filter(disk_charm, "disk_charm")
     app.add_template_filter(markdown_filter,"md")
+    app.add_template_filter(smart_label,"smart_label")
 
     app.secret_key = os.environ.get("NMS_SECRET_KEY")
 
@@ -87,6 +108,9 @@ def create_flask_app():
     csrf = CSRFProtect(app)
 
     celery_init_app(app)
+    babel.init_app(app,locale_selector=get_locale)
+
+
 
     return app
 

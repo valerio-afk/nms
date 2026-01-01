@@ -1,31 +1,31 @@
 {% extends "card.html" %}
 
-{% block card_title %}<i class="bi bi-exclamation-triangle-fill"></i> Danger Zone{% endblock %}
+{% block card_title %}<i class="bi bi-exclamation-triangle-fill"></i> {{ _("Danger Zone") }}{% endblock %}
 
 {% block card_content %}
 
 <div class="container">
     <div class="row g-3">
         {% set btn_icon = "<i class=\"bi bi-database-fill-x\"></i>" | safe %}
-        {% set btn_title = "Format Disk Array" %}
+        {% set btn_title = _("Format Disk Array") %}
         {% set btn_method = "POST" %}
         {% set btn_link = url_for('main.format') %}
         {% include "element.square_btn.html" %}
 
         {% set btn_icon = "<i class=\"bi bi-radioactive\"></i>" | safe %}
-        {% set btn_title = "Delete Disk Array" %}
+        {% set btn_title = _("Delete Disk Array") %}
         {% set btn_method = "POST" %}
         {% set btn_link = url_for('main.zpool_destroy') %}
         {% include "element.square_btn.html" %}
 
         {% set btn_icon = "<i class=\"bi bi-bandaid-fill\"></i>" | safe %}
-        {% set btn_title = "Attempt Recovery" %}
+        {% set btn_title = _("Attempt Recovery") %}
         {% set btn_method = "POST" %}
         {% set btn_link = url_for('main.zpool_recover') %}
         {% include "element.square_btn.html" %}
 
         {% set btn_icon = "<i class=\"bi bi-stars\"></i>" | safe %}
-        {% set btn_title = "Format Disk" %}
+        {% set btn_title = _("Format Disk") %}
         {% set btn_choices = disks %}
         {% set btn_method = "POST" %}
         {% set btn_link = url_for('main.zpool_format_disk') %}

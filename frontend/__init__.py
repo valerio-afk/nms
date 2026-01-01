@@ -1,11 +1,11 @@
-import time
-import traceback
-
-from constants import MSGID
-from typing import Optional
-from flask import Blueprint, flash, session, redirect, Response ,url_for, request
 from backend import NMSBackend
-from urllib.parse import urlparse
+from constants import MSGID
+from flask import Blueprint, flash, session, redirect, Response ,url_for, request
+from flask_babel import get_locale
+from typing import Optional
+from urllib.parse import urlparse,urlencode
+import constants
+import time
 
 BACKEND:NMSBackend = NMSBackend()
 frontend:Blueprint = Blueprint('main',__name__)
@@ -32,6 +32,28 @@ def check_pool_warnings() -> None:
         message = MSGID.get(msgid,None)
         if (message is not None):
             flash(message[1], message[0])
+
+@frontend.before_request
+def detect_and_set_language() -> Optional[Response]:
+    lang = request.args.get("lang")
+    # lang_cookie = request.cookies.get("lang")
+    #raise Exception("detect_and_set_language")
+
+    if lang:
+        # Build a clean URL without the lang query param
+        args = request.args.to_dict()
+        args.pop("lang")
+
+
+        clean_url = request.path
+        if args:
+            clean_url += "?" + urlencode(args)
+
+        # Redirect to clean URL, setting cookie in response
+        resp = redirect(clean_url)
+        resp.set_cookie("lang", lang, max_age=60*60*24*365)  # 1 year
+        return resp
+
 
 @frontend.before_request
 def require_login() -> Optional[Response]:
@@ -69,6 +91,29 @@ def no_cache(response) -> Response:
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
     return response
+
+@frontend.context_processor
+def set_language_frontend() -> dict:
+    current_locale = get_locale()
+    current_lang = current_locale.language if current_locale is not None else "en"
+
+    def language_url(lang:str='en')-> str:
+        args = request.args.to_dict()
+        args.update(lang=lang)
+        return url_for(
+            request.endpoint,
+            **(request.view_args or {}),
+            **args
+        )
+
+    return {
+        "langs": constants.LANGS,
+        "current_language": constants.LANGS[current_lang][0],
+        "language_url" : language_url,
+    }
+
+
+
 
 # @frontend.after_request
 # def debug_session(response):

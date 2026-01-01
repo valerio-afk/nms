@@ -2,8 +2,8 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Confirm</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <h5 class="modal-title">{{ _("Confirm") }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _("Close") }}"></button>
       </div>
 
       <div class="modal-body">
@@ -11,11 +11,11 @@
       </div>
 
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _("Cancel") }}</button>
 
         <form id="ConfirmModalForm" method="post" class="m-0">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-danger" id="ConfirmModalBtn">Yes</button>
+            <button type="submit" class="btn btn-danger" id="ConfirmModalBtn">{{ _("Yes") }}</button>
         </form>
       </div>
     </div>

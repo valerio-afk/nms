@@ -1,36 +1,36 @@
 {% extends "card.html" %}
 
-{% block card_title %}<i class="bi bi-lightning-charge-fill"></i> System Administration{% endblock %}
+{% block card_title %}<i class="bi bi-lightning-charge-fill"></i> {{ _("System Administration") }}{% endblock %}
 
 {% block card_content %}
 
 <div class="container">
     <div class="row g-3">
         {% set btn_icon = "<i class='bi bi-list-columns-reverse'></i>" | safe %}
-        {% set btn_title = "System Logs" %}
+        {% set btn_title = _("System Logs") %}
         {% set btn_method = "GET" %}
         {% set btn_link = url_for('main.system_logs') %}
         {% include "element.square_btn.html" %}
 
         {% set btn_icon = "<i class=\"bi bi-bootstrap-reboot\"></i>" | safe %}
-        {% set btn_title = "Restart System Services" %}
+        {% set btn_title = _("Restart System Services") %}
         {% set btn_method = "POST" %}
         {% set btn_link = url_for('main.restart_systemd') %}
         {% include "element.square_btn.html" %}
 
         {% set btn_icon = "<i class=\"bi  bi-shield-fill-x\"></i>" | safe %}
-        {% set btn_title = "Reset Admin Login" %}
+        {% set btn_title = _("Reset Admin Login") %}
         {% set btn_method = "POST" %}
         {% set btn_link = url_for('main.reset_otp') %}
-        {% set btn_message = "Are you sure you want to reset the adminstrator login credentials?" %}
+        {% set btn_message = _("Are you sure you want to reset the adminstrator login credentials?") %}
         {% include "element.square_btn.modal.html" %}
 
         {% if encrypted %}
             {% set btn_icon = "<i class=\"bi bi-key-fill\"></i>" | safe %}
-            {% set btn_title = "Download Encryption Key" %}
+            {% set btn_title = _("Download Encryption Key") %}
             {% set btn_method = "POST" %}
             {% set btn_modal = True %}
-            {% set btn_message = "The encryption key is what keeps your data safe.\nYou may need it if you perform a factory reset and want to keep accessing your data.\n\n**Do not disclose it to anyone!**" %}
+            {% set btn_message = _("The encryption key is what keeps your data safe.\nYou may need it if you perform a factory reset and want to keep accessing your data.\n\n**Do not disclose it to anyone!**") %}
             {% set btn_link = url_for('main.get_tank_key') %}
             {% include "element.square_btn.html" %}
         {% endif %}

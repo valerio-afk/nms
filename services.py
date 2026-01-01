@@ -9,7 +9,7 @@ from abc import abstractmethod
 from cmdl import RemoteCommandLineTransaction, SystemCtlIsActive, ApplyPatch, UserModChangeUsername, GetEntShadow, \
     ChPasswd, SystemCtlUnmask, SystemCtlEnable, SystemCtlStart, SystemCtlDisable, SystemCtlMask, SystemCtlStop, \
     SystemCtlRestart, ExportfsRA, SMBPasswd, DockerRun, DockerStop, DockerInspect, DockerRemove
-from constants import SOCK_PATH,FILEBROWSER
+from constants import SOCK_PATH
 from nms_utils import make_diff, read_lines_from_file
 from pathlib import Path
 import socket

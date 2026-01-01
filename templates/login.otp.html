@@ -2,7 +2,7 @@
 
 {% block content %}
 <div class="otp-box card">
-    <h4 class="mb-3">Scan QR Code in your authenticator app</h4>
+    <h4 class="mb-3">{{ _("Scan QR Code in your authenticator app") }}</h4>
 
     <form method="POST" id="otpForm" action="{{ url_for('main.configure_otp') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -10,7 +10,7 @@
             <img src="{{ url_for('main.otp_qr') }}" />
         </div>
 
-        <button class="btn btn-success w-100">I have scanned it</button>
+        <button class="btn btn-success w-100"> {{ _("I have scanned it") }}</button>
     </form>
 </div>
 

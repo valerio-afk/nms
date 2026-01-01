@@ -38,40 +38,40 @@
     {% if enabled %}
       <div class="row g-2">
         <div class="col-6">
-            <button class="btn btn-success w-100" type="submit" name="action" value="update">Update settings</button>
+            <button class="btn btn-success w-100" type="submit" name="action" value="update">{{ _("Update settings") }}</button>
         </div>
         <div class="col-6">
-            <button class="btn btn-danger w-100" type="submit" name="action" value="disable">Disable</button>
+            <button class="btn btn-danger w-100" type="submit" name="action" value="disable">{{ _("Disable") }}</button>
         </div>
       </div>
     {% else %}
       <div class="row g-1">
         <div class="col-12">
-            <button class="btn btn-success w-100" type="submit" name="action" value="enable" {{ "" if mountpoint else "disabled" }}>Enable</button>
+            <button class="btn btn-success w-100" type="submit" name="action" value="enable" {{ "" if mountpoint else "disabled" }}>{{ _("Enable") }}</button>
         </div>
     </div>
     {% endif %}
 </form>
 
 <div class="mt-4">
-    <h4>Connecting using SSH</h4>
+    <h4> {{ _("Connecting using %(service)s",service="SSH") }}</h4>
     <div class="accordion" id="ssh_explanations">
         <div class="accordion-item">
             <h2 class="accordion-header">
                 <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#unix" aria-expanded="true" aria-controls="unix">
-                    Linux & MacOS
+                     <i class="bi bi-tux"></i><i class="bi bi-apple"></i>&nbsp;&nbsp;Linux & MacOS
                 </button>
             </h2>
             <div id="unix" class="accordion-collapse collapse" data-bs-parent="#ssh_explanations">
                 <div class="accordion-body">
                     <ol>
-                        <li>Open the <strong>Terminal</strong> <i class="bi bi-terminal-fill"></i></li>
-                        <li>Type the following command <br/>
+                        <li>{{ _("Open the %(st_st)sTerminal%(e_st)s %(icon)s",st_st="<strong>"|safe,e_st="</strong>"|safe,icon='<i class="bi bi-terminal-fill"></i>'|safe) }}</li>
+                        <li>{{ _("Type the following command") }} <br/>
                             <code>$ ssh {{ form.username.default }}@<strong>IP</strong> -p {{ form.port.default }} </code>
                         </li>
-                        <li>You should replace <code>IP</code> with the IP address you can find in the Network tab.</li>
-                        <li>The first time you connect, please accept the fingerprint by typing <code>yes</code>.</li>
-                        <li>Enter the password when asked.</li>
+                        <li>{{ _("You should replace %(st_code)sIP%(e_code)s with the IP address you can find in the Network tab.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
+                        <li>{{ _("The first time you connect, please accept the fingerprint by typing %(st_code)syes%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
+                        <li>{{ _("Type your password once asked.") }}</li>
                     </ol>
                 </div>
             </div>
@@ -80,18 +80,18 @@
         <div class="accordion-item">
             <h2 class="accordion-header">
                 <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#windows" aria-expanded="true" aria-controls="windows">
-                    Windows
+                    <i class="bi bi-windows"></i>&nbsp;&nbsp;Windows
                 </button>
             </h2>
             <div id="windows" class="accordion-collapse collapse" data-bs-parent="#ssh_explanations">
                 <div class="accordion-body">
                     <ol>
-                        <li>Download <a href="https://www.putty.org/index.html" target="_blank">PuTTY</a>.</li>
-                        <li>Once you have opened PuTTY, select <code>SSH</code> in <em>Connection type</em>.</li>
-                        <li>Insert the IP of this NAS (you can find in the Network tab) in <code>Hostname</code>.</li>
-                        <li>Change <code>Port</code> with <code>{{ form.port.default }}.</code></li>
-                        <li>Press <code>Open</code></li>
-                        <li>You will be asked for your <code>login</code> (username) and <code>password</code>.</li>
+                        <li>{{ _("Download %(putty)s.",putty='<a href="https://www.putty.org/index.html" target="_blank">PuTTY</a>'|safe) }}</li>
+                        <li>{{ _("Once you have opened PuTTY, select %(st_code)sSSH%(e_code)s in %(st_em)sConnection type%(e_em)s.",st_code="<code>"|safe,e_code="</code>"|safe,st_em="<em>"|safe,e_em="</em>"|safe) }}</li>
+                        <li>{{ _("Insert the IP of this NAS (you can find in the Network tab) in %(st_code)sHostname%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
+                        <li>{{ _("Change %(st_code)sPort%(e_code)s with %(st_code)s%(port)i%(e_code)s.",port=form.port.default,st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
+                        <li>{{ _("Press %(st_code)sOpen%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
+                        <li>{{ _("You will be asked for your %(st_code)slogin%(e_code)s (username) and %(st_code)spassword%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
                     </ol>
                 </div>
             </div>

@@ -1,12 +1,8 @@
 {% extends "card.html" %}
 
-{% block card_title %}Create New Array{% endblock %}
+{% block card_title %}{{ _("Create New Array") }}{% endblock %}
 
 {% block card_content %}
-
-<p >
-  Do you want to create a new array with these new disks?
-</p>
 
 <form action="{{ url_for('main.new_pool') }}" method="POST" class="ps-3 pe-3">
     {{ new_pool_form.hidden_tag() }}
@@ -22,7 +18,7 @@
         <span
           class="d-inline-block bg-dark text-white rounded-circle text-center ms-3 help"
           data-bs-toggle="tooltip"
-          title="Protects data by distributing it across multiple disks with RAIDZ1 parity, allowing recovery if a single disk fails. It requires a minimum of 3 disks"
+          title="{{ _("Protects data by distributing it across multiple disks with RAIDZ1 parity, allowing recovery if a single disk fails. It requires a minimum of 3 disks") }}"
         >
           ?
         </span>
@@ -40,7 +36,7 @@
         <span
           class="d-inline-block bg-dark text-white rounded-circle text-center ms-3 help"
           data-bs-toggle="tooltip"
-          title="Secures data by encoding it so only authorised users with the key can access the information stored on your array."
+          title="{{ _("Secures data by encoding it so only authorised users with the key can access the information stored on your array.") }}"
         >
           ?
         </span>
@@ -58,7 +54,7 @@
         <span
           class="d-inline-block bg-dark text-white rounded-circle text-center ms-3 help"
           data-bs-toggle="tooltip"
-          title="Reduces storage space by automatically compressing data before writing it to disk, saving disk space."
+          title="{{ _("Reduces storage space by automatically compressing data before writing it to disk, saving disk space.") }}"
         >
           ?
         </span>
@@ -70,7 +66,7 @@
             <div class="accordion-item">
                 <h2 class="accordion-header">
                     <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#advanced" aria-expanded="true" aria-controls="advanced">
-                        Advanced Options
+                        {{ _('Advanced Options') }}
                     </button>
                 </h2>
                 <div id="advanced" class="accordion-collapse collapse" data-bs-parent="#advanced">
@@ -101,7 +97,7 @@
         </div>
     </div>
 
-  <button type="submit" class="btn btn-info w-100">Create Array</button>
+  <button type="submit" class="btn btn-info w-100">{{ _("Create Array") }}</button>
 </form>
 
 

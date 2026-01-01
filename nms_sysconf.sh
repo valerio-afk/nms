@@ -264,6 +264,15 @@ DEBIAN_FRONTEND=noninteractive run_and_log "apt-get install nginx" \
   apt-get install -y nginx
 
 
+#---------------------------------------------------------------------
+# sudi
+#--------------------------------------------------------------------
+log INFO "Installing `sudo`"
+
+# Install sudo
+DEBIAN_FRONTEND=noninteractive run_and_log "apt-get install sudo" \
+  apt-get install -y sudo
+
 
 #---------------------------------------------------------------------
 # Install Docker and pull Redis image
@@ -413,17 +422,37 @@ fi
 # Create afk user for external login
 #--------------------------------------------------------------------
 
-log INFO "Creating afk user"
+log INFO "Ensuring afk user with UID 1000 exists"
 
-# Create afk user if it doesn't exist
-if ! id -u afk >/dev/null 2>&1; then
-  run_and_log "Creating user afk" \
-    useradd -M --shell /usr/bash -G users afk
+# Find username (if any) that owns UID 1000
+uid1000_user="$(getent passwd 1000 | cut -d: -f1)"
+
+if [ -n "$uid1000_user" ]; then
+  if [ "$uid1000_user" = "afk" ]; then
+    log INFO "User afk already exists with UID 1000"
+  else
+    log INFO "UID 1000 belongs to user '$uid1000_user', renaming to afk"
+
+    run_and_log "Renaming user $uid1000_user to afk" \
+      usermod -l afk "$uid1000_user"
+
+    # Optional but usually a good idea:
+    # rename primary group if it matches the old username
+    if getent group "$uid1000_user" >/dev/null; then
+      run_and_log "Renaming group $uid1000_user to afk" \
+        groupmod -n afk "$uid1000_user"
+    fi
+  fi
 else
-  log INFO "User afk already exists"
+  log INFO "UID 1000 does not exist, creating user afk"
+
+  run_and_log "Creating user afk with UID 1000" \
+    useradd -u 1000 -M --shell /usr/bash -G users afk
 fi
 
-run_and_log "Setting default password for afk" echo "afk:afk" | chpasswd
+run_and_log "Setting default password for afk" \
+  bash -c 'echo "afk:afk" | chpasswd'
+
 #---------------------------------------------------------------------
 # Installing python3 requirements
 #--------------------------------------------------------------------
@@ -579,6 +608,25 @@ if is_virtualbox; then
 else
     log INFO "Not running inside VirtualBox - skipping group modification"
 fi
+
+
+#---------------------------------------------------------------------
+# smarttools
+#--------------------------------------------------------------------
+
+log INFO "Installing SMART tools"
+
+DEBIAN_FRONTEND=noninteractive run_and_log "apt-get install smartmontools" \
+  apt-get install -y smartmontools
+
+#---------------------------------------------------------------------
+# Linux headers
+#--------------------------------------------------------------------
+
+log INFO "Installing linux headers"
+
+DEBIAN_FRONTEND=noninteractive run_and_log "apt-get install linux-headers-$(uname -r)" \
+  apt-get install -y linux-headers-$(uname -r)
 
 
 #---------------------------------------------------------------------

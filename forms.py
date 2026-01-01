@@ -1,4 +1,5 @@
 from flask_wtf import FlaskForm
+from flask_babel import lazy_gettext as _
 from wtforms import StringField, IntegerField,PasswordField,BooleanField, SelectMultipleField, HiddenField, FileField
 from wtforms.fields.choices import RadioField
 from wtforms.validators import DataRequired,NumberRange, EqualTo, Regexp,StopValidation
@@ -62,12 +63,12 @@ class AddDisksForm(FlaskForm):
             this.process()
 
 class CreatePoolForm(FlaskForm):
-    redundancy = BooleanField("Redundancy")
-    encryption = BooleanField("Encryption")
-    compression = BooleanField("Compression")
-    pool_name = StringField("Pool Name",validators=[DataRequired()], default=POOLNAME)
-    dataset_name = StringField("Dataset Name", validators=[DataRequired()], default=DATASETNAME)
-    disks = MultiCheckboxField("Disks",validators=[AtLeastOneField("You must select at least one disk to create a pool")])
+    redundancy = BooleanField(_("Redundancy"))
+    encryption = BooleanField(_("Encryption"))
+    compression = BooleanField(_("Compression"))
+    pool_name = StringField(_("Pool Name"),validators=[DataRequired()], default=POOLNAME)
+    dataset_name = StringField(_("Dataset Name"), validators=[DataRequired()], default=DATASETNAME)
+    disks = MultiCheckboxField(_("Disks"),validators=[AtLeastOneField(_("You must select at least one disk to create an array"))])
 
     def __init__(this,disks:List[Disk],*args, **kwargs):
         super().__init__(*args,**kwargs)
@@ -83,7 +84,7 @@ class CreatePoolForm(FlaskForm):
             this.process()
 
 class ImportPoolForm(FlaskForm):
-    key = FileField("Key")
+    key = FileField(_("Key"))
 
 
 class AccessServiceForm(FlaskForm):
@@ -100,32 +101,31 @@ class AccessServiceForm(FlaskForm):
         return this._enabled
 
 class SSHServiceForm(AccessServiceForm):
-    port = IntegerField("Port",validators=[NumberRange(min=PORT_MIN,max=PORT_MAX,message=f"The port number must be between {PORT_MIN}-{PORT_MAX}")])
-    username = StringField("Username",validators=[DataRequired(),Regexp(r'^[a-z_][a-z0-9_-]*[$]?$',message="Invalid username: must start with a letter or _, and contain only lowercase letters, digits, _ or -.")])
-    password = PasswordField("Password")
-    confirm_password = PasswordField("Confirm Password", validators=[EqualTo('password', message='Passwords must match')])
+    port = IntegerField(_("Port"),validators=[NumberRange(min=PORT_MIN,max=PORT_MAX,message=_("The port number must be between %(port_min)s-%(port_max)s",port_min=PORT_MIN,port_max=PORT_MAX))])
+    username = StringField(_("Username"),validators=[DataRequired(),Regexp(r'^[a-z_][a-z0-9_-]*[$]?$',message=_("Invalid username: must start with a letter or _, and contain only lowercase letters, digits, _ or -."))])
+    password = PasswordField(_("Password"))
+    confirm_password = PasswordField(_("Confirm Password"), validators=[EqualTo('password', message=_('Passwords must match'))])
 
 class FTPServiceForm(AccessServiceForm):
     ...
 
 
 class NFSServiceForm(AccessServiceForm):
-    ip = StringField("Hostname",validators=[DataRequired()])
+    ip = StringField(_("Hostname"),validators=[DataRequired()])
 
 class SMBServiceForm(AccessServiceForm):
-    username = StringField("Username",validators=[DataRequired()])
-    password = PasswordField("Password")
-    confirm_password = PasswordField("Confirm Password", validators=[EqualTo('password', message='Passwords must match')])
+    username = StringField(_("Username"),validators=[DataRequired()])
+    password = PasswordField(_("Password"))
+    confirm_password = PasswordField(_("Confirm Password"), validators=[EqualTo('password', message=_('Passwords must match'))])
 
 class WEBServiceForm(AccessServiceForm):
-    port = IntegerField("Port",validators=[NumberRange(min=PORT_MIN,max=PORT_MAX,message=f"The port number must be between {PORT_MIN}-{PORT_MAX}")])
-    username = StringField("Username", validators=[
-        DependentDataRequired(["authentication"],message="You must specify a username if authentication is enabled."),
-        Regexp(r'^[a-z_][a-z0-9_-]*[$]?$',message="Invalid username: must start with a letter or _, and contain only lowercase letters, digits, _ or -.")
-    ])
-    password = PasswordField("Password")
-    confirm_password = PasswordField("Confirm Password",
-                                     validators=[EqualTo('password', message='Passwords must match')])
-    authentication = BooleanField("Authentication:")
+    port = IntegerField(_("Port"),validators=[NumberRange(min=PORT_MIN,max=PORT_MAX,message=_("The port number must be between %(port_min)s-%(port_max)s",port_min=PORT_MIN,port_max=PORT_MAX))])
+    username = StringField(_("Username"), validators=[
+        DependentDataRequired(["authentication"],message=_("You must specify a username if authentication is enabled.")),
+        Regexp(r'^[a-z_][a-z0-9_-]*[$]?$',message=_("Invalid username: must start with a letter or _, and contain only lowercase letters, digits, _ or -."))])
+    password = PasswordField(_("Password"))
+    confirm_password = PasswordField(_("Confirm Password"),
+                                     validators=[EqualTo('password', message=_('Passwords must match'))])
+    authentication = BooleanField(_("Authentication:"))
 
 

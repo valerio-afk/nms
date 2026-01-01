@@ -12,12 +12,12 @@
       <div class="col-sm-8">
         {{ form.ip(class="form-control") }}
         <div class="form-text">
-            Enter the IP address (or a range of IPs) of the device you want to allow to mount your disk array via NFS. If you use DNS, you may also enter a hostname instead of an IP.  Examples:
+            {{ _("Enter the IP address (or a range of IPs) of the device you want to allow to mount your disk array via NFS. If you use DNS, you may also enter a hostname instead of an IP. Examples: ") }}
             <ul>
-                <li><code>{{ ip }}</code> — allows only your current device.</li>
-                <li><code>{{ ip_range }}</code> — allows any device in your LAN.</li>
+                <li><code>{{ ip }}</code> — {{ _("allows only your current device.") }}</li>
+                <li><code>{{ ip_range }}</code> — {{ _("allows any device in your LAN.") }}</li>
             </ul>
-            If you have a VPN service enabled, remember that your VPN IP will be different from the local network IP, so you will need to allow that IP (or VPN subnet) instead.
+            {{ _("If you have a VPN service enabled, remember that your VPN IP will be different from the local network IP, so you will need to allow that IP (or VPN subnet) instead.") }}
         </div>
       </div>
     </div>
@@ -29,32 +29,32 @@
             <button class="btn btn-success w-100" type="submit" name="action" value="update">Update settings</button>
         </div>
         <div class="col-6">
-            <button class="btn btn-danger w-100" type="submit" name="action" value="disable">Disable</button>
+            <button class="btn btn-danger w-100" type="submit" name="action" value="disable">{{ _("Disable") }}</button>
         </div>
       </div>
     {% else %}
       <div class="row g-1">
         <div class="col-12">
-            <button class="btn btn-success w-100" type="submit" name="action" value="enable" {{ "" if mountpoint else "disabled" }}>Enable</button>
+            <button class="btn btn-success w-100" type="submit" name="action" value="enable" {{ "" if mountpoint else "disabled" }}>{{ _("Enable") }}</button>
         </div>
     </div>
     {% endif %}
 </form>
 
 <div class="mt-4">
-    <h4>Connecting using NFS</h4>
+    <h4>{{  _("Connecting using %(service)s",service="NFS") }}</h4>
     <div class="accordion" id="nfs_explanations">
         <div class="accordion-item">
             <h2 class="accordion-header">
                 <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#linux" aria-expanded="true" aria-controls="linux">
-                    Linux (most distributions)
+                    <i class="bi bi-tux"></i>&nbsp;&nbsp;Linux ({{ _("most distributions")}})
                 </button>
             </h2>
             <div id="linux" class="accordion-collapse collapse" data-bs-parent="#nfs_explanations">
                 <div class="accordion-body">
                     <ol>
-                        <li>Open the <strong>Terminal</strong> <i class="bi bi-terminal-fill"></i></li>
-                        <li>Install <code>nfs</code> client if it's not already in there. Here there are some directions to it on major distributions:
+                        <li>{{ _("Open the %(st_st)sTerminal%(e_st)s %(icon)s",st_st="<strong>"|safe,e_st="</strong>"|safe,icon='<i class="bi bi-terminal-fill"></i>'|safe) }}</li>
+                        <li>{{ _("Install %(st_code)snfs%(e_code)s client if it's not already in there. Here there are some directions to it on major distributions:",st_code="<code>"|safe,e_code="</code>"|safe) }}
                             <ul>
                                 <li><strong>Ubuntu/Debian</strong>: <code>$ sudo apt install nfs-common</code></li>
                                 <li><strong>Fedora/Red Hat/CentOS/AlmaLinux</strong>: <code>$ sudo dnf install nfs-utils</code></li>
@@ -62,14 +62,14 @@
                                 <li><strong>OpenSUSE</strong>: <code>$ sudo zypper install nfs-client</code></li>
                             </ul>
                         </li>
-                        <li>Create a mount directory in either <code>/media</code> or <code>/mnt</code>. For example<br />
+                        <li>{{ _("Create a mount directory in either %(st_code)s/media%(e_code)s or %(st_code)s/mnt%(e_code)s. For example",st_code="<code>"|safe,e_code="</code>"|safe) }}<br />
                             <code>$ sudo mkdir /media/nms</code>
                         </li>
-                        <li>Type the following command <br/>
+                        <li>{{ _("Type the following command") }} <br/>
                             <code>$ sudo mount -t nfs <strong>IP</strong>:{{ mountpoint }} /media/nms</code>
                         </li>
-                        <li>You should replace <code>IP</code> with the IP address you can find in the Network tab.</li>
-                        <li>Adapt <code>/media/nms</code> as per step (3) if you used a different setup.</li>
+                        <li>{{ _("You should replace %(st_code)sIP%(e_code)s with the IP address you can find in the Network tab.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
+                        <li>{{ _("Adapt %(st_code)s/media/nms%(e_code)s as per step (%(step)i) if you used a different setup.",st_code="<code>"|safe,e_code="</code>"|safe,step=3) }}</li>
                     </ol>
                 </div>
             </div>
@@ -78,21 +78,21 @@
         <div class="accordion-item">
             <h2 class="accordion-header">
                 <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#macos" aria-expanded="true" aria-controls="macos">
-                    macOS
+                    <i class="bi bi-apple"></i>&nbsp;&nbsp;macOS
                 </button>
             </h2>
             <div id="macos" class="accordion-collapse collapse" data-bs-parent="#nfs_explanations">
                 <div class="accordion-body">
                     <ol>
-                        <li>Open the <strong>Terminal</strong> <i class="bi bi-terminal-fill"></i></li>
-                        <li>Create a mount directory in <code>/Volumes</code>. For example<br />
+                         <li>{{ _("Open the %(st_st)sTerminal%(e_st)s %(icon)s",st_st="<strong>"|safe,e_st="</strong>"|safe,icon='<i class="bi bi-terminal-fill"></i>'|safe) }}</li>
+                        <li>{{ _("Create a mount directory in %(st_code)s/Volumes%(e_code)s. For example", st_code="<code>"|safe,e_code="</code>"|safe) }}<br />
                             <code>$ sudo mkdir /Volumes/nms</code>
                         </li>
-                        <li>Type the following command <br/>
+                        <li>{{ _("Type the following command") }} <br/>
                             <code>$ sudo mount -t nfs -o resvport <strong>IP</strong>:{{ mountpoint }} /Volumes/nms</code>
                         </li>
-                        <li>You should replace <code>IP</code> with the IP address you can find in the Network tab.</li>
-                        <li>Adapt <code>/Volumes/nms</code> as per step (2) if you used a different setup.</li>
+                        <li>{{ _("You should replace %(st_code)sIP%(e_code)s with the IP address you can find in the Network tab.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
+                        <li>{{ _("Adapt %(st_code)s/media/nms%(e_code)s as per step (%(step)i) if you used a different setup.",st_code="<code>"|safe,e_code="</code>"|safe,step=2) }}</li>
                     </ol>
                 </div>
             </div>
@@ -102,7 +102,7 @@
             <div class="accordion-item">
                 <h2 class="accordion-header">
                     <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#windows_nfs" aria-expanded="true" aria-controls="windows_nfs">
-                        Windows
+                       <i class="bi bi-windows"></i>&nbsp;&nbsp;Windows
                     </button>
                 </h2>
                 <div id="windows_nfs" class="accordion-collapse collapse" data-bs-parent="#nfs_explanations">
@@ -111,12 +111,12 @@
                             <li>Go to <code>Control Panel > Programs</code></li>
                             <li>On the left side, press <code>Turn Windows features on or off</code>.</li>
                             <li>Make sure that <code>Services for NFS</code> is checked. Then press <code>OK</code>.</li>
-                            <li>Open <code>Powershell</code>.</li>
-                             <li>Type the following command <br/>
+                            <li>{{ _("Open %(st_code)sPowershell%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
+                            <li>{{ _("Type the following command") }} <br/>
                                 <code>mount -o anon \\<strong>IP</strong>\{{ mountpoint.replace("/","\\") }} Z:</code>
                             </li>
-                            <li>You should replace <code>IP</code> with the IP address you can find in the Network tab.</li>
-                            <li>You can choose a different unit letter than <code>Z:</code>.</li>
+                            <li>{{ _("You should replace %(st_code)sIP%(e_code)s with the IP address you can find in the Network tab.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
+                            <li>{{ _("You can choose a different unit letter than %(st_code)sZ:%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
                         </ol>
                     </div>
                 </div>

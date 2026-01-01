@@ -1,6 +1,6 @@
 {% extends "card.html" %}
 
-{% block card_title %}<i class="bi bi-device-hdd-fill"></i> Disk {{ idx }} <span title="{{ disk.status }}" class="float-end">{{ disk.status | disk_charm }}</span>{% endblock %}
+{% block card_title %}<i class="bi bi-device-hdd-fill"></i> {{ _("Disk") }} {{ idx }} <span title="{{ disk.status }}" class="float-end">{{ disk.status | disk_charm }}</span>{% endblock %}
 
 {% block card_content %}
 
@@ -14,7 +14,17 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <div class="row g-1">
     <div class="col-12">
-        <button class="btn btn-warning w-100" type="submit" name="disk" value="{{ disk.physical_paths[0] }}">Replace</button>
+        <button class="btn btn-warning w-100" type="submit" name="disk" value="{{ disk.physical_paths[0] }}">{{ _("Replace") }}</button>
+    </div>
+</div>
+</form>
+{% elif disk.status.value == 1 %}
+    <form action="{{ url_for('main.smart_disk') }}" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<div class="row g-1">
+    <div class="col-12">
+        <button class="btn btn-info w-100" type="submit" name="disk" value="{{ disk.path }}"><i class="bi bi-device-hdd-fill"></i>
+            {{ _("Check disk health") }}</button>
     </div>
 </div>
 </form>
