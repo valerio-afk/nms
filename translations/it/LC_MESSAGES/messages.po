@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-01-01 17:09+0000\n"
+"POT-Creation-Date: 2026-01-01 23:57+0000\n"
 "PO-Revision-Date: 2025-12-31 10:19+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: it\n"
@@ -33,6 +33,18 @@ msgstr ""
 #: disk.py:18
 msgid "Corrupted"
 msgstr "Corrotto"
+
+#: errors.py:11
+msgid "Unknown Error"
+msgstr "Errore Sconosciuto"
+
+#: errors.py:15
+msgid "The disk array is already configured."
+msgstr "C'è già un archivio configurato."
+
+#: errors.py:16
+msgid "You must have at least 3 disks connected to opt in redundancy."
+msgstr "Devi avere almeno 3 dischi per attivare la ridondanza."
 
 #: filters.py:15
 msgid "Enabled"
@@ -62,15 +74,15 @@ msgstr "È SSD"
 msgid "Interface"
 msgstr "Interfaccia"
 
-#: backend/pool.py:235 forms.py:66
+#: backend/pool.py:237 forms.py:66
 msgid "Redundancy"
 msgstr "Ridondanza"
 
-#: backend/pool.py:236 forms.py:67
+#: backend/pool.py:238 forms.py:67
 msgid "Encryption"
 msgstr "Criptazione"
 
-#: backend/pool.py:237 forms.py:68
+#: backend/pool.py:239 forms.py:68
 msgid "Compression"
 msgstr "Compressione"
 

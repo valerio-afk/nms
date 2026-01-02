@@ -88,7 +88,7 @@
   </nav>
 
   <div id="page-content">
-    {% if (hide_flash is not defined) or (hide_flash)  %}
+    {% if (hide_flash is not defined) or (hide_flash == false)  %}
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% for category,msg in messages %}
                 {% if category == "error" %}

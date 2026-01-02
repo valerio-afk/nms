@@ -14,6 +14,8 @@ import re
 import socket
 import subprocess
 
+from msg import Errors
+
 remove_partition:Callable[[str],str] = lambda path : re.sub(r"-part[0-9]$","",path)
 
 class PoolMixin:
@@ -414,12 +416,12 @@ class PoolMixin:
                     disks:list) -> None:
 
         if this.is_pool_configured():
-            raise Exception("The disk array is already configured.")
+            Errors.raise_error(Errors.EPOOL_ALREADY_CONFIGURED)
 
         disks_objs = [d for d in this.get_disks() if d.status == DiskStatus.NEW]
 
         if redundancy and (len(disks)<3):
-            raise Exception("You must have at least 3 disks connected to opt in redundancy.")
+            Errors.raise_error(Errors.EPOOL_REDUNDANCY_MIN)
 
         for disk in disks:
             this._format_disk(disk)
@@ -448,7 +450,7 @@ class PoolMixin:
 
         if (not trans.success):
             if (len(output)==0):
-                raise Exception("Unknown error")
+                Errors.raise_error(Errors.E_UNK)
             else:
                 raise Exception(output[-1].get('stderr',None))
 
