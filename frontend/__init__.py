@@ -7,8 +7,6 @@ from urllib.parse import urlparse,urlencode
 import constants
 import time
 
-from msg import Errors
-
 BACKEND:NMSBackend = NMSBackend()
 frontend:Blueprint = Blueprint('main',__name__)
 
@@ -19,10 +17,9 @@ def check_flash_messages_from_tasks() -> None:
     reload_config = False
 
     for t in tasks:
-        try:
-            msg = Errors.get_error(Errors(str(t.result)))
-        except ValueError:
-            msg = str(t.result)
+        msg = str(t.result)
+
+        raise Exception(str(t.result))
 
         flash(msg,"success" if t.successful else "error")
         reload_config = True

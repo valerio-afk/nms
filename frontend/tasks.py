@@ -21,10 +21,8 @@ def apt_get_upgrade() -> str:
 
 @shared_task(bind=True)
 def expand_pool(self, new_device):
-    try:
-        BACKEND.expand_pool(new_device)
-    except Exception as e:
-        raise RuntimeError(str(e))
+
+    BACKEND.expand_pool(new_device)
 
     done = False
 

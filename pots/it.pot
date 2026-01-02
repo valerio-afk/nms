@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-01-01 23:57+0000\n"
+"POT-Creation-Date: 2026-01-02 10:20+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -31,18 +31,6 @@ msgstr ""
 
 #: disk.py:18
 msgid "Corrupted"
-msgstr ""
-
-#: errors.py:11
-msgid "Unknown Error"
-msgstr "Errore Sconosciuto"
-
-#: errors.py:15
-msgid "The disk array is already configured."
-msgstr ""
-
-#: errors.py:16
-msgid "You must have at least 3 disks connected to opt in redundancy."
 msgstr ""
 
 #: filters.py:15
@@ -73,15 +61,15 @@ msgstr ""
 msgid "Interface"
 msgstr ""
 
-#: backend/pool.py:237 forms.py:66
+#: backend/pool.py:238 forms.py:66
 msgid "Redundancy"
 msgstr ""
 
-#: backend/pool.py:238 forms.py:67
+#: backend/pool.py:239 forms.py:67
 msgid "Encryption"
 msgstr ""
 
-#: backend/pool.py:239 forms.py:68
+#: backend/pool.py:240 forms.py:68
 msgid "Compression"
 msgstr ""
 
@@ -147,6 +135,28 @@ msgstr ""
 #: forms.py:129
 msgid "Authentication:"
 msgstr ""
+
+#: msg.py:13
+msgid "Unknown Error"
+msgstr ""
+
+#: msg.py:23
+msgid "The disk array is already configured."
+msgstr ""
+
+#: msg.py:30
+msgid "You must have at least 3 disks connected to opt in redundancy."
+msgstr ""
+
+#: msg.py:39
+#, python-format
+msgid "Could not retrieve information for the disk: %(dev)s"
+msgstr ""
+
+#: msg.py:53
+#, python-format
+msgid "Unable to attach new device to disk array%(details)s"
+msgstr "Non è stato possibile aggiungere il nuovo disco all'archivio%(details)s"
 
 #: backend/system.py:31
 msgid "Uptime"

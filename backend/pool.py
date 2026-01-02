@@ -14,7 +14,8 @@ import re
 import socket
 import subprocess
 
-from msg import Errors
+from msg import PoolAlreadyConfiguredError, PoolRedundancyMinRequirementError, UnknownError, PoolExpandInfoError, \
+    PoolAttachError
 
 remove_partition:Callable[[str],str] = lambda path : re.sub(r"-part[0-9]$","",path)
 
@@ -416,12 +417,12 @@ class PoolMixin:
                     disks:list) -> None:
 
         if this.is_pool_configured():
-            Errors.raise_error(Errors.EPOOL_ALREADY_CONFIGURED)
+            raise PoolAlreadyConfiguredError()
 
         disks_objs = [d for d in this.get_disks() if d.status == DiskStatus.NEW]
 
         if redundancy and (len(disks)<3):
-            Errors.raise_error(Errors.EPOOL_REDUNDANCY_MIN)
+            raise PoolRedundancyMinRequirementError()
 
         for disk in disks:
             this._format_disk(disk)
@@ -450,7 +451,7 @@ class PoolMixin:
 
         if (not trans.success):
             if (len(output)==0):
-                Errors.raise_error(Errors.E_UNK)
+                raise UnknownError()
             else:
                 raise Exception(output[-1].get('stderr',None))
 
@@ -697,7 +698,7 @@ class PoolMixin:
         new_disk_obj = [ d for d in disks if d.has_path(new_device)]
 
         if (len(new_disk_obj)!=1):
-            raise Exception(f"Could not retrieve information for the disk: {new_device}")
+            raise PoolExpandInfoError(new_device)
 
         new_disk_obj = new_disk_obj.pop()
 
@@ -720,7 +721,8 @@ class PoolMixin:
                     if (vdevs[value]['vdev_type'] == 'raidz'):
                         cmd = ZPoolAttach(this.pool_name, vdevs[value]['name'],new_device)
 
-            assert cmd is not None,"Unable to attach new device to disk array."
+            if (cmd is None):
+                raise PoolAttachError(new_device)
 
         else:
             cmd = ZPoolAdd(this.pool_name,new_device)
@@ -732,7 +734,7 @@ class PoolMixin:
         output = trans.run()
 
         if (not trans.success):
-            raise Exception(f"Unable to attach new device to disk array: {output[0]['stderr']}")
+            raise PoolAttachError(output[0]['stderr'])
 
         this.cfg["pool"]["disks"].append(new_disk_obj.serialise())
         this.flush_config()
