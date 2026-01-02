@@ -6,6 +6,7 @@ from constants import SOCK_PATH, KEYPATH
 from datetime import timedelta
 from disk import DiskStatus, Disk
 from flask_babel import _
+from msg import ErrorMessage
 from typing import Tuple, Optional, List, Dict, Callable
 import base64
 import json
@@ -14,8 +15,6 @@ import re
 import socket
 import subprocess
 
-from msg import PoolAlreadyConfiguredError, PoolRedundancyMinRequirementError, UnknownError, PoolExpandInfoError, \
-    PoolAttachError
 
 remove_partition:Callable[[str],str] = lambda path : re.sub(r"-part[0-9]$","",path)
 
@@ -422,7 +421,7 @@ class PoolMixin:
         disks_objs = [d for d in this.get_disks() if d.status == DiskStatus.NEW]
 
         if redundancy and (len(disks)<3):
-            raise PoolRedundancyMinRequirementError()
+            raise Exception(ErrorMessage.get_error(ErrorMessage.E_POOL_REDUNDANCY_MIN))
 
         for disk in disks:
             this._format_disk(disk)
@@ -698,7 +697,7 @@ class PoolMixin:
         new_disk_obj = [ d for d in disks if d.has_path(new_device)]
 
         if (len(new_disk_obj)!=1):
-            raise PoolExpandInfoError(new_device)
+            raise Exception(ErrorMessage.get_error(ErrorMessage.E_POOL_EXPAND,new_device))
 
         new_disk_obj = new_disk_obj.pop()
 
@@ -722,7 +721,7 @@ class PoolMixin:
                         cmd = ZPoolAttach(this.pool_name, vdevs[value]['name'],new_device)
 
             if (cmd is None):
-                raise PoolAttachError(new_device)
+                raise ErrorMessage.get_error(ErrorMessage.E_POOL_ATTACH(new_device))
 
         else:
             cmd = ZPoolAdd(this.pool_name,new_device)
@@ -734,7 +733,7 @@ class PoolMixin:
         output = trans.run()
 
         if (not trans.success):
-            raise PoolAttachError(output[0]['stderr'])
+            raise ErrorMessage.get_error(ErrorMessage.E_POOL_ATTACH(output[0]['stderr']))
 
         this.cfg["pool"]["disks"].append(new_disk_obj.serialise())
         this.flush_config()

@@ -18,9 +18,6 @@ def check_flash_messages_from_tasks() -> None:
 
     for t in tasks:
         msg = str(t.result)
-
-        raise Exception(str(t.result))
-
         flash(msg,"success" if t.successful else "error")
         reload_config = True
 
