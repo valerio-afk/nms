@@ -1,10 +1,11 @@
+from msg import ErrorMessage
 from . import frontend as bp, BACKEND
 from .tasks import  expand_pool, create_pool
 from backend.tasks import NMSTask
 from datetime import datetime
 from flask import g, render_template, redirect, url_for, flash, Response, request
 from flask_wtf.csrf import validate_csrf
-from flask_babel import _
+from flask_babel import _, get_locale
 from forms import ImportPoolForm, CreatePoolForm, AddDisksForm
 from frontend.decorators import wait
 from pySMART import Device
@@ -83,14 +84,12 @@ def add_disk() -> Response:
 
     if (form.validate_on_submit()):
         try:
-            task = expand_pool.delay(form.disks.data)
+            task = expand_pool.delay(form.disks.data,str(get_locale()))
             BACKEND.append_task(NMSTask(task.task_id, "/disks", tag="add_disk"))
-
-            flash(f"Adding {form.disks.data} to your pool. This operation can take long")
         except Exception as e:
-            flash(f"Error while adding {form.disks.data}: {str(e)}"
-                  , "error")
+            flash(ErrorMessage.get_error(ErrorMessage.E_POOL_EXPAND,form.disks.data,str(e)),"error")
     else:
+        #TODO fix this how you fix the other(s)
         flash(f"Unable to process the form: {form.errors}","error")
 
     return redirect(url_for("main.disk_management"))
@@ -111,7 +110,9 @@ def new_pool() -> Response:
 
         disks = form.disks.data
 
-        task = create_pool.delay(pool_name,dataset_name,redundancy,encryption,compression,disks)
+        lang = str(get_locale())
+
+        task = create_pool.delay(pool_name,dataset_name,redundancy,encryption,compression,disks, lang)
         BACKEND.append_task(NMSTask(task.task_id,"/disks",tag="new_disk"))
 
     else:

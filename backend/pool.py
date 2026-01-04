@@ -1,5 +1,5 @@
 from cmdl import ZPoolExport, RemoteCommandLineTransaction, ZFSDestroy, ZPoolDestroy, \
-    ZPoolList, ZPoolImport, ZPoolCreate, ZPoolLabelClear, ZFSCreate, WipeFS, CreateKey, \
+    ZPoolList, ZPoolImport, ZPoolCreate, ZFSCreate, CreateKey, \
     ZPoolStatus, ZPoolAdd, ZPoolAttach, LSBLK, ZFSList, ZFSGet, ZFSLoadKey, CommandLine, \
     LocalCommandLineTransaction, ZPoolClear, ZPoolReplace
 from constants import SOCK_PATH, KEYPATH
@@ -78,7 +78,7 @@ class PoolMixin:
     def get_array_expansion_status(this) -> Tuple[Optional[float], Optional[timedelta], bool]:
 
         if (not this.is_pool_configured()):
-            raise Exception(f"Disk array not configured yet.")
+            raise Exception(ErrorMessage.get_error(ErrorMessage.E_POOL_NO_CONF))
 
         if (not this.has_redundancy):
             return 100.0, timedelta(0), True
@@ -416,7 +416,7 @@ class PoolMixin:
                     disks:list) -> None:
 
         if this.is_pool_configured():
-            raise PoolAlreadyConfiguredError()
+            raise Exception(ErrorMessage.get_error(ErrorMessage.E_POOL_ALREADY_CONF))
 
         disks_objs = [d for d in this.get_disks() if d.status == DiskStatus.NEW]
 
@@ -450,7 +450,7 @@ class PoolMixin:
 
         if (not trans.success):
             if (len(output)==0):
-                raise UnknownError()
+                raise ErrorMessage.get_error(ErrorMessage.E_UNKNOWN)
             else:
                 raise Exception(output[-1].get('stderr',None))
 
@@ -697,7 +697,7 @@ class PoolMixin:
         new_disk_obj = [ d for d in disks if d.has_path(new_device)]
 
         if (len(new_disk_obj)!=1):
-            raise Exception(ErrorMessage.get_error(ErrorMessage.E_POOL_EXPAND,new_device))
+            raise Exception(ErrorMessage.get_error(ErrorMessage.E_POOL_EXPAND_INFO, new_device))
 
         new_disk_obj = new_disk_obj.pop()
 
@@ -761,7 +761,7 @@ class PoolMixin:
         output = trans.run()
 
         if (not trans.success):
-            raise Exception(f"Unable to recover disk array: {output[0]['stderr']}")
+            raise Exception( ErrorMessage.get_error(ErrorMessage.E_POOL_RECOVERY, output[0]['stderr']))
 
 
     def replace(this, old_dev:str, new_dev:Optional[str]=None) -> None:

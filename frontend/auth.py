@@ -3,6 +3,8 @@ import pyotp
 import qrcode
 from typing import Union, Tuple
 from io import BytesIO
+
+from msg import SuccessMessage
 from . import frontend as bp, BACKEND, request, flash, redirect, url_for, session
 from flask import Response, render_template, send_file, g
 from flask_wtf.csrf import generate_csrf, validate_csrf, ValidationError
@@ -68,8 +70,7 @@ def reauth(operation:str) -> Union[Response,str]:
             if (BACKEND.verify_otp(otp)):
                 session["dz_authorisation"] = {"time":time.time(),"timestamp":time.time(),"operation":operation}
                 BACKEND.logger.info(f"OTP accepted")
-                flash("OTP Accepted. Please press again the button of the desired dangerous operation to continue.",
-                      "success")
+                flash(SuccessMessage.get_message(SuccessMessage.S_OTP_DANGEROUS), "success")
             else:
                 BACKEND.logger.warning(f"Invalid OTP")
                 flash("Invalid OTP","error")

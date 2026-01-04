@@ -1,67 +1,79 @@
 from time import sleep
 from celery import shared_task
+from flask_babel import force_locale, _
+from msg import ErrorMessage
+
+from msg import SuccessMessage
 from . import BACKEND
 
 
 @shared_task()
-def create_pool(pool,dataset, redundancy, encryption,compression,disks) -> str:
-    BACKEND.create_pool(pool,dataset, redundancy, encryption,compression,disks)
-
-    return "Disk array created successfully."
+def create_pool(pool:str,
+                dataset:str,
+                redundancy:bool,
+                encryption:bool,
+                compression:bool,
+                disks:list,
+                lang:str='en') -> str:
+    with force_locale(lang):
+        BACKEND.create_pool(pool,dataset, redundancy, encryption,compression,disks)
+        return SuccessMessage.get_message(SuccessMessage.S_POOL_CREATED)
 
 @shared_task()
-def apt_get_updates() -> str:
-    BACKEND.get_apt_updates()
-    return "System update retrieved successfully."
+def apt_get_updates(lang:str='en') -> str:
+    with force_locale(lang):
+        BACKEND.get_apt_updates()
+        return SuccessMessage.get_message(SuccessMessage.S_APT_UPDATE)
 
 @shared_task()
-def apt_get_upgrade() -> str:
-    BACKEND.get_apt_upgrade()
-    return "System update completed successfully."
+def apt_get_upgrade(lang:str='en') -> str:
+    with force_locale(lang):
+        BACKEND.get_apt_upgrade()
+        return SuccessMessage.get_message(SuccessMessage.S_APT_UPGRADE)
 
 @shared_task(bind=True)
-def expand_pool(self, new_device):
+def expand_pool(self, new_device:str,lang:str='en'):
+    with force_locale(lang):
+        BACKEND.expand_pool(new_device)
 
-    BACKEND.expand_pool(new_device)
+        done = False
 
-    done = False
+        sleep(0.5)
 
-    sleep(0.5)
+        while not done:
+            perc,time,success = BACKEND.get_array_expansion_status
 
-    while not done:
-        perc,time,success = BACKEND.get_array_expansion_status
-
-        if (perc is None) and (time is None):
-            raise RuntimeError("Unable to get array expansion status")
-        else:
-
-            if (time is not None):
-                total_seconds = int(time.total_seconds())
-
-                hours, remainder = divmod(total_seconds, 3600)
-                minutes, seconds = divmod(remainder, 60)
-
-                eta = ""
-                if hours > 0:
-                    eta = f"{hours}"
-                if minutes > 0:
-                    eta += f"{minutes}m"
-                else:
-                    eta += f"{seconds}s"
-
-                self.update_state(state="PROGRESS", meta={
-                    "progress":round(perc),
-                    "message": f"Disk expansion is expected to take {eta}"
-                })
+            if (perc is None) and (time is None):
+                raise Exception(ErrorMessage.get_error(ErrorMessage.E_POOL_EXPAND_INFO, new_device))
             else:
-                self.update_state(state="PROGRESS", meta={
-                    "progress": round(perc),
-                    "message": "Disk expansion in progress"
-                })
 
-            done = success
+                if (time is not None):
+                    total_seconds = int(time.total_seconds())
 
-        sleep(1)
+                    hours, remainder = divmod(total_seconds, 3600)
+                    minutes, seconds = divmod(remainder, 60)
 
-    return "Disk array expanded successfully."
+                    eta = ""
+                    if hours > 0:
+                        eta = f"{hours}{_("h")}"
+                    if minutes > 0:
+                        eta += f"{minutes}{_("m")}"
+                    else:
+                        eta += f"{seconds}{_("s")}"
+
+                    self.update_state(state="PROGRESS", meta={
+                        "progress":round(perc),
+                        "message": _("Disk expansion is expected to take %(eta)s") % {"eta":eta},
+                    })
+                else:
+                    self.update_state(state="PROGRESS", meta={
+                        "progress": round(perc),
+                        "message": _("Disk expansion in progress")
+                    })
+
+                done = success
+
+            sleep(1)
+
+        return SuccessMessage.get_message(SuccessMessage.S_POOL_EXPANDED)
 

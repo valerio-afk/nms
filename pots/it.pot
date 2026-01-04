@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-01-02 10:20+0000\n"
+"POT-Creation-Date: 2026-01-04 15:03+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -61,15 +61,15 @@ msgstr ""
 msgid "Interface"
 msgstr ""
 
-#: backend/pool.py:238 forms.py:66
+#: backend/pool.py:237 forms.py:66
 msgid "Redundancy"
 msgstr ""
 
-#: backend/pool.py:239 forms.py:67
+#: backend/pool.py:238 forms.py:67
 msgid "Encryption"
 msgstr ""
 
-#: backend/pool.py:240 forms.py:68
+#: backend/pool.py:239 forms.py:68
 msgid "Compression"
 msgstr ""
 
@@ -136,38 +136,116 @@ msgstr ""
 msgid "Authentication:"
 msgstr ""
 
-#: msg.py:13
+#: msg.py:9
 msgid "Unknown Error"
 msgstr ""
 
-#: msg.py:23
+#: msg.py:11
 msgid "The disk array is already configured."
 msgstr ""
 
-#: msg.py:30
+#: msg.py:12
+msgid "Disk array not configured yet."
+msgstr ""
+
+#: msg.py:13
 msgid "You must have at least 3 disks connected to opt in redundancy."
 msgstr ""
 
-#: msg.py:39
+#: msg.py:14
+#, python-format
+msgid "Error while adding %(dev)s: %(info)s"
+msgstr ""
+
+#: msg.py:15
 #, python-format
 msgid "Could not retrieve information for the disk: %(dev)s"
 msgstr ""
 
-#: msg.py:53
+#: msg.py:16
+#, python-format
+msgid "Unable to get array expansion status: %(info)s"
+msgstr ""
+
+#: msg.py:17
 #, python-format
 msgid "Unable to attach new device to disk array%(details)s"
-msgstr "Non è stato possibile aggiungere il nuovo disco all'archivio%(details)s"
+msgstr ""
+
+#: msg.py:18
+#, python-format
+msgid "Error while recovering the disk array: %(info)s)"
+msgstr ""
+
+#: msg.py:19
+msgid "Invalid authorisation."
+msgstr "Autorizzazione non valida."
+
+#: msg.py:20
+msgid "Authorisation token expired."
+msgstr "Autorizzazione scaduta."
+
+#: msg.py:28
+msgid "Disk array created successfully."
+msgstr ""
+
+#: msg.py:29
+msgid "Disk array expanded successfully."
+msgstr ""
+
+#: msg.py:31
+msgid "System updates retrieved successfully."
+msgstr ""
+
+#: msg.py:32
+msgid "System updates installed successfully."
+msgstr ""
+
+#: msg.py:34
+msgid ""
+"OTP Accepted. Please press again the button of the desired dangerous "
+"operation to continue."
+msgstr ""
+
+#: msg.py:36
+msgid "Disk array recovery attempted."
+msgstr "Recupero dell'archivio tentato con successo."
 
 #: backend/system.py:31
 msgid "Uptime"
+msgstr ""
+
+#: backend/system.py:31
+msgid "Since"
 msgstr ""
 
 #: backend/system.py:35
 msgid "NMS Version"
 msgstr ""
 
-#: frontend/disks.py:210
+#: frontend/disks.py:211
 msgid "The creation of a new disk array may take some time. Please wait..."
+msgstr ""
+
+#: frontend/tasks.py:58
+msgid "h"
+msgstr ""
+
+#: frontend/tasks.py:60
+msgid "m"
+msgstr ""
+
+#: frontend/tasks.py:62
+msgid "s"
+msgstr ""
+
+#: frontend/tasks.py:66
+#, python-format
+msgid "Disk expansion is expected to take %(eta)s"
+msgstr ""
+
+#: frontend/tasks.py:71
+msgid "Disk expansion in progress"
 msgstr ""
 
 #: templates/access.html:3 templates/index.html:34

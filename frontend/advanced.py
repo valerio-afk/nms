@@ -1,10 +1,13 @@
 from flask import render_template, redirect, url_for, request, flash, g, send_file, session, abort
+from flask_babel import get_locale
 from flask_wtf.csrf import generate_csrf, validate_csrf
 from frontend import  BACKEND, frontend as bp
 from backend.tasks import NMSTask
 from backend.logger import LogFilter
 from frontend.tasks import apt_get_updates, apt_get_upgrade
 from io import BytesIO
+
+from msg import SuccessMessage, ErrorMessage
 from widget import render_widget,get_widgets_html,get_widgets_css_files
 from wtforms import ValidationError
 from urllib.parse import quote, unquote
@@ -162,10 +165,10 @@ def zpool_destroy():
                 except Exception as e:
                     flash(f"Error while deleting disk array: {str(e)}","error")
             else:
-                flash(f"Invalid authorisation", "error")
+                flash(ErrorMessage.get_error(ErrorMessage.E_AUTH_INVALID), "error")
 
         else:
-            flash("Authorisation token expired","error")
+            flash(ErrorMessage.get_error(ErrorMessage.E_AUTH_EXPIRED),"error")
 
         return redirect(url_for("main.advanced"))
 
@@ -187,14 +190,14 @@ def zpool_recover():
             if (authorisation['operation'] == "recover"):
                 try:
                     BACKEND.recover()
-                    flash("Disk array recovery attempted.","success")
+                    flash(SuccessMessage.get_message(SuccessMessage.S_RECOVERY),"success")
                 except Exception as e:
-                    flash(f"Error while recovering the disk array: {str(e)}","error")
+                    flash(ErrorMessage.get_error(ErrorMessage.E_POOL_RECOVERY,str(e)),"error")
             else:
-                flash(f"Invalid authorisation", "error")
+                flash(ErrorMessage.get_error(ErrorMessage.E_AUTH_INVALID), "error")
 
         else:
-            flash("Authorisation token expired","error")
+            flash(ErrorMessage.get_error(ErrorMessage.E_AUTH_EXPIRED),"error")
 
         return redirect(url_for("main.advanced"))
 
@@ -241,11 +244,13 @@ def apt_get():
 
     action = request.form.get("action",None)
 
+    lang = str(get_locale())
+
     if (action=="update"):
-        task = apt_get_updates.delay()
+        task = apt_get_updates.delay(lang)
         BACKEND.append_task(NMSTask(task.task_id,"/advanced/apt",action=action,tag="apt"))
     elif (action == "upgrade"):
-        task = apt_get_upgrade.delay()
+        task = apt_get_upgrade.delay(lang)
         BACKEND.append_task(NMSTask(task.task_id, "/advanced/apt", action=action,tag="apt"))
     return redirect(url_for("main.advanced"))
 
