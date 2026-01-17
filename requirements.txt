@@ -11,3 +11,6 @@ flask-session >= 0.8.0
 redis >= 5.2
 pySMART >= 1.4.2
 flask-babel >= 4.0.0
+fastapi >= 0.128.0
+uvicorn >= 0.40.0
+pyjwt >= 2.10.1
