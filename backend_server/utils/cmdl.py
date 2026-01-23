@@ -1,6 +1,7 @@
 import json
 import subprocess
 import socket
+from subprocess import CompletedProcess
 from tempfile import gettempdir
 import os
 from abc import abstractmethod, ABC
@@ -30,7 +31,7 @@ class CommandLine(ABC):
         return this._mask_output
 
 
-    def _execute(this,raw_cmd):
+    def _execute(this,raw_cmd) -> Optional[CompletedProcess[str]]:
 
         if (raw_cmd is None):
             return None

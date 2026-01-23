@@ -1,6 +1,6 @@
 
 from constants import SOCK_PATH
-from cmdl import LSBLK, WipeFS, RemoteCommandLineTransaction, ZPoolLabelClear
+from backend_server.utils.cmdl import LSBLK, WipeFS, RemoteCommandLineTransaction, ZPoolLabelClear
 from disk import DiskStatus, Disk
 from typing import List
 import json

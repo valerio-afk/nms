@@ -1,6 +1,6 @@
 
 from .utils import  LogFilter
-from cmdl import RemoteCommandLineTransaction, JournalCtl
+from backend_server.utils.cmdl import RemoteCommandLineTransaction, JournalCtl
 from constants import SOCK_PATH
 from nms_utils import setup_logger
 import socket

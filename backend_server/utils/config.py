@@ -1,7 +1,10 @@
 import json
 import os
+from backend_server.utils.cmdl import ZFSList, ZPoolStatus
+from backend_server.utils.daemons import NetIOCounter
 from backend_server.utils.logger import Logger
-from typing import Optional
+from backend_server.utils.cmdl import ZPoolList
+from typing import Optional, Dict
 
 class NMSConfig(Logger):
     def __new__(cls):
@@ -10,18 +13,29 @@ class NMSConfig(Logger):
         return cls.instance
 
     def __init__(this, config_file:str='nms.json'):
+        super().__init__()
         this._config_file = config_file
         this._cfg = {}
         this._tmp_secret = None
+        this._daemons = {
+            'netcounter': NetIOCounter()
+        }
+
+        for d in this._daemons.values():
+            d.start()
 
         try:
             this.load_configuration_file()
         except FileNotFoundError:
             this.create_default_configuration_file()
 
+    #BASE PROPERTIES
+
     @property
     def config_filename(this) -> str:
         return this._config_file
+
+    # AUTH/OTP PROPERTIES
 
     @property
     def is_otp_configured(this) -> bool:
@@ -37,12 +51,115 @@ class NMSConfig(Logger):
 
     @property
     def otp_secret(this) -> Optional[str]:
-        return this._cfg['access'].get("otp_secret",None)
+        return this._cfg['access'].get("otp_secret")
 
-    def save_otp_secret(this) -> None:
-        this._cfg['access']["otp_secret"] = this.temporary_otp_secret
-        this.temporary_otp_secret = None
-        this.flush_config()
+    #NETWORK PROPERTIES
+
+    @property
+    def net_counter(this) -> Optional[NetIOCounter]:
+        return this._daemons.get("netcounter")
+
+    # POOL PROPERTIES
+
+    @property
+    def has_redundancy(this) -> bool:
+        return this._cfg.get('pool',{}).get("redundancy", False)
+
+    @property
+    def has_encryption(this) -> bool:
+        return this._cfg.get('pool',{}).get("encrypted", None) is not None
+
+    @property
+    def has_compression(this) -> bool:
+        return this._cfg.get('pool',{}).get("compressed", False)
+
+    @property
+    def dataset_name(this) -> Optional[str]:
+        return this._cfg.get("dataset")
+
+    @property
+    def key_filename(this) -> Optional[str]:
+        return this._cfg.get('pool').get("encrypted", None)
+
+    @property
+    def pool_name(this) -> str:
+        return this._cfg.get("pool",{}).get("name")
+
+    @property
+    def get_pool_capacity(this) -> Optional[Dict[str, int]]:
+        if (not this.is_pool_configured):
+            return None
+
+        zpool_list = ZPoolList(this.pool_name)
+
+        output = zpool_list.execute()
+
+        if (output.returncode == 0):
+            d = json.loads(output.stdout)
+
+            pool_properties = d.get('pools', {}).get(this.pool_name, {}).get('properties', None)
+
+            if (pool_properties is not None):
+                return {
+                    "used": int(pool_properties.get('allocated', {}).get('value', 0)),
+                    "total": int(pool_properties.get('size', {}).get('value', 0))
+                }
+            else:
+                raise Exception(f"Unable to read disk array capacity information: unknown error")
+        else:
+            raise Exception(f"Unable to read disk array capacity information: {output.returncode}")
+
+    @property
+    def mountpoint(this) -> Optional[str]:
+        cmd = ZFSList(properties=["mountpoint"])
+        process = cmd.execute()
+
+        if process.returncode != 0:
+            raise Exception(process.stderr)
+
+        d = json.loads(process.stdout)
+        pool = CONFIG.pool_name
+        dataset = CONFIG.dataset_name
+
+        return (d.get("datasets",{})
+                .get(f"{pool}/{dataset}",{})
+                .get("properties", {})
+                .get("mountpoint",{})
+                .get("value"))
+
+    @property
+    def is_mounted(this) -> bool:
+        cmd = ZFSList(properties=["mounted"])
+        process = cmd.execute()
+
+        if process.returncode != 0:
+            raise Exception(process.stderr)
+
+        d = json.loads(process.stdout)
+        pool = CONFIG.pool_name
+        dataset = CONFIG.dataset_name
+
+        return (d.get("datasets", {})
+                .get(f"{pool}/{dataset}", {})
+                .get("properties", {})
+                .get("mounted", {})
+                .get("value","no").lower()) != "no"
+
+    @property
+    def is_pool_configured(this) -> bool:
+        return this._cfg.get('pool',{}).get("name", None) is not None
+
+    @property
+    def is_pool_present(this) -> bool:
+        if (not this.is_pool_configured):
+            return False
+
+        cmd = ZPoolStatus(this.pool_name)
+        process = cmd.execute()
+
+        return process.returncode == 0
+
+    # BASE METHODS
 
     def load_configuration_file(this) -> None:
         this.info(f"Loading configuration file `{this.config_filename}`")
@@ -118,3 +235,13 @@ class NMSConfig(Logger):
         except Exception as e:
             this.error(f"Unable to flush the configuration file `{this.config_filename}`: {str(e)}")
 
+    #AUTH/OPT METHODS
+
+    def save_otp_secret(this) -> None:
+        this._cfg['access']["otp_secret"] = this.temporary_otp_secret
+        this.temporary_otp_secret = None
+        this.flush_config()
+
+
+
+CONFIG = NMSConfig()

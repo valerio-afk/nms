@@ -1,7 +1,7 @@
 from typing import  Dict
 from services import SystemService
 from constants import SOCK_PATH
-from cmdl import UserModChangeHomeDir, RemoteCommandLineTransaction
+from backend_server.utils.cmdl import UserModChangeHomeDir, RemoteCommandLineTransaction
 from importlib import import_module
 import pwd
 import socket

@@ -1,4 +1,4 @@
-from cmdl import ZPoolExport, RemoteCommandLineTransaction, ZFSDestroy, ZPoolDestroy, \
+from backend_server.utils.cmdl import ZPoolExport, RemoteCommandLineTransaction, ZFSDestroy, ZPoolDestroy, \
     ZPoolList, ZPoolImport, ZPoolCreate, ZFSCreate, CreateKey, \
     ZPoolStatus, ZPoolAdd, ZPoolAttach, LSBLK, ZFSList, ZFSGet, ZFSLoadKey, CommandLine, \
     LocalCommandLineTransaction, ZPoolClear, ZPoolReplace
@@ -96,8 +96,6 @@ class PoolMixin:
             raise Exception(f"Unable to get array expansion status: {output[0]['stderr']}")
 
         zpool_output = output[0]['stdout']
-
-        this.logger.warning(zpool_output)
 
 
         # Case 1: percentage + ETA available

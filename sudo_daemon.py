@@ -10,7 +10,7 @@ from constants import SOCK_PATH
 from importlib import import_module
 from socketserver import UnixStreamServer, StreamRequestHandler
 from nms_utils import setup_logger
-from cmdl import LocalCommandLineTransaction, CommandLineTransaction, ZFSList
+from backend_server.utils.cmdl import LocalCommandLineTransaction, CommandLineTransaction, ZFSList
 from pySMART import Device
 
 ALLOWED_UID = None

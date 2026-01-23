@@ -1,5 +1,5 @@
 
-from cmdl import RemoteCommandLineTransaction, Reboot, Shutdown, SystemCtlRestart,APTGetUpdate, APTGetUpgrade
+from backend_server.utils.cmdl import RemoteCommandLineTransaction, Reboot, Shutdown, SystemCtlRestart,APTGetUpdate, APTGetUpgrade
 from collections import OrderedDict
 from constants import SOCK_PATH, APT_LISTS
 from flask_babel import _
