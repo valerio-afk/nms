@@ -1,12 +1,11 @@
 import logging
-import os.path
+import difflib
 import sys
+from .constants import ANSI_RESET, ANSI_COLOURS,ANSI2HTML_MAP, ANSI_RE
 from datetime import datetime
 from logging import Logger
-
-from constants import ANSI_RESET, ANSI_COLOURS,ANSI2HTML_MAP, ANSI_RE
 from pathlib import Path
-import difflib
+
 
 class ColourFormatter(logging.Formatter):
     def format(self, record):

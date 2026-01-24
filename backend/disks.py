@@ -1,7 +1,7 @@
 
 from constants import SOCK_PATH
 from backend_server.utils.cmdl import LSBLK, WipeFS, RemoteCommandLineTransaction, ZPoolLabelClear
-from disk import DiskStatus, Disk
+from disk import FrontEndDiskStatus, Disk
 from typing import List
 import json
 import socket
@@ -24,8 +24,8 @@ class DiskMixin:
                  serial=d['serial'],
                  size=d['size'],
                  path=d['path'],
-                 status=DiskStatus.NEW,
-                )
+                 status=FrontEndDiskStatus.NEW,
+                 )
             for d in sata_disks
         ]
 

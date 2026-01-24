@@ -4,7 +4,7 @@ from backend_server.utils.cmdl import ZPoolExport, RemoteCommandLineTransaction,
     LocalCommandLineTransaction, ZPoolClear, ZPoolReplace
 from constants import SOCK_PATH, KEYPATH
 from datetime import timedelta
-from disk import DiskStatus, Disk
+from disk import FrontEndDiskStatus, Disk
 from flask_babel import _
 from msg import ErrorMessage
 from typing import Tuple, Optional, List, Dict, Callable
@@ -131,7 +131,7 @@ class PoolMixin:
 
     @property
     def get_attachable_disks(this) -> List[Disk]:
-        disks = [d for d in this.get_system_disks() if d.status == DiskStatus.NEW]
+        disks = [d for d in this.get_system_disks() if d.status == FrontEndDiskStatus.NEW]
         config_disk = this.get_pool_disks()
 
         physical_paths = []
@@ -189,11 +189,11 @@ class PoolMixin:
                             if d.has_path(path):
                                 match (x.get("state")):
                                     case 'ONLINE':
-                                        d.status = DiskStatus.ONLINE
+                                        d.status = FrontEndDiskStatus.ONLINE
                                     case 'OFFLINE':
-                                        d.status = DiskStatus.OFFLINE
+                                        d.status = FrontEndDiskStatus.OFFLINE
                                     case _:
-                                        d.status = DiskStatus.CORRUPTED
+                                        d.status = FrontEndDiskStatus.CORRUPTED
 
                 for d in disks.values():
                     if (d.get("not_present",0)==1) or (d.get("state",None) == "REMOVED"):
@@ -209,7 +209,7 @@ class PoolMixin:
                             serial="N/A",
                             size=int(d.get("phys_space","0")),
                             path=d.get("was",""),
-                            status=DiskStatus.OFFLINE
+                            status=FrontEndDiskStatus.OFFLINE
                         )
 
                         for cfg_disk in this.get_configured_disks():
@@ -416,7 +416,7 @@ class PoolMixin:
         if this.is_pool_configured():
             raise Exception(ErrorMessage.get_error(ErrorMessage.E_POOL_ALREADY_CONF))
 
-        disks_objs = [d for d in this.get_disks() if d.status == DiskStatus.NEW]
+        disks_objs = [d for d in this.get_disks() if d.status == FrontEndDiskStatus.NEW]
 
         if redundancy and (len(disks)<3):
             raise Exception(ErrorMessage.get_error(ErrorMessage.E_POOL_REDUNDANCY_MIN))
@@ -655,7 +655,7 @@ class PoolMixin:
                                  serial=dev_info['serial'],
                                  size=dev_info['size'],
                                  path=dev_info['path'],
-                                 status=DiskStatus.ONLINE
+                                 status=FrontEndDiskStatus.ONLINE
                                  )
 
 
@@ -719,7 +719,7 @@ class PoolMixin:
                         cmd = ZPoolAttach(this.pool_name, vdevs[value]['name'],new_device)
 
             if (cmd is None):
-                raise ErrorMessage.get_error(ErrorMessage.E_POOL_ATTACH(new_device))
+                raise ErrorMessage.get_error(ErrorMessage.E_DISK_ATTACH(new_device))
 
         else:
             cmd = ZPoolAdd(this.pool_name,new_device)
@@ -731,7 +731,7 @@ class PoolMixin:
         output = trans.run()
 
         if (not trans.success):
-            raise ErrorMessage.get_error(ErrorMessage.E_POOL_ATTACH(output[0]['stderr']))
+            raise ErrorMessage.get_error(ErrorMessage.E_DISK_ATTACH(output[0]['stderr']))
 
         this.cfg["pool"]["disks"].append(new_disk_obj.serialise())
         this.flush_config()

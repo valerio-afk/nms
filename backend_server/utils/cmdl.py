@@ -6,7 +6,8 @@ from tempfile import gettempdir
 import os
 from abc import abstractmethod, ABC
 from enum import Enum
-from typing import Optional
+from typing import Optional, List, Dict, Any
+
 
 class CommandLine(ABC):
     def __init__(this,command,sudo=False,mask_output=False):
@@ -592,21 +593,29 @@ class CreateKey(RevertibleCommandLine):
         return CreateKey(serialisation.get('key_path',None),serialisation.get('bytes',0))
 
 class Chmod(RevertibleCommandLine):
-    def __init__(this,flags,path,sudo=False):
-        this._flags = flags
+    def __init__(this,path:str,perm:str,flags:Optional[List[str]],sudo=False):
+        this._perm = perm
         this._path = path
+        this._flags = flags
 
         current_mode = os.stat(path).st_mode
 
-        revert_cmd = ["chmod",str(oct(current_mode)),path]
+        revert_cmd = ["chmod"]
+        if (flags is not None):
+            revert_cmd.extend(flags)
+        revert_cmd += [str(oct(current_mode)),path]
 
-        cmd = ["chmod",flags,path]
+        cmd = ["chmod"]
+        if (flags is not None):
+            cmd.extend(flags)
+        cmd+=[perm,path]
         super().__init__(cmd,revert_command=revert_cmd,sudo=sudo)
 
     def to_dict(this):
-        d = super().to_dict()
+        d:Dict[str,Any] = super().to_dict()
 
         d['flags'] = this._flags
+        d['perm'] = this._perm
         d['path'] = this._path
         d['sudo'] = this._sudo
 
@@ -617,17 +626,24 @@ class Chmod(RevertibleCommandLine):
         return Chmod(serialisation.get('flags',None),serialisation.get('path',None),sudo=serialisation.get('sudo',False))
 
 class Chown(RevertibleCommandLine):
-    def __init__(this,uid,gid,path,sudo=False):
+    def __init__(this,uid:Optional[str|int],gid:Optional[str|int],path:str,flags:Optional[List[str]]= None,sudo=False):
         this._uid = uid
         this._gid = gid
         this._path = path
+        this._flags = flags
 
         current_uid = os.stat(path).st_uid
         current_gid = os.stat(path).st_gid
 
-        revert_cmd = ["chown",f"{current_uid}:{current_gid}",path]
+        revert_cmd = ["chown"]
+        if (flags is not None):
+            revert_cmd.extend(flags)
+        revert_cmd += [f"{current_uid}:{current_gid}",path]
 
-        cmd = ["chown",str(uid) if gid is None else f"{uid}:{gid}",path]
+        cmd = ["chown"]
+        if (flags is not None):
+            cmd.extend(flags)
+        cmd+=[f"{uid or ''}:{gid or ''}",path]
 
         super().__init__(cmd,revert_command=revert_cmd,sudo=sudo)
 
@@ -637,6 +653,7 @@ class Chown(RevertibleCommandLine):
         d['uid'] = this._uid
         d['gid'] = this._gid
         d['path'] = this._path
+        d['flags'] = this._flags
         d['sudo'] = this._sudo
 
         return d

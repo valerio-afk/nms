@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
+from backend_server.utils.responses import NetCounter, NetworkInterface
 from backend_server.utils.config import CONFIG
 from backend_server.utils.daemons import NetIOCounter
 from backend_server.v1.auth import verify_token_factory
@@ -15,16 +15,7 @@ net = APIRouter(
     dependencies=[Depends(verify_token_factory())]
 )
 
-class NetCounter(BaseModel):
-    bytes_sent: Optional[int]
-    bytes_recv: Optional[int]
 
-class NetworkInterface(BaseModel):
-    name:str
-    status:bool
-    ipv4: Optional[str]
-    ipv6: Optional[str]
-    network_name:Optional[str]
 
 
 @net.get('/io',response_model=NetCounter,responses={500:{'description':'Error while retrieving network information'}})

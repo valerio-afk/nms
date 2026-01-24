@@ -1,15 +1,15 @@
 from typing import Optional
 
 from markdown import markdown
-from disk import DiskStatus
+from disk import FrontEndDiskStatus
 from flask_babel import _
 
-def disk_charm(disk_status:DiskStatus):
+def disk_charm(disk_status:FrontEndDiskStatus):
     match (disk_status):
-        case DiskStatus.NEW: return "✴️"
-        case DiskStatus.ONLINE: return "🟢"
-        case DiskStatus.OFFLINE: return "🔴"
-        case DiskStatus.CORRUPTED: return "⚠️"
+        case FrontEndDiskStatus.NEW: return "✴️"
+        case FrontEndDiskStatus.ONLINE: return "🟢"
+        case FrontEndDiskStatus.OFFLINE: return "🔴"
+        case FrontEndDiskStatus.CORRUPTED: return "⚠️"
 
 def enabled_fmt(status:bool):
     fmt = _("Enabled") if status else _("Disabled")

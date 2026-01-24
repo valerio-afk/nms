@@ -1,4 +1,4 @@
-from disk import Disk, DiskStatus
+from disk import Disk, FrontEndDiskStatus
 from typing import List
 import json
 import os
@@ -118,7 +118,7 @@ class ConfigMixin:
                 serial = d["serial"],
                 path = d["path"],
                 size = d["size"],
-                status=DiskStatus.NEW
+                status=FrontEndDiskStatus.NEW
             )
 
             cfg_disk.cached_physical_paths = d["physical_paths"]

@@ -1,3 +1,5 @@
+from enum import Enum
+
 import jwt
 import pyotp
 import pytz
@@ -8,13 +10,12 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Any, Dict
 from backend_server.utils.config import CONFIG
+from backend_server.utils.responses import OTPVerification, ErrorMessage
+from nms_shared import ErrorMessages
 
 auth = APIRouter(prefix='/auth',tags=['auth'])
 
-class OTPVerification(BaseModel):
-    purpose:str
-    duration:int
-    otp:str
+
 
 
 bearer = HTTPBearer()
@@ -43,21 +44,25 @@ def verify_token_factory(requested_purpose:str='login'):
 
             purpose = payload.get("purpose")
             if (purpose is None):
-                raise HTTPException(status_code=403, detail="Token missing purpose claim")
+                CONFIG.error("Token missing purpose claim")
+                raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_MALFORMED.name))
             elif (purpose != requested_purpose):
-                raise HTTPException(status_code=403, detail="Wrong purpose claim")
+                CONFIG.error("Purpose claim not matching")
+                raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_INVALID.name))
 
             exp = payload.get("exp")
 
             if (exp is None):
-                raise HTTPException(status_code=403, detail="Token missing expire claim")
+                CONFIG.error("Expiration claim not matching")
+                raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_MALFORMED.name))
             elif (datetime.now(pytz.timezone("UTC")).timestamp() > exp):
-                raise HTTPException(status_code=403, detail="Token expired")
+                CONFIG.error("Token Expired")
+                raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_EXPIRED.name))
 
             return payload
 
         except jwt.PyJWTError:
-            raise HTTPException(status_code=403, detail="Invalid Token")
+            raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_MALFORMED.name))
 
     return verify_token
 
@@ -65,12 +70,15 @@ class AuthProperty(BaseModel):
     property:str
     value: Any
 
+class AuthProperties(Enum):
+    is_configured = 'is_configured'
+
 @auth.get("/otp/get/{prop}", response_model=AuthProperty, responses={404: {"description": "Invalid property"}})
-def auth_get_property(prop:str) -> AuthProperty:
+def auth_get_property(prop:AuthProperties) -> AuthProperty:
     match prop:
-        case "is_configured":
+        case AuthProperties.is_configured:
             CONFIG.info(f"Requesting auth property {prop}")
-            return AuthProperty(property=prop,value=CONFIG.is_otp_configured)
+            return AuthProperty(property=prop.value,value=CONFIG.is_otp_configured)
         case _:
             CONFIG.error(f"Requested invalid auth property {prop}")
             raise HTTPException(status_code=404, detail=f"Property {prop} not valid for auth")
@@ -109,8 +117,8 @@ def auth_otp_verify(data:OTPVerification) -> AuthToken:
             CONFIG.info("OPT Secret saved")
             CONFIG.save_otp_secret()
         else:
-            CONFIG.error("OTP is already configured")
-            raise HTTPException(status_code=403, detail="You have not configured the OTP secret")
+            CONFIG.error("OTP not configured yet")
+            raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_NOT_CONF.name))
 
     secret = CONFIG.otp_secret
 
@@ -118,7 +126,7 @@ def auth_otp_verify(data:OTPVerification) -> AuthToken:
 
     if not totp.verify(data.otp):
         CONFIG.error("Invalid OTP")
-        raise HTTPException(status_code=403, detail="Invalid OTP Token")
+        raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_WRONG_OTP.name))
 
     token = create_token(data)
     CONFIG.info("Valid OTP - token issued")
