@@ -15,10 +15,13 @@ class ErrorMessages(Enum):
     E_POOL_CONFIG = "E_POOL_CONFIG"
     E_POOL_DISK_UNAVAL = "E_POOL_DISK_UNAVAL"
     E_POOL_NEW = "E_POOL_NEW"
+    E_POOL_DESTROY = "E_POOL_DESTROY"
     E_POOL_REDUNDANCY_MIN = "E_POOL_REDUNDANCY_MIN"
     E_POOL_EXPAND = "E_POOL_EXPAND"
     E_POOL_EXPAND_INFO = "E_POOL_EXPAND_INFO"
     E_POOL_EXPAND_STATUS = "E_POOL_EXPAND_STATUS"
+    E_POOL_KEY = "E_POOL_KEY"
+    E_POOL_KEY_IMPORT = "E_POOL_KEY_IMPORT"
     E_POOL_LIST = "E_POOL_LIST"
     E_POOL_RECOVERY = "E_POOL_RECOVERY"
     E_POOL_DISKS = "E_POOL_DISKS"
@@ -42,6 +45,7 @@ class ErrorMessages(Enum):
     E_AUTH_WRONG_OTP = "E_AUTH_WRONG_OTP"
 
     E_DISK_ATTACH = "E_DISK_ATTACH"
+    E_DISK_FORMAT = "E_DISK_FORMAT"
 
     E_FS_CH_PERM =  "E_FS_CH_PERM"
 
@@ -79,10 +83,14 @@ ERROR_MESSAGES = {
     ErrorMessages.E_POOL_DISK_UNAVAL : lambda dev : _("Disk %(dev)s is not available to be in the new disk array.") % {'dev':dev}, # <------
     ErrorMessages.E_POOL_NEW : lambda info = None: _("Unable to create a new disk array: %(info)s)") % {
         'info': info or ErrorMessages.fallback_message()},  # <------
+    ErrorMessages.E_POOL_DESTROY : lambda info = None: _("Unable to destroy the disk array: %(info)s)") % {
+        'info': info or ErrorMessages.fallback_message()},  # <------
     ErrorMessages.E_POOL_REDUNDANCY_MIN : lambda: _("You must have at least 3 disks connected to opt in redundancy."),
     ErrorMessages.E_POOL_EXPAND : lambda dev, info: _("Error while adding %(dev)s: %(info)s") % {'dev': dev, 'info': info},
     ErrorMessages.E_POOL_EXPAND_INFO : lambda dev: _("Could not retrieve information for the disk: %(dev)s") % {'dev': dev},
     ErrorMessages.E_POOL_EXPAND_STATUS : lambda info: _("Unable to get array expansion status: %(info)s") % {'info': info},
+    ErrorMessages.E_POOL_KEY : lambda info: _("Error while retrieving the encryption key: %(info)s") % {'info': info}, # <------
+    ErrorMessages.E_POOL_KEY_IMPORT : lambda info: _("Error while importing the encryption key: %(info)s") % {'info': info}, # <------
     ErrorMessages.E_POOL_ATTACH : lambda info: _("Error while attaching an existing pool: %(info)s") % {'info': info}, # <------
     ErrorMessages.E_POOL_LIST : lambda info: _("Unable to retrieve the list of pools."), # <------
     ErrorMessages.E_POOL_RECOVERY : lambda info: _("Error while recovering the disk array: %(info)s)") % {'info': info},
@@ -108,6 +116,7 @@ ERROR_MESSAGES = {
     ErrorMessages.E_AUTH_WRONG_OTP : lambda: _("Invalid OTP."),  # <------
 
     ErrorMessages.E_DISK_ATTACH : lambda details: _("Unable to attach new device to disk array%(details)s") % {'details': details}, # <------
+    ErrorMessages.E_DISK_FORMAT : lambda dev, info: _("Error while formatting %(dev)s: %(info)s") % {'dev': dev, 'info': info},
 
     ErrorMessages.E_FS_CH_PERM : lambda path, info: _("Unable to change permissions for %(path)s: %(info)s") % {'path':path,'info': info}, # <------
 }

@@ -2,21 +2,23 @@ from pydantic import BaseModel
 
 from backend_server.utils.cmdl import CommandLine, ZFSLoadKey, ZFSMount, LocalCommandLineTransaction, ZFSUnmount, \
                                       ZFSUnLoadKey, ZFSDestroy, ZFSCreate, ZPoolStatus, ZFSList, ZPoolExport, \
-                                      ZPoolImport, CreateKey, ZPoolCreate
+                                      ZPoolImport, CreateKey, ZPoolCreate, ZPoolDestroy, ZPoolClear
 from backend_server.utils.config import CONFIG
 from backend_server.utils.responses import ExpasionStatus, BackendProperty, ErrorMessage, Disk
 from backend_server.v1.auth import verify_token_factory
 from datetime import timedelta
 from enum import Enum
-from fastapi import HTTPException, APIRouter, Depends
+from fastapi import HTTPException, APIRouter, Depends, UploadFile, File
 from nms_shared import ErrorMessages
 from nms_shared.constants import KEYPATH
 from nms_shared.enums import DiskStatus
 from typing import  Optional, List, Callable
+import base64
 import json
 import os
 import re
 import subprocess
+import traceback
 
 
 pool = APIRouter(
@@ -104,10 +106,13 @@ def get_array_expansion_status() -> ExpasionStatus:
 def get_pool_disks() -> List[Disk]:
     from .disks import get_system_disks
 
+    if (not CONFIG.is_pool_configured):
+        return []
+
     trans = LocalCommandLineTransaction(ZPoolStatus(CONFIG.pool_name))
     output = trans.run()
 
-    if (trans.success) and (len(output) == 1):
+    if ((trans.success) and (len(output) == 1)):
         stdout = output[0].get('stdout',None)
 
         try:
@@ -178,7 +183,8 @@ def get_pool_disks() -> List[Disk]:
             return attached_disks + detached_disks
 
         except Exception as e:
-            raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_DISKS.name,params=[str(e)]))
+            tb = traceback.format_exc()
+            raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_DISKS.name,params=[f"{str(e)}\n{tb}"]))
 
     return []
 
@@ -300,7 +306,51 @@ def get_importable_pools() -> List[dict]:
 
     return pools
 
+def get_tank_key() -> Optional[str]:
+    if (not CONFIG.has_encryption):
+        return None
+
+    fname = CONFIG.key_filename
+
+    if (os.path.isabs(fname) and (fname.startswith("/root"))):
+        path = fname
+    else:
+        path = os.path.join("/", "root", fname)
+
+    result = subprocess.run(
+        ["sudo", "cat", path],
+        stdout=subprocess.PIPE,
+        check=True
+    )
+
+    if result.returncode != 0:
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_KEY.name,params=[result.stderr.decode('utf8')]))
+
+    return base64.b64encode(result.stdout).decode("ascii")
+
+def get_pool_status_id() -> Optional[str]:
+    if (CONFIG.is_pool_configured):
+        pool = CONFIG.pool_name
+        trans = LocalCommandLineTransaction(ZPoolStatus(pool))
+        output = trans.run()
+        if (trans.success) and (len(output) > 0):
+            output = output[0].get("stdout",{})
+            d = json.loads(output)
+
+            root = d.get("pools", {}).get(pool,{})
+            return root.get("msgid",None)
+
+def recover() -> None:
+    trans = LocalCommandLineTransaction(ZPoolClear(CONFIG.pool_name,True))
+
+    output = trans.run()
+
+    if (not trans.success):
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_RECOVERY.name, params=[output[0]['stderr']]))
+
+
 class PoolProperties(Enum):
+    pool_name = "pool_name"
     dataset_name = "dataset_name"
     mountpoint = "mountpoint"
     is_mounted = "is_mounted"
@@ -310,6 +360,8 @@ class PoolProperties(Enum):
     pool_capacity = "pool_capacity"
     expansion_status = "expansion_status"
     pool_list = "pool_list"
+    encryption_key = "encryption_key"
+    status_id = "status_id"
 
 
 @pool.get("/get/disks",
@@ -342,8 +394,10 @@ def attachable_disks() -> List[Disk]:
 def pool_get_property(prop:PoolProperties) -> Optional[BackendProperty]:
     try:
         match prop:
+            case PoolProperties.pool_name:
+                return BackendProperty(property=prop.value, value=CONFIG.pool_name)
             case PoolProperties.dataset_name:
-                return BackendProperty(property=prop.value,value=CONFIG.dataset_name)
+                return BackendProperty(property=prop.value, value=CONFIG.dataset_name)
             case PoolProperties.mountpoint:
                 return BackendProperty(property=prop.value, value=CONFIG.mountpoint)
             case PoolProperties.is_mounted:
@@ -360,6 +414,10 @@ def pool_get_property(prop:PoolProperties) -> Optional[BackendProperty]:
                 return BackendProperty(property=prop.value, value=get_array_expansion_status())
             case PoolProperties.pool_list:
                 return BackendProperty(property=prop.value, value=get_importable_pools())
+            case PoolProperties.encryption_key:
+                return BackendProperty(property=prop.value, value=get_tank_key())
+            case PoolProperties.status_id:
+                return BackendProperty(property=prop.value, value=get_pool_status_id())
             case _:
                 CONFIG.error(f"Requested invalid pool property {prop}")
                 raise HTTPException(status_code=404, detail=f"Property {prop} not valid for pool")
@@ -496,7 +554,7 @@ class CreatePool(BaseModel):
     pool_name: str
     dataset_name: str
     redundancy: bool
-    encryption: bool
+    encryption: Optional[str]
     compression: bool
     disks: List[str]
 
@@ -509,14 +567,18 @@ def create_disk_array(data:CreatePool) -> None:
     if (CONFIG.is_pool_configured):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_CONFIG.name))
 
-    disks_objs = [d for d in get_disks() if d.status == DiskStatus.NEW]
+    disks_objs = [d for d in get_disks() if (d.status == DiskStatus.NEW) and (d.has_any_paths(data.disks))]
 
-    for d in disks_objs:
-        if not d.has_any_paths(data.disks):
-            raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_DISK_UNAVAL.name,params=[d.path]))
+    if (len(disks_objs) < len(data.disks)):
+        for dev in data.disks:
+            for d in disks_objs:
+                if (not d.has_path(dev)):
+                    raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_DISK_UNAVAL.name,params=[dev]))
 
     if data.redundancy and (len(data.disks) < 3):
         raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_REDUNDANCY_MIN.name))
+
+
 
     for disk in data.disks:
         format_disk(disk)
@@ -524,7 +586,7 @@ def create_disk_array(data:CreatePool) -> None:
     commands = []
     enc_key = None
 
-    if data.encryption:
+    if data.encryption is not None:
         enc_key = KEYPATH
         keygen = CreateKey(enc_key)
         commands.append(keygen)
@@ -555,3 +617,72 @@ def create_disk_array(data:CreatePool) -> None:
     CONFIG.flush_config()
 
     change_permissions(CONFIG.mountpoint)
+
+@pool.post("/destroy",
+    responses={500: {"description": "Any internal errors"}},
+    summary="Destroy the new disk array",)
+def create_disk_array() -> None:
+    from .fs import rm_mountpoint
+    if (not CONFIG.is_pool_configured):
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_NO_CONF.name))
+
+    #TODO: disable all services
+
+    mountpoint = CONFIG.mountpoint
+
+    try:
+        unmount()
+    except:
+        ...
+
+    pool = CONFIG.pool_name
+    dataset = CONFIG.dataset_name
+
+    commands = [
+        ZFSDestroy(pool, dataset),
+        ZPoolDestroy(pool)
+    ]
+
+    trans = LocalCommandLineTransaction(*commands)
+
+    output = trans.run()
+
+    if (not trans.success):
+        errors = "\n ".join([x["stderr"] for x in output])
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_DESTROY.name, params=[errors]))
+
+    CONFIG.deinit_pool()
+    CONFIG.flush_config()
+
+    try:
+        rm_mountpoint(mountpoint)
+    except:
+        ... # it means that zpool already removed it
+
+@pool.post("/import-key",
+    responses={500: {"description": "Any internal errors"}},
+    summary="Import encryption key for a disk array",)
+async def import_key(key_file: UploadFile = File(...)) -> None:
+    key = await key_file.read()
+
+    path = KEYPATH
+
+    proc = subprocess.run(
+        ["sudo", "tee", path],
+        input=key,
+        stdout=subprocess.DEVNULL,  # avoid echoing back
+        stderr=subprocess.PIPE,
+        check=True,
+    )
+
+    if (proc.returncode != 0):
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_KEY_IMPORT.name, params=[proc.stdout.decode()]))
+
+    CONFIG.key_filename = path
+    CONFIG.flush_config()
+
+@pool.post("/recover",
+    responses={500: {"description": "Any internal errors"}},
+    summary="Attempts to recover from errors in the disk array",)
+def attempt_recovery() -> None:
+    recover()

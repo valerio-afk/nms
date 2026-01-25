@@ -85,8 +85,12 @@ class NMSConfig(Logger):
         return this._cfg.get("dataset")
 
     @property
-    def key_filename(this) -> Optional[str]:
-        return this._cfg.get('pool').get("encrypted", None)
+    def key_filename(this,path) -> Optional[str]:
+        return this._cfg.get('pool').get("encrypted")
+
+    @key_filename.setter
+    def  key_filename(this,path):
+        this._cfg['pool']["encrypted"] = path
 
     @property
     def pool_name(this) -> str:

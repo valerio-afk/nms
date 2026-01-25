@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from backend_server.v1.auth import verify_token_factory
-from backend_server.utils.responses import Disk
+from backend_server.utils.responses import Disk, ErrorMessage
 from backend_server.utils.cmdl import LSBLK, ZPoolLabelClear, WipeFS
 from typing import List
 
 import json
 
+from nms_shared import ErrorMessages
 from nms_shared.enums import DiskStatus
 
 disks = APIRouter(
@@ -41,10 +42,14 @@ def get_disks() -> List[Disk]:
 
     detected_disks = []
 
+
+
     for sys_disk in system_disks:
         for pool_disk in pool_disks:
             if (sys_disk==pool_disk):
                 detected_disks.append(pool_disk)
+
+
 
 
     for d in detected_disks:
@@ -69,7 +74,7 @@ def format_disk(dev:str) -> None:
     proc2 = cmd2.execute()
 
     if (proc2.returncode != 0):
-        raise Exception(proc2.stderr)
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_DISK_FORMAT.name,params=[dev,proc2.stderr]))
 
 @disks.get("/get/sys-disks",
           response_model=List[Disk],
