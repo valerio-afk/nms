@@ -6,13 +6,12 @@ import configparser
 import bcrypt
 from abc import abstractmethod
 
-from backend_server.utils.cmdl import RemoteCommandLineTransaction, SystemCtlIsActive, ApplyPatch, UserModChangeUsername, GetEntShadow, \
+from backend_server.utils.cmdl import SystemCtlIsActive, ApplyPatch, UserModChangeUsername, GetEntShadow, \
     ChPasswd, SystemCtlUnmask, SystemCtlEnable, SystemCtlStart, SystemCtlDisable, SystemCtlMask, SystemCtlStop, \
-    SystemCtlRestart, ExportfsRA, SMBPasswd, DockerRun, DockerStop, DockerInspect, DockerRemove
-from constants import SOCK_PATH
-from nms_utils import make_diff, read_lines_from_file
+    SystemCtlRestart, ExportfsRA, SMBPasswd, DockerRun, DockerStop, DockerInspect, DockerRemove, \
+    LocalCommandLineTransaction
+from nms_shared.utils import make_diff, read_lines_from_file
 from pathlib import Path
-import socket
 import pwd
 import grp
 
@@ -83,12 +82,7 @@ class SystemService:
             cmds = [SystemCtlIsActive(n) for n in names]
             n_services = len(cmds)
 
-        trans = RemoteCommandLineTransaction(
-            socket.AF_UNIX,
-            socket.SOCK_STREAM,
-            SOCK_PATH,
-            *cmds
-        )
+        trans = LocalCommandLineTransaction(*cmds)
 
         results = trans.run()
 
@@ -115,12 +109,7 @@ class SystemService:
                 SystemCtlStart(n),
             ])
 
-        trans = RemoteCommandLineTransaction(
-            socket.AF_UNIX,
-            socket.SOCK_STREAM,
-            SOCK_PATH,
-            *cmds
-        )
+        trans = LocalCommandLineTransaction(*cmds)
 
         results = trans.run()
 
@@ -141,12 +130,7 @@ class SystemService:
                 SystemCtlMask(n),
             ])
 
-        trans = RemoteCommandLineTransaction(
-            socket.AF_UNIX,
-            socket.SOCK_STREAM,
-            SOCK_PATH,
-            *cmds
-        )
+        trans = LocalCommandLineTransaction(*cmds)
 
         results = trans.run()
 
@@ -212,12 +196,7 @@ class SSHService(SystemService):
         Path(patch_fname).write_text(patch_text, encoding="utf-8", errors="surrogateescape")
 
         cmd = ApplyPatch(patch_fname,this.config_file,sudo=True)
-        trans = RemoteCommandLineTransaction(
-            socket.AF_UNIX,
-            socket.SOCK_STREAM,
-            SOCK_PATH,
-            cmd
-        )
+        trans = LocalCommandLineTransaction(cmd)
 
         trans.run()
         os.remove(patch_fname)
@@ -225,12 +204,7 @@ class SSHService(SystemService):
     def set_username(this,value):
         cmd = UserModChangeUsername(this.get("username"),value)
 
-        trans = RemoteCommandLineTransaction(
-            socket.AF_UNIX,
-            socket.SOCK_STREAM,
-            SOCK_PATH,
-            cmd
-        )
+        trans = LocalCommandLineTransaction(cmd)
         output = trans.run()
 
         if (len(output) == 1):
@@ -242,12 +216,7 @@ class SSHService(SystemService):
     def set_password(this,value):
         shadow_cmd = GetEntShadow(this.get("username"))
 
-        trans = RemoteCommandLineTransaction(
-            socket.AF_UNIX,
-            socket.SOCK_STREAM,
-            SOCK_PATH,
-            shadow_cmd
-        )
+        trans = LocalCommandLineTransaction(shadow_cmd)
         output = trans.run()
 
         if (len(output)!=1):
@@ -265,12 +234,7 @@ class SSHService(SystemService):
 
         chpasswd = ChPasswd(uname,value,shadow_password)
 
-        trans = RemoteCommandLineTransaction(
-            socket.AF_UNIX,
-            socket.SOCK_STREAM,
-            SOCK_PATH,
-            chpasswd
-        )
+        trans = LocalCommandLineTransaction(chpasswd)
         output = trans.run()
 
         if ((len(output)!=1) or (output[0].get("returncode",-1) != 0)):
@@ -285,7 +249,7 @@ class SSHService(SystemService):
             this.set("password",password)
 
     def enable(this,port,username,password,**kwargs):
-        this._update_data(port,username,password)
+        this._update_data(int(port),username,password)
         this.start()
 
     def disable(this,*args,**kwargs):
@@ -296,12 +260,7 @@ class SSHService(SystemService):
 
         cmd = SystemCtlRestart(this.service_names)
 
-        trans = RemoteCommandLineTransaction(
-            socket.AF_UNIX,
-            socket.SOCK_STREAM,
-            SOCK_PATH,
-            cmd
-        )
+        trans = LocalCommandLineTransaction(cmd)
         output = trans.run()
 
         if (not trans.success):
@@ -355,12 +314,7 @@ class FTPService(SystemService):
             Path(patch_fname).write_text(patch_text, encoding="utf-8", errors="surrogateescape")
 
             cmd = ApplyPatch(patch_fname, this.config_file, sudo=True)
-            trans = RemoteCommandLineTransaction(
-                socket.AF_UNIX,
-                socket.SOCK_STREAM,
-                SOCK_PATH,
-                cmd
-            )
+            trans = LocalCommandLineTransaction(cmd)
 
             trans.run()
             os.remove(patch_fname)
@@ -443,12 +397,7 @@ class NFSService(SystemService):
         Path(patch_fname).write_text(patch_text, encoding="utf-8", errors="surrogateescape")
 
         cmd = ApplyPatch(patch_fname, this.config_file, sudo=True)
-        trans = RemoteCommandLineTransaction(
-            socket.AF_UNIX,
-            socket.SOCK_STREAM,
-            SOCK_PATH,
-            cmd
-        )
+        trans = LocalCommandLineTransaction(cmd)
 
         trans.run()
         os.remove(patch_fname)
@@ -458,12 +407,7 @@ class NFSService(SystemService):
         this.start()
 
     def start(this):
-        trans = RemoteCommandLineTransaction(
-            socket.AF_UNIX,
-            socket.SOCK_STREAM,
-            SOCK_PATH,
-            ExportfsRA()
-        )
+        trans = LocalCommandLineTransaction(ExportfsRA())
 
         trans.run()
         super().start()
@@ -523,24 +467,14 @@ class SMBService(SystemService):
         Path(patch_fname).write_text(patch_text, encoding="utf-8", errors="surrogateescape")
 
         cmd = ApplyPatch(patch_fname, this.config_file, sudo=True)
-        trans = RemoteCommandLineTransaction(
-            socket.AF_UNIX,
-            socket.SOCK_STREAM,
-            SOCK_PATH,
-            cmd
-        )
+        trans = LocalCommandLineTransaction(cmd)
 
         trans.run()
         os.remove(patch_fname)
 
     def _smbpasswd(this,username,password=None,flag=None):
         cmd = SMBPasswd(username=username,password=password,flag=flag)
-        trans = RemoteCommandLineTransaction(
-            socket.AF_UNIX,
-            socket.SOCK_STREAM,
-            SOCK_PATH,
-            cmd
-        )
+        trans = LocalCommandLineTransaction(cmd)
 
         trans.run()
 
@@ -629,16 +563,8 @@ class WEBService(SystemService):
 
         docker_remove = DockerRemove(container_name=this.service_names)
 
-        trans = RemoteCommandLineTransaction(
-            socket.AF_UNIX,
-            socket.SOCK_STREAM,
-            SOCK_PATH,
-            docker_remove
-        )
+        trans = LocalCommandLineTransaction(docker_remove)
         trans.run()
-
-
-
 
         volumes = {
             this._mountpoint:"/var/www",
@@ -671,12 +597,7 @@ class WEBService(SystemService):
             restart="unless-stopped"
         )
 
-        trans = RemoteCommandLineTransaction(
-            socket.AF_UNIX,
-            socket.SOCK_STREAM,
-            SOCK_PATH,
-            docker_run
-        )
+        trans = LocalCommandLineTransaction(docker_run)
 
         trans.run()
 
@@ -687,17 +608,12 @@ class WEBService(SystemService):
             DockerRemove(container_name=this.service_names)
         ]
 
-        trans = RemoteCommandLineTransaction(
-            socket.AF_UNIX,
-            socket.SOCK_STREAM,
-            SOCK_PATH,
-            *cmds
-        )
+        trans = LocalCommandLineTransaction(*cmds)
 
         trans.run()
 
     def enable(this,port,**kwargs):
-        this.set("port",port)
+        this.set("port",int(port))
         this._update_credential(**kwargs)
         this.start()
 
@@ -740,12 +656,7 @@ class WEBService(SystemService):
             flags=['-f','{{.State.Status}}']
         )
 
-        trans = RemoteCommandLineTransaction(
-            socket.AF_UNIX,
-            socket.SOCK_STREAM,
-            SOCK_PATH,
-            docker_inspect
-        )
+        trans = LocalCommandLineTransaction(docker_inspect)
 
         output = trans.run()
 

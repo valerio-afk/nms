@@ -1,8 +1,6 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Any, List
+from typing import Optional, Any, List, Dict, Union
 from datetime import timedelta
-from nms_shared.disks import Disk
-
 
 class StatusMessage(BaseModel):
     type:str
@@ -41,4 +39,9 @@ class OTPVerification(BaseModel):
     purpose:str
     duration:int
     otp:str
+
+class AccessService(BaseModel):
+    service_name: Union[str, List[str]]
+    properties:Dict[str, Any]
+    active:bool
 

@@ -15,11 +15,7 @@ net = APIRouter(
     dependencies=[Depends(verify_token_factory())]
 )
 
-
-
-
-@net.get('/io',response_model=NetCounter,responses={500:{'description':'Error while retrieving network information'}})
-def net_io_counter() -> NetCounter:
+def net_counter() -> NetCounter:
     counter:Optional[NetIOCounter] = CONFIG.net_counter
 
     if counter is None:
@@ -29,6 +25,11 @@ def net_io_counter() -> NetCounter:
         bytes_sent=counter.bytes_sent,
         bytes_recv=counter.bytes_received
     )
+
+
+@net.get('/io',response_model=NetCounter,responses={500:{'description':'Error while retrieving network information'}})
+def net_io_counter() -> NetCounter:
+    return net_io_counter()
 
 @net.get('/ifaces', response_model=List[NetworkInterface])
 def net_ifaces() -> List[NetworkInterface]:

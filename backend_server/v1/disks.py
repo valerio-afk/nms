@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from backend_server.v1.auth import verify_token_factory
-from backend_server.utils.responses import Disk, ErrorMessage
+from backend_server.utils.responses import  ErrorMessage
 from backend_server.utils.cmdl import LSBLK, ZPoolLabelClear, WipeFS
+from nms_shared.disks import Disk
 from typing import List
 
 import json
@@ -12,7 +13,7 @@ from nms_shared.enums import DiskStatus
 disks = APIRouter(
     prefix='/disks',
     tags=['disks'],
-    # dependencies=[Depends(verify_token_factory())]
+    dependencies=[Depends(verify_token_factory())]
 )
 
 

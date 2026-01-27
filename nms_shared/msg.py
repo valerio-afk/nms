@@ -25,6 +25,7 @@ class ErrorMessages(Enum):
     E_POOL_LIST = "E_POOL_LIST"
     E_POOL_RECOVERY = "E_POOL_RECOVERY"
     E_POOL_DISKS = "E_POOL_DISKS"
+    E_POOL_DISK_REPLACE = "E_POOL_DISK_REPLACE"
     E_POOL_ATTACH = "E_POOL_DETACH"
     E_POOL_DETACH = "E_POOL_DETACH"
     E_POOL_MOUNT = "E_POOL_MOUNT"
@@ -40,6 +41,7 @@ class ErrorMessages(Enum):
 
     E_AUTH_INVALID = "E_AUTH_INVALID"
     E_AUTH_EXPIRED = "E_AUTH_EXPIRED"
+    E_AUTH_REVOKED = "E_AUTH_REVOKED"
     E_AUTH_MALFORMED = "E_AUTH_MALFORMED"
     E_AUTH_NOT_CONF = "E_AUTH_NOT_CONF"
     E_AUTH_WRONG_OTP = "E_AUTH_WRONG_OTP"
@@ -48,6 +50,11 @@ class ErrorMessages(Enum):
     E_DISK_FORMAT = "E_DISK_FORMAT"
 
     E_FS_CH_PERM =  "E_FS_CH_PERM"
+
+    E_APT_GET = "E_APT_GET"
+
+    E_ACCESS_ENABLED = "E_ACCESS_ENABLED"
+    E_ACCESS_DISABLED = "E_ACCESS_DISABLED"
 
     @staticmethod
     def get_error(err_code:"ErrorMessage",*args,**kwargs) -> str:
@@ -95,6 +102,7 @@ ERROR_MESSAGES = {
     ErrorMessages.E_POOL_LIST : lambda info: _("Unable to retrieve the list of pools."), # <------
     ErrorMessages.E_POOL_RECOVERY : lambda info: _("Error while recovering the disk array: %(info)s)") % {'info': info},
     ErrorMessages.E_POOL_DISKS : lambda info: _("Error while retrieving the disks in the array: %(info)s)") % {'info': info},  # <------
+    ErrorMessages.E_POOL_DISK_REPLACE : lambda d1,d2,info: _("Unable to replace %(dev1)s with %(dev2)s: %(info)s") % {'dev1':d1, 'dev2': d2, 'info': info}, # <------
     ErrorMessages.E_POOL_DETACH : lambda info: _("Error while detaching the disk array: %(info)s)") % {'info': info},  # <------
     ErrorMessages.E_POOL_MOUNT : lambda info: _("Error while mounting the disk array: %(info)s)") % {'info': info},  # <------
     ErrorMessages.E_POOL_UNMOUNT : lambda info: _("Error while unmounting the disk array: %(info)s)") % {'info': info}, # <------
@@ -111,6 +119,7 @@ ERROR_MESSAGES = {
 
     ErrorMessages.E_AUTH_INVALID : lambda: _("Invalid authorisation."),
     ErrorMessages.E_AUTH_EXPIRED : lambda: _("Authorisation token expired."),
+    ErrorMessages.E_AUTH_REVOKED : lambda: _("Authorisation token revoked."),  # <------
     ErrorMessages.E_AUTH_MALFORMED : lambda: _("Authorisation token malformed."),  # <------
     ErrorMessages.E_AUTH_NOT_CONF : lambda: _("OTP secret not configured yet."),  # <------
     ErrorMessages.E_AUTH_WRONG_OTP : lambda: _("Invalid OTP."),  # <------
@@ -119,6 +128,11 @@ ERROR_MESSAGES = {
     ErrorMessages.E_DISK_FORMAT : lambda dev, info: _("Error while formatting %(dev)s: %(info)s") % {'dev': dev, 'info': info},
 
     ErrorMessages.E_FS_CH_PERM : lambda path, info: _("Unable to change permissions for %(path)s: %(info)s") % {'path':path,'info': info}, # <------
+
+    ErrorMessages.E_APT_GET : lambda path, info: _("Unable to get system updates: %(info)s") % {'path':path,'info': info}, # <------
+
+    ErrorMessages.E_ACCESS_ENABLED : lambda service,info: _("Error while enabling %{service}s: %(info)s)") % {'service':service,'info': info},  # <------
+    ErrorMessages.E_ACCESS_DISABLED : lambda service,info: _("Error while disabling %{service}s: %(info)s)") % {'service':service,'info': info},  # <------
 }
 
 SUCCESS_MESSAGES = {

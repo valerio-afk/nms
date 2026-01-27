@@ -20,16 +20,18 @@ auth = APIRouter(prefix='/auth',tags=['auth'])
 
 bearer = HTTPBearer()
 
-def create_token(data:OTPVerification) -> str:
+def create_token(purpose:str, duration:int) -> str:
     released = datetime.now(pytz.timezone("UTC"))
-    expire =  released + timedelta(minutes=data.duration)
+    expire =  released + timedelta(minutes=duration)
+    exp_timestamp = expire.timestamp()
 
-    payload = {"purpose":data.purpose,"released": released.timestamp(), "exp":expire.timestamp()}
+    payload = {"purpose":purpose,"released": released.timestamp(), "exp":exp_timestamp}
 
     #TODO: secret must be taken from ENV
     secret_key = "test_secret_key"
 
     encoded_jwt = jwt.encode(payload, secret_key, algorithm="HS256")
+    CONFIG.add_issued_token(encoded_jwt, exp_timestamp)
     return encoded_jwt
 
 def verify_token_factory(requested_purpose:str='login'):
@@ -37,6 +39,9 @@ def verify_token_factory(requested_purpose:str='login'):
         token = credentials.credentials
 
         try:
+            if (token not in CONFIG.issued_tokens):
+                raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_REVOKED.name))
+
             # TODO: secret must be taken from ENV
             secret_key = "test_secret_key"
 
@@ -58,6 +63,8 @@ def verify_token_factory(requested_purpose:str='login'):
             elif (datetime.now(pytz.timezone("UTC")).timestamp() > exp):
                 CONFIG.error("Token Expired")
                 raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_EXPIRED.name))
+
+            payload['token'] = token
 
             return payload
 
@@ -128,7 +135,21 @@ def auth_otp_verify(data:OTPVerification) -> AuthToken:
         CONFIG.error("Invalid OTP")
         raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_WRONG_OTP.name))
 
-    token = create_token(data)
+    token = create_token(data.purpose,data.duration)
     CONFIG.info("Valid OTP - token issued")
 
     return AuthToken(token=token)
+
+@auth.get("/refresh",response_model=AuthToken,responses={403: {"description": "Invalid token"}},summary="Refresh access token")
+def auth_token_refresh(token:Dict[str,Any] = Depends(verify_token_factory())) -> AuthToken:
+    print(token)
+    duration = (token['exp'] - token['released']) // 60
+    CONFIG.revoke_token(token['token'])
+    token = create_token(token["purpose"],duration)
+    CONFIG.info("Auth token refreshed")
+
+    return AuthToken(token=token)
+
+@auth.post("/logout")
+def auth_token_refresh(token:dict = Depends(verify_token_factory())) -> None:
+    CONFIG.revoke_token(token['token'])

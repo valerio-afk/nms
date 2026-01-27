@@ -2,9 +2,9 @@ from pydantic import BaseModel
 
 from backend_server.utils.cmdl import CommandLine, ZFSLoadKey, ZFSMount, LocalCommandLineTransaction, ZFSUnmount, \
                                       ZFSUnLoadKey, ZFSDestroy, ZFSCreate, ZPoolStatus, ZFSList, ZPoolExport, \
-                                      ZPoolImport, CreateKey, ZPoolCreate, ZPoolDestroy, ZPoolClear
+                                      ZPoolImport, CreateKey, ZPoolCreate, ZPoolDestroy, ZPoolClear, ZPoolReplace
 from backend_server.utils.config import CONFIG
-from backend_server.utils.responses import ExpasionStatus, BackendProperty, ErrorMessage, Disk
+from backend_server.utils.responses import ExpasionStatus, BackendProperty, ErrorMessage
 from backend_server.v1.auth import verify_token_factory
 from datetime import timedelta
 from enum import Enum
@@ -12,6 +12,7 @@ from fastapi import HTTPException, APIRouter, Depends, UploadFile, File
 from nms_shared import ErrorMessages
 from nms_shared.constants import KEYPATH
 from nms_shared.enums import DiskStatus
+from nms_shared.disks import Disk
 from typing import  Optional, List, Callable
 import base64
 import json
@@ -24,7 +25,7 @@ import traceback
 pool = APIRouter(
     prefix='/pool',
     tags=['pool'],
-    #dependencies=[Depends(verify_token_factory())]
+    dependencies=[Depends(verify_token_factory())]
 )
 remove_partition:Callable[[str],str] = lambda path : re.sub(r"-part[0-9]$","",path)
 
@@ -686,3 +687,18 @@ async def import_key(key_file: UploadFile = File(...)) -> None:
     summary="Attempts to recover from errors in the disk array",)
 def attempt_recovery() -> None:
     recover()
+
+@pool.post("/recover",
+    responses={500: {"description": "Any internal errors"}},
+    summary="Replace a device with another device in the disk array",)
+def replace(old_dev:str, new_dev:str) -> None:
+    cmd =  ZPoolReplace(CONFIG.pool_name, old_dev, new_dev)
+
+    process = cmd.execute()
+
+    if (process.returncode != 0):
+        error = process.stderr.decode()
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_DISK_REPLACE.name, params=[old_dev, new_dev, error]))
+
+
+#TODO: EXPAND

@@ -1,14 +1,17 @@
+import datetime
 import json
 import os
+import pwd
+from backend_server.utils.services import SystemService
 from nms_shared.enums import DiskStatus
-from backend_server.utils.responses import Disk
-from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet
+from nms_shared.disks import Disk
+from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet, UserModChangeHomeDir
 from backend_server.utils.daemons import NetIOCounter
 from backend_server.utils.logger import Logger
 from backend_server.utils.cmdl import ZPoolList
 from fastapi import HTTPException
 from typing import Optional, Dict, List
-
+from importlib import import_module
 from backend_server.utils.responses import ErrorMessage
 from nms_shared import ErrorMessages
 
@@ -36,6 +39,80 @@ class NMSConfig(Logger):
         except FileNotFoundError:
             this.create_default_configuration_file()
 
+        this._access_services = {}
+        this._setup_access_services()
+        this._issued_tokens = {}
+
+
+    def _setup_access_services(this) -> None:
+        module = import_module("backend_server.utils.services")
+        account = this._cfg.get("access",{}).get("account",{})
+
+
+        for service,args in this._cfg.get("access",{}).get("services",{}).items():
+            try:
+                cls = getattr(module,f"{service.upper()}Service")
+                arguments = args.copy()
+                arguments.update(account)
+                arguments['mountpoint'] = this.mountpoint
+                this._access_services[service] = cls(**arguments)
+            except AttributeError:
+                ... #service not implemented yet
+
+        this._access_services['ssh'].add_change_hook("username", this._sys_username_changed)
+        this._access_services['ftp'].add_pre_start_hook(this._set_pwd)
+        this._access_services['web'].add_change_hook("port", this._web_port_changed)
+        this._access_services['web'].add_change_hook("credential", this._web_credentials_changed)
+        this._access_services['web'].add_change_hook("authentication", this._web_authentication_changed)
+
+    def _web_port_changed(this, service) -> None:
+        d = this._cfg.get("access", {}).get("services", {}).get("web", {})
+        d['port'] = service.get("port")
+        this._cfg['access']['services']['web'] = d
+
+        this.flush_config()
+
+    def _web_credentials_changed(this, service) -> None:
+        d = this._cfg.get("access", {}).get("services", {}).get("web", {})
+        d['credential'] = service.get("credential")
+        this._cfg['access']['services']['web'] = d
+
+        this.flush_config()
+
+    def _web_authentication_changed(this, service) -> None:
+        d = this._cfg.get("access", {}).get("services", {}).get("web", {})
+        d['authentication'] = service.get("authentication")
+        this._cfg['access']['services']['web'] = d
+
+        this.flush_config()
+
+
+    def _sys_username_changed(this,service) -> None:
+        old_username = this._cfg['access']['account']['username']
+        new_username = service.get("username")
+        this._cfg['access']['account']['username'] = new_username
+        this.flush_config()
+
+        smb = this._access_services.get("smb",None)
+        smb.set("username",new_username)
+
+
+        if ((smb is not None) and (smb.is_active)):
+            smb.disable(old_username)
+
+    def _set_pwd(this, *args, **kwargs) -> None:
+        if (this.is_pool_configured):
+            mp = this.mountpoint
+            username = this._cfg.get("access",{}).get("services").get("account",{}).get("username",None)
+
+            if (username is not None):
+                current_pwd = pwd.getpwnam(username).pw_dir
+
+                if (current_pwd!=mp):
+                    cmd = UserModChangeHomeDir(username,current_pwd,mp)
+
+                    cmd.execute()
+
     #BASE PROPERTIES
 
     @property
@@ -59,6 +136,13 @@ class NMSConfig(Logger):
     @property
     def otp_secret(this) -> Optional[str]:
         return this._cfg['access'].get("otp_secret")
+
+    @property
+    def issued_tokens(this) -> List[str]:
+        now = datetime.datetime.now().timestamp()
+        this._issued_tokens = {t:exp for t,exp in this._issued_tokens.items() if exp>now}
+
+        return list(this._issued_tokens.keys())
 
     #NETWORK PROPERTIES
 
@@ -129,8 +213,8 @@ class NMSConfig(Logger):
             raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_MOUNTPOINT.name,params=[process.stderr]))
 
         d = json.loads(process.stdout)
-        pool = CONFIG.pool_name
-        dataset = CONFIG.dataset_name
+        pool = this.pool_name
+        dataset = this.dataset_name
 
         return (d.get("datasets",{})
                 .get(f"{pool}/{dataset}",{})
@@ -194,8 +278,28 @@ class NMSConfig(Logger):
         return disks
 
     # ACCESS SERVICES PROPERTIES
+    @property
     def access_account(this) -> dict:
         return this._cfg.get("access", {}).get("account", {})
+
+    @property
+    def access_services(this) -> Dict[str, SystemService]    :
+        return  {k:v for k,v in this._access_services.items()}
+
+    # SYSTEM PROPERTIES
+    @property
+    def system_updates(this) -> List[str]:
+        return [pkg for pkg in this._cfg.get("updates", {}).get("apt", [])]
+
+    @system_updates.setter
+    def system_updates(this,updates:List[str]) -> None:
+        this._cfg['updates']['apt'] = updates
+
+    @property
+    def systemd_services(this) -> List[str]:
+        return [service for service in this._cfg.get('systemd',{}).get('services',[])]
+
+
 
     # BASE METHODS
 
@@ -274,6 +378,12 @@ class NMSConfig(Logger):
             this.error(f"Unable to flush the configuration file `{this.config_filename}`: {str(e)}")
 
     #AUTH/OTP METHODS
+
+    def add_issued_token(this,token:str,expire_date:datetime.datetime) -> None:
+        this._issued_tokens[token] = expire_date
+
+    def revoke_token(this,token:str) -> None:
+        del this._issued_tokens[token]
 
     def save_otp_secret(this) -> None:
         this._cfg['access']["otp_secret"] = this.temporary_otp_secret
