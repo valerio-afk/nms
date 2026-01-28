@@ -4,8 +4,8 @@ from wtforms import StringField, IntegerField,PasswordField,BooleanField, Select
 from wtforms.fields.choices import RadioField
 from wtforms.validators import DataRequired,NumberRange, EqualTo, Regexp,StopValidation
 from wtforms.widgets.core import CheckboxInput, ListWidget
-from disk import Disk
-from constants import PORT_MIN,PORT_MAX, POOLNAME,DATASETNAME
+from nms_shared.disks import Disk
+from nms_shared.constants import PORT_MIN,PORT_MAX, POOLNAME,DATASETNAME
 from typing import List
 
 class ToggleInput(CheckboxInput):

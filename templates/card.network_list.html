@@ -14,10 +14,6 @@
     {% if iface.network_name %}<dd class="ms-4 mb-1"><span class="fw-bold">Network:</span> {{ iface.network_name }} </dd>{% endif %}
   {% endfor %}
 </dl>
-{% else %}
-<div class="p-3 mb-3 border-start border-4 border-warning bg-warning-subtle rounded ">
-  No disk array configuration found. Go to <a href="{{ url_for('disk_management') }}">Disk Management</a> to configure your disk array.
-</div>
 {% endif %}
 
 

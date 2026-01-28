@@ -1,4 +1,4 @@
-from . import frontend as bp, BACKEND
+from . import frontend as bp, NMSBACKEND as BACKEND
 from importlib import import_module
 from flask import render_template, request, flash, redirect, url_for, Response, g
 from widget import render_widget

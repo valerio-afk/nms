@@ -1,4 +1,4 @@
-from . import frontend as bp, BACKEND
+from . import frontend as bp, NMSBACKEND as BACKEND
 from flask import jsonify, request, Response, flash, redirect, url_for
 
 @bp.route('/check_tasks', methods=['POST'])

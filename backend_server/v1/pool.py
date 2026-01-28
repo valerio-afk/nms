@@ -363,6 +363,7 @@ class PoolProperties(Enum):
     pool_list = "pool_list"
     encryption_key = "encryption_key"
     status_id = "status_id"
+    pool_settings = "pool_settings"
 
 
 @pool.get("/get/disks",
@@ -419,6 +420,12 @@ def pool_get_property(prop:PoolProperties) -> Optional[BackendProperty]:
                 return BackendProperty(property=prop.value, value=get_tank_key())
             case PoolProperties.status_id:
                 return BackendProperty(property=prop.value, value=get_pool_status_id())
+            case PoolProperties.pool_settings:
+                return BackendProperty(property=prop.value,value={
+                    "encryption" : CONFIG.has_encryption,
+                    "redundancy" : CONFIG.has_redundancy,
+                    "compression" : CONFIG.has_compression,
+                })
             case _:
                 CONFIG.error(f"Requested invalid pool property {prop}")
                 raise HTTPException(status_code=404, detail=f"Property {prop} not valid for pool")

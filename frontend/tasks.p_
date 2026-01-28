@@ -1,9 +1,6 @@
 from time import sleep
 from celery import shared_task
 from flask_babel import force_locale, _
-from msg import ErrorMessage
-
-from msg import SuccessMessage
 from . import BACKEND
 
 

@@ -1,12 +1,13 @@
-from typing import Optional, Tuple
-from . import frontend as bp, BACKEND
-from widget import render_widget, get_widgets_css_files, get_widgets_html
+from . import frontend as bp, NMSBACKEND as BACKEND
 from flask import  render_template, g, flash
+from typing import Optional, Tuple
+from widget import render_widget, get_widgets_css_files, get_widgets_html
 
 
 def widget_disk_overview() -> Tuple[str,Optional[str]]:
     disks = BACKEND.get_disks()
-    pool_options = BACKEND.get_pool_options() if BACKEND.is_pool_configured() else []
+    pool_options = BACKEND.get_pool_options if BACKEND.is_pool_configured else []
+
 
     return render_widget("disk_list",disks=disks,pool_options=pool_options)
 
@@ -20,9 +21,9 @@ def widget_network_overview() -> Tuple[str,Optional[str]]:
     return render_widget("network_list",ifaces=ifaces)
 
 def widget_access_overview() -> Tuple[str,Optional[str]]:
-    access_services = BACKEND.get_access_services
+    access_services = BACKEND.access_services
 
-    services = [(name.upper(),obj.is_active) for name,obj in access_services.items()]
+    services = [(name.upper(),obj.get('active')) for name,obj in access_services.items()]
 
     return render_widget("access_list",services=services)
 

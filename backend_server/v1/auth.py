@@ -3,6 +3,7 @@ from enum import Enum
 import jwt
 import pyotp
 import pytz
+import os
 from datetime import datetime,timedelta
 from fastapi import APIRouter, HTTPException
 from fastapi.params import Depends
@@ -14,7 +15,7 @@ from backend_server.utils.responses import OTPVerification, ErrorMessage
 from nms_shared import ErrorMessages
 
 auth = APIRouter(prefix='/auth',tags=['auth'])
-
+SECRET_KEY = os.environ.get("NMS_SECRET_KEY")
 
 
 
@@ -27,10 +28,8 @@ def create_token(purpose:str, duration:int) -> str:
 
     payload = {"purpose":purpose,"released": released.timestamp(), "exp":exp_timestamp}
 
-    #TODO: secret must be taken from ENV
-    secret_key = "test_secret_key"
 
-    encoded_jwt = jwt.encode(payload, secret_key, algorithm="HS256")
+    encoded_jwt = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
     CONFIG.add_issued_token(encoded_jwt, exp_timestamp)
     return encoded_jwt
 
@@ -42,10 +41,7 @@ def verify_token_factory(requested_purpose:str='login'):
             if (token not in CONFIG.issued_tokens):
                 raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_REVOKED.name))
 
-            # TODO: secret must be taken from ENV
-            secret_key = "test_secret_key"
-
-            payload = jwt.decode(token, secret_key, algorithms="HS256")
+            payload = jwt.decode(token, SECRET_KEY, algorithms="HS256")
 
             purpose = payload.get("purpose")
             if (purpose is None):

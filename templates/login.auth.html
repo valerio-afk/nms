@@ -4,6 +4,8 @@
 <div class="otp-box card">
     <h4 class="mb-3">{{  _("Enter OTP to log in") }}</h4>
 
+    {% include "flash_cards.html" %}
+
     <form method="POST" id="otpForm" action="{{ request.url }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="d-flex justify-content-center mb-3">

@@ -1,16 +1,14 @@
-import os
-
 from celery import Celery, Task
-from flask import Flask, g, request
-from flask_wtf import CSRFProtect
-from flask_session import Session
-import redis
-import base64
-from flask_babel import Babel
-
-import constants
 from filters import human_readable_bytes, enabled_fmt, disk_charm, markdown_filter, smart_label, boolean_fmt
+from flask import Flask, g, request
+from flask_babel import Babel
+from flask_session import Session
+from flask_wtf import CSRFProtect
 from frontend import frontend as bp
+from nms_shared import constants
+import base64
+import os
+import redis
 
 babel = Babel()
 

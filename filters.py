@@ -1,15 +1,14 @@
-from typing import Optional
-
 from markdown import markdown
-from disk import FrontEndDiskStatus
+from typing import Optional
 from flask_babel import _
+from nms_shared.enums import DiskStatus
 
-def disk_charm(disk_status:FrontEndDiskStatus):
+def disk_charm(disk_status:DiskStatus):
     match (disk_status):
-        case FrontEndDiskStatus.NEW: return "✴️"
-        case FrontEndDiskStatus.ONLINE: return "🟢"
-        case FrontEndDiskStatus.OFFLINE: return "🔴"
-        case FrontEndDiskStatus.CORRUPTED: return "⚠️"
+        case DiskStatus.NEW: return "✴️"
+        case DiskStatus.ONLINE: return "🟢"
+        case DiskStatus.OFFLINE: return "🔴"
+        case DiskStatus.CORRUPTED: return "⚠️"
 
 def enabled_fmt(status:bool):
     fmt = _("Enabled") if status else _("Disabled")

@@ -88,22 +88,7 @@
   </nav>
 
   <div id="page-content">
-    {% if (hide_flash is not defined) or (hide_flash == false)  %}
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% for category,msg in messages %}
-                {% if category == "error" %}
-                    {% set callout_text = msg %}
-                    {% include "callout.error.html" %}
-                {% elif category == "warning" %}
-                  {% set callout_text = msg %}
-                  {% include "callout.warning.html" %}
-                {% elif category == "success" %}
-                  {% set callout_text = msg %}
-                  {% include "callout.success.html" %}
-                {% endif %}
-            {% endfor %}
-        {% endwith %}
-    {% endif %}
+    {% include "flash_cards.html" %}
 
     {% block content %}
     {% endblock %}

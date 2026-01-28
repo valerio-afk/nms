@@ -1,6 +1,6 @@
 from enum import Enum
-from typing import Callable,List, Any
 from flask_babel import _
+from typing import Callable
 
 def parse_msg(msg:Callable[...,str],*args,**kwargs) -> str:
     return str(msg(*args,**kwargs))
@@ -8,6 +8,7 @@ def parse_msg(msg:Callable[...,str],*args,**kwargs) -> str:
 
 class ErrorMessages(Enum):
     E_UNKNOWN = "E_UNKNOWN"
+    E_UNKNOWN_RESPONSE = "E_UNKNOWN_RESPONSE"
     E_PROPERTY = "E_PROPERTY"
 
     E_POOL_ALREADY_CONF = "E_POOL_ALREADY_CONF"
@@ -57,6 +58,10 @@ class ErrorMessages(Enum):
     E_ACCESS_DISABLED = "E_ACCESS_DISABLED"
 
     @staticmethod
+    def get_error_from_string(error_code:str,*args,**kwargs) -> str:
+        return ErrorMessages.get_error(ErrorMessages[error_code],*args,**kwargs)
+
+    @staticmethod
     def get_error(err_code:"ErrorMessage",*args,**kwargs) -> str:
         return parse_msg(ERROR_MESSAGES[err_code],*args,**kwargs)
 
@@ -82,6 +87,7 @@ class SuccessMessages(Enum):
 
 ERROR_MESSAGES = {
     ErrorMessages.E_UNKNOWN : lambda: _("Unknown Error"),
+    ErrorMessages.E_UNKNOWN_RESPONSE : lambda: _("Unknown response from server"), # <------
     ErrorMessages.E_PROPERTY : lambda prop, info: _("Error while getting %(prop)s: %(info)s") % {'prop': prop, 'info': info}, # <------
 
     ErrorMessages.E_POOL_ALREADY_CONF : lambda: _("The disk array is already configured."),

@@ -1,36 +1,37 @@
-from backend import NMSBackend
-from constants import MSGID
+from .backend_proxy import NMSBACKEND
 from flask import Blueprint, flash, session, redirect, Response ,url_for, request
 from flask_babel import get_locale
+from nms_shared import constants
 from typing import Optional
 from urllib.parse import urlparse,urlencode
-import constants
 import time
 
-BACKEND:NMSBackend = NMSBackend()
+from .exception import NotAuthenticatedError
+
 frontend:Blueprint = Blueprint('main',__name__)
 
 
 @frontend.before_request
 def check_flash_messages_from_tasks() -> None:
-    tasks = BACKEND.get_completed_tasks()
-    reload_config = False
-
-    for t in tasks:
-        msg = str(t.result)
-        flash(msg,"success" if t.successful else "error")
-        reload_config = True
-
-
-    if (reload_config):
-        BACKEND.load_configuration_file()
-        BACKEND.remove_completed_tasks()
+    ...
+    # tasks = BACKEND.get_completed_tasks()
+    # reload_config = False
+    #
+    # for t in tasks:
+    #     msg = str(t.result)
+    #     flash(msg,"success" if t.successful else "error")
+    #     reload_config = True
+    #
+    #
+    # if (reload_config):
+    #     BACKEND.load_configuration_file()
+    #     BACKEND.remove_completed_tasks()
 
 @frontend.before_request
 def check_pool_warnings() -> None:
-    msgid = BACKEND.get_pool_status_id()
+    msgid = NMSBACKEND.pool_status_id
     if (msgid is not None):
-        message = MSGID.get(msgid,None)
+        message = constants.MSGID.get(msgid,None)
         if (message is not None):
             flash(message[1], message[0])
 
@@ -80,11 +81,11 @@ def require_login() -> Optional[Response]:
             return redirect(url_for("main.login",**redirect_params))
 
 
-@frontend.after_request
-def scrub_checker(response) -> Response:
-
-    BACKEND.check_scrub_status()
-    return response
+# @frontend.after_request
+# def scrub_checker(response) -> Response:
+#
+#     BACKEND.check_scrub_status()
+#     return response
 
 @frontend.after_request
 def no_cache(response) -> Response:
@@ -114,7 +115,10 @@ def set_language_frontend() -> dict:
     }
 
 
-
+@frontend.errorhandler(NotAuthenticatedError)
+def handle_token_expired(_):
+    session.clear()
+    return redirect(url_for("main.login"))
 
 # @frontend.after_request
 # def debug_session(response):

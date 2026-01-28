@@ -1,7 +1,5 @@
-from msg import ErrorMessage
-from . import frontend as bp, BACKEND
-from .tasks import  expand_pool, create_pool
-from backend.tasks import NMSTask
+from . import frontend as bp, NMSBACKEND as BACKEND
+# from .tasks import  expand_pool, create_pool
 from datetime import datetime
 from flask import g, render_template, redirect, url_for, flash, Response, request
 from flask_wtf.csrf import validate_csrf
@@ -87,7 +85,7 @@ def add_disk() -> Response:
             task = expand_pool.delay(form.disks.data,str(get_locale()))
             BACKEND.append_task(NMSTask(task.task_id, "/disks", tag="add_disk"))
         except Exception as e:
-            flash(ErrorMessage.get_error(ErrorMessage.E_POOL_EXPAND,form.disks.data,str(e)),"error")
+            ...
     else:
         #TODO fix this how you fix the other(s)
         flash(f"Unable to process the form: {form.errors}","error")

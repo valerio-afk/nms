@@ -1,19 +1,15 @@
 from flask_babel import _
+from nms_shared.enums import DiskStatus
 from typing import Optional
 
-from nms_shared.enums import DiskStatus
+def get_disk_status_label(d:DiskStatus) -> Optional[str]:
+    match (d):
+        case DiskStatus.NEW: return _("New")
+        case DiskStatus.ONLINE: return _("Online")
+        case DiskStatus.OFFLINE: return _("Offline")
+        case DiskStatus.CORRUPTED: return _("Corrupted")
 
-class DiskStatusMixin:
-    def __str__(this) -> Optional[str]:
-        match (this):
-            case FrontEndDiskStatus.NEW: return _("New")
-            case FrontEndDiskStatus.ONLINE: return _("Online")
-            case FrontEndDiskStatus.OFFLINE: return _("Offline")
-            case FrontEndDiskStatus.CORRUPTED: return _("Corrupted")
-            case _: return None
 
-class FrontEndDiskStatus(DiskStatusMixin,DiskStatus):
-    ...
 
 
 

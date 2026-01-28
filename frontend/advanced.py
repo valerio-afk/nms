@@ -1,13 +1,8 @@
+from .import NMSBACKEND as BACKEND, frontend as bp
 from flask import render_template, redirect, url_for, request, flash, g, send_file, session, abort
 from flask_babel import get_locale
 from flask_wtf.csrf import generate_csrf, validate_csrf
-from frontend import  BACKEND, frontend as bp
-from backend.tasks import NMSTask
-from backend.logger import LogFilter
-from frontend.tasks import apt_get_updates, apt_get_upgrade
 from io import BytesIO
-
-from msg import SuccessMessage, ErrorMessage
 from widget import render_widget,get_widgets_html,get_widgets_css_files
 from wtforms import ValidationError
 from urllib.parse import quote, unquote
@@ -78,7 +73,7 @@ def system_logs(log):
     log_filter = LogFilter.FLASK
 
     match (log):
-        case "backend":
+        case "backend_client":
             log_filter = LogFilter.BACKEND
         case "celery":
             log_filter = LogFilter.CELERY

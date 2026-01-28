@@ -1,15 +1,11 @@
-import time
-import pyotp
-import qrcode
-from typing import Union, Tuple
-from io import BytesIO
-
-from msg import SuccessMessage
-from . import frontend as bp, BACKEND, request, flash, redirect, url_for, session
+from . import frontend as bp, request, flash, redirect, url_for, session, NMSBACKEND as BACKEND
 from flask import Response, render_template, send_file, g
 from flask_wtf.csrf import generate_csrf, validate_csrf, ValidationError
-
-
+from io import BytesIO
+from typing import Union, Tuple
+import pyotp
+import qrcode
+import time
 
 #MAIN PAGES
 
@@ -28,17 +24,12 @@ def login() -> Union[Response,str]:
 
             otp = request.form.get("otp")
 
-            BACKEND.logger.info(f"Login request. OTP: {otp}")
-
-            if (BACKEND.verify_otp(otp)):
+            if (BACKEND.login(otp)):
                 session["authenticated"] = True
                 session["login_time"] = time.time()
                 session["last_activity"] = time.time()
                 session["ip"] = request.remote_addr
                 authenticated = True
-                BACKEND.logger.info(f"OTP accepted")
-            else:
-                BACKEND.logger.warning(f"Invalid OTP")
 
         elif session.get("authenticated",False):
             authenticated = True
@@ -70,7 +61,7 @@ def reauth(operation:str) -> Union[Response,str]:
             if (BACKEND.verify_otp(otp)):
                 session["dz_authorisation"] = {"time":time.time(),"timestamp":time.time(),"operation":operation}
                 BACKEND.logger.info(f"OTP accepted")
-                flash(SuccessMessage.get_message(SuccessMessage.S_OTP_DANGEROUS), "success")
+                # flash(SuccessMessage.get_message(SuccessMessage.S_OTP_DANGEROUS), "success")
             else:
                 BACKEND.logger.warning(f"Invalid OTP")
                 flash("Invalid OTP","error")
