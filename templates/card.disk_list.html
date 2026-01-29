@@ -29,7 +29,7 @@
 
     {% if pool_options %}
         <dl class="row">
-          {% for lbl,status in pool_options %}
+          {% for lbl,status in pool_options.items() %}
           <dt class="col-sm-6">{{ lbl }}:</dt>
           <dd class="col-sm-6">{{ status | enabled_fmt | safe }}</dd>
           {% endfor %}

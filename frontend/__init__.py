@@ -1,7 +1,9 @@
-from .backend_proxy import NMSBACKEND
+from nms_shared.msg import WarningMessages
+from .api.backend_proxy import NMSBACKEND
 from flask import Blueprint, flash, session, redirect, Response ,url_for, request
 from flask_babel import get_locale
 from nms_shared import constants
+from nms_shared.msg import ErrorMessages, WarningMessages, ERROR_MESSAGES, WARNING_MESSAGES
 from typing import Optional
 from urllib.parse import urlparse,urlencode
 import time
@@ -31,9 +33,13 @@ def check_flash_messages_from_tasks() -> None:
 def check_pool_warnings() -> None:
     msgid = NMSBACKEND.pool_status_id
     if (msgid is not None):
-        message = constants.MSGID.get(msgid,None)
-        if (message is not None):
-            flash(message[1], message[0])
+        code = constants.MSGID.get(msgid,None)
+        if (code is not None):
+            if (isinstance(code,ErrorMessages)):
+                flash(ERROR_MESSAGES[code](),"error")
+            elif (isinstance(code,WarningMessages)):
+                flash(WARNING_MESSAGES[code](), "warning")
+
 
 @frontend.before_request
 def detect_and_set_language() -> Optional[Response]:

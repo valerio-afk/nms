@@ -6,7 +6,7 @@ from widget import render_widget, get_widgets_css_files, get_widgets_html
 
 def widget_disk_overview() -> Tuple[str,Optional[str]]:
     disks = BACKEND.get_disks()
-    pool_options = BACKEND.get_pool_options if BACKEND.is_pool_configured else []
+    pool_options = BACKEND.pool_settings if BACKEND.is_pool_configured else []
 
 
     return render_widget("disk_list",disks=disks,pool_options=pool_options)
@@ -29,7 +29,7 @@ def widget_access_overview() -> Tuple[str,Optional[str]]:
 
 def widget_disk_usage() -> Tuple[str,Optional[str]]:
     try:
-        pool_capacity = BACKEND.get_pool_capacity
+        pool_capacity = BACKEND.pool_capacity
         used = pool_capacity['used']
         total = pool_capacity['total']
         capacity = int(used / total * 1000) / 10 if total > 0 else 0
@@ -67,7 +67,7 @@ def dashboard() -> str:
         widget_sys_info()
     ]
 
-    if (BACKEND.is_pool_configured()):
+    if (BACKEND.is_pool_configured):
         dashboard_widgets.insert(0,widget_disk_usage())
 
 

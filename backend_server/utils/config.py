@@ -6,7 +6,7 @@ from backend_server.utils.services import SystemService
 from nms_shared.enums import DiskStatus
 from nms_shared.disks import Disk
 from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet, UserModChangeHomeDir
-from backend_server.utils.daemons import NetIOCounter
+from backend_server.utils.threads import NetIOCounter
 from backend_server.utils.logger import Logger
 from backend_server.utils.cmdl import ZPoolList
 from fastapi import HTTPException

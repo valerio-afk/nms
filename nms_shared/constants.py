@@ -1,5 +1,6 @@
 import re
 import os
+from .msg import ErrorMessages, WarningMessages
 
 POOLNAME='tank'
 DATASETNAME='data'
@@ -48,15 +49,15 @@ SOCK_FILE= "privileged_cmdl.sock"
 SOCK_PATH = os.path.join(SOCK_DIR,SOCK_FILE)
 
 MSGID = {
-    "ZFS-8000-2Q" : ("warning", "One or more disks cannot be opened. As you have redundancy activated, you can still use your disk array. Run a diagnostic to see if the disk is getting faulted and replace if necessary. Alternatively, you can format it in the Advanced page."),
-    "ZFS-8000-3C" : ("error", "One or more disks cannot be opened. Your disk array CANNOT be used in this state. Run a diagnostic to see if the disk is getting faulted and replace if necessary. Alternatively, you can format it in the Advanced page (this can likely cause data loss)."),
-    "ZFS-8000-4J" : ("warning", "One or more disks seems missing. As you have redundancy activated, you can still use your disk array. Insert back the missing disk. If the disk is inserted and still see this error, press `Replace` in the Disk Management page."),
-    "ZFS-8000-5E" : ("error", "One or more disks seems missing. Your disk array CANNOT be used in this state. Insert back the missing disk. If the disk is inserted and still see this error, you can format it in the Advanced page (this can likely cause data loss)."),
-    "ZFS-8000-72" : ("error", "The information related your disk array are corrupted. Recovery may be possible (but not guaranteed) and some data loss can occur. Use the `Attempt Recovery` button in Advanced. If the problem persists, back up your data, destroy and create a new array. Consider replacing one or more disks if their diagnostics suggest so."),
-    "ZFS-8000-8A" : ("warning", "Some files and/or directories are corrupted and data cannot be recovered. If the problem persists, back up your data, destroy and create a new array. Consider replacing one or more disks if their diagnostics suggest so."),
-    "ZFS-8000-9P" : ("warning", "One or more disks appear to experience some problems. No imminent actions are required at the moment. However, you should investigate which disk(s) is getting old and consider replacing it."),
-    "ZFS-8000-A5" : ("error", "Your disk array seems to be too old and cannot be used anymore."),
-    "ZFS-8000-ER" : ("warning", "Your disk array is experiencing some format issues. To solve this issue, press `Verify` in the Disk Management page."),
+    "ZFS-8000-2Q" : WarningMessages.W_POOL_OPENED,
+    "ZFS-8000-3C" : ErrorMessages.E_POOL_OPENED,
+    "ZFS-8000-4J" : WarningMessages.W_POOL_MISSING,
+    "ZFS-8000-5E" : ErrorMessages.E_POOL_DISK_MISSING,
+    "ZFS-8000-72" : ErrorMessages.E_POOL_CORRUPTED,
+    "ZFS-8000-8A" : WarningMessages.W_POOL_CORRUPTED,
+    "ZFS-8000-9P" : WarningMessages.W_DISK_ISSUE,
+    "ZFS-8000-A5" : ErrorMessages.E_POOL_OUTDATED,
+    "ZFS-8000-ER" : WarningMessages.W_DISK_FORMAT,
 }
 
 LANGS = {

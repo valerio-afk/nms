@@ -39,6 +39,10 @@ class ErrorMessages(Enum):
     E_POOL_MOUNTPOINT = "E_POOL_MOUNTPOINT"
     E_POOL_FORMAT = "E_POOL_FORMAT"
     E_POOL_CAPACITY = "E_POOL_CAPACITY"
+    E_POOL_OPENED = "E_POOL_OPENED"
+    E_POOL_DISK_MISSING = "E_POOL_DISK_MISSING"
+    E_POOL_CORRUPTED = "E_POOL_CORRUPTED"
+    E_POOL_OUTDATED = "E_POOL_OUTDATED"
 
     E_AUTH_INVALID = "E_AUTH_INVALID"
     E_AUTH_EXPIRED = "E_AUTH_EXPIRED"
@@ -68,6 +72,17 @@ class ErrorMessages(Enum):
     @staticmethod
     def fallback_message():
         return ErrorMessages.get_error(ErrorMessages.E_UNKNOWN)
+    
+class WarningMessages(Enum):
+    W_POOL_OPENED = "W_POOL_OPENED"
+    W_POOL_MISSING = "W_POOL_MISSING"
+    W_POOL_CORRUPTED = "W_POOL_CORRUPTED"
+    W_DISK_ISSUE = "W_DISK_ISSUE"
+    W_DISK_FORMAT = "W_DISK_FORMAT"
+
+    @staticmethod
+    def get_warning(warn_code: "WarningMessages", *args, **kwargs) -> str:
+        return parse_msg(ERROR_MESSAGES[warn_code], *args, **kwargs)
 
 class SuccessMessages(Enum):
     S_POOL_CREATED = "S_POOL_CREATED"
@@ -123,6 +138,11 @@ ERROR_MESSAGES = {
     ErrorMessages.E_POOL_CAPACITY : lambda info = None: _("Unable to read disk array capacity information: %(info)s)") % {
         'info': info or ErrorMessages.fallback_message()},  # <------
 
+    ErrorMessages.E_POOL_OPENED : lambda : _("One or more disks cannot be opened. Your disk array CANNOT be used in this state. Run a diagnostic to see if the disk is getting faulted and replace if necessary. Alternatively, you can format it in the Advanced page (this can likely cause data loss)."), # <-----------
+    ErrorMessages.E_POOL_DISK_MISSING: lambda : _("One or more disks seems missing. Your disk array CANNOT be used in this state. Insert back the missing disk. If the disk is inserted and still see this error, you can format it in the Advanced page (this can likely cause data loss)."), # <-----------
+    ErrorMessages.E_POOL_CORRUPTED: lambda : _("The information related your disk array are corrupted. Recovery may be possible (but not guaranteed) and some data loss can occur. Use the `Attempt Recovery` button in Advanced. If the problem persists, back up your data, destroy and create a new array. Consider replacing one or more disks if their diagnostics suggest so."), # <-----------
+    ErrorMessages.E_POOL_OUTDATED: lambda : _("Your disk array seems to be outdated and cannot be used anymore."), # <-----------
+
     ErrorMessages.E_AUTH_INVALID : lambda: _("Invalid authorisation."),
     ErrorMessages.E_AUTH_EXPIRED : lambda: _("Authorisation token expired."),
     ErrorMessages.E_AUTH_REVOKED : lambda: _("Authorisation token revoked."),  # <------
@@ -139,6 +159,14 @@ ERROR_MESSAGES = {
 
     ErrorMessages.E_ACCESS_ENABLED : lambda service,info: _("Error while enabling %{service}s: %(info)s)") % {'service':service,'info': info},  # <------
     ErrorMessages.E_ACCESS_DISABLED : lambda service,info: _("Error while disabling %{service}s: %(info)s)") % {'service':service,'info': info},  # <------
+}
+
+WARNING_MESSAGES = {
+    WarningMessages.W_POOL_OPENED  : lambda : _("One or more disks cannot be opened. As you have redundancy activated, you can still use your disk array. Run a diagnostic to see if the disk is getting faulted and replace if necessary. Alternatively, you can format it in the Advanced page."),
+    WarningMessages.W_POOL_MISSING : lambda : _("One or more disks seems missing. As you have redundancy activated, you can still use your disk array. Insert back the missing disk. If the disk is inserted and still see this error, press `Replace` in the Disk Management page."),
+    WarningMessages.W_POOL_CORRUPTED : lambda : _("Some files and/or directories are corrupted and data cannot be recovered. If the problem persists, back up your data, destroy and create a new array. Consider replacing one or more disks if their diagnostics suggest so."),
+    WarningMessages.W_DISK_ISSUE : lambda : _("One or more disks appear to experience some problems. No imminent actions are required at the moment. However, you should investigate which disk(s) is getting old and consider replacing it."),
+    WarningMessages.W_DISK_FORMAT : lambda : _("Your disk array is experiencing some format issues. To solve this issue, press `Verify` in the Disk Management page."),
 }
 
 SUCCESS_MESSAGES = {

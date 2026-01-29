@@ -33,11 +33,11 @@
 <div class="row">
      <dt class="col-sm-4">{{ _("Network:") }}</dt>
     <div class="col-auto">
-        <i class="bi bi-box-arrow-in-down"></i> {{ system_info['_net_counters']['received'] | human_readable_bytes}}/s
+        <i class="bi bi-box-arrow-in-down"></i> {{ system_info['_net_counters']['bytes_recv'] | human_readable_bytes}}/s
     </div>
 
     <div class="col-auto">
-        <i class="bi bi-box-arrow-in-up"></i> {{ system_info['_net_counters']['sent'] | human_readable_bytes }}/s
+        <i class="bi bi-box-arrow-in-up"></i> {{ system_info['_net_counters']['bytes_sent'] | human_readable_bytes }}/s
     </div>
 </div>
 

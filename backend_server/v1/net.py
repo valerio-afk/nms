@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from backend_server.utils.responses import NetCounter, NetworkInterface
 from backend_server.utils.config import CONFIG
-from backend_server.utils.daemons import NetIOCounter
+from backend_server.utils.threads import NetIOCounter
 from backend_server.v1.auth import verify_token_factory
 from typing import Optional, List
 

@@ -1,7 +1,8 @@
 from enum import Enum
 from flask import flash
 from flask_babel import _
-
+from traceback import format_exc
+from frontend.api.threads import TimerThread
 from frontend.exception import NotAuthenticatedError
 from nms_shared import ErrorMessages
 from nms_shared.disks import Disk, DiskStatus
@@ -9,6 +10,7 @@ from requests import get, post
 from requests.exceptions import HTTPError
 from typing import Optional, List, Any, Dict
 
+from nms_shared.threads import NMSThread
 
 
 def show_flash(type:str="error", code:str=ErrorMessages.E_UNKNOWN.name,params:List[Any]=None) -> None:
@@ -24,6 +26,8 @@ def make_flash(data:dict) -> None:
     type = data.get("type")
     code = data.get("code")
     params = data.get("params") or []
+
+    msg = ""
 
     try:
         match type:
@@ -50,6 +54,9 @@ class BackEndProxy:
 
     def __init__(this) -> None:
         this._bearer:Optional[str] = None
+        this._threads:Dict[str,Optional[NMSThread]] = {
+            'token_refresher' : None
+        }
 
     def _request(this,
                  endpoint:str,
@@ -92,6 +99,9 @@ class BackEndProxy:
         except HTTPError as err:
             if (not ignore_exception):
                 try:
+                    if (err.response.status_code == 422):
+                        raise Exception(response.raw.data)
+
                     err_message = err.response.json()
 
                     detail = err_message['detail']
@@ -104,7 +114,8 @@ class BackEndProxy:
                     raise err
                 except Exception as e:
                     show_flash(code=ErrorMessages.E_UNKNOWN.name)
-                    flash(str(e),"error")
+                    flash(f"{format_exc()}\n\n{str(e)}","error")
+
 
             return None
 
@@ -138,26 +149,53 @@ class BackEndProxy:
     def is_otp_configured(this):
         return this._get_bool_property_request("auth/otp","is_configured")
 
-    #ACCESS SERVICES
+    #ACCESS SERVICES PROPERTIES
     @property
     def access_services(this) -> List[dict]:
         r = this._request("services/get",RequestMethod.GET)
 
         return r or []
 
+    #SYSTEM PROPERTIES
+    @property
+    def system_information(this) -> Dict[str,Any]:
+        r = this._get_property_request("system","system_information")
+
+        if (r is not None):
+            return {
+                _('Uptime'): f"{_("Since")} {r.get('uptime',"")}",
+                _('NMS Version'): r.get('nms_ver',""),
+                _('CPU'): r.get('cpu',""),
+                _('OS'): r.get('os',""),
+                "_cpu_load": f"{r.get("cpu_load","")}",
+                "_memory_load": f"{r.get("memory_load", "")}",
+                '_net_counters': r.get("net_counters",{})
+            }
+
+        return {}
+
     #POOL PROPERTIES
     @property
     def is_pool_configured(this) -> bool:
-        return this._get_bool_property_request("pool", "is_pool_configured")
+        return this._get_bool_property_request("pool", "is_configured")
+
+    @property
+    def is_mounted(this) -> bool:
+        return this._get_bool_property_request("pool", "is_mounted")
+
+    @property
+    def pool_capacity(this) -> Optional[Dict[str,int]]:
+        return this._get_property_request("pool", "pool_capacity") or None
+
 
     @property
     def pool_settings(this) -> Dict[str, bool]:
-        tag = "pool"
+        settings = this._get_property_request("pool", "pool_settings")
 
         return {
-            _("Encryption") : this._get_bool_property_request(tag,"encryption"),
-            _("Redundancy"): this._get_bool_property_request(tag, "redundancy"),
-            _("Compression"): this._get_bool_property_request(tag, "compression")
+            _("Encryption") : settings.get("encryption",False),
+            _("Redundancy"): settings.get("redundancy",False),
+            _("Compression"):settings.get("compression",False),
         }
 
     #DISK PROPERTIES
@@ -188,13 +226,9 @@ class BackEndProxy:
 
     #NET PROPERTIES
     def iface_status(this) -> Optional[List[dict]]:
-        r = this._request("net/iface",RequestMethod.GET)
+        r = this._request("net/ifaces",RequestMethod.GET)
 
-        if (r is not None):
-            return r.get("status")
-
-        return None
-
+        return r or []
 
     #AUTH METHOD
     def verify_otp(this,otp:str,purpose:str="login",duration:int=TOKEN_LONGEVITY) -> Optional[str]:
@@ -215,12 +249,30 @@ class BackEndProxy:
             unknown_response()
 
     def login(this, otp:str) -> bool:
+        duration = BackEndProxy.TOKEN_LONGEVITY
         token = this.verify_otp(otp)
         if (token is not None):
             this._bearer = token
+
+            refresher = this._threads['token_refresher']
+
+            if (refresher is not None):
+                refresher.stop()
+
+            refresher = TimerThread(interval=(duration-1)*60,callback=this.refresh_token)
+            refresher.start()
+            this._threads['token_refresher'] = refresher
+
+
             return True
 
         return False
+
+    def refresh_token(this) -> None:
+       r = this._request("auth/refresh",RequestMethod.GET)
+
+       if (r is not None) and ((new_token := r.get("token")) is not None):
+           this._bearer = new_token
 
 
 
