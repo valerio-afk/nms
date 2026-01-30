@@ -4,7 +4,7 @@ from flask_babel import _
 from traceback import format_exc
 from frontend.api.threads import TimerThread
 from frontend.exception import NotAuthenticatedError
-from nms_shared import ErrorMessages
+from nms_shared import ErrorMessages, SuccessMessages
 from nms_shared.disks import Disk, DiskStatus
 from requests import get, post
 from requests.exceptions import HTTPError
@@ -33,6 +33,8 @@ def make_flash(data:dict) -> None:
         match type:
             case "error":
                 msg = ErrorMessages.get_error_from_string(code,*params)
+            case "success":
+                msg = SuccessMessages.get_success_from_string(code,*params)
             case _:
                 raise Exception("Wrong Error code")
     except Exception as e:
@@ -119,7 +121,12 @@ class BackEndProxy:
 
             return None
 
-        return response.json()
+        output = response.json()
+
+        if ((isinstance(output,dict)) and (output.get("detail") is not None)):
+            make_flash(output)
+        else:
+            return output
 
     def _get_property_request(this, tag:str, property:str) -> Any:
         endpoint = f"{tag}/get"
@@ -143,18 +150,17 @@ class BackEndProxy:
 
         return r if isinstance(r, bool) else coerce_to
 
+    #OTHER PROPERTIES
+    @property
+    def tasks(this) -> List:
+        return []
+
 
     #AUTH PROPERTIES
     @property
     def is_otp_configured(this):
         return this._get_bool_property_request("auth/otp","is_configured")
 
-    #ACCESS SERVICES PROPERTIES
-    @property
-    def access_services(this) -> List[dict]:
-        r = this._request("services/get",RequestMethod.GET)
-
-        return r or []
 
     #SYSTEM PROPERTIES
     @property
@@ -185,7 +191,11 @@ class BackEndProxy:
 
     @property
     def pool_capacity(this) -> Optional[Dict[str,int]]:
-        return this._get_property_request("pool", "pool_capacity") or None
+        return this._get_property_request("pool", "pool_capacity")
+
+    @property
+    def mountpoint(this) -> Optional[str]:
+        return this._get_property_request("pool", "mountpoint")
 
 
     @property
@@ -198,8 +208,27 @@ class BackEndProxy:
             _("Compression"):settings.get("compression",False),
         }
 
+    @property
+    def attachable_disks(this) -> List[Disk]:
+        disks = this._request("pool/get/attachable-disks",RequestMethod.GET)
+
+        if (disks is not None):
+            return [
+                Disk(
+                    name = disk.get("name"),
+                    model=disk.get("model"),
+                    serial=disk.get("serial"),
+                    size = disk.get("size"),
+                    status = DiskStatus(disk.get("status")),
+                    path = disk.get("path")
+                ) for disk in disks
+            ]
+
+        return []
+
     #DISK PROPERTIES
-    def get_disks(this) -> List[Disk]:
+    @property
+    def disks(this) -> List[Disk]:
         disks = this._request("disks/get/disks",RequestMethod.GET)
 
         if (disks is not None):
@@ -217,7 +246,22 @@ class BackEndProxy:
         return []
 
 
+
+
     #POOL PROPERTIES
+    @property
+    def scrub_report(this) -> Optional[Dict[str,str]]:
+        return this._get_property_request("pool","last_scrub_report")
+
+    @property
+    def scrub_info(this) -> Dict[str, Any]:
+        return this._get_property_request("pool", "scrub_info")
+
+
+    @property
+    def importable_pools(this) -> List[dict]:
+        return this._get_property_request("pool","pool_list") or []
+
     @property
     def pool_status_id(this) -> Optional[str]:
         if (this._bearer is not None):
@@ -229,6 +273,11 @@ class BackEndProxy:
         r = this._request("net/ifaces",RequestMethod.GET)
 
         return r or []
+
+    #ACCESS SERVICES PROPERTIES
+    @property
+    def access_services(this) -> Dict[str,dict]:
+        return this._request("services/get", RequestMethod.GET) or {}
 
     #AUTH METHOD
     def verify_otp(this,otp:str,purpose:str="login",duration:int=TOKEN_LONGEVITY) -> Optional[str]:
@@ -274,8 +323,26 @@ class BackEndProxy:
        if (r is not None) and ((new_token := r.get("token")) is not None):
            this._bearer = new_token
 
+    #SERVICE
+    def enable_service(this,service:str,**kwargs) -> None:
+        this._request(f"services/enable/{service}",RequestMethod.POST,body_params=kwargs)
+
+    def disable_service(this,service:str,**kwargs) -> None:
+        this._request(f"services/disable/{service}",RequestMethod.POST,body_params=kwargs)
+
+    def update_service(this,service:str,**kwargs) -> None:
+        this._request(f"services/update/{service}",RequestMethod.POST,body_params=kwargs)
 
 
+    #SYSTEM METHODS
+    def shutdown(this) -> None:
+        this._request("system/shutdown",RequestMethod.POST)
+
+    def restart(this) -> None:
+        this._request("system/restart",RequestMethod.POST)
+
+    def restart_systemd_services(this) -> None:
+        this._request("system/restart-systemd-services",RequestMethod.POST)
 
 
 

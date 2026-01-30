@@ -5,7 +5,7 @@ from widget import render_widget, get_widgets_css_files, get_widgets_html
 
 
 def widget_disk_overview() -> Tuple[str,Optional[str]]:
-    disks = BACKEND.get_disks()
+    disks = BACKEND.disks
     pool_options = BACKEND.pool_settings if BACKEND.is_pool_configured else []
 
 

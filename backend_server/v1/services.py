@@ -1,9 +1,10 @@
 from backend_server.utils.config import CONFIG
-from backend_server.utils.responses import AccessService, ErrorMessage
+from backend_server.utils.responses import AccessService, ErrorMessage, SuccessMessage
+from nms_shared import SuccessMessages
 from nms_shared.msg import ErrorMessages
 from fastapi import APIRouter, Depends, HTTPException, Request
 from .auth import verify_token_factory
-from typing import Dict
+from typing import Dict, Optional
 
 services = APIRouter(
     prefix='/services',
@@ -38,22 +39,47 @@ def get_system_services() -> Dict[str,AccessService]:
     responses = {500: {"description": "Any internal error while enabling an access services"}},
     summary = "Enable an access service"
 )
-async def enable_access_service(service: str, request: Request) -> None:
+async def enable_access_service(service_id: str, request: Request) -> Optional[Dict]:
     try:
         data = await request.json()
-        service = CONFIG.access_services[service]
+        service = CONFIG.access_services[service_id]
         service.enable(**data)
+
+        if (service.is_active):
+            return {"detail":SuccessMessage(code=SuccessMessages.S_ACCESS_ENABLED.name,params=[service_id.upper()])}
+        else:
+            raise Exception()
+
     except Exception as e:
-        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_ACCESS_ENABLED.name,params=[service,str(e)]))
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_ACCESS_ENABLED.name,params=[service_id.upper(),str(e)]))
+
+@services.post("/update/{service}",
+    responses = {500: {"description": "Any internal error while disabling an access services"}},
+    summary = "Update the settings in an access service"
+)
+async def update_access_service(service_id: str, request: Request) -> Optional[Dict]:
+    try:
+        data = await request.json()
+        service = CONFIG.access_services[service_id]
+        service.disable(**data)
+
+        return {"detail": SuccessMessage(code=SuccessMessages.S_ACCESS_UPDATED.name, params=[service_id.upper()])}
+
+    except Exception as e:
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_ACCESS_UPDATED.name,params=[service_id.upper(),str(e)]))
 
 @services.post("/disable/{service}",
     responses = {500: {"description": "Any internal error while disabling an access services"}},
     summary = "Disable an access service"
 )
-async def disable_access_service(service: str, request: Request) -> None:
+async def disable_access_service(service_id: str, request: Request) -> Optional[Dict]:
     try:
         data = await request.json()
-        service = CONFIG.access_services[service]
+        service = CONFIG.access_services[service_id]
         service.disable(**data)
+        if (not service.is_active):
+            return {"detail":SuccessMessage(code=SuccessMessages.S_ACCESS_DISABLED.name,params=[service_id.upper()])}
+        else:
+            raise Exception()
     except Exception as e:
-        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_ACCESS_DISABLED.name,params=[service,str(e)]))
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_ACCESS_DISABLED.name,params=[service_id.upper(),str(e)]))

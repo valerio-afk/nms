@@ -14,6 +14,9 @@ class ErrorMessage(StatusMessage):
     type:str = Field(default="error",frozen=True)
 
 
+class SuccessMessage(StatusMessage):
+    type:str = Field(default="error",frozen=True)
+
 
 class ExpasionStatus(BaseModel):
     is_running: bool

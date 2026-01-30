@@ -2,7 +2,9 @@ from . import frontend as bp, NMSBACKEND as BACKEND
 from importlib import import_module
 from flask import render_template, request, flash, redirect, url_for, Response, g
 from widget import render_widget
-from flask_babel import get_locale
+from nms_shared.msg import ErrorMessages
+from .api.backend_proxy import  show_flash
+
 
 # MAIN PAGE
 
@@ -12,19 +14,19 @@ def access() -> str:
     widgets = []
     mountpoint  = BACKEND.mountpoint
 
-    if (not BACKEND.is_pool_configured()):
+    if (not BACKEND.is_pool_configured):
         flash("You need to configure your disk array before enabling any access services","error")
 
-    for k,v in BACKEND.get_access_services.items():
+    for k,v in BACKEND.access_services.items():
         service_form_cls = getattr(forms,f"{k.upper()}ServiceForm")
-        service_enabled = v.is_active
+        service_enabled = v['active']
         form = service_form_cls(enabled=service_enabled)
 
 
-        for prop in v.properties:
+        for prop in v['properties']:
             try:
                 attr = getattr(form,prop)
-                attr.default = v.get(prop)
+                attr.default = v['properties'][prop]
             except AttributeError:
                 ...
 
@@ -47,29 +49,28 @@ def access() -> str:
 @bp.route("/access/update/<string:service>",methods=['POST'])
 def change_access_settings(service) -> Response:
     try:
-        serv = BACKEND.get_access_services.get(service,None)
+        serv = BACKEND.access_services.get(service)
 
         if (serv is None):
-            flash(f"Service `{service}` not recognised","error")
+            show_flash(code=ErrorMessages.E_ACCESS_SERV_UNK.name,params=[service.upper()])
             return redirect(url_for("main.access"))
 
         forms = import_module("forms")
         service_form_cls = getattr(forms, f"{service.upper()}ServiceForm")
-        service_enabled = serv.is_active
+        service_enabled = serv['active']
         form = service_form_cls(enabled=service_enabled)
 
         if (form.validate_on_submit()):
             form_action = request.form.get('action')
-            form_data = {k:v.data for k,v in form._fields.items()}
-            getattr(serv,form_action)(**form_data)
+            form_data = {k:v.data for k,v in form._fields.items() if k != "action"}
 
-            match(form_action):
+            match (form_action):
                 case "enable":
-                    flash(f"Service { service.upper() } enabled successfully.","success")
-                case "update":
-                    flash(f"Service {service.upper()} settings updated successfully.", "success")
+                    BACKEND.enable_service(service, **form_data)
                 case "disable":
-                    flash(f"Service {service.upper()} disabled successfully.", "success")
+                    BACKEND.disable_service(service, **form_data)
+                case "update":
+                    BACKEND.update_service(service, **form_data)
 
 
         elif (request.method == 'POST'):

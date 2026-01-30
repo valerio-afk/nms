@@ -9,7 +9,7 @@ def wait(redirect_to:Optional[str]=None, tag:Optional[str]=None) -> Callable:
         def wrapped(*args, **kwargs) -> Any:
             path = request.path.lower()
 
-            for task in BACKEND.get_tasks:
+            for task in BACKEND.tasks:
                 if path.startswith(task.page):
                     if (tag is None) or (task.tag == tag):
                         if not task.completed:

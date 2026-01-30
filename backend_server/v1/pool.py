@@ -13,8 +13,9 @@ from nms_shared import ErrorMessages
 from nms_shared.constants import KEYPATH
 from nms_shared.enums import DiskStatus
 from nms_shared.disks import Disk
-from typing import  Optional, List, Callable
+from typing import  Optional, List, Callable, Dict
 import base64
+import datetime
 import json
 import os
 import re
@@ -349,6 +350,30 @@ def recover() -> None:
     if (not trans.success):
         raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_RECOVERY.name, params=[output[0]['stderr']]))
 
+def get_last_scrub_report() -> Optional[Dict[str,str]]:
+    pool_name = CONFIG.pool_name
+    output = ZPoolStatus(pool_name).execute()
+
+
+    if (output.returncode == 0):
+        d = json.loads(output.stdout)
+        scan_stats = d.get('pools', {}).get(pool_name, {}).get('scan_stats', {})
+
+        if (scan_stats.get('function', "") == "SCRUB"):
+            started = int(scan_stats.get('start_time', -1))
+            ended = int(scan_stats.get('end_time', -1))
+            errors = scan_stats.get('errors', "-")
+
+            started = datetime.datetime.fromtimestamp(started).strftime("%c") if started >=0 else "-"
+            ended = datetime.datetime.fromtimestamp(ended).strftime("%c") if ended >= 0 else "-"
+
+            return {
+                'started': started,
+                'ended': ended,
+                "errors": errors
+            }
+
+    return None
 
 class PoolProperties(Enum):
     pool_name = "pool_name"
@@ -364,6 +389,8 @@ class PoolProperties(Enum):
     encryption_key = "encryption_key"
     status_id = "status_id"
     pool_settings = "pool_settings"
+    last_scrub_report = "last_scrub_report"
+    scrub_info = "scrub_info"
 
 
 @pool.get("/get/disks",
@@ -381,8 +408,6 @@ def pool_disks() -> List[Disk]:
           )
 def attachable_disks() -> List[Disk]:
     return get_attachable_disks()
-
-
 
 
 @pool.get("/get/{prop}",
@@ -420,6 +445,10 @@ def pool_get_property(prop:PoolProperties) -> Optional[BackendProperty]:
                 return BackendProperty(property=prop.value, value=get_tank_key())
             case PoolProperties.status_id:
                 return BackendProperty(property=prop.value, value=get_pool_status_id())
+            case PoolProperties.last_scrub_report:
+                return BackendProperty(property=prop.value,value=get_last_scrub_report())
+            case PoolProperties.scrub_info:
+                return BackendProperty(property=prop.value, value=CONFIG.scrub_info)
             case PoolProperties.pool_settings:
                 return BackendProperty(property=prop.value,value={
                     "encryption" : CONFIG.has_encryption,

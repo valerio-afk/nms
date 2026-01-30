@@ -60,6 +60,7 @@ class ErrorMessages(Enum):
 
     E_ACCESS_ENABLED = "E_ACCESS_ENABLED"
     E_ACCESS_DISABLED = "E_ACCESS_DISABLED"
+    E_ACCESS_SERV_UNK = "E_ACCESS_SERV_UNK"
 
     @staticmethod
     def get_error_from_string(error_code:str,*args,**kwargs) -> str:
@@ -95,9 +96,17 @@ class SuccessMessages(Enum):
 
     S_RECOVERY = "S_RECOVERY"
 
+    S_ACCESS_ENABLED = "S_ACCESS_ENABLED"
+    S_ACCESS_UPDATED = "S_ACCESS_UPDATED"
+    S_ACCESS_DISABLED = "S_ACCESS_DISABLED"
+
     @staticmethod
     def get_message(success_code:"SuccessMessage",*args,**kwargs) -> str:
         return parse_msg(SUCCESS_MESSAGES[success_code],*args,**kwargs)
+
+    @staticmethod
+    def get_error_from_string(code:str,*args,**kwargs) -> str:
+        return SuccessMessages.get_message(SuccessMessages[code],*args,**kwargs)
 
 
 ERROR_MESSAGES = {
@@ -157,8 +166,9 @@ ERROR_MESSAGES = {
 
     ErrorMessages.E_APT_GET : lambda path, info: _("Unable to get system updates: %(info)s") % {'path':path,'info': info}, # <------
 
-    ErrorMessages.E_ACCESS_ENABLED : lambda service,info: _("Error while enabling %{service}s: %(info)s)") % {'service':service,'info': info},  # <------
-    ErrorMessages.E_ACCESS_DISABLED : lambda service,info: _("Error while disabling %{service}s: %(info)s)") % {'service':service,'info': info},  # <------
+    ErrorMessages.E_ACCESS_ENABLED : lambda service,info: _("Error while enabling %(service)s: %(info)s)") % {'service':service,'info': info},  # <------
+    ErrorMessages.E_ACCESS_DISABLED : lambda service,info: _("Error while disabling %(service)s: %(info)s)") % {'service':service,'info': info},  # <------
+    ErrorMessages.E_ACCESS_SERV_UNK: lambda service: _("Access service %(service)s not recognised.") % {'service':service}, # <------
 }
 
 WARNING_MESSAGES = {
@@ -179,4 +189,8 @@ SUCCESS_MESSAGES = {
     SuccessMessages.S_OTP_DANGEROUS : lambda: _("OTP Accepted. Please press again the button of the desired dangerous operation to continue."),
 
     SuccessMessages.S_RECOVERY : lambda: _("Disk array recovery attempted."),
+
+    SuccessMessages.S_ACCESS_ENABLED : lambda service : _("Service %(service)s enabled successfully.") % {'service':service},  # <------
+    SuccessMessages.S_ACCESS_UPDATED : lambda service : _("Service %(service)s settings updated successfully.") % {'service':service},  # <------
+    SuccessMessages.S_ACCESS_DISABLED : lambda service : _("Service %(service)s disabled successfully.") % {'service':service},  # <------
 }

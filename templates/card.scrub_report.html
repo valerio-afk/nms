@@ -6,10 +6,15 @@
 
 
 <dl class="row">
-  {% for name,value in scrub.items() %}
-    <dt class="col-sm-4">{{ name }}:</dt>
-    <dd class="col-sm-8">{{ value }}</dd>
-  {% endfor %}
+
+  <dt class="col-sm-4"> {{ _("Started at") }}:</dt>
+  <dd class="col-sm-8">{{ scrub['started'] }}</dd>
+
+  <dt class="col-sm-4"> {{ _("Ended at") }}:</dt>
+  <dd class="col-sm-8">{{ scrub['ended'] }}</dd>
+
+  <dt class="col-sm-4"> {{ _("Errors") }}:</dt>
+  <dd class="col-sm-8">{{ scrub['errors'] }}</dd>
 </dl>
 
 

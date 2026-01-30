@@ -28,7 +28,7 @@ def check_task_by_id(task_id:str) -> Response:
 def reboot():
 
     try:
-        BACKEND.reboot()
+        BACKEND.restart()
     except Exception as e:
         flash(str(e),"error")
 

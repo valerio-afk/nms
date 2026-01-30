@@ -10,7 +10,7 @@ from backend_server.utils.threads import NetIOCounter
 from backend_server.utils.logger import Logger
 from backend_server.utils.cmdl import ZPoolList
 from fastapi import HTTPException
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 from importlib import import_module
 from backend_server.utils.responses import ErrorMessage
 from nms_shared import ErrorMessages
@@ -253,6 +253,10 @@ class NMSConfig(Logger):
         process = cmd.execute()
 
         return process.returncode == 0
+
+    @property
+    def scrub_info(this) -> Dict[str, Any]:
+        return {k: v for k, v in this._cfg['pool'].get('tools', {}).get('scrub', {}).items()}
 
     # DISK PROPERTIES
     @property

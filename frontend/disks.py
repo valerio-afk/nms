@@ -17,10 +17,10 @@ from wtforms import ValidationError
 @wait(redirect_to="/disks/new/wait",tag="new_disk")
 @wait(redirect_to="/disks/add/wait",tag="add_disk")
 def disk_management() -> str:
-    disks = BACKEND.get_disks()
-    attachable_disks = BACKEND.get_attachable_disks
+    disks = BACKEND.disks
+    attachable_disks = BACKEND.attachable_disks
 
-    importable_pools = BACKEND.get_importable_pools()
+    importable_pools = BACKEND.importable_pools
 
     imports = []
 
@@ -34,7 +34,7 @@ def disk_management() -> str:
     parameters = {
         "active_page": "disk",
         "disks": disks,
-        "pool": BACKEND.is_pool_configured(),
+        "pool": BACKEND.is_pool_configured,
         "imported_pools": imports,
         "csp_nonce": g.csp_nonce,
     }
@@ -44,13 +44,13 @@ def disk_management() -> str:
         parameters['new_pool_form'] = CreatePoolForm(disks)
     else:
         parameters['mounted'] = BACKEND.is_mounted
-        parameters['scrub'] = BACKEND.get_last_scrub_report()
+        parameters['scrub'] = BACKEND.scrub_report
         parameters["attachable_disks"] = None if len(attachable_disks) == 0 else AddDisksForm(attachable_disks)
 
-    verify = BACKEND.get_scrub_info
+    verify = BACKEND.scrub_info
 
     if (verify['last'] is None):
-        verify['last'] = "Never"
+        verify['last'] = _("Never")
     else:
         verify['last'] = datetime.fromtimestamp(verify['last']).strftime("%c")
 
@@ -77,7 +77,7 @@ def smart_disk() -> str:
 
 @bp.route('/disks/add', methods=['POST'])
 def add_disk() -> Response:
-    attachable_disks = BACKEND.get_attachable_disks
+    attachable_disks = BACKEND.attachable_disks
     form = AddDisksForm(attachable_disks)
 
     if (form.validate_on_submit()):
@@ -95,7 +95,7 @@ def add_disk() -> Response:
 @bp.route('/disks/new',methods=['POST'])
 @wait()
 def new_pool() -> Response:
-    disks = BACKEND.get_disks()
+    disks = BACKEND.disks
     form = CreatePoolForm(disks)
 
     if (form.validate_on_submit()):
