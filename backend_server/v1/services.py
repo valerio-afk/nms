@@ -35,7 +35,7 @@ def get_system_services() -> Dict[str,AccessService]:
         raise HTTPException(status_code=500,detail=str(e))
 
 
-@services.post("/enable/{service}",
+@services.post("/enable/{service_id}",
     responses = {500: {"description": "Any internal error while enabling an access services"}},
     summary = "Enable an access service"
 )
@@ -53,7 +53,7 @@ async def enable_access_service(service_id: str, request: Request) -> Optional[D
     except Exception as e:
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_ACCESS_ENABLED.name,params=[service_id.upper(),str(e)]))
 
-@services.post("/update/{service}",
+@services.post("/update/{service_id}",
     responses = {500: {"description": "Any internal error while disabling an access services"}},
     summary = "Update the settings in an access service"
 )
@@ -61,14 +61,14 @@ async def update_access_service(service_id: str, request: Request) -> Optional[D
     try:
         data = await request.json()
         service = CONFIG.access_services[service_id]
-        service.disable(**data)
+        service.update(**data)
 
         return {"detail": SuccessMessage(code=SuccessMessages.S_ACCESS_UPDATED.name, params=[service_id.upper()])}
 
     except Exception as e:
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_ACCESS_UPDATED.name,params=[service_id.upper(),str(e)]))
 
-@services.post("/disable/{service}",
+@services.post("/disable/{service_id}",
     responses = {500: {"description": "Any internal error while disabling an access services"}},
     summary = "Disable an access service"
 )

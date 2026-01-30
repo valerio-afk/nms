@@ -1,3 +1,4 @@
+import datetime
 from enum import Enum
 from flask import flash
 from flask_babel import _
@@ -6,7 +7,7 @@ from frontend.api.threads import TimerThread
 from frontend.exception import NotAuthenticatedError
 from nms_shared import ErrorMessages, SuccessMessages
 from nms_shared.disks import Disk, DiskStatus
-from requests import get, post
+from requests import get, post, PreparedRequest
 from requests.exceptions import HTTPError
 from typing import Optional, List, Any, Dict
 
@@ -36,7 +37,7 @@ def make_flash(data:dict) -> None:
             case "success":
                 msg = SuccessMessages.get_success_from_string(code,*params)
             case _:
-                raise Exception("Wrong Error code")
+                raise Exception(data)
     except Exception as e:
         msg = str(e) or ErrorMessages.get_error(ErrorMessages.E_UNKNOWN)
         type = "error"
@@ -102,7 +103,11 @@ class BackEndProxy:
             if (not ignore_exception):
                 try:
                     if (err.response.status_code == 422):
-                        raise Exception(response.raw.data)
+                        error = f"URL: {err.request.url}\n"
+                        error+= f"Data: {err.request.body}\n"
+                        error+= f"Headers: {err.request.headers.values()}\n\n"
+                        error+= f"Response: {response.raw.data}"
+                        raise Exception(error)
 
                     err_message = err.response.json()
 
@@ -123,8 +128,8 @@ class BackEndProxy:
 
         output = response.json()
 
-        if ((isinstance(output,dict)) and (output.get("detail") is not None)):
-            make_flash(output)
+        if ((isinstance(output,dict)) and ((flash_data:=output.get("detail")) is not None)):
+            make_flash(flash_data)
         else:
             return output
 
@@ -164,6 +169,16 @@ class BackEndProxy:
 
     #SYSTEM PROPERTIES
     @property
+    def last_apt_time(this) -> Optional[datetime.datetime]:
+        dt = this._get_property_request("system","last_apt_time")
+
+        return datetime.datetime.fromtimestamp(dt) if dt is not None else None
+
+    @property
+    def system_updates(this) -> List[str]:
+        return this._get_property_request("system","system_updates") or []
+
+    @property
     def system_information(this) -> Dict[str,Any]:
         r = this._get_property_request("system","system_information")
 
@@ -197,6 +212,9 @@ class BackEndProxy:
     def mountpoint(this) -> Optional[str]:
         return this._get_property_request("pool", "mountpoint")
 
+    @property
+    def pool_settings_raw(this) -> Dict[str, bool]:
+        return this._get_property_request("pool", "pool_settings") or {}
 
     @property
     def pool_settings(this) -> Dict[str, bool]:
@@ -207,6 +225,12 @@ class BackEndProxy:
             _("Redundancy"): settings.get("redundancy",False),
             _("Compression"):settings.get("compression",False),
         }
+
+    @property
+    def has_encryption(this) -> bool:
+        return this.pool_settings_raw.get("encryption",False)
+
+
 
     @property
     def attachable_disks(this) -> List[Disk]:

@@ -62,7 +62,7 @@ def change_access_settings(service) -> Response:
 
         if (form.validate_on_submit()):
             form_action = request.form.get('action')
-            form_data = {k:v.data for k,v in form._fields.items() if k != "action"}
+            form_data = {k:v.data for k,v in form._fields.items() if k not in ["action","csrf_token"]}
 
             match (form_action):
                 case "enable":

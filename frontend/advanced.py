@@ -17,8 +17,8 @@ def widget_system_admin():
 def widget_system_updates():
     apt = {
         'csrf_token': generate_csrf(),
-        'last_update' : BACKEND.last_apt_time(),
-        'updates': BACKEND.get_updates,
+        'last_update' : BACKEND.last_apt_time,
+        'updates': BACKEND.system_updates,
         'state': None
     }
 

@@ -15,7 +15,7 @@ class ErrorMessage(StatusMessage):
 
 
 class SuccessMessage(StatusMessage):
-    type:str = Field(default="error",frozen=True)
+    type:str = Field(default="success",frozen=True)
 
 
 class ExpasionStatus(BaseModel):

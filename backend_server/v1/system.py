@@ -1,5 +1,4 @@
 
-from pydantic import BaseModel
 from backend_server.v1.net import net_counter
 from backend_server.v1.auth import verify_token_factory
 from backend_server.utils.config import CONFIG
@@ -16,6 +15,7 @@ import os
 import platform
 import psutil
 
+from nms_shared.threads import NMSThread
 
 system = APIRouter(
     prefix='/system',
@@ -24,7 +24,7 @@ system = APIRouter(
 )
 
 
-def last_apt_time() -> Optional[datetime.datetime]:
+def last_apt_time() -> Optional[int]:
     times = []
     for fname in os.listdir(APT_LISTS):
         path = os.path.join(APT_LISTS, fname)
@@ -32,7 +32,7 @@ def last_apt_time() -> Optional[datetime.datetime]:
             times.append(os.path.getmtime(path))
 
     if times:
-        return datetime.datetime.fromtimestamp(max(times))
+        return max(times)
     return None
 
 def get_cpu_name() -> Optional[str]:
@@ -81,6 +81,37 @@ class SystemProperties(Enum):
     last_apt_time = "last_apt_time"
 
 
+class APTGETThread (NMSThread):
+    def run(this) -> None:
+        cmd = APTGetUpdate()
+        process = cmd.execute()
+
+        try:
+            if (process.returncode != 0):
+                raise Exception(process.stderr)
+
+            cmd = APTGetUpgrade(dry_run=True)
+            process = cmd.execute()
+
+            if (process.returncode != 0):
+                raise Exception(process.stderr)
+
+            updates = []
+
+            for line in process.stdout.splitlines():
+                if (line.startswith("Inst ")):
+                    pkg = line.split()
+
+                    if (len(pkg) >= 2):
+                        updates.append(pkg[1])
+
+            CONFIG.system_updates = updates
+            CONFIG.flush_config()
+
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessage.E_APT_GET.name, params=[str(e)]))
+
+
 
 @system.get("/get/{prop}",
           response_model=BackendProperty,
@@ -93,11 +124,11 @@ class SystemProperties(Enum):
 def system_get_property(prop:SystemProperties) -> Optional[BackendProperty]:
     match(prop):
         case SystemProperties.system_information:
-            return BackendProperty(property=prop, value=system_information())
+            return BackendProperty(property=prop.name, value=system_information())
         case SystemProperties.system_updates:
-            return BackendProperty(property=prop, value=CONFIG.system_updates)
+            return BackendProperty(property=prop.name, value=CONFIG.system_updates)
         case SystemProperties.last_apt_time:
-            return BackendProperty(property=prop, value=last_apt_time())
+            return BackendProperty(property=prop.name, value=last_apt_time())
         case _:
             CONFIG.error(f"Requested invalid system property {prop}")
             raise HTTPException(status_code=404, detail=f"Property {prop} not valid for system")
@@ -126,33 +157,7 @@ def restart_systemd_services() -> None:
             },
             summary="Retrieves packages to be updated from APT")
 def apt_updates() -> None:
-    cmd = APTGetUpdate()
-    process = cmd.execute()
 
-    try:
-        if (process.returncode != 0):
-            raise Exception(process.stderr)
-
-        cmd = APTGetUpgrade(dry_run=True)
-        process = cmd.execute()
-
-        if (process.returncode != 0):
-            raise Exception(process.stderr)
-
-        updates = []
-
-        for line in process.stdout.splitlines():
-            if (line.startswith("Inst ")):
-                pkg = line.split()
-
-                if (len(pkg) >= 2):
-                    updates.append(pkg[1])
-
-        CONFIG.system_updates = updates
-        CONFIG.flush_config()
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessage.E_APT_GET.name,params=[str(e)]))
 
 @system.post('/apt-upgrade',
              responses={

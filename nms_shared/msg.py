@@ -105,7 +105,7 @@ class SuccessMessages(Enum):
         return parse_msg(SUCCESS_MESSAGES[success_code],*args,**kwargs)
 
     @staticmethod
-    def get_error_from_string(code:str,*args,**kwargs) -> str:
+    def get_success_from_string(code:str,*args,**kwargs) -> str:
         return SuccessMessages.get_message(SuccessMessages[code],*args,**kwargs)
 
 
