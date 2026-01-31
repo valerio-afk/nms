@@ -4,14 +4,14 @@ class PartialRefresher {
     this.intervalMs = intervalMs;
     this.timerId = null;
     this._inFlight = new Map(); // id -> Promise flag to avoid duplicates
-    this.once_ids = []
+    this.once_ids = new Map();
   }
 
   register(id, url) { this.targets.set(id, url); }
   register_once(id, url)
   {
     this.register(id, url);
-    this.once_ids.push(id);
+    this.once_ids.set(id,true)
   }
   unregister(id) { this.targets.delete(id); }
 
@@ -50,6 +50,15 @@ class PartialRefresher {
             console.warn('[refresher] could not read headers', e);
           }
 
+          if (this.once_ids.has(id))
+          {
+            const repeat = response.headers.get("X-NMS-Keep-Repeating") == "True";
+              if (!repeat) {
+                this.once_ids.delete(id);
+                this.unregister(id);
+              }
+          }
+
           // get body anyway (text) so we can show errors in the UI and inspect content
           const text = await response.text();
 
@@ -79,13 +88,6 @@ class PartialRefresher {
           this._inFlight.set(id, false);
         }
       })();
-
-      for (const id of this.once_ids)
-      {
-        this.unregister(id)
-      }
-
-      this.once_ids = []
     }
   }
 }

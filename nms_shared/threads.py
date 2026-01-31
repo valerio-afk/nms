@@ -17,13 +17,20 @@ class NMSThread(metaclass=ABCMeta):
         return this._exception
 
     @property
+    def progress(this) -> Optional[float]:
+        return None
+
+    @property
+    def eta(this) -> Optional[int]:
+        return None
+
+    @property
     def is_successful(this) -> bool:
         return (not this.is_running) and (this.exception is None)
 
     def start(this) -> None:
         if not this.is_running:
-            this._running = True
-            this._thread = threading.Thread(target=this.run,daemon=True)
+            this._thread = threading.Thread(target=this._internal_runner,daemon=True)
             this._thread.start()
 
     def stop(this) -> None:
@@ -38,10 +45,13 @@ class NMSThread(metaclass=ABCMeta):
     def run(this) -> None:
         pass
 
-    def internal_runner(this):
+    def _internal_runner(this):
+        this._running = True
         try:
             this.run()
         except Exception as e:
             this._exception = e
+
+        this._running = False
 
 

@@ -48,3 +48,9 @@ class AccessService(BaseModel):
     properties:Dict[str, Any]
     active:bool
 
+class BackgroundTask(BaseModel):
+    task_id:str
+    running:bool
+    progress:Optional[float]
+    eta: Optional[int]
+

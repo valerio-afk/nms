@@ -1,8 +1,8 @@
-
+from backend_server.utils.scheduler import SCHEDULER
 from backend_server.v1.net import net_counter
 from backend_server.v1.auth import verify_token_factory
 from backend_server.utils.config import CONFIG
-from backend_server.utils.responses import BackendProperty, ErrorMessage
+from backend_server.utils.responses import BackendProperty, ErrorMessage, BackgroundTask
 from backend_server.utils.cmdl import Shutdown, Reboot, SystemCtlRestart, LocalCommandLineTransaction, APTGetUpdate, \
     APTGetUpgrade
 from collections import OrderedDict
@@ -80,8 +80,12 @@ class SystemProperties(Enum):
     system_updates = "system_updates"
     last_apt_time = "last_apt_time"
 
+class AptGetActions(Enum):
+    update = "update"
+    upgrade = "upgrade"
 
-class APTGETThread (NMSThread):
+
+class AptGetUpdateThread (NMSThread):
     def run(this) -> None:
         cmd = APTGetUpdate()
         process = cmd.execute()
@@ -106,6 +110,28 @@ class APTGETThread (NMSThread):
                         updates.append(pkg[1])
 
             CONFIG.system_updates = updates
+            CONFIG.flush_config()
+
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessage.E_APT_GET.name, params=[str(e)]))
+
+
+class AptGetUpgradeThread(NMSThread):
+    def run(this) -> None:
+        cmd = APTGetUpdate()
+        process = cmd.execute()
+
+        try:
+            if (process.returncode != 0):
+                raise Exception(process.stderr)
+
+            cmd = APTGetUpgrade(dry_run=False)
+            process = cmd.execute()
+
+            if (process.returncode != 0):
+                raise Exception(process.stderr)
+
+            CONFIG.system_updates = []
             CONFIG.flush_config()
 
         except Exception as e:
@@ -151,35 +177,37 @@ def restart_systemd_services() -> None:
         trans = LocalCommandLineTransaction(*cmds)
         trans.run()
 
-@system.get('/apt-updates',
+@system.post('/apt/{action}',
             responses={
-              500: {"description": "Any internal error to retrieve updates information"},
+              500: {"description": "Any internal error"},
             },
-            summary="Retrieves packages to be updated from APT")
-def apt_updates() -> None:
+            summary="Perform apt-get update/upgrade commands",
+            response_model=BackgroundTask
+            )
+def apt_get(action:AptGetActions) -> BackgroundTask:
+    match (action):
+        case AptGetActions.update:
+            task = AptGetUpdateThread()
+            task_id = SCHEDULER.schedule(task)
+        case AptGetActions.upgrade:
+            task = AptGetUpgradeThread()
+            task_id = SCHEDULER.schedule(task)
+
+    return BackgroundTask(task_id=task_id,running=True,progress=None,eta=None)
 
 
-@system.post('/apt-upgrade',
-             responses={
-                 500: {"description": "Any internal error to install upgrades"},
-             },
-             summary="Retrieves packages to be updated from APT")
-def apt_upgrade() -> None:
-    cmd = APTGetUpdate()
-    process = cmd.execute()
 
-    try:
-        if (process.returncode != 0):
-            raise Exception(process.stderr)
+@system.get("/task/{task_id}",
+              responses={500: {"description": "Any internal error while disabling an access services"}},
+              summary="Get the information of background task",
+              response_model=Optional[BackgroundTask]
+)
+def get_task_info(task_id: str) -> Optional[Dict]:
+    task = SCHEDULER.get_task_by_id(task_id)
 
-        cmd = APTGetUpgrade(dry_run=False)
-        process = cmd.execute()
+    if (task is None):
+        return None
 
-        if (process.returncode != 0):
-            raise Exception(process.stderr)
+    thread = task.thread
 
-        CONFIG.system_updates = []
-        CONFIG.flush_config()
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessage.E_APT_GET.name, params=[str(e)]))
+    return BackgroundTask(task_id=task_id,running=thread.is_running,progress=thread.progress,eta=thread.eta)

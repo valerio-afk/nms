@@ -30,7 +30,9 @@ class TaskScheduler:
         task = this._tasks.pop(uuid,None)
         now = datetime.datetime.now()
 
-        this._tasks = {uuid:task for uuid,task in this._tasks.items() if (now - task.scheduled_time).total_seconds() >= TaskScheduler.LIFETIME }
+        this._tasks = {uuid:task for uuid,task in this._tasks.items() if
+                       ((now - task.scheduled_time).total_seconds() >= TaskScheduler.LIFETIME) or (not task.is_running())
+                       }
 
         return task
 

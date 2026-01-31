@@ -64,3 +64,5 @@ LANGS = {
     'en' : ('🇬🇧','English'),
     'it' : ('🇮🇹','Italiano')
 }
+
+HTTP_REPEAT_HEADER = "X-NMS-Keep-Repeating"

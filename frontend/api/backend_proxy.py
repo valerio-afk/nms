@@ -3,15 +3,32 @@ from enum import Enum
 from flask import flash
 from flask_babel import _
 from traceback import format_exc
+
+from frontend.api.tasks import BackgroundTask
 from frontend.api.threads import TimerThread
 from frontend.exception import NotAuthenticatedError
 from nms_shared import ErrorMessages, SuccessMessages
 from nms_shared.disks import Disk, DiskStatus
-from requests import get, post, PreparedRequest
+from requests import get, post
 from requests.exceptions import HTTPError
-from typing import Optional, List, Any, Dict
+from typing import Optional, List, Any, Dict, Literal, Union
 
 from nms_shared.threads import NMSThread
+
+def parse_disks_from_request(d:Optional[List[dict]]) -> List[Disk]:
+    if (d is not None):
+        return [
+            Disk(
+                name=disk.get("name"),
+                model=disk.get("model"),
+                serial=disk.get("serial"),
+                size=disk.get("size"),
+                status=DiskStatus(disk.get("status")),
+                path=disk.get("path")
+            ) for disk in d
+        ]
+
+    return []
 
 
 def show_flash(type:str="error", code:str=ErrorMessages.E_UNKNOWN.name,params:List[Any]=None) -> None:
@@ -54,9 +71,11 @@ class BackEndProxy:
     TOKEN_LONGEVITY:int = 30 # 30 mins
     API = "http://localhost:8000"
     VERSION = "v1"
+    TASK_LIFETIME = 60
 
     def __init__(this) -> None:
         this._bearer:Optional[str] = None
+        this._tasks:Dict[str, BackgroundTask] = {}
         this._threads:Dict[str,Optional[NMSThread]] = {
             'token_refresher' : None
         }
@@ -197,6 +216,24 @@ class BackEndProxy:
 
     #POOL PROPERTIES
     @property
+    def scrub_report(this) -> Optional[Dict[str, str]]:
+        return this._get_property_request("pool", "last_scrub_report")
+
+    @property
+    def scrub_info(this) -> Dict[str, Any]:
+        return this._get_property_request("pool", "scrub_info")
+
+    @property
+    def importable_pools(this) -> List[dict]:
+        return this._get_property_request("pool", "pool_list") or []
+
+    @property
+    def pool_status_id(this) -> Optional[str]:
+        if (this._bearer is not None):
+            return this._get_property_request("pool", "status_id")
+        return None
+
+    @property
     def is_pool_configured(this) -> bool:
         return this._get_bool_property_request("pool", "is_configured")
 
@@ -235,62 +272,20 @@ class BackEndProxy:
     @property
     def attachable_disks(this) -> List[Disk]:
         disks = this._request("pool/get/attachable-disks",RequestMethod.GET)
+        return parse_disks_from_request(disks)
 
-        if (disks is not None):
-            return [
-                Disk(
-                    name = disk.get("name"),
-                    model=disk.get("model"),
-                    serial=disk.get("serial"),
-                    size = disk.get("size"),
-                    status = DiskStatus(disk.get("status")),
-                    path = disk.get("path")
-                ) for disk in disks
-            ]
-
-        return []
 
     #DISK PROPERTIES
     @property
     def disks(this) -> List[Disk]:
         disks = this._request("disks/get/disks",RequestMethod.GET)
-
-        if (disks is not None):
-            return [
-                Disk(
-                    name = disk.get("name"),
-                    model=disk.get("model"),
-                    serial=disk.get("serial"),
-                    size = disk.get("size"),
-                    status = DiskStatus(disk.get("status")),
-                    path = disk.get("path")
-                ) for disk in disks
-            ]
-
-        return []
-
-
-
-
-    #POOL PROPERTIES
-    @property
-    def scrub_report(this) -> Optional[Dict[str,str]]:
-        return this._get_property_request("pool","last_scrub_report")
+        return parse_disks_from_request(disks)
 
     @property
-    def scrub_info(this) -> Dict[str, Any]:
-        return this._get_property_request("pool", "scrub_info")
+    def system_disks(this) -> List[Disk]:
+        disks = this._request("disks/get/sys-disks", RequestMethod.GET)
+        return parse_disks_from_request(disks)
 
-
-    @property
-    def importable_pools(this) -> List[dict]:
-        return this._get_property_request("pool","pool_list") or []
-
-    @property
-    def pool_status_id(this) -> Optional[str]:
-        if (this._bearer is not None):
-            return this._get_property_request("pool","status_id")
-        return None
 
     #NET PROPERTIES
     def iface_status(this) -> Optional[List[dict]]:
@@ -367,6 +362,63 @@ class BackEndProxy:
 
     def restart_systemd_services(this) -> None:
         this._request("system/restart-systemd-services",RequestMethod.POST)
+
+    def apt_get(this,action:Union[Literal['update'],Literal['upgrade']]) -> Optional[Dict]:
+        r = this._request(f"system/apt/{action}", RequestMethod.POST)
+
+        return r if isinstance(r,dict) else None
+
+    def apt_get_update(this) -> Optional[Dict]:
+        return this.apt_get("update")
+
+    def apt_get_upgrade(this) -> Optional[Dict]:
+        return this.apt_get("upgrade")
+
+    #Other Method
+    def register_task(this,id:str,pages:Optional[List[str]]=None,metadata:Optional[str]=None,**kwargs) -> None:
+        this._tasks[id] = BackgroundTask(
+            pages=pages,
+            last_update=datetime.datetime.now().timestamp(),
+            metadata=metadata,
+            **kwargs)
+
+    def update_task_info(this,task_id:str) -> None:
+
+        task = this._tasks.get(task_id)
+
+        if (task is not None):
+            r = this._request(f"system/task/{task_id}",RequestMethod.GET)
+            task.last_update = datetime.datetime.now().timestamp()
+
+            if (r is None):
+                task.running = False
+                task.eta = None
+                task.progress = None
+            else:
+                task.running = r.get("running",False)
+                task.progress = r.get("progress")
+                task.eta = r.get("eta")
+
+
+
+    def get_tasks_by_path(this,path:str) -> List[BackgroundTask]:
+        path = path.lower()
+        new_tasks = {}
+        tasks = []
+
+        for task_id,task in this._tasks.items():
+            if (path in [p.lower() for p in task.pages]):
+                this.update_task_info(task_id)
+                tasks.append(task)
+
+            if (task.running) and ((task.last_update+NMSBACKEND.TASK_LIFETIME) >= datetime.datetime.now().timestamp()):
+                new_tasks[task_id] = task
+
+        this._tasks = new_tasks
+
+        return tasks
+
+
 
 
 

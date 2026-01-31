@@ -1,20 +1,25 @@
+from nms_shared import ErrorMessages
+from nms_shared.constants import HTTP_REPEAT_HEADER
 from .import NMSBACKEND as BACKEND, frontend as bp
+from .api.backend_proxy import show_flash
 from flask import render_template, redirect, url_for, request, flash, g, send_file, session, abort
-from flask_babel import get_locale
 from flask_wtf.csrf import generate_csrf, validate_csrf
 from io import BytesIO
 from widget import render_widget,get_widgets_html,get_widgets_css_files
 from wtforms import ValidationError
 from urllib.parse import quote, unquote
+from typing import Optional, Dict
 import os
 import time
+
+
 
 
 def widget_system_admin():
 
     return render_widget("sys_admin",encrypted=BACKEND.has_encryption)
 
-def widget_system_updates():
+def widget_system_updates(hedaers:Optional[Dict]=None):
     apt = {
         'csrf_token': generate_csrf(),
         'last_update' : BACKEND.last_apt_time,
@@ -25,16 +30,22 @@ def widget_system_updates():
     if (apt['last_update'] is not None):
         apt['last_update'] = apt['last_update'].strftime("%c")
 
-    celery_tasks = BACKEND.get_tasks_by_path("/advanced/apt")
+    tasks = BACKEND.get_tasks_by_path("/advanced/apt")
 
-    for t in celery_tasks:
-        if (t.action is not None):
-            apt['state'] = t.action
+    repeat = False
+
+    for t in tasks:
+        if (t.metadata is not None):
+            apt['state'] = t.metadata
+            repeat = True
+
+    if (hedaers is not None):
+        hedaers[HTTP_REPEAT_HEADER] = repeat
 
     return render_widget("apt", **apt)
 
 def widget_danger_zone():
-    disks = BACKEND.get_system_disks()
+    disks = BACKEND.system_disks
 
     choices = [(d.path, d.name) for d in disks]
 
@@ -43,7 +54,10 @@ def widget_danger_zone():
 
 @bp.route('/async/widgets/apt')
 def async_widget_system_updates():
-    return widget_system_updates()[0]
+    headers = {}
+    html = widget_system_updates(headers)[0]
+
+    return html,200,headers
 
 # MAIN PAGE
 
@@ -55,7 +69,7 @@ def advanced():
         widget_system_updates()
     ]
 
-    if BACKEND.is_pool_configured():
+    if BACKEND.is_pool_configured:
         dashboard_widgets.append(widget_danger_zone())
 
     return render_template("advanced.html",
@@ -236,17 +250,24 @@ def zpool_format_disk():
 
 @bp.route('/advanced/apt',methods=['POST'])
 def apt_get():
-
     action = request.form.get("action",None)
 
-    lang = str(get_locale())
+    task = None
 
-    if (action=="update"):
-        task = apt_get_updates.delay(lang)
-        BACKEND.append_task(NMSTask(task.task_id,"/advanced/apt",action=action,tag="apt"))
+    if (action == "update"):
+        task = BACKEND.apt_get_update()
     elif (action == "upgrade"):
-        task = apt_get_upgrade.delay(lang)
-        BACKEND.append_task(NMSTask(task.task_id, "/advanced/apt", action=action,tag="apt"))
+        task = BACKEND.apt_get_upgrade()
+
+    if task is None:
+        show_flash(code=ErrorMessages.E_APT_GET.name)
+    else:
+        try:
+            task_id = task.get("task_id")
+            BACKEND.register_task(task_id,pages=["/advanced/apt"],metadata=action,**task)
+        except Exception as e:
+            show_flash(code=ErrorMessages.E_APT_GET.name,params=[str(e)])
+
     return redirect(url_for("main.advanced"))
 
 

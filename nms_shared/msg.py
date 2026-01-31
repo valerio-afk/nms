@@ -164,7 +164,7 @@ ERROR_MESSAGES = {
 
     ErrorMessages.E_FS_CH_PERM : lambda path, info: _("Unable to change permissions for %(path)s: %(info)s") % {'path':path,'info': info}, # <------
 
-    ErrorMessages.E_APT_GET : lambda path, info: _("Unable to get system updates: %(info)s") % {'path':path,'info': info}, # <------
+    ErrorMessages.E_APT_GET : lambda info: _("Unable to get system updates: %(info)s") % {'info': info or ErrorMessages.fallback_message()}, # <------
 
     ErrorMessages.E_ACCESS_ENABLED : lambda service,info: _("Error while enabling %(service)s: %(info)s)") % {'service':service,'info': info},  # <------
     ErrorMessages.E_ACCESS_DISABLED : lambda service,info: _("Error while disabling %(service)s: %(info)s)") % {'service':service,'info': info},  # <------

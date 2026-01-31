@@ -12,8 +12,6 @@ services = APIRouter(
     dependencies=[Depends(verify_token_factory())]
 )
 
-
-
 @services.get("/get",
           response_model=Dict[str,AccessService],
           responses={
@@ -83,3 +81,5 @@ async def disable_access_service(service_id: str, request: Request) -> Optional[
             raise Exception()
     except Exception as e:
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_ACCESS_DISABLED.name,params=[service_id.upper(),str(e)]))
+
+
