@@ -1,3 +1,4 @@
+from nms_shared import ErrorMessages, SuccessMessages
 from . import frontend as bp, request, flash, redirect, url_for, session, NMSBACKEND as BACKEND
 from flask import Response, render_template, send_file, g
 from flask_wtf.csrf import generate_csrf, validate_csrf, ValidationError
@@ -6,6 +7,9 @@ from typing import Union, Tuple
 import pyotp
 import qrcode
 import time
+
+from .api.backend_proxy import show_flash
+
 
 #MAIN PAGES
 
@@ -51,22 +55,14 @@ def reauth(operation:str) -> Union[Response,str]:
             try:
                 validate_csrf(request.form.get("csrf_token"))
             except ValidationError:
-                raise Exception("CSRF validation failed")
-                abort(400)
-
-            otp = request.form.get("otp")
-
-            BACKEND.logger.info(f"Login request. OTP: {otp}")
-
-            if (BACKEND.verify_otp(otp)):
-                session["dz_authorisation"] = {"time":time.time(),"timestamp":time.time(),"operation":operation}
-                BACKEND.logger.info(f"OTP accepted")
-                # flash(SuccessMessage.get_message(SuccessMessage.S_OTP_DANGEROUS), "success")
+                show_flash(code=ErrorMessages.E_CSRF.name)
             else:
-                BACKEND.logger.warning(f"Invalid OTP")
-                flash("Invalid OTP","error")
+                otp = request.form.get("otp")
 
-
+                if (token:=BACKEND.verify_otp(otp,purpose=operation,duration=1)):
+                    session["dz_authorisation"] = {"time":time.time(),"timestamp":time.time(),"purpose":operation}
+                    BACKEND.set_session_token(operation,token)
+                    show_flash(type="success", code=SuccessMessages.S_OTP_DANGEROUS.name)
 
             return redirect(url_for("main.advanced"))
 
@@ -116,5 +112,5 @@ def configure_otp() -> Union[Response,str]:
 
 @bp.route("/logout",methods=['POST'])
 def logout() -> Response:
-    session.clear()
+    BACKEND.logout()
     return redirect(url_for("main.login"))

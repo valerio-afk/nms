@@ -10,6 +10,7 @@ class ErrorMessages(Enum):
     E_UNKNOWN = "E_UNKNOWN"
     E_UNKNOWN_RESPONSE = "E_UNKNOWN_RESPONSE"
     E_PROPERTY = "E_PROPERTY"
+    E_CSRF = "E_CSRF"
 
     E_POOL_ALREADY_CONF = "E_POOL_ALREADY_CONF"
     E_POOL_NO_CONF = "E_POOL_NO_CONF"
@@ -60,6 +61,7 @@ class ErrorMessages(Enum):
 
     E_ACCESS_ENABLED = "E_ACCESS_ENABLED"
     E_ACCESS_DISABLED = "E_ACCESS_DISABLED"
+    E_ACCESS_DISABLING = "E_ACCESS_DISABLING"
     E_ACCESS_SERV_UNK = "E_ACCESS_SERV_UNK"
 
     @staticmethod
@@ -88,6 +90,8 @@ class WarningMessages(Enum):
 class SuccessMessages(Enum):
     S_POOL_CREATED = "S_POOL_CREATED"
     S_POOL_EXPANDED = "S_POOL_EXPANDED"
+    S_POOL_FORMATTED = "S_POOL_FORMATTED"
+    S_POOL_DESTROYED = "S_POOL_DESTROYED"
 
     S_APT_UPDATE = "S_APT_UPDATE"
     S_APT_UPGRADE = "S_APT_UPGRADE"
@@ -99,6 +103,8 @@ class SuccessMessages(Enum):
     S_ACCESS_ENABLED = "S_ACCESS_ENABLED"
     S_ACCESS_UPDATED = "S_ACCESS_UPDATED"
     S_ACCESS_DISABLED = "S_ACCESS_DISABLED"
+
+    S_DISK_FORMATTED = "S_DISK_FORMATTED"
 
     @staticmethod
     def get_message(success_code:"SuccessMessage",*args,**kwargs) -> str:
@@ -113,6 +119,7 @@ ERROR_MESSAGES = {
     ErrorMessages.E_UNKNOWN : lambda: _("Unknown Error"),
     ErrorMessages.E_UNKNOWN_RESPONSE : lambda: _("Unknown response from server"), # <------
     ErrorMessages.E_PROPERTY : lambda prop, info: _("Error while getting %(prop)s: %(info)s") % {'prop': prop, 'info': info}, # <------
+    ErrorMessages.E_CSRF : lambda : _("Form validation failed"), # <------
 
     ErrorMessages.E_POOL_ALREADY_CONF : lambda: _("The disk array is already configured."),
     ErrorMessages.E_POOL_NO_CONF : lambda: _("Disk array not configured yet."),
@@ -168,6 +175,7 @@ ERROR_MESSAGES = {
 
     ErrorMessages.E_ACCESS_ENABLED : lambda service,info: _("Error while enabling %(service)s: %(info)s)") % {'service':service,'info': info},  # <------
     ErrorMessages.E_ACCESS_DISABLED : lambda service,info: _("Error while disabling %(service)s: %(info)s)") % {'service':service,'info': info},  # <------
+    ErrorMessages.E_ACCESS_DISABLING : lambda service,info: _("Unable to disable %(service)s. Please, disable it manually.") % {'service':service},  # <------
     ErrorMessages.E_ACCESS_SERV_UNK: lambda service: _("Access service %(service)s not recognised.") % {'service':service}, # <------
 }
 
@@ -182,6 +190,8 @@ WARNING_MESSAGES = {
 SUCCESS_MESSAGES = {
     SuccessMessages.S_POOL_CREATED : lambda: _("Disk array created successfully."),
     SuccessMessages.S_POOL_EXPANDED : lambda: _("Disk array expanded successfully."),
+    SuccessMessages.S_POOL_FORMATTED : lambda: _("Disk array formatted successfully."), # <----------
+    SuccessMessages.S_POOL_DESTROYED : lambda: _("Disk array destroyed successfully."), # <----------
 
     SuccessMessages.S_APT_UPDATE : lambda: _("System updates retrieved successfully."),
     SuccessMessages.S_APT_UPGRADE : lambda: _("System updates installed successfully."),
@@ -193,4 +203,6 @@ SUCCESS_MESSAGES = {
     SuccessMessages.S_ACCESS_ENABLED : lambda service : _("Service %(service)s enabled successfully.") % {'service':service},  # <------
     SuccessMessages.S_ACCESS_UPDATED : lambda service : _("Service %(service)s settings updated successfully.") % {'service':service},  # <------
     SuccessMessages.S_ACCESS_DISABLED : lambda service : _("Service %(service)s disabled successfully.") % {'service':service},  # <------
+
+    SuccessMessages.S_DISK_FORMATTED : lambda dev : _("Disk %(dev)s formatted successfully.") % {'dev':dev},  # <------
 }

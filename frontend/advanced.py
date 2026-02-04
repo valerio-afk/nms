@@ -1,19 +1,38 @@
+from werkzeug.datastructures import ImmutableMultiDict
+
 from nms_shared import ErrorMessages
 from nms_shared.constants import HTTP_REPEAT_HEADER
 from .import NMSBACKEND as BACKEND, frontend as bp
 from .api.backend_proxy import show_flash
-from flask import render_template, redirect, url_for, request, flash, g, send_file, session, abort
+from flask import render_template, redirect, url_for, request, flash, g, send_file, session, Response
 from flask_wtf.csrf import generate_csrf, validate_csrf
 from io import BytesIO
 from widget import render_widget,get_widgets_html,get_widgets_css_files
 from wtforms import ValidationError
 from urllib.parse import quote, unquote
-from typing import Optional, Dict
+from typing import Optional, Dict, Callable, Any
 import os
 import time
 
 
 
+def risky_operation_reauth(operation:str,callback:Callable[[str, ImmutableMultiDict],Any]) -> Optional[Response]:
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+    else:
+        authorisation = session.pop("dz_authorisation",None)
+
+        if (authorisation is None):
+            return redirect(url_for("main.reauth",operation=operation))
+
+        else:
+            if ((token:=BACKEND.get_session_token(operation)) is not None):
+                form = request.form
+                callback(token,form)
+            else:
+                show_flash(code=ErrorMessages.E_AUTH_INVALID.name)
 
 def widget_system_admin():
 
@@ -125,127 +144,54 @@ def get_tank_key():
 
 @bp.route('/advanced/format',methods=['POST'])
 def format():
-    try:
-        validate_csrf(request.form.get("csrf_token"))
-    except ValidationError:
-        raise Exception("CSRF validation failed")
-        abort(400)
-
-    authorisation = session.pop("dz_authorisation",None)
-
-    if (authorisation is None):
-        return redirect(url_for("main.reauth",operation="format"))
-
-    else:
-        if (time.time() - authorisation['timestamp']) < 60:
-            if (authorisation['operation'] == "format"):
-                try:
-                    BACKEND.simulate_format()
-                    flash("Disk array formatted.","success")
-                except Exception as e:
-                    flash(f"Error while formatting disk array: {str(e)}","error")
-            else:
-                flash(f"Invalid authorisation", "error")
-
-        else:
-            flash("Authorisation token expired","error")
-
-        return redirect(url_for("main.advanced"))
+    return risky_operation_reauth("format",lambda token,_ : BACKEND.simulate_format(token)) or redirect(url_for("main.advanced"))
 
 @bp.route('/advanced/destroy',methods=['POST'])
 def zpool_destroy():
-    try:
-        validate_csrf(request.form.get("csrf_token"))
-    except ValidationError:
-        flash("CSRF validation failed","error")
-        return redirect(url_for("main.advanced"))
-
-    authorisation = session.pop("dz_authorisation",None)
-
-    if (authorisation is None):
-        return redirect(url_for("main.reauth",operation="destroy"))
-
-    else:
-        if (time.time() - authorisation['timestamp']) < 60:
-            if (authorisation['operation'] == "destroy"):
-                try:
-                    BACKEND.destroy_tank()
-                    flash("Disk array deleted.","success")
-                except Exception as e:
-                    flash(f"Error while deleting disk array: {str(e)}","error")
-            else:
-                flash(ErrorMessage.get_error(ErrorMessage.E_AUTH_INVALID), "error")
-
-        else:
-            flash(ErrorMessage.get_error(ErrorMessage.E_AUTH_EXPIRED),"error")
-
-        return redirect(url_for("main.advanced"))
+    return risky_operation_reauth("destroy", lambda token,_: BACKEND.pool_destroy(token)) or redirect(url_for("main.advanced"))
 
 @bp.route('/advanced/recover',methods=['POST'])
 def zpool_recover():
-    try:
-        validate_csrf(request.form.get("csrf_token"))
-    except ValidationError:
-        flash("CSRF validation failed","error")
-        return redirect(url_for("main.advanced"))
-
-    authorisation = session.pop("dz_authorisation",None)
-
-    if (authorisation is None):
-        return redirect(url_for("main.reauth",operation="recover"))
-
-    else:
-        if (time.time() - authorisation['timestamp']) < 60:
-            if (authorisation['operation'] == "recover"):
-                try:
-                    BACKEND.recover()
-                    flash(SuccessMessage.get_message(SuccessMessage.S_RECOVERY),"success")
-                except Exception as e:
-                    flash(ErrorMessage.get_error(ErrorMessage.E_POOL_RECOVERY,str(e)),"error")
-            else:
-                flash(ErrorMessage.get_error(ErrorMessage.E_AUTH_INVALID), "error")
-
-        else:
-            flash(ErrorMessage.get_error(ErrorMessage.E_AUTH_EXPIRED),"error")
-
-        return redirect(url_for("main.advanced"))
+    return risky_operation_reauth("recover", lambda token,_: BACKEND.pool_recover(token)) or redirect(url_for("main.advanced"))
 
 @bp.route('/advanced/format_disk',methods=['POST'])
 def zpool_format_disk():
-    try:
-        validate_csrf(request.form.get("csrf_token"))
-    except ValidationError:
-        flash("CSRF validation failed","error")
-        return redirect(url_for("main.advanced"))
+    return risky_operation_reauth("format-disk", lambda token,form: BACKEND.format_disk(form.get("option"),token)) or redirect(url_for("main.advanced"))
 
-    authorisation = session.pop("dz_authorisation",None)
-
-    option = request.form.get("option",None)
-
-    if option is None:
-        raise Exception("Invalid disk to format")
-
-    auth_code = quote(f"format:{option.replace("/","+")}")
-
-
-    if (authorisation is None):
-        return redirect(url_for("main.reauth",operation=auth_code))
-
-    else:
-        if (time.time() - authorisation['timestamp']) < 60:
-            if (authorisation['operation'] == unquote(auth_code)):
-                try:
-                    BACKEND.format_disk(option)
-                    flash(f"Disk {option} formatted successfully.","success")
-                except Exception as e:
-                    flash(f"Error while formatting {option}: {str(e)}","error")
-            else:
-                flash(f"Invalid authorisation", "error")
-
-        else:
-            flash("Authorisation token expired","error")
-
-        return redirect(url_for("main.advanced"))
+    # try:
+    #     validate_csrf(request.form.get("csrf_token"))
+    # except ValidationError:
+    #     flash("CSRF validation failed","error")
+    #     return redirect(url_for("main.advanced"))
+    #
+    # authorisation = session.pop("dz_authorisation",None)
+    #
+    # option = request.form.get("option",None)
+    #
+    # if option is None:
+    #     raise Exception("Invalid disk to format")
+    #
+    # auth_code = quote(f"format:{option.replace("/","+")}")
+    #
+    #
+    # if (authorisation is None):
+    #     return redirect(url_for("main.reauth",operation=auth_code))
+    #
+    # else:
+    #     if (time.time() - authorisation['timestamp']) < 60:
+    #         if (authorisation['operation'] == unquote(auth_code)):
+    #             try:
+    #                 BACKEND.format_disk(option)
+    #                 flash(f"Disk {option} formatted successfully.","success")
+    #             except Exception as e:
+    #                 flash(f"Error while formatting {option}: {str(e)}","error")
+    #         else:
+    #             flash(f"Invalid authorisation", "error")
+    #
+    #     else:
+    #         flash("Authorisation token expired","error")
+    #
+    #     return redirect(url_for("main.advanced"))
 
 
 @bp.route('/advanced/apt',methods=['POST'])

@@ -1,9 +1,8 @@
 import datetime
 from enum import Enum
-from flask import flash
+from flask import flash, session
 from flask_babel import _
 from traceback import format_exc
-
 from frontend.api.tasks import BackgroundTask
 from frontend.api.threads import TimerThread
 from frontend.exception import NotAuthenticatedError
@@ -12,7 +11,6 @@ from nms_shared.disks import Disk, DiskStatus
 from requests import get, post
 from requests.exceptions import HTTPError
 from typing import Optional, List, Any, Dict, Literal, Union
-
 from nms_shared.threads import NMSThread
 
 def parse_disks_from_request(d:Optional[List[dict]]) -> List[Disk]:
@@ -74,7 +72,6 @@ class BackEndProxy:
     TASK_LIFETIME = 60
 
     def __init__(this) -> None:
-        this._bearer:Optional[str] = None
         this._tasks:Dict[str, BackgroundTask] = {}
         this._threads:Dict[str,Optional[NMSThread]] = {
             'token_refresher' : None
@@ -86,6 +83,7 @@ class BackEndProxy:
                  url_params:Optional[List[str]] = None,
                  qstring_params:Optional[dict] = None,
                  body_params:Optional[dict] = None,
+                 extra_headers:Optional[dict] = None,
                  ignore_exception:bool = False,
                  ) -> Optional[dict]:
         url = f"{BackEndProxy.API}/{BackEndProxy.VERSION}/{endpoint}"
@@ -95,8 +93,11 @@ class BackEndProxy:
 
         headers = {}
 
-        if (this._bearer is not None):
-            headers["Authorization"] = "Bearer " + this._bearer
+        if (this.bearer_token is not None):
+            headers["Authorization"] = "Bearer " + this.bearer_token
+
+        if (extra_headers is not None):
+            headers.update(extra_headers)
 
         match method:
             case RequestMethod.GET:
@@ -132,7 +133,10 @@ class BackEndProxy:
 
                     detail = err_message['detail']
 
-                    if (isinstance(detail,str) and (detail.lower() == "not authenticated")):
+                    if (
+                            (isinstance(detail,str) and (detail.lower() == "not authenticated")) or
+                            ((detail.get("code") == ErrorMessages.E_AUTH_REVOKED.name))
+                    ):
                         raise NotAuthenticatedError()
 
                     make_flash(detail)
@@ -182,8 +186,13 @@ class BackEndProxy:
 
     #AUTH PROPERTIES
     @property
+    def bearer_token(this) -> Optional[str]:
+        return this.get_session_token("login")
+
+    @property
     def is_otp_configured(this):
-        return this._get_bool_property_request("auth/otp","is_configured")
+        r =  this._get_bool_property_request("auth/otp","is_configured")
+        return r if r is not None else True
 
 
     #SYSTEM PROPERTIES
@@ -229,7 +238,7 @@ class BackEndProxy:
 
     @property
     def pool_status_id(this) -> Optional[str]:
-        if (this._bearer is not None):
+        if (this.bearer_token is not None):
             return this._get_property_request("pool", "status_id")
         return None
 
@@ -299,6 +308,17 @@ class BackEndProxy:
         return this._request("services/get", RequestMethod.GET) or {}
 
     #AUTH METHOD
+    def get_session_token(this,purpose:str) -> Optional[str]:
+        try:
+            return session['tokens'].get(purpose)
+        except KeyError:
+            return None
+
+    def set_session_token(this,purpose:str,token:str) -> None:
+        if (session.get('tokens') is None):
+            session['tokens'] = {}
+        session['tokens'][purpose] = token
+
     def verify_otp(this,otp:str,purpose:str="login",duration:int=TOKEN_LONGEVITY) -> Optional[str]:
         data = {
             "otp": otp,
@@ -320,7 +340,7 @@ class BackEndProxy:
         duration = BackEndProxy.TOKEN_LONGEVITY
         token = this.verify_otp(otp)
         if (token is not None):
-            this._bearer = token
+            this.set_session_token("login",token)
 
             refresher = this._threads['token_refresher']
 
@@ -331,18 +351,59 @@ class BackEndProxy:
             refresher.start()
             this._threads['token_refresher'] = refresher
 
-
             return True
 
         return False
+
+    def logout(this) -> None:
+        this._request("auth/logout",RequestMethod.POST)
+
+        refresher = this._threads['token_refresher']
+        this._threads['token_refresher'] = None
+
+        if (refresher is not None):
+            refresher.stop()
+
+        session.clear()
 
     def refresh_token(this) -> None:
        r = this._request("auth/refresh",RequestMethod.GET)
 
        if (r is not None) and ((new_token := r.get("token")) is not None):
-           this._bearer = new_token
+           this.set_session_token("login",new_token)
 
-    #SERVICE
+    #POOL METHODS
+    def pool_destroy(this,auth_token:str) -> None:
+        this._request(
+            "pool/destroy",
+            RequestMethod.POST,
+            extra_headers={"X-Extra-Auth-destroy":auth_token}
+        )
+
+    def simulate_format(this,auth_token:str) -> None:
+        this._request(
+            "pool/format",
+            RequestMethod.POST,
+            extra_headers={"X-Extra-Auth-format":auth_token}
+        )
+
+    def pool_recover(this, auth_token:str) -> None:
+        this._request(
+            "pool/recover",
+            RequestMethod.POST,
+            extra_headers={"X-Extra-Auth-recover":auth_token}
+        )
+
+    #DISK METHODS
+    def format_disk(this,dev:str, auth_token:str) -> None:
+        this._request(
+            "disks/format",
+            RequestMethod.POST,
+            qstring_params={"dev":dev},
+            extra_headers={"X-Extra-Auth-format-disk":auth_token}
+        )
+
+    #SERVICE METHODS
     def enable_service(this,service:str,**kwargs) -> None:
         this._request(f"services/enable/{service}",RequestMethod.POST,body_params=kwargs)
 
@@ -388,7 +449,7 @@ class BackEndProxy:
 
         if (task is not None):
             r = this._request(f"system/task/{task_id}",RequestMethod.GET)
-            task.last_update = datetime.datetime.now().timestamp()
+            task.last_update = d#atetime.datetime.now().timestamp()
 
             if (r is None):
                 task.running = False

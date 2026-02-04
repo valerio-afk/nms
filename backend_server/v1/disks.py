@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
-from backend_server.v1.auth import verify_token_factory
-from backend_server.utils.responses import  ErrorMessage
+from backend_server.v1.auth import verify_token_factory, verify_token_header_factory
+from backend_server.utils.responses import  ErrorMessage, SuccessMessage
 from backend_server.utils.cmdl import LSBLK, ZPoolLabelClear, WipeFS
 from nms_shared.disks import Disk
-from typing import List
+from nms_shared.msg import SuccessMessages
+from typing import List, Optional, Dict
 
 import json
 
@@ -96,3 +97,13 @@ def sys_disks() -> List[Disk]:
           )
 def get_all_disks() -> List[Disk]:
     return get_disks()
+
+@disks.post("/format",
+            responses={
+              500: {"description": "Any internal error to retrieve system disks"},
+            },
+          summary="Format a specific disk"
+           )
+def perform_format_disk(dev:str,auth:Dict=Depends(verify_token_header_factory("format-disk"))) -> Optional[Dict]:
+    format_disk(dev)
+    return {"detail": SuccessMessage(code=SuccessMessages.S_DISK_FORMATTED.name,params=[dev])}

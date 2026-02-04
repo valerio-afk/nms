@@ -5,7 +5,7 @@ import pyotp
 import pytz
 import os
 from datetime import datetime,timedelta
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.params import Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
@@ -28,46 +28,62 @@ def create_token(purpose:str, duration:int) -> str:
 
     payload = {"purpose":purpose,"released": released.timestamp(), "exp":exp_timestamp}
 
-
     encoded_jwt = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
     CONFIG.add_issued_token(encoded_jwt, exp_timestamp)
     return encoded_jwt
+
+def token_verification(token:str,requested_purpose:str) -> Dict[str, Any]:
+    try:
+        if (token not in CONFIG.issued_tokens):
+            raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_REVOKED.name))
+
+        payload = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+
+        purpose = payload.get("purpose")
+        if (purpose is None):
+            CONFIG.error("Token missing `purpose` claim")
+            raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_MALFORMED.name))
+        elif (purpose != requested_purpose):
+            CONFIG.error(f"Purpose claim not matching ({purpose} != {requested_purpose})")
+            raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_INVALID.name))
+
+        exp = payload.get("exp")
+
+        if (exp is None):
+            CONFIG.error("Token missing `expiration` claim")
+            raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_MALFORMED.name))
+        elif (datetime.now(pytz.timezone("UTC")).timestamp() > exp):
+            CONFIG.error("Token Expired")
+            raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_EXPIRED.name))
+
+        payload['token'] = token
+
+        return payload
+
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_MALFORMED.name))
 
 def verify_token_factory(requested_purpose:str='login'):
     def verify_token(credentials:HTTPAuthorizationCredentials = Depends(bearer)) -> Dict[str,Any]:
         token = credentials.credentials
 
-        try:
-            if (token not in CONFIG.issued_tokens):
-                raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_REVOKED.name))
-
-            payload = jwt.decode(token, SECRET_KEY, algorithms="HS256")
-
-            purpose = payload.get("purpose")
-            if (purpose is None):
-                CONFIG.error("Token missing purpose claim")
-                raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_MALFORMED.name))
-            elif (purpose != requested_purpose):
-                CONFIG.error("Purpose claim not matching")
-                raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_INVALID.name))
-
-            exp = payload.get("exp")
-
-            if (exp is None):
-                CONFIG.error("Expiration claim not matching")
-                raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_MALFORMED.name))
-            elif (datetime.now(pytz.timezone("UTC")).timestamp() > exp):
-                CONFIG.error("Token Expired")
-                raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_EXPIRED.name))
-
-            payload['token'] = token
-
-            return payload
-
-        except jwt.PyJWTError:
-            raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_MALFORMED.name))
+        return token_verification(token,requested_purpose)
 
     return verify_token
+
+def verify_token_header_factory(requested_purpose:str):
+    def verify_token(request: Request) -> Dict[str,Any]:
+        header_name = f"X-Extra-Auth-{requested_purpose}"
+
+        try:
+            token = request.headers[header_name]
+            return token_verification(token, requested_purpose)
+        except KeyError:
+            CONFIG.error(request.headers)
+            raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_INVALID.name))
+
+    return verify_token
+
 
 class AuthProperty(BaseModel):
     property:str
@@ -127,9 +143,9 @@ def auth_otp_verify(data:OTPVerification) -> AuthToken:
 
     totp = pyotp.TOTP(secret)
 
-    # if not totp.verify(data.otp):
-    #     CONFIG.error("Invalid OTP")
-    #     raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_WRONG_OTP.name))
+    if not totp.verify(data.otp):
+        CONFIG.error("Invalid OTP")
+        raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_WRONG_OTP.name))
 
     token = create_token(data.purpose,data.duration)
     CONFIG.info("Valid OTP - token issued")
@@ -147,5 +163,5 @@ def auth_token_refresh(token:Dict[str,Any] = Depends(verify_token_factory())) ->
     return AuthToken(token=token)
 
 @auth.post("/logout")
-def auth_token_refresh(token:dict = Depends(verify_token_factory())) -> None:
+def auth_logout(token:dict = Depends(verify_token_factory())) -> None:
     CONFIG.revoke_token(token['token'])

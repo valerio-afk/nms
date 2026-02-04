@@ -4,12 +4,13 @@ from backend_server.utils.cmdl import CommandLine, ZFSLoadKey, ZFSMount, LocalCo
                                       ZFSUnLoadKey, ZFSDestroy, ZFSCreate, ZPoolStatus, ZFSList, ZPoolExport, \
                                       ZPoolImport, CreateKey, ZPoolCreate, ZPoolDestroy, ZPoolClear, ZPoolReplace
 from backend_server.utils.config import CONFIG
-from backend_server.utils.responses import ExpasionStatus, BackendProperty, ErrorMessage
-from backend_server.v1.auth import verify_token_factory
+from backend_server.utils.responses import ExpasionStatus, BackendProperty, ErrorMessage, SuccessMessage
+from backend_server.v1.auth import verify_token_factory, verify_token_header_factory
 from datetime import timedelta
 from enum import Enum
 from fastapi import HTTPException, APIRouter, Depends, UploadFile, File
-from nms_shared import ErrorMessages
+from backend_server.v1.services import disable_all_access_services
+from nms_shared import ErrorMessages, SuccessMessages
 from nms_shared.constants import KEYPATH
 from nms_shared.enums import DiskStatus
 from nms_shared.disks import Disk
@@ -37,7 +38,7 @@ def unmount():
     if (not CONFIG.is_mounted):
         return
 
-    #TODO: disable all access services
+    disable_all_access_services()
 
     cmds: List[CommandLine] = [
         ZFSUnmount(CONFIG.pool_name, CONFIG.dataset_name),
@@ -497,18 +498,19 @@ def pool_mount() -> None:
     summary="Unmount the disk array"
 )
 def pool_unmount() -> None:
-        unmount()
+    disable_all_access_services()
+    unmount()
 
 @pool.post(
     "/format",
     responses={500: {"description": "Any internal errors"}},
     summary="Destroy and recreate a new disk array"
 )
-def pool_format() -> None:
+def pool_format(auth:Dict=Depends(verify_token_header_factory("format"))) -> Optional[Dict]:
     if (not CONFIG.is_pool_configured):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_NO_CONF.name))
 
-    # TODO: disable all access services
+    disable_all_access_services()
 
     unmount()
 
@@ -528,6 +530,7 @@ def pool_format() -> None:
         errors = "\n ".join([x["stderr"] for x in output])
         raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_FORMAT.name,params=[errors]))
 
+    return {"detail": SuccessMessage(code=SuccessMessages.S_POOL_FORMATTED.name)}
 
 
 @pool.post(
@@ -658,12 +661,12 @@ def create_disk_array(data:CreatePool) -> None:
 @pool.post("/destroy",
     responses={500: {"description": "Any internal errors"}},
     summary="Destroy the new disk array",)
-def create_disk_array() -> None:
+def destroy_disk_array(auth:Dict=Depends(verify_token_header_factory("destroy"))) -> Optional[dict]:
     from .fs import rm_mountpoint
     if (not CONFIG.is_pool_configured):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_NO_CONF.name))
 
-    #TODO: disable all services
+    disable_all_access_services()
 
     mountpoint = CONFIG.mountpoint
 
@@ -696,6 +699,8 @@ def create_disk_array() -> None:
     except:
         ... # it means that zpool already removed it
 
+    return {"detail": SuccessMessage(code=SuccessMessages.S_POOL_DESTROYED.name)}
+
 @pool.post("/import-key",
     responses={500: {"description": "Any internal errors"}},
     summary="Import encryption key for a disk array",)
@@ -720,11 +725,16 @@ async def import_key(key_file: UploadFile = File(...)) -> None:
 
 @pool.post("/recover",
     responses={500: {"description": "Any internal errors"}},
-    summary="Attempts to recover from errors in the disk array",)
-def attempt_recovery() -> None:
+    summary="Attempts to recover from errors in the disk array")
+def attempt_recovery(auth:Dict=Depends(verify_token_header_factory("recover"))) -> Optional[dict]:
+    if (not CONFIG.is_pool_configured):
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_NO_CONF.name))
+
     recover()
 
-@pool.post("/recover",
+    return {"detail": SuccessMessage(code=SuccessMessages.S_RECOVERY.name)}
+
+@pool.post("/replace",
     responses={500: {"description": "Any internal errors"}},
     summary="Replace a device with another device in the disk array",)
 def replace(old_dev:str, new_dev:str) -> None:

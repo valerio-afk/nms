@@ -12,6 +12,15 @@ services = APIRouter(
     dependencies=[Depends(verify_token_factory())]
 )
 
+
+def disable_all_access_services() -> None:
+    for name, s in CONFIG.access_services.items():
+        if s.is_active:
+            try:
+                s.disable()
+            except:
+                raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_ACCESS_DISABLING.name,params=[name.upper()]))
+
 @services.get("/get",
           response_model=Dict[str,AccessService],
           responses={
