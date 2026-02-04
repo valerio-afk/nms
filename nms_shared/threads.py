@@ -6,15 +6,20 @@ class NMSThread(metaclass=ABCMeta):
     def __init__(this):
         this._running:bool = False
         this._thread:Optional[threading.Thread] = None
-        this._exception:Optional[Exception] = None
+        this._message:Optional[Exception] = None
+        this._exception:bool = False
 
     @property
     def is_running(this) -> bool:
         return this._running
 
     @property
-    def exception(this) -> Optional[Exception]:
+    def has_exception(this) -> bool:
         return this._exception
+
+    @property
+    def message(this) -> Optional[Exception]:
+        return this._message
 
     @property
     def progress(this) -> Optional[float]:
@@ -50,7 +55,8 @@ class NMSThread(metaclass=ABCMeta):
         try:
             this.run()
         except Exception as e:
-            this._exception = e
+            this._message = e
+            this._exception = True
 
         this._running = False
 

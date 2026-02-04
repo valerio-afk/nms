@@ -9,7 +9,7 @@ from collections import OrderedDict
 from enum import Enum
 from fastapi import APIRouter, Depends, HTTPException
 from nms_shared.constants import APT_LISTS
-from typing import Optional, Dict
+from typing import Optional, Dict, Union
 import datetime
 import os
 import platform
@@ -200,9 +200,9 @@ def apt_get(action:AptGetActions) -> BackgroundTask:
 @system.get("/task/{task_id}",
               responses={500: {"description": "Any internal error while disabling an access services"}},
               summary="Get the information of background task",
-              response_model=Optional[BackgroundTask]
+              response_model=Optional[Union[BackgroundTask,Dict]]
 )
-def get_task_info(task_id: str) -> Optional[Dict]:
+def get_task_info(task_id: str) ->Optional[Union[BackgroundTask,Dict]]:
     task = SCHEDULER.get_task_by_id(task_id)
 
     if (task is None):
@@ -210,4 +210,11 @@ def get_task_info(task_id: str) -> Optional[Dict]:
 
     thread = task.thread
 
-    return BackgroundTask(task_id=task_id,running=thread.is_running,progress=thread.progress,eta=thread.eta)
+    if (thread.has_exception):
+        raise thread.message
+
+
+    if (thread.is_running):
+        return BackgroundTask(task_id=task_id,running=thread.is_running,progress=thread.progress,eta=thread.eta)
+    else:
+        return {"detail":thread.message}

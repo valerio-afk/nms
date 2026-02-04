@@ -169,7 +169,7 @@ class NMSConfig(Logger):
         return this._cfg.get("dataset")
 
     @property
-    def key_filename(this,path) -> Optional[str]:
+    def key_filename(this) -> Optional[str]:
         return this._cfg.get('pool').get("encrypted")
 
     @key_filename.setter
@@ -531,6 +531,10 @@ class NMSConfig(Logger):
         }
 
         this._cfg["dataset"] = dataset_name
+
+    def scrub_started(this) -> None:
+        this._cfg['pool']['tools']['scrub']['ongoing'] = True
+        this._cfg['pool']['tools']['scrub']['last'] = datetime.datetime.now().timestamp()
 
 
 

@@ -34,6 +34,7 @@ class ErrorMessages(Enum):
     E_POOL_UNMOUNT = "E_POOL_UNMOUNT"
     E_POOL_MOUNTED = "E_POOL_MOUNTED"
     E_POOL_UNMOUNTED = "E_POOL_UNMOUNTED"
+    E_POOL_SCRUB = "E_POOL_SCRUB"
     E_POOL_RM_MOUNTPOINT = "E_POOL_RM_MOUNTPOINT"
     E_POOL_INVALID_MOUNTPOINT = "E_POOL_INVALID_MOUNTPOINT"
     E_POOL_MOUNT_STATUS = "E_POOL_MOUNT_STATUS"
@@ -92,6 +93,9 @@ class SuccessMessages(Enum):
     S_POOL_EXPANDED = "S_POOL_EXPANDED"
     S_POOL_FORMATTED = "S_POOL_FORMATTED"
     S_POOL_DESTROYED = "S_POOL_DESTROYED"
+    S_POOL_MOUNTED = "S_POOL_MOUNTED"
+    S_POOL_UNMOUNTED = "S_POOL_UNMOUNTED"
+    S_POOL_SCRUB = "S_POOL_SCRUB"
 
     S_APT_UPDATE = "S_APT_UPDATE"
     S_APT_UPGRADE = "S_APT_UPGRADE"
@@ -145,6 +149,7 @@ ERROR_MESSAGES = {
     ErrorMessages.E_POOL_UNMOUNT : lambda info: _("Error while unmounting the disk array: %(info)s)") % {'info': info}, # <------
     ErrorMessages.E_POOL_MOUNTED : lambda: _("Disk array is mounted."),  # <------
     ErrorMessages.E_POOL_UNMOUNTED : lambda: _("Disk array is unmounted."),  # <------
+    ErrorMessages.E_POOL_SCRUB : lambda info : _("Error while verifying the disk array: %(info)s.") % {'info',info},  # <------
     ErrorMessages.E_POOL_INVALID_MOUNTPOINT : lambda: _("The provided mount point is not valid.") , # <------
     ErrorMessages.E_POOL_MOUNT_STATUS : lambda info: _("Error while retrieving the mount information the disk array: %(info)s)") % {
         'info': info},  # <------
@@ -192,6 +197,9 @@ SUCCESS_MESSAGES = {
     SuccessMessages.S_POOL_EXPANDED : lambda: _("Disk array expanded successfully."),
     SuccessMessages.S_POOL_FORMATTED : lambda: _("Disk array formatted successfully."), # <----------
     SuccessMessages.S_POOL_DESTROYED : lambda: _("Disk array destroyed successfully."), # <----------
+    SuccessMessages.S_POOL_MOUNTED : lambda: _("Disk array mounted successfully."), # <----------
+    SuccessMessages.S_POOL_UNMOUNTED : lambda: _("Disk array unmounted successfully."), # <----------
+    SuccessMessages.S_POOL_SCRUB : lambda: _("Disk array verification performed successfully."), # <----------
 
     SuccessMessages.S_APT_UPDATE : lambda: _("System updates retrieved successfully."),
     SuccessMessages.S_APT_UPGRADE : lambda: _("System updates installed successfully."),

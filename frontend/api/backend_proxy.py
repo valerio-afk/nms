@@ -373,6 +373,29 @@ class BackEndProxy:
            this.set_session_token("login",new_token)
 
     #POOL METHODS
+    def pool_create(this, pool_name:str, dataset_name:str, redundancy:bool, encryption:bool, compression:bool,devs:List[str]) -> None:
+        this._request("pool/create",RequestMethod.POST,body_params={
+            "pool_name": pool_name,
+            "dataset_name": dataset_name,
+            "redundancy": redundancy,
+            "encryption": encryption,
+            "compression": compression,
+            "disks": devs
+        })
+
+    def pool_mount(this):
+        this._request("pool/mount",RequestMethod.POST)
+
+    def pool_unmount(this):
+        this._request("pool/unmount",RequestMethod.POST)
+
+    def start_scrub(this) -> None:
+        task = this._request("pool/scrub",RequestMethod.POST)
+
+        if isinstance(task, dict):
+            this.register_task(id=task.get('task_id'),metadata="scrub",**task)
+
+
     def pool_destroy(this,auth_token:str) -> None:
         this._request(
             "pool/destroy",
@@ -449,7 +472,7 @@ class BackEndProxy:
 
         if (task is not None):
             r = this._request(f"system/task/{task_id}",RequestMethod.GET)
-            task.last_update = d#atetime.datetime.now().timestamp()
+            task.last_update = datetime.datetime.now().timestamp()
 
             if (r is None):
                 task.running = False
@@ -479,7 +502,22 @@ class BackEndProxy:
 
         return tasks
 
+    def get_tasks_by_metadata(this,metadata:str) -> List[BackgroundTask]:
+        new_tasks = {}
+        tasks = []
 
+        for task_id, task in this._tasks.items():
+            if (metadata == task.metadata):
+                this.update_task_info(task_id)
+                tasks.append(task)
+
+            if (task.running) and (
+                    (task.last_update + NMSBACKEND.TASK_LIFETIME) >= datetime.datetime.now().timestamp()):
+                new_tasks[task_id] = task
+
+        this._tasks = new_tasks
+
+        return tasks
 
 
 

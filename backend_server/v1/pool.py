@@ -1,10 +1,9 @@
-from pydantic import BaseModel
-
 from backend_server.utils.cmdl import CommandLine, ZFSLoadKey, ZFSMount, LocalCommandLineTransaction, ZFSUnmount, \
-                                      ZFSUnLoadKey, ZFSDestroy, ZFSCreate, ZPoolStatus, ZFSList, ZPoolExport, \
-                                      ZPoolImport, CreateKey, ZPoolCreate, ZPoolDestroy, ZPoolClear, ZPoolReplace
+    ZFSUnLoadKey, ZFSDestroy, ZFSCreate, ZPoolStatus, ZFSList, ZPoolExport, \
+    ZPoolImport, CreateKey, ZPoolCreate, ZPoolDestroy, ZPoolClear, ZPoolReplace, ZPoolScrub
 from backend_server.utils.config import CONFIG
-from backend_server.utils.responses import ExpasionStatus, BackendProperty, ErrorMessage, SuccessMessage
+from backend_server.utils.responses import ExpasionStatus, BackendProperty, ErrorMessage, SuccessMessage, BackgroundTask
+from backend_server.utils.scheduler import SCHEDULER
 from backend_server.v1.auth import verify_token_factory, verify_token_header_factory
 from datetime import timedelta
 from enum import Enum
@@ -15,6 +14,8 @@ from nms_shared.constants import KEYPATH
 from nms_shared.enums import DiskStatus
 from nms_shared.disks import Disk
 from typing import  Optional, List, Callable, Dict
+from pydantic import BaseModel
+from backend_server.utils.threads import NMSThread
 import base64
 import datetime
 import json
@@ -22,6 +23,7 @@ import os
 import re
 import subprocess
 import traceback
+import time
 
 
 pool = APIRouter(
@@ -394,6 +396,32 @@ class PoolProperties(Enum):
     scrub_info = "scrub_info"
 
 
+class ScrubStateChecker(NMSThread):
+    def __init__(this, pool_name: str):
+        super().__init__()
+        this.pool_name = pool_name
+
+    def run(this) -> None:
+        while (this.is_running):
+            output = ZPoolStatus(this.pool_name).execute()
+
+            if (output.returncode == 0):
+                d = json.loads(output.stdout)
+                scan_stats = d.get('pools', {}).get(this.pool_name, {}).get('scan_stats', {})
+
+                if (scan_stats.get('function', "") == "SCRUB"):
+                    if (scan_stats.get('state', "FINISHED") != "FINISHED"):
+                        time.sleep(2)
+                    else:
+                        break
+                else:
+                    break
+            else:
+                raise HTTPException(500,detail=ErrorMessage(code=ErrorMessages.E_POOL_SCRUB.name, params=[output.stderr.decode('utf8')]))
+
+        this._message = SuccessMessage(code=SuccessMessages.S_POOL_SCRUB.name)
+
+
 @pool.get("/get/disks",
           response_model=List[Disk],
           responses={500: {"description": "Any internal error to retrieve pool information"}},
@@ -469,37 +497,38 @@ def pool_get_property(prop:PoolProperties) -> Optional[BackendProperty]:
     responses={500: {"description": "Missing configuration/Other internal errors"}},
     summary="Mount the disk array"
 )
-def pool_mount() -> None:
+def pool_mount() -> Dict:
     if (not CONFIG.is_pool_configured):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_NO_CONF.name))
 
-    if (CONFIG.is_mounted):
-        return
+    if (not CONFIG.is_mounted):
+        cmds = []
 
-    cmds = []
+        if (CONFIG.has_encryption):
+            cmds.append(ZFSLoadKey(CONFIG.pool_name, CONFIG.key_filename))
 
-    if (CONFIG.has_encryption):
-        cmds.append(ZFSLoadKey(CONFIG.pool_name, CONFIG.key_filename))
+        cmds.append(ZFSMount(CONFIG.pool_name))
+        cmds.append(ZFSMount(CONFIG.pool_name, CONFIG.dataset_name))
 
-    cmds.append(ZFSMount(CONFIG.pool_name))
-    cmds.append(ZFSMount(CONFIG.pool_name, CONFIG.dataset_name))
+        trans = LocalCommandLineTransaction(*cmds)
 
-    trans = LocalCommandLineTransaction(*cmds)
+        output = trans.run()
 
-    output = trans.run()
+        if (not trans.success):
+            errors = "\n".join([o['stderr'] for o in output])
+            raise ErrorMessage(code=ErrorMessages.E_POOL_MOUNT.name,params=[errors])
 
-    if (not trans.success):
-        errors = "\n".join([o['stderr'] for o in output])
-        raise ErrorMessage(code=ErrorMessages.E_POOL_MOUNT.name,params=[errors])
+    return {"detail": SuccessMessage(code=SuccessMessages.S_POOL_MOUNTED.name)}
 
 @pool.post(
     "/unmount",
     responses={500: {"description": "Missing configuration/Other internal errors"}},
     summary="Unmount the disk array"
 )
-def pool_unmount() -> None:
+def pool_unmount() -> Dict:
     disable_all_access_services()
     unmount()
+    return {"detail": SuccessMessage(code=SuccessMessages.S_POOL_UNMOUNTED.name)}
 
 @pool.post(
     "/format",
@@ -594,7 +623,7 @@ class CreatePool(BaseModel):
     pool_name: str
     dataset_name: str
     redundancy: bool
-    encryption: Optional[str]
+    encryption: bool
     compression: bool
     disks: List[str]
 
@@ -626,7 +655,7 @@ def create_disk_array(data:CreatePool) -> None:
     commands = []
     enc_key = None
 
-    if data.encryption is not None:
+    if data.encryption:
         enc_key = KEYPATH
         keygen = CreateKey(enc_key)
         commands.append(keygen)
@@ -657,6 +686,8 @@ def create_disk_array(data:CreatePool) -> None:
     CONFIG.flush_config()
 
     change_permissions(CONFIG.mountpoint)
+
+    return {"detail": SuccessMessage(code=SuccessMessages.S_POOL_CREATED.name)}
 
 @pool.post("/destroy",
     responses={500: {"description": "Any internal errors"}},
@@ -745,6 +776,27 @@ def replace(old_dev:str, new_dev:str) -> None:
     if (process.returncode != 0):
         error = process.stderr.decode()
         raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_DISK_REPLACE.name, params=[old_dev, new_dev, error]))
+
+@pool.post("/scrub",
+    responses={500: {"description": "Any internal errors"}},
+    summary="Start disk array scrubbing operation",)
+def pool_scrub() -> None:
+    pool_name = CONFIG.pool_name
+    cmd =  ZPoolScrub(pool_name)
+
+    process = cmd.execute()
+
+    if (process.returncode != 0):
+        error = process.stderr.decode()
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_SCRUB.name,params=[error]))
+
+    task = ScrubStateChecker(pool_name)
+    task_id = SCHEDULER.schedule(task)
+
+    CONFIG.scrub_started()
+    CONFIG.flush_config()
+
+    return BackgroundTask(task_id=task_id,running=True,progress=None,eta=None)
 
 
 #TODO: EXPAND

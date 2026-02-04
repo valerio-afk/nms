@@ -108,10 +108,9 @@ def new_pool() -> Response:
 
         disks = form.disks.data
 
-        lang = str(get_locale())
+        #(pool_name,dataset_name,redundancy,encryption,compression,disks, lang)
 
-        task = create_pool.delay(pool_name,dataset_name,redundancy,encryption,compression,disks, lang)
-        BACKEND.append_task(NMSTask(task.task_id,"/disks",tag="new_disk"))
+        BACKEND.pool_create(pool_name,dataset_name,redundancy,encryption,compression,disks)
 
     else:
         for e in form.errors:
@@ -155,25 +154,13 @@ def scrub() -> Response:
 
 @bp.route("/disk/unmount",methods=['POST'])
 def unmount() -> Response:
-    try:
-        BACKEND.unmount()
-    except Exception as e:
-        flash(str(e),"error")
-    else:
-        flash("Disk array unmounted successfully","success")
-
+    BACKEND.pool_unmount()
     return redirect(url_for("main.disk_management"))
 
 
 @bp.route("/disk/mount",methods=['POST'])
 def mount() -> Response:
-    try:
-        BACKEND.mount()
-    except Exception as e:
-        flash(str(e), "error")
-    else:
-        flash("Disk array mounted successfully", "success")
-
+    BACKEND.pool_mount()
     return redirect(url_for("main.disk_management"))
 
 @bp.route("/disk/replace",methods=['POST'])

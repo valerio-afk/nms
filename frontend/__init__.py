@@ -1,4 +1,3 @@
-from nms_shared.msg import WarningMessages
 from .api.backend_proxy import NMSBACKEND
 from flask import Blueprint, flash, session, redirect, Response ,url_for, request
 from flask_babel import get_locale
@@ -12,22 +11,6 @@ from .exception import NotAuthenticatedError
 
 frontend:Blueprint = Blueprint('main',__name__)
 
-
-@frontend.before_request
-def check_flash_messages_from_tasks() -> None:
-    ...
-    # tasks = BACKEND.get_completed_tasks()
-    # reload_config = False
-    #
-    # for t in tasks:
-    #     msg = str(t.result)
-    #     flash(msg,"success" if t.successful else "error")
-    #     reload_config = True
-    #
-    #
-    # if (reload_config):
-    #     BACKEND.load_configuration_file()
-    #     BACKEND.remove_completed_tasks()
 
 @frontend.before_request
 def check_pool_warnings() -> None:
@@ -87,14 +70,15 @@ def require_login() -> Optional[Response]:
             return redirect(url_for("main.login",**redirect_params))
 
 
-# @frontend.after_request
-# def scrub_checker(response) -> Response:
-#
-#     BACKEND.check_scrub_status()
-#     return response
 
 @frontend.after_request
-def no_cache(response) -> Response:
+def after_request_ops(response) -> Response:
+
+    NMSBACKEND.get_tasks_by_metadata("scrub")
+    # this operation will also deal with flash msg and whatnots
+    # no further operation is required
+
+    #force no cache
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
