@@ -1,5 +1,4 @@
 from enum import Enum
-
 import jwt
 import pyotp
 import pytz
@@ -91,16 +90,22 @@ class AuthProperty(BaseModel):
 
 class AuthProperties(Enum):
     is_configured = 'is_configured'
+    is_new_otp_ready = 'is_new_otp_ready'
 
 @auth.get("/otp/get/{prop}", response_model=AuthProperty, responses={404: {"description": "Invalid property"}})
 def auth_get_property(prop:AuthProperties) -> AuthProperty:
+    result = None
     match prop:
         case AuthProperties.is_configured:
-            CONFIG.info(f"Requesting auth property {prop}")
-            return AuthProperty(property=prop.value,value=CONFIG.is_otp_configured)
+            result = AuthProperty(property=prop.value,value=CONFIG.is_otp_configured)
+        case AuthProperties.is_new_otp_ready:
+            result = AuthProperty(property=prop.value, value=CONFIG.temporary_otp_secret is not None)
         case _:
             CONFIG.error(f"Requested invalid auth property {prop}")
             raise HTTPException(status_code=404, detail=f"Property {prop} not valid for auth")
+
+    CONFIG.info(f"{result.property}={result.value}")
+    return result
 
 
 class AuthUri(BaseModel):
@@ -152,9 +157,15 @@ def auth_otp_verify(data:OTPVerification) -> AuthToken:
 
     return AuthToken(token=token)
 
+@auth.post("/otp/reset",responses={403: {"description": "Invalid token"}},summary="Reset the OTP secret")
+def auth_token_refresh(token:Dict[str,Any] = Depends(verify_token_factory())) -> None:
+    CONFIG.revoke_token(token['token'])
+    CONFIG.otp_secret = None
+    CONFIG.warning("OTP secret reset")
+
+
 @auth.get("/refresh",response_model=AuthToken,responses={403: {"description": "Invalid token"}},summary="Refresh access token")
 def auth_token_refresh(token:Dict[str,Any] = Depends(verify_token_factory())) -> AuthToken:
-    print(token)
     duration = (token['exp'] - token['released']) // 60
     CONFIG.revoke_token(token['token'])
     token = create_token(token["purpose"],duration)

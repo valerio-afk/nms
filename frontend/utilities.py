@@ -21,7 +21,12 @@ def check_task_by_id(task_id:str) -> Response:
     if task is None:
         return jsonify({"progress": 100})
 
-    return jsonify(task.data)
+    return jsonify({
+        "running": task.running,
+        "progress": task.progress,
+        "eta": task.eta,
+        "message": str(task)
+    })
 
 
 @bp.route("/reboot", methods=['POST'])

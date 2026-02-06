@@ -20,7 +20,7 @@ class SuccessMessage(StatusMessage):
 
 class ExpasionStatus(BaseModel):
     is_running: bool
-    eta: Optional[timedelta]
+    eta: Optional[int]
     progress: Optional[float]
 
 class BackendProperty(BaseModel):
@@ -53,4 +53,5 @@ class BackgroundTask(BaseModel):
     running:bool
     progress:Optional[float]
     eta: Optional[int]
+    detail:Any
 

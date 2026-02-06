@@ -5,8 +5,8 @@ from flask_babel import _
 from traceback import format_exc
 from frontend.api.tasks import BackgroundTask
 from frontend.api.threads import TimerThread
-from frontend.exception import NotAuthenticatedError
-from nms_shared import ErrorMessages, SuccessMessages
+from frontend.utils.exception import NotAuthenticatedError
+from nms_shared import ErrorMessages, SuccessMessages, WarningMessages
 from nms_shared.disks import Disk, DiskStatus
 from requests import get, post
 from requests.exceptions import HTTPError
@@ -49,6 +49,8 @@ def make_flash(data:dict) -> None:
         match type:
             case "error":
                 msg = ErrorMessages.get_error_from_string(code,*params)
+            case "warning":
+                msg = WarningMessages.get_warning_from_string(code, *params)
             case "success":
                 msg = SuccessMessages.get_success_from_string(code,*params)
             case _:
@@ -180,8 +182,19 @@ class BackEndProxy:
 
     #OTHER PROPERTIES
     @property
-    def tasks(this) -> List:
-        return []
+    def tasks(this) -> List[BackgroundTask]:
+        new_tasks = {}
+        tasks = [t for t in this._tasks.values()]
+
+        for task_id, task in this._tasks.items():
+            this.update_task_info(task_id)
+            if (task.running) and (
+                    (task.last_update + NMSBACKEND.TASK_LIFETIME) >= datetime.datetime.now().timestamp()):
+                new_tasks[task_id] = task
+
+        this._tasks = new_tasks
+
+        return tasks
 
 
     #AUTH PROPERTIES
@@ -192,6 +205,11 @@ class BackEndProxy:
     @property
     def is_otp_configured(this):
         r =  this._get_bool_property_request("auth/otp","is_configured")
+        return r if r is not None else True
+
+    @property
+    def is_new_otp_ready(this):
+        r = this._get_bool_property_request("auth/otp", "is_new_otp_ready")
         return r if r is not None else True
 
 
@@ -224,6 +242,10 @@ class BackEndProxy:
         return {}
 
     #POOL PROPERTIES
+    @property
+    def encryption_key(this) -> Optional[str]:
+        return this._get_property_request("pool", "encryption_key")
+
     @property
     def scrub_report(this) -> Optional[Dict[str, str]]:
         return this._get_property_request("pool", "last_scrub_report")
@@ -275,6 +297,14 @@ class BackEndProxy:
     @property
     def has_encryption(this) -> bool:
         return this.pool_settings_raw.get("encryption",False)
+
+    @property
+    def pool_name(this) -> Optional[str]:
+        return this._get_property_request("pool", "pool_name")
+
+    @property
+    def dataset_name(this) -> Optional[str]:
+        return this._get_property_request("pool", "dataset_name")
 
 
 
@@ -372,6 +402,15 @@ class BackEndProxy:
        if (r is not None) and ((new_token := r.get("token")) is not None):
            this.set_session_token("login",new_token)
 
+    def reset_otp_secret(this) -> None:
+        this._request("auth/otp/reset",RequestMethod.POST)
+
+    def get_new_otp(this) -> Optional[str]:
+        r = this._request("auth/otp/new",RequestMethod.GET)
+
+        if (isinstance(r, dict)):
+            return r.get("provisioning_uri")
+
     #POOL METHODS
     def pool_create(this, pool_name:str, dataset_name:str, redundancy:bool, encryption:bool, compression:bool,devs:List[str]) -> None:
         this._request("pool/create",RequestMethod.POST,body_params={
@@ -417,6 +456,13 @@ class BackEndProxy:
             extra_headers={"X-Extra-Auth-recover":auth_token}
         )
 
+    def pool_expand(this,new_device:str) -> Optional[Dict]:
+        r = this._request("pool/expand",RequestMethod.POST,qstring_params={"new_device":new_device})
+
+        if (isinstance(r, dict)):
+            if (r.get("task_id") is not None):
+                return r
+
     #DISK METHODS
     def format_disk(this,dev:str, auth_token:str) -> None:
         this._request(
@@ -449,7 +495,6 @@ class BackEndProxy:
 
     def apt_get(this,action:Union[Literal['update'],Literal['upgrade']]) -> Optional[Dict]:
         r = this._request(f"system/apt/{action}", RequestMethod.POST)
-
         return r if isinstance(r,dict) else None
 
     def apt_get_update(this) -> Optional[Dict]:
@@ -459,15 +504,19 @@ class BackEndProxy:
         return this.apt_get("upgrade")
 
     #Other Method
-    def register_task(this,id:str,pages:Optional[List[str]]=None,metadata:Optional[str]=None,**kwargs) -> None:
-        this._tasks[id] = BackgroundTask(
+    def register_task(this,
+                      id:str,
+                      pages:Optional[List[str]]=None,
+                      metadata:Optional[str]=None,
+                      cls:type[BackgroundTask]=BackgroundTask,
+                      **kwargs) -> None:
+        this._tasks[id] = cls(
             pages=pages,
             last_update=datetime.datetime.now().timestamp(),
             metadata=metadata,
             **kwargs)
 
     def update_task_info(this,task_id:str) -> None:
-
         task = this._tasks.get(task_id)
 
         if (task is not None):
@@ -484,40 +533,20 @@ class BackEndProxy:
                 task.eta = r.get("eta")
 
 
-
     def get_tasks_by_path(this,path:str) -> List[BackgroundTask]:
         path = path.lower()
-        new_tasks = {}
-        tasks = []
-
-        for task_id,task in this._tasks.items():
-            if (path in [p.lower() for p in task.pages]):
-                this.update_task_info(task_id)
-                tasks.append(task)
-
-            if (task.running) and ((task.last_update+NMSBACKEND.TASK_LIFETIME) >= datetime.datetime.now().timestamp()):
-                new_tasks[task_id] = task
-
-        this._tasks = new_tasks
-
-        return tasks
+        return [t for t in this.tasks if path in [p.lower() for p in t.pages]]
 
     def get_tasks_by_metadata(this,metadata:str) -> List[BackgroundTask]:
-        new_tasks = {}
-        tasks = []
+        return [t for t in this.tasks if metadata == t.metadata]
 
-        for task_id, task in this._tasks.items():
-            if (metadata == task.metadata):
-                this.update_task_info(task_id)
-                tasks.append(task)
+    def get_task_by_id(this,id:str) -> Optional[BackgroundTask]:
+        for task in this.tasks:
+            if (id == task.task_id):
+                return task
 
-            if (task.running) and (
-                    (task.last_update + NMSBACKEND.TASK_LIFETIME) >= datetime.datetime.now().timestamp()):
-                new_tasks[task_id] = task
+        return None
 
-        this._tasks = new_tasks
-
-        return tasks
 
 
 

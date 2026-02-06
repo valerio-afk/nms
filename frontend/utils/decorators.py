@@ -1,4 +1,4 @@
-from . import  NMSBACKEND as BACKEND
+from frontend import  NMSBACKEND as BACKEND
 from functools import wraps
 from flask import request,redirect,abort
 from typing import Optional, Any, Callable
@@ -10,10 +10,10 @@ def wait(redirect_to:Optional[str]=None, tag:Optional[str]=None) -> Callable:
             path = request.path.lower()
 
             for task in BACKEND.tasks:
-                if path.startswith(task.page):
-                    if (tag is None) or (task.tag == tag):
-                        if not task.completed:
-                            if redirect_to is not None:
+                if any([path.startswith(p.lower()) for p in task.pages]):
+                    if ((tag is None) or (task.metadata == tag)):
+                        if (task.running):
+                            if (redirect_to is not None):
                                 return redirect(redirect_to)
                             else:
                                 abort(403)

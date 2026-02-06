@@ -81,12 +81,17 @@ class WarningMessages(Enum):
     W_POOL_OPENED = "W_POOL_OPENED"
     W_POOL_MISSING = "W_POOL_MISSING"
     W_POOL_CORRUPTED = "W_POOL_CORRUPTED"
+    W_POOL_NEEDED = "W_POOL_NEEDED"
     W_DISK_ISSUE = "W_DISK_ISSUE"
     W_DISK_FORMAT = "W_DISK_FORMAT"
 
     @staticmethod
     def get_warning(warn_code: "WarningMessages", *args, **kwargs) -> str:
-        return parse_msg(ERROR_MESSAGES[warn_code], *args, **kwargs)
+        return parse_msg(WARNING_MESSAGES[warn_code], *args, **kwargs)
+
+    @staticmethod
+    def get_warning_from_string(code:str,*args,**kwargs) -> str:
+        return WarningMessages.get_warning(WarningMessages[code],*args,**kwargs)
 
 class SuccessMessages(Enum):
     S_POOL_CREATED = "S_POOL_CREATED"
@@ -118,6 +123,13 @@ class SuccessMessages(Enum):
     def get_success_from_string(code:str,*args,**kwargs) -> str:
         return SuccessMessages.get_message(SuccessMessages[code],*args,**kwargs)
 
+class InfoMessages(Enum):
+    I_POOL_EXPANSION_ETA = "I_POOL_EXPANSION_ETA"
+    I_POOL_EXPANSION = "I_POOL_EXPANSION"
+
+    @staticmethod
+    def get_message(code:"InfoMessages",*args,**kwargs) -> str:
+        return parse_msg(INFO_MESSAGES[code],*args,**kwargs)
 
 ERROR_MESSAGES = {
     ErrorMessages.E_UNKNOWN : lambda: _("Unknown Error"),
@@ -137,8 +149,8 @@ ERROR_MESSAGES = {
     ErrorMessages.E_POOL_EXPAND : lambda dev, info: _("Error while adding %(dev)s: %(info)s") % {'dev': dev, 'info': info},
     ErrorMessages.E_POOL_EXPAND_INFO : lambda dev: _("Could not retrieve information for the disk: %(dev)s") % {'dev': dev},
     ErrorMessages.E_POOL_EXPAND_STATUS : lambda info: _("Unable to get array expansion status: %(info)s") % {'info': info},
-    ErrorMessages.E_POOL_KEY : lambda info: _("Error while retrieving the encryption key: %(info)s") % {'info': info}, # <------
-    ErrorMessages.E_POOL_KEY_IMPORT : lambda info: _("Error while importing the encryption key: %(info)s") % {'info': info}, # <------
+    ErrorMessages.E_POOL_KEY : lambda info = None: _("Error while retrieving the encryption key: %(info)s") % {'info': info or ErrorMessages.fallback_message()}, # <------
+    ErrorMessages.E_POOL_KEY_IMPORT : lambda info: _("Error while importing the encryption key: %(info)s") % {'info': info }, # <------
     ErrorMessages.E_POOL_ATTACH : lambda info: _("Error while attaching an existing pool: %(info)s") % {'info': info}, # <------
     ErrorMessages.E_POOL_LIST : lambda info: _("Unable to retrieve the list of pools."), # <------
     ErrorMessages.E_POOL_RECOVERY : lambda info: _("Error while recovering the disk array: %(info)s)") % {'info': info},
@@ -176,7 +188,7 @@ ERROR_MESSAGES = {
 
     ErrorMessages.E_FS_CH_PERM : lambda path, info: _("Unable to change permissions for %(path)s: %(info)s") % {'path':path,'info': info}, # <------
 
-    ErrorMessages.E_APT_GET : lambda info: _("Unable to get system updates: %(info)s") % {'info': info or ErrorMessages.fallback_message()}, # <------
+    ErrorMessages.E_APT_GET : lambda info = None: _("Unable to get system updates: %(info)s") % {'info': info or ErrorMessages.fallback_message()}, # <------
 
     ErrorMessages.E_ACCESS_ENABLED : lambda service,info: _("Error while enabling %(service)s: %(info)s)") % {'service':service,'info': info},  # <------
     ErrorMessages.E_ACCESS_DISABLED : lambda service,info: _("Error while disabling %(service)s: %(info)s)") % {'service':service,'info': info},  # <------
@@ -190,6 +202,7 @@ WARNING_MESSAGES = {
     WarningMessages.W_POOL_CORRUPTED : lambda : _("Some files and/or directories are corrupted and data cannot be recovered. If the problem persists, back up your data, destroy and create a new array. Consider replacing one or more disks if their diagnostics suggest so."),
     WarningMessages.W_DISK_ISSUE : lambda : _("One or more disks appear to experience some problems. No imminent actions are required at the moment. However, you should investigate which disk(s) is getting old and consider replacing it."),
     WarningMessages.W_DISK_FORMAT : lambda : _("Your disk array is experiencing some format issues. To solve this issue, press `Verify` in the Disk Management page."),
+    WarningMessages.W_POOL_NEEDED : lambda : _("You need to configure your disk array before enabling any access services")
 }
 
 SUCCESS_MESSAGES = {
@@ -213,4 +226,9 @@ SUCCESS_MESSAGES = {
     SuccessMessages.S_ACCESS_DISABLED : lambda service : _("Service %(service)s disabled successfully.") % {'service':service},  # <------
 
     SuccessMessages.S_DISK_FORMATTED : lambda dev : _("Disk %(dev)s formatted successfully.") % {'dev':dev},  # <------
+}
+
+INFO_MESSAGES = {
+    InfoMessages.I_POOL_EXPANSION_ETA : lambda eta: _("Disk expansion is expected to take %(eta)s.") % {'eta':eta}, # <----------
+    InfoMessages.I_POOL_EXPANSION : lambda: _("Disk expansion in progress.") # <----------
 }

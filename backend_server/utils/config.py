@@ -37,7 +37,7 @@ class NMSConfig(Logger):
         try:
             this.load_configuration_file()
         except FileNotFoundError:
-            this.create_default_configuration_file()
+            this.create_default_config_file()
 
         this._access_services = {}
         this._setup_access_services()
@@ -137,6 +137,10 @@ class NMSConfig(Logger):
     def otp_secret(this) -> Optional[str]:
         return this._cfg['access'].get("otp_secret")
 
+    @otp_secret.setter
+    def otp_secret(this, value:Optional[str]) -> None:
+        this._cfg['access']["otp_secret"] = value
+
     @property
     def issued_tokens(this) -> List[str]:
         now = datetime.datetime.now().timestamp()
@@ -231,8 +235,8 @@ class NMSConfig(Logger):
             raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_MOUNT_STATUS.name,params=[process.stderr]))
 
         d = json.loads(process.stdout)
-        pool = CONFIG.pool_name
-        dataset = CONFIG.dataset_name
+        pool = this.pool_name
+        dataset = this.dataset_name
 
         return (d.get("datasets", {})
                 .get(f"{pool}/{dataset}", {})
@@ -515,10 +519,10 @@ class NMSConfig(Logger):
 
         this._cfg["dataset"] = None
 
-    def config_pool(this,pool_name:str,dataset_name:str,redundancy:bool,encription_key:Optional[str],compressed:bool,disks:List[Disk]) -> None:
+    def config_pool(this, pool_name:str, dataset_name:str, redundancy:bool, encryption_key:Optional[str], compressed:bool, disks:List[Disk]) -> None:
         this._cfg['pool'] = {
             "name": pool_name,
-            "encrypted": encription_key,
+            "encrypted": encryption_key,
             "redundancy": redundancy,
             "compressed": compressed,
             "disks": [d.serialise() for d in disks],
@@ -536,6 +540,12 @@ class NMSConfig(Logger):
         this._cfg['pool']['tools']['scrub']['ongoing'] = True
         this._cfg['pool']['tools']['scrub']['last'] = datetime.datetime.now().timestamp()
 
+    def scrub_stopped(this):
+        this._cfg['pool']['tools']['scrub']['ongoing'] = False
+
+    #DISK METHODS
+    def add_disk(this,disk:Disk) -> None:
+        this._cfg['pool']['disks'].append(disk.serialise())
 
 
 

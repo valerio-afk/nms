@@ -3,7 +3,7 @@
 {% block card_title %}FTP <span class="float-end">{{ enabled | enabled_fmt | safe }}</span>{% endblock %}
 
 {% block card_content %}
-<form action="{{ url_for('main.change_access_settings',service='ftp') }}" method="POST">
+<form action="{{ url_for('main.change_access_settings',service='ftp') }}" method="POST" class="disable-on-submit">
     {{ form.hidden_tag() }}
 
     {% if enabled %}

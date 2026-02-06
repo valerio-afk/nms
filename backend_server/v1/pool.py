@@ -1,13 +1,13 @@
 from backend_server.utils.cmdl import CommandLine, ZFSLoadKey, ZFSMount, LocalCommandLineTransaction, ZFSUnmount, \
-    ZFSUnLoadKey, ZFSDestroy, ZFSCreate, ZPoolStatus, ZFSList, ZPoolExport, \
-    ZPoolImport, CreateKey, ZPoolCreate, ZPoolDestroy, ZPoolClear, ZPoolReplace, ZPoolScrub
+    ZFSUnLoadKey, ZFSDestroy, ZFSCreate, ZPoolStatus, ZFSList, ZPoolExport, ZPoolScrub, ZPoolAttach, ZPoolAdd, \
+    ZPoolImport, CreateKey, ZPoolCreate, ZPoolDestroy, ZPoolClear, ZPoolReplace
 from backend_server.utils.config import CONFIG
 from backend_server.utils.responses import ExpasionStatus, BackendProperty, ErrorMessage, SuccessMessage, BackgroundTask
 from backend_server.utils.scheduler import SCHEDULER
 from backend_server.v1.auth import verify_token_factory, verify_token_header_factory
 from datetime import timedelta
 from enum import Enum
-from fastapi import HTTPException, APIRouter, Depends, UploadFile, File
+from fastapi import HTTPException, APIRouter, Depends, UploadFile, File, FastAPI
 from backend_server.v1.services import disable_all_access_services
 from nms_shared import ErrorMessages, SuccessMessages
 from nms_shared.constants import KEYPATH
@@ -60,7 +60,7 @@ def unmount():
         raise ErrorMessage(code=ErrorMessages.E_POOL_UNMOUNT.name,params=[errors])
 
 def get_array_expansion_status() -> ExpasionStatus:
-    if (not CONFIG.is_pool_configured()):
+    if (not CONFIG.is_pool_configured):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_NO_CONF.name))
 
     if (not CONFIG.has_redundancy):
@@ -71,7 +71,7 @@ def get_array_expansion_status() -> ExpasionStatus:
     output = cmd.execute()
 
     if (output.returncode != 0):
-        error = output[0]['stderr']
+        error = output.stderr
         raise ErrorMessage(code=ErrorMessages.E_POOL_EXPAND_STATUS.name,params=[error])
 
     zpool_output = output.stdout
@@ -87,7 +87,8 @@ def get_array_expansion_status() -> ExpasionStatus:
     if with_eta:
         pct = float(with_eta.group(1))
         h, m, s = map(int, with_eta.group(2).split(":"))
-        return ExpasionStatus(progress=pct, eta=timedelta(hours=h, minutes=m, seconds=s), is_running=True)
+        eta = int(timedelta(hours=h, minutes=m, seconds=s).total_seconds())
+        return ExpasionStatus(progress=pct, eta=eta, is_running=True)
 
     # Case 2: percentage but ETA explicitly unavailable
     no_eta = re.search(
@@ -378,6 +379,7 @@ def get_last_scrub_report() -> Optional[Dict[str,str]]:
 
     return None
 
+
 class PoolProperties(Enum):
     pool_name = "pool_name"
     dataset_name = "dataset_name"
@@ -402,24 +404,61 @@ class ScrubStateChecker(NMSThread):
         this.pool_name = pool_name
 
     def run(this) -> None:
-        while (this.is_running):
-            output = ZPoolStatus(this.pool_name).execute()
+        try:
+            while (this.is_running):
+                output = ZPoolStatus(this.pool_name).execute()
 
-            if (output.returncode == 0):
-                d = json.loads(output.stdout)
-                scan_stats = d.get('pools', {}).get(this.pool_name, {}).get('scan_stats', {})
+                if (output.returncode == 0):
+                    d = json.loads(output.stdout)
+                    scan_stats = d.get('pools', {}).get(this.pool_name, {}).get('scan_stats', {})
 
-                if (scan_stats.get('function', "") == "SCRUB"):
-                    if (scan_stats.get('state', "FINISHED") != "FINISHED"):
-                        time.sleep(2)
+                    if (scan_stats.get('function', "") == "SCRUB"):
+                        if (scan_stats.get('state', "FINISHED") != "FINISHED"):
+                            time.sleep(2)
+                        else:
+                            break
                     else:
                         break
                 else:
-                    break
-            else:
-                raise HTTPException(500,detail=ErrorMessage(code=ErrorMessages.E_POOL_SCRUB.name, params=[output.stderr.decode('utf8')]))
+                    error = output.stderr.decode('utf8')
+                    CONFIG.error(f"Scrub state checker: {error}")
+                    raise HTTPException(500,detail=ErrorMessage(code=ErrorMessages.E_POOL_SCRUB.name, params=[error]))
+        except Exception as e:
+            raise e
+        finally:
+            CONFIG.scrub_stopped()
+            CONFIG.flush_config()
+
 
         this._message = SuccessMessage(code=SuccessMessages.S_POOL_SCRUB.name)
+        CONFIG.info("Scrub state checker terminated successfully")
+
+class PoolExpansionStatus(NMSThread):
+    def __init__(this, dev:str):
+        super().__init__()
+        this._device = dev
+
+
+    def run(this) -> None:
+        done = False
+        time.sleep(0.5)
+
+        while not done:
+            status = get_array_expansion_status()
+
+            if (status.progress is None) and (status.eta is None):
+                raise Exception(ErrorMessage.get_error(ErrorMessage.E_POOL_EXPAND_INFO, this._device))
+            else:
+                if (status.eta is not None):
+                    this._eta = status.eta
+                    this._progress = status.progress
+
+            done = not status.is_running
+
+            time.sleep(1)
+
+        this._message =  SuccessMessage(code=SuccessMessages.S_POOL_EXPANDED.name)
+        CONFIG.info("Pool expansion completed successfully")
 
 
 @pool.get("/get/disks",
@@ -796,7 +835,71 @@ def pool_scrub() -> None:
     CONFIG.scrub_started()
     CONFIG.flush_config()
 
-    return BackgroundTask(task_id=task_id,running=True,progress=None,eta=None)
+    CONFIG.info(f"Scrub initiated for pool {pool_name} - task id {task_id}")
+
+    return BackgroundTask(task_id=task_id,running=True,progress=None,eta=None,detail=None)
+
+@pool.post("/expand",
+    responses={500: {"description": "Any internal errors"}},
+    summary="Add a new disk to the pool",
+    response_model=Optional[BackgroundTask],
+)
+def pool_attach_disk(new_device:str) -> Optional[BackgroundTask]:
+    cmd = None
+
+    disks = get_attachable_disks()
+
+    new_disk_obj = [ d for d in disks if d.has_path(new_device)]
+
+    if (len(new_disk_obj)!=1):
+        raise Exception(ErrorMessage.get_error(ErrorMessage.E_POOL_EXPAND_INFO, new_device))
+
+    new_disk_obj = new_disk_obj.pop()
+
+    disable_all_access_services()
+    unmount()
+
+    pool_name = CONFIG.pool_name
+
+    make_concurrent = False
+
+    if CONFIG.has_redundancy:
+        status = ZPoolStatus(pool_name)
+        output = status.execute()
+
+        if (output.returncode == 0):
+            d = json.loads(output.stdout)
+
+            vdevs = d.get("pools", {}).get(pool_name, {}).get("vdevs", {}).get(pool_name, {}).get("vdevs", {})
+
+            if (len(vdevs) == 1):
+                # check if raidz is enabled
+                value = list(vdevs.keys())[0]
+
+                if (vdevs[value]['vdev_type'] == 'raidz'):
+                    cmd = ZPoolAttach(pool_name, vdevs[value]['name'],new_device)
+                    make_concurrent = True
+
+        if (cmd is None):
+            raise ErrorMessage.get_error(ErrorMessage.E_DISK_ATTACH(new_device))
+
+    else:
+        cmd = ZPoolAdd(pool_name,new_device)
+
+    trans = LocalCommandLineTransaction(cmd)
+
+    output = trans.run()
+
+    if (not trans.success):
+        raise ErrorMessage.get_error(ErrorMessage.E_DISK_ATTACH(output[0]['stderr']))
+
+    CONFIG.add_disk(new_disk_obj)
+    CONFIG.flush_config()
+
+    if (make_concurrent):
+        task = PoolExpansionStatus(new_device)
+        task_id = SCHEDULER.schedule(task)
+
+        return BackgroundTask(task_id=task_id, running=True, progress=None, eta=None, detail=None)
 
 
-#TODO: EXPAND

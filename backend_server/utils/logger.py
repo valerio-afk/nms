@@ -1,4 +1,10 @@
 from logging import getLogger
+
+from nms_shared.utils import setup_logger
+
+setup_logger(__name__)
+
+
 class Logger:
     def __init__(this):
         this._logger = getLogger(__name__)

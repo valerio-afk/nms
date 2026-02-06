@@ -1,20 +1,22 @@
 from . import frontend as bp, NMSBACKEND as BACKEND
-# from .tasks import  expand_pool, create_pool
 from datetime import datetime
 from flask import g, render_template, redirect, url_for, flash, Response, request
 from flask_wtf.csrf import validate_csrf
-from flask_babel import _, get_locale
+from flask_babel import _
 from forms import ImportPoolForm, CreatePoolForm, AddDisksForm
-from frontend.decorators import wait
+from frontend.utils.decorators import wait
 from pySMART import Device
 from typing import Union
 from wtforms import ValidationError
+from nms_shared.msg import ErrorMessages
+from .api.backend_proxy import show_flash
+from .api.tasks import PoolExpansionTask
 
 
 # MAIN PAGE
 
 @bp.route('/disks')
-@wait(redirect_to="/disks/new/wait",tag="new_disk")
+# @wait(redirect_to="/disks/new/wait",tag="new_disk")
 @wait(redirect_to="/disks/add/wait",tag="add_disk")
 def disk_management() -> str:
     disks = BACKEND.disks
@@ -81,14 +83,19 @@ def add_disk() -> Response:
     form = AddDisksForm(attachable_disks)
 
     if (form.validate_on_submit()):
-        try:
-            task = expand_pool.delay(form.disks.data,str(get_locale()))
-            BACKEND.append_task(NMSTask(task.task_id, "/disks", tag="add_disk"))
-        except Exception as e:
-            ...
+        dev = form.disks.data
+        task = BACKEND.pool_expand(dev)
+
+        if (task is not None):
+            BACKEND.register_task(
+                task.get("task_id"),
+                ['/disks'],
+                metadata="add_disk",
+                cls=PoolExpansionTask,
+                **task)
+
     else:
-        #TODO fix this how you fix the other(s)
-        flash(f"Unable to process the form: {form.errors}","error")
+        show_flash(code=ErrorMessages.E_CSRF.name)
 
     return redirect(url_for("main.disk_management"))
 
@@ -185,28 +192,24 @@ def replace_disk():
 
 # WAIT PAGES
 
-@bp.route('/disks/new/wait')
-def new_pool_wait() -> str:
-    return render_template("wait.indeterminate.html",
-                           active_page="disk",
-                           refresh_to=url_for("main.disk_management"),
-                           extra_css=["pacman.css"],
-                           csp_nonce=g.csp_nonce,
-                           hide_flash=True,
-                           waiting_message=_("The creation of a new disk array may take some time. Please wait..."))
+# @bp.route('/disks/new/wait')
+# def new_pool_wait() -> str:
+#     return render_template("wait.indeterminate.html",
+#                            active_page="disk",
+#                            refresh_to=url_for("main.disk_management"),
+#                            extra_css=["pacman.css"],
+#                            csp_nonce=g.csp_nonce,
+#                            hide_flash=True,
+#                            waiting_message=_("The creation of a new disk array may take some time. Please wait..."))
 
 @bp.route('/disks/add/wait')
 def add_disk_wait() -> Union[str,Response]:
-    tasks = BACKEND.get_tasks
-    add_disk_task = None
+    tasks = BACKEND.get_tasks_by_metadata("add_disk")
 
-    for task in tasks:
-        if task.tag == "add_disk":
-            add_disk_task = task
-
-
-    if add_disk_task is None:
+    if len(tasks) == 0:
         return redirect(url_for("main.disk_management"))
+
+    add_disk_task = tasks.pop()
 
     return render_template("wait.determinate.html",
                            active_page="disk",

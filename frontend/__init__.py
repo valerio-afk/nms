@@ -6,11 +6,15 @@ from nms_shared.msg import ErrorMessages, WarningMessages, ERROR_MESSAGES, WARNI
 from typing import Optional
 from urllib.parse import urlparse,urlencode
 import time
-
-from .exception import NotAuthenticatedError
+from .utils.exception import NotAuthenticatedError
 
 frontend:Blueprint = Blueprint('main',__name__)
 
+@frontend.before_request
+def check_scrub_status() -> None:
+    NMSBACKEND.get_tasks_by_metadata("scrub")
+    # this operation will also deal with flash msg and whatnots
+    # no further operation is required
 
 @frontend.before_request
 def check_pool_warnings() -> None:
@@ -72,13 +76,7 @@ def require_login() -> Optional[Response]:
 
 
 @frontend.after_request
-def after_request_ops(response) -> Response:
-
-    NMSBACKEND.get_tasks_by_metadata("scrub")
-    # this operation will also deal with flash msg and whatnots
-    # no further operation is required
-
-    #force no cache
+def no_cache(response) -> Response:
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"

@@ -1,1 +1,1 @@
-from .msg import ErrorMessages, SuccessMessages, parse_msg
+from .msg import ErrorMessages, SuccessMessages, WarningMessages, parse_msg

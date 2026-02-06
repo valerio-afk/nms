@@ -1,5 +1,7 @@
 import datetime
 from dataclasses import dataclass
+
+from backend_server.utils.config import CONFIG
 from nms_shared.threads import NMSThread
 from uuid import uuid4
 from typing import Optional
@@ -27,12 +29,10 @@ class TaskScheduler:
         return uuid
 
     def get_task_by_id(this,uuid:str) -> Optional[ScheduledTask]:
-        task = this._tasks.pop(uuid,None)
-        now = datetime.datetime.now()
+        task = this._tasks.get(uuid)
 
-        this._tasks = {uuid:task for uuid,task in this._tasks.items() if
-                       ((now - task.scheduled_time).total_seconds() >= TaskScheduler.LIFETIME) or (not task.is_running())
-                       }
+
+        this._tasks = {uuid:task for uuid,task in this._tasks.items() if (task.thread.is_running) }
 
         return task
 

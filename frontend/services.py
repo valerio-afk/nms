@@ -1,3 +1,4 @@
+from msg import WarningMessages
 from . import frontend as bp, NMSBACKEND as BACKEND
 from importlib import import_module
 from flask import render_template, request, flash, redirect, url_for, Response, g
@@ -15,7 +16,7 @@ def access() -> str:
     mountpoint  = BACKEND.mountpoint
 
     if (not BACKEND.is_pool_configured):
-        flash("You need to configure your disk array before enabling any access services","error")
+        show_flash(type="warning",code=WarningMessages.W_POOL_NEEDED.name)
 
     for k,v in BACKEND.access_services.items():
         service_form_cls = getattr(forms,f"{k.upper()}ServiceForm")

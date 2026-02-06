@@ -193,13 +193,13 @@ def apt_get(action:AptGetActions) -> BackgroundTask:
             task = AptGetUpgradeThread()
             task_id = SCHEDULER.schedule(task)
 
-    return BackgroundTask(task_id=task_id,running=True,progress=None,eta=None)
+    return BackgroundTask(task_id=task_id,running=True,progress=None,eta=None,detail=None)
 
 
 
 @system.get("/task/{task_id}",
               responses={500: {"description": "Any internal error while disabling an access services"}},
-              summary="Get the information of background task",
+              summary="Get the information of a background task",
               response_model=Optional[Union[BackgroundTask,Dict]]
 )
 def get_task_info(task_id: str) ->Optional[Union[BackgroundTask,Dict]]:
@@ -214,7 +214,9 @@ def get_task_info(task_id: str) ->Optional[Union[BackgroundTask,Dict]]:
         raise thread.message
 
 
-    if (thread.is_running):
-        return BackgroundTask(task_id=task_id,running=thread.is_running,progress=thread.progress,eta=thread.eta)
-    else:
-        return {"detail":thread.message}
+    return BackgroundTask(task_id=task_id,
+                          running=thread.is_running,
+                          progress=thread.progress,
+                          eta=thread.eta,
+                          detail=thread.message
+                          )

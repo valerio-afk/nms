@@ -4,7 +4,7 @@
 
 {% block card_content %}
 
-<form action="{{ url_for('main.change_access_settings',service='web') }}" method="POST">
+<form action="{{ url_for('main.change_access_settings',service='web') }}" method="POST" class="disable-on-submit">
     {{ form.hidden_tag() }}
 
     <div class="mb-3 row">

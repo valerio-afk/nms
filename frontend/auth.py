@@ -16,7 +16,7 @@ from .api.backend_proxy import show_flash
 @bp.route("/login",methods=['GET','POST'])
 def login() -> Union[Response,str]:
     authenticated = False
-    if (BACKEND.is_otp_configured):
+    if (BACKEND.is_otp_configured or BACKEND.is_new_otp_ready):
 
         if (request.method == 'POST'):
 
@@ -72,14 +72,8 @@ def reauth(operation:str) -> Union[Response,str]:
 
 @bp.route("/login/config/show_qrcode")
 def otp_qr() -> Union[Response,Tuple[str,int]]:
-    secret = session.get("pending_otp_secret")
-    if not secret:
-        return "Setup not started", 400
+    uri = BACKEND.get_new_otp()
 
-    totp = pyotp.TOTP(secret)
-    uri = totp.provisioning_uri(
-        issuer_name="NMS"
-    )
 
     img = qrcode.make(uri)
     buf = BytesIO()
@@ -90,20 +84,9 @@ def otp_qr() -> Union[Response,Tuple[str,int]]:
 
 @bp.route("/login/config",methods=['GET','POST'])
 def configure_otp() -> Union[Response,str]:
-
-    if (BACKEND.is_otp_configured):
+    if ((BACKEND.is_otp_configured) or (request.method == 'POST')):
         return redirect(url_for("main.login"))
 
-    if (request.method == 'POST'):
-        secret = session.get("pending_otp_secret")
-        if secret is not None:
-            del session['pending_otp_secret']
-            BACKEND.set_otp_secret(secret)
-            return redirect(url_for("main.login"))
-
-
-    secret = pyotp.random_base32()
-    session['pending_otp_secret'] = secret
 
     return render_template("login.otp.html",csrf_token= generate_csrf())
 

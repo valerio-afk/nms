@@ -1,3 +1,5 @@
+import base64
+
 from werkzeug.datastructures import ImmutableMultiDict
 
 from nms_shared import ErrorMessages
@@ -9,10 +11,9 @@ from flask_wtf.csrf import generate_csrf, validate_csrf
 from io import BytesIO
 from widget import render_widget,get_widgets_html,get_widgets_css_files
 from wtforms import ValidationError
-from urllib.parse import quote, unquote
 from typing import Optional, Dict, Callable, Any
 import os
-import time
+
 
 
 
@@ -120,8 +121,8 @@ def system_logs(log):
 # ACTIONS
 @bp.route("/advanced/reset-otp",methods=['POST'])
 def reset_otp():
+    BACKEND.reset_otp_secret()
     session.clear()
-    BACKEND.set_otp_secret(None)
     return redirect(url_for("main.login"))
 
 @bp.route("/advanced/restart-systemd",methods=['POST'])
@@ -131,14 +132,17 @@ def restart_systemd():
     return redirect(url_for("main.advanced"))
 
 @bp.route("/advanced/get-key",methods=['POST'])
-def get_tank_key():
-    key = BACKEND.get_tank_key()
+def get_tank_key() -> Response:
+    key = BACKEND.encryption_key
 
     if (key is None):
-        flash("Unable to retrieve the encryption key","error")
+        show_flash(code=ErrorMessages.E_POOL_KEY.name)
         return redirect(url_for("main.advanced"))
 
-    return send_file(BytesIO(key),as_attachment=True,download_name=os.path.split(BACKEND.key_filename)[1],mimetype="application/octet-stream")
+    raw_data = base64.b64decode(key)
+    key_fname = f"{BACKEND.dataset_name}.key"
+
+    return send_file(BytesIO(raw_data),as_attachment=True,download_name=key_fname,mimetype="application/octet-stream")
 
 
 
@@ -158,46 +162,11 @@ def zpool_recover():
 def zpool_format_disk():
     return risky_operation_reauth("format-disk", lambda token,form: BACKEND.format_disk(form.get("option"),token)) or redirect(url_for("main.advanced"))
 
-    # try:
-    #     validate_csrf(request.form.get("csrf_token"))
-    # except ValidationError:
-    #     flash("CSRF validation failed","error")
-    #     return redirect(url_for("main.advanced"))
-    #
-    # authorisation = session.pop("dz_authorisation",None)
-    #
-    # option = request.form.get("option",None)
-    #
-    # if option is None:
-    #     raise Exception("Invalid disk to format")
-    #
-    # auth_code = quote(f"format:{option.replace("/","+")}")
-    #
-    #
-    # if (authorisation is None):
-    #     return redirect(url_for("main.reauth",operation=auth_code))
-    #
-    # else:
-    #     if (time.time() - authorisation['timestamp']) < 60:
-    #         if (authorisation['operation'] == unquote(auth_code)):
-    #             try:
-    #                 BACKEND.format_disk(option)
-    #                 flash(f"Disk {option} formatted successfully.","success")
-    #             except Exception as e:
-    #                 flash(f"Error while formatting {option}: {str(e)}","error")
-    #         else:
-    #             flash(f"Invalid authorisation", "error")
-    #
-    #     else:
-    #         flash("Authorisation token expired","error")
-    #
-    #     return redirect(url_for("main.advanced"))
 
 
 @bp.route('/advanced/apt',methods=['POST'])
 def apt_get():
     action = request.form.get("action",None)
-
     task = None
 
     if (action == "update"):

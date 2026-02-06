@@ -3,8 +3,19 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from nms_shared.utils import setup_logger
 from .utils.responses import ErrorMessage
+from contextlib import asynccontextmanager
 
-app = FastAPI()
+@asynccontextmanager
+async def automount(app:FastAPI):
+    from backend_server.utils.config import CONFIG
+    from backend_server.v1.pool import pool_mount
+    if ((CONFIG.is_pool_configured) and (not CONFIG.is_mounted)):
+        CONFIG.info("Start up automount")
+        pool_mount()
+
+    yield
+
+app = FastAPI(lifespan=automount)
 
 app.include_router(v1)
 

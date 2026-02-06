@@ -1,13 +1,15 @@
 from abc import abstractmethod, ABCMeta
-from typing import Optional
+from typing import Optional, Any
 import threading
 
 class NMSThread(metaclass=ABCMeta):
     def __init__(this):
         this._running:bool = False
         this._thread:Optional[threading.Thread] = None
-        this._message:Optional[Exception] = None
+        this._message:Optional[Any] = None
         this._exception:bool = False
+        this._eta:Optional[int] = None
+        this._progress:Optional[float] = None
 
     @property
     def is_running(this) -> bool:
@@ -18,20 +20,20 @@ class NMSThread(metaclass=ABCMeta):
         return this._exception
 
     @property
-    def message(this) -> Optional[Exception]:
+    def message(this) -> Optional[Any]:
         return this._message
 
     @property
     def progress(this) -> Optional[float]:
-        return None
+        return this._progress
 
     @property
     def eta(this) -> Optional[int]:
-        return None
+        return this._eta
 
     @property
     def is_successful(this) -> bool:
-        return (not this.is_running) and (this.exception is None)
+        return (not (this.is_running or this.has_exception))
 
     def start(this) -> None:
         if not this.is_running:
