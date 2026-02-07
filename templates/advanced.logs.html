@@ -4,20 +4,35 @@
 
 {% block content %}
 
-<ul class="nav nav-tabs">
-  <li class="nav-item">
-    <a class="nav-link {% if active == 'flask' %} active {% endif %}" href="{{ url_for('main.system_logs',log='flask') }}"><i class="bi bi-window-sidebar"></i> {{ _("Web App") }}</a>
-  </li>
-  <li class="nav-item">
-    <a class="nav-link {% if active == 'backend' %} active {% endif %}" href="{{ url_for('main.system_logs',log='backend') }}"><i class="bi bi-gear-wide-connected"></i> {{ _("Backend") }}</a>
-  </li>
-  <li class="nav-item">
-    <a class="nav-link {% if active == 'celery' %} active {% endif %}" href="{{ url_for('main.system_logs',log='celery') }}"><i class="bi bi-list-task"></i> {{ _("Worker Manager") }}</a>
-  </li>
-  <li class="nav-item">
-    <a class="nav-link {% if active == 'sudo_daemon' %} active {% endif %}" href="{{ url_for('main.system_logs',log='sudo_daemon') }}"><i class="bi bi-terminal-fill"></i> {{ _("System Manager") }}</a>
-  </li>
-</ul>
+<div class="d-flex align-items-center border-bottom">
+  <ul class="nav nav-tabs">
+    <li class="nav-item">
+      <a class="nav-link {% if active == 'frontend' %} active {% endif %}" href="{{ url_for('main.system_logs',log='frontend',start=date_filter['start'],end=date_filter['end']) }}"><i class="bi bi-window-sidebar"></i> {{ _("Web App") }}</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if active == 'backend' %} active {% endif %}" href="{{ url_for('main.system_logs',log='backend',start=date_filter['start'],end=date_filter['end']) }}"><i class="bi bi-gear-wide-connected"></i> {{ _("Backend") }}</a>
+    </li>
+  </ul>
+
+  <form class="d-flex align-items-center ms-auto gap-2" action="{{ url_for('main.system_logs',log=active) }}" method="get">
+
+        <input type="datetime-local"
+               name="start"
+               value="{{ date_filter['start'] }}"
+               class="form-control form-control-sm">
+
+        <span class="text-muted">→</span>
+
+        <input type="datetime-local"
+               name="end"
+               value="{{ date_filter['end'] }}"
+               class="form-control form-control-sm">
+
+        <button class="btn btn-sm btn-primary">
+            {{ _("Filter") }}
+        </button>
+    </form>
+</div>
 
 <div class="terminal-container">
 <pre class="ansi-viewport mb-0" aria-live="polite" role="log">

@@ -1,20 +1,19 @@
 import base64
+import datetime
 
 from werkzeug.datastructures import ImmutableMultiDict
 
 from nms_shared import ErrorMessages
 from nms_shared.constants import HTTP_REPEAT_HEADER
+from nms_shared.enums import LogFilter
 from .import NMSBACKEND as BACKEND, frontend as bp
 from .api.backend_proxy import show_flash
 from flask import render_template, redirect, url_for, request, flash, g, send_file, session, Response
 from flask_wtf.csrf import generate_csrf, validate_csrf
 from io import BytesIO
-from widget import render_widget,get_widgets_html,get_widgets_css_files
+from frontend.utils.widget import render_widget,get_widgets_html,get_widgets_css_files
 from wtforms import ValidationError
 from typing import Optional, Dict, Callable, Any
-import os
-
-
 
 
 def risky_operation_reauth(operation:str,callback:Callable[[str, ImmutableMultiDict],Any]) -> Optional[Response]:
@@ -104,19 +103,41 @@ def advanced():
 @bp.route('/advanced/logs', defaults={'log': 'flask'})
 @bp.route('/advanced/logs/<string:log>')
 def system_logs(log):
-    log_filter = LogFilter.FLASK
-
     match (log):
-        case "backend_client":
+        case "backend":
             log_filter = LogFilter.BACKEND
-        case "celery":
-            log_filter = LogFilter.CELERY
-        case "sudo_daemon":
-            log_filter = LogFilter.SUDODAEMON
+        case _:
+            log_filter = LogFilter.FRONTEND
 
-    logs = BACKEND.get_logs(log_filter)
+    start = request.args.get('start')
+    end = request.args.get('end')
 
-    return render_template("advanced.logs.html",active=log,log_html=logs,csp_nonce=g.csp_nonce,active_page="advanced")
+    since = None
+    until = None
+
+    if (end is None):
+       until = datetime.datetime.now().timestamp()
+       end = datetime.datetime.fromtimestamp(until).strftime("%Y-%m-%d %H:%M:%S")
+    else:
+       until = datetime.datetime.fromisoformat(end).timestamp()
+
+    if (start is None):
+        since = until - datetime.timedelta(hours=1).total_seconds()
+        start = datetime.datetime.fromtimestamp(since).strftime("%Y-%m-%d %H:%M:%S")
+    else:
+        since = datetime.datetime.fromisoformat(start).timestamp()
+
+    since = int(since)
+    until = int(until)
+
+    logs = BACKEND.get_logs(log_filter,since=since,until=until)
+
+    return render_template("advanced.logs.html",
+                           active=log_filter.value,
+                           log_html=logs,
+                           csp_nonce=g.csp_nonce,
+                           date_filter={"start":start,"end":end},
+                           active_page="advanced")
 
 # ACTIONS
 @bp.route("/advanced/reset-otp",methods=['POST'])

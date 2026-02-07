@@ -1,6 +1,6 @@
 {% extends "card.html" %}
 
-{% block card_title %}<i class="bi bi-device-hdd-fill"></i> {{ _("Disk") }} {{ idx }} <span title="{{ disk.status }}" class="float-end">{{ disk.status | disk_charm }}</span>{% endblock %}
+{% block card_title %}<i class="bi bi-device-hdd-fill"></i> {{ _("Disk") }} {{ idx }} <span title="{{ disk.status | disk_status_babel }}" class="float-end">{{ disk.status | disk_charm }}</span>{% endblock %}
 
 {% block card_content %}
 

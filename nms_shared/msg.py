@@ -84,6 +84,7 @@ class WarningMessages(Enum):
     W_POOL_NEEDED = "W_POOL_NEEDED"
     W_DISK_ISSUE = "W_DISK_ISSUE"
     W_DISK_FORMAT = "W_DISK_FORMAT"
+    W_POOL_DISK_OFFLINE = "W_POOL_DISK_OFFLINE"
 
     @staticmethod
     def get_warning(warn_code: "WarningMessages", *args, **kwargs) -> str:
@@ -115,6 +116,8 @@ class SuccessMessages(Enum):
 
     S_DISK_FORMATTED = "S_DISK_FORMATTED"
 
+    S_POOL_REPLACE_DISK = "S_POOL_REPLACE_DISK"
+
     @staticmethod
     def get_message(success_code:"SuccessMessage",*args,**kwargs) -> str:
         return parse_msg(SUCCESS_MESSAGES[success_code],*args,**kwargs)
@@ -126,6 +129,7 @@ class SuccessMessages(Enum):
 class InfoMessages(Enum):
     I_POOL_EXPANSION_ETA = "I_POOL_EXPANSION_ETA"
     I_POOL_EXPANSION = "I_POOL_EXPANSION"
+    I_POOL_DISK_REPLACEMENT = "I_POOL_DISK_REPLACEMENT"
 
     @staticmethod
     def get_message(code:"InfoMessages",*args,**kwargs) -> str:
@@ -153,22 +157,22 @@ ERROR_MESSAGES = {
     ErrorMessages.E_POOL_KEY_IMPORT : lambda info: _("Error while importing the encryption key: %(info)s") % {'info': info }, # <------
     ErrorMessages.E_POOL_ATTACH : lambda info: _("Error while attaching an existing pool: %(info)s") % {'info': info}, # <------
     ErrorMessages.E_POOL_LIST : lambda info: _("Unable to retrieve the list of pools."), # <------
-    ErrorMessages.E_POOL_RECOVERY : lambda info: _("Error while recovering the disk array: %(info)s)") % {'info': info},
-    ErrorMessages.E_POOL_DISKS : lambda info: _("Error while retrieving the disks in the array: %(info)s)") % {'info': info},  # <------
+    ErrorMessages.E_POOL_RECOVERY : lambda info: _("Error while recovering the disk array: %(info)s") % {'info': info},
+    ErrorMessages.E_POOL_DISKS : lambda info: _("Error while retrieving the disks in the array: %(info)s") % {'info': info},  # <------
     ErrorMessages.E_POOL_DISK_REPLACE : lambda d1,d2,info: _("Unable to replace %(dev1)s with %(dev2)s: %(info)s") % {'dev1':d1, 'dev2': d2, 'info': info}, # <------
-    ErrorMessages.E_POOL_DETACH : lambda info: _("Error while detaching the disk array: %(info)s)") % {'info': info},  # <------
-    ErrorMessages.E_POOL_MOUNT : lambda info: _("Error while mounting the disk array: %(info)s)") % {'info': info},  # <------
-    ErrorMessages.E_POOL_UNMOUNT : lambda info: _("Error while unmounting the disk array: %(info)s)") % {'info': info}, # <------
+    ErrorMessages.E_POOL_DETACH : lambda info: _("Error while detaching the disk array: %(info)s") % {'info': info},  # <------
+    ErrorMessages.E_POOL_MOUNT : lambda info: _("Error while mounting the disk array: %(info)s") % {'info': info},  # <------
+    ErrorMessages.E_POOL_UNMOUNT : lambda info: _("Error while unmounting the disk array: %(info)s") % {'info': info}, # <------
     ErrorMessages.E_POOL_MOUNTED : lambda: _("Disk array is mounted."),  # <------
     ErrorMessages.E_POOL_UNMOUNTED : lambda: _("Disk array is unmounted."),  # <------
     ErrorMessages.E_POOL_SCRUB : lambda info : _("Error while verifying the disk array: %(info)s.") % {'info',info},  # <------
     ErrorMessages.E_POOL_INVALID_MOUNTPOINT : lambda: _("The provided mount point is not valid.") , # <------
-    ErrorMessages.E_POOL_MOUNT_STATUS : lambda info: _("Error while retrieving the mount information the disk array: %(info)s)") % {
+    ErrorMessages.E_POOL_MOUNT_STATUS : lambda info: _("Error while retrieving the mount information the disk array: %(info)s") % {
         'info': info},  # <------
-    ErrorMessages.E_POOL_MOUNTPOINT : lambda info: _("Error while retrieving the mount point: %(info)s)") % {'info': info},  # <------
-    ErrorMessages.E_POOL_RM_MOUNTPOINT : lambda info: _("Error while removing the mount point: %(info)s)") % {'info': info},  # <------
-    ErrorMessages.E_POOL_FORMAT : lambda info: _("Error while formatting the disk array: %(info)s)") % {'info': info},  # <------
-    ErrorMessages.E_POOL_CAPACITY : lambda info = None: _("Unable to read disk array capacity information: %(info)s)") % {
+    ErrorMessages.E_POOL_MOUNTPOINT : lambda info: _("Error while retrieving the mount point: %(info)s") % {'info': info},  # <------
+    ErrorMessages.E_POOL_RM_MOUNTPOINT : lambda info: _("Error while removing the mount point: %(info)s") % {'info': info},  # <------
+    ErrorMessages.E_POOL_FORMAT : lambda info: _("Error while formatting the disk array: %(info)s") % {'info': info},  # <------
+    ErrorMessages.E_POOL_CAPACITY : lambda info = None: _("Unable to read disk array capacity information: %(info)s") % {
         'info': info or ErrorMessages.fallback_message()},  # <------
 
     ErrorMessages.E_POOL_OPENED : lambda : _("One or more disks cannot be opened. Your disk array CANNOT be used in this state. Run a diagnostic to see if the disk is getting faulted and replace if necessary. Alternatively, you can format it in the Advanced page (this can likely cause data loss)."), # <-----------
@@ -183,7 +187,7 @@ ERROR_MESSAGES = {
     ErrorMessages.E_AUTH_NOT_CONF : lambda: _("OTP secret not configured yet."),  # <------
     ErrorMessages.E_AUTH_WRONG_OTP : lambda: _("Invalid OTP."),  # <------
 
-    ErrorMessages.E_DISK_ATTACH : lambda details: _("Unable to attach new device to disk array%(details)s") % {'details': details}, # <------
+    ErrorMessages.E_DISK_ATTACH : lambda details: _("Unable to attach new device to disk array: %(details)s") % {'details': details}, # <------
     ErrorMessages.E_DISK_FORMAT : lambda dev, info: _("Error while formatting %(dev)s: %(info)s") % {'dev': dev, 'info': info},
 
     ErrorMessages.E_FS_CH_PERM : lambda path, info: _("Unable to change permissions for %(path)s: %(info)s") % {'path':path,'info': info}, # <------
@@ -202,17 +206,19 @@ WARNING_MESSAGES = {
     WarningMessages.W_POOL_CORRUPTED : lambda : _("Some files and/or directories are corrupted and data cannot be recovered. If the problem persists, back up your data, destroy and create a new array. Consider replacing one or more disks if their diagnostics suggest so."),
     WarningMessages.W_DISK_ISSUE : lambda : _("One or more disks appear to experience some problems. No imminent actions are required at the moment. However, you should investigate which disk(s) is getting old and consider replacing it."),
     WarningMessages.W_DISK_FORMAT : lambda : _("Your disk array is experiencing some format issues. To solve this issue, press `Verify` in the Disk Management page."),
-    WarningMessages.W_POOL_NEEDED : lambda : _("You need to configure your disk array before enabling any access services")
+    WarningMessages.W_POOL_NEEDED : lambda : _("You need to configure your disk array before enabling any access services"),
+    WarningMessages.W_POOL_DISK_OFFLINE : lambda : _("One or more of your disks in the array is offline. If redundancy is active, you can still use the array. Please, reinsert or replace your disk soon.")
 }
 
 SUCCESS_MESSAGES = {
     SuccessMessages.S_POOL_CREATED : lambda: _("Disk array created successfully."),
     SuccessMessages.S_POOL_EXPANDED : lambda: _("Disk array expanded successfully."),
-    SuccessMessages.S_POOL_FORMATTED : lambda: _("Disk array formatted successfully."), # <----------
-    SuccessMessages.S_POOL_DESTROYED : lambda: _("Disk array destroyed successfully."), # <----------
-    SuccessMessages.S_POOL_MOUNTED : lambda: _("Disk array mounted successfully."), # <----------
-    SuccessMessages.S_POOL_UNMOUNTED : lambda: _("Disk array unmounted successfully."), # <----------
-    SuccessMessages.S_POOL_SCRUB : lambda: _("Disk array verification performed successfully."), # <----------
+    SuccessMessages.S_POOL_FORMATTED : lambda: _("Disk array formatted successfully."),
+    SuccessMessages.S_POOL_DESTROYED : lambda: _("Disk array destroyed successfully."),
+    SuccessMessages.S_POOL_MOUNTED : lambda: _("Disk array mounted successfully."),
+    SuccessMessages.S_POOL_UNMOUNTED : lambda: _("Disk array unmounted successfully."),
+    SuccessMessages.S_POOL_SCRUB : lambda: _("Disk array verification performed successfully."),
+    SuccessMessages.S_POOL_REPLACE_DISK : lambda: _("Disk replaced successfully."),
 
     SuccessMessages.S_APT_UPDATE : lambda: _("System updates retrieved successfully."),
     SuccessMessages.S_APT_UPGRADE : lambda: _("System updates installed successfully."),
@@ -221,14 +227,15 @@ SUCCESS_MESSAGES = {
 
     SuccessMessages.S_RECOVERY : lambda: _("Disk array recovery attempted."),
 
-    SuccessMessages.S_ACCESS_ENABLED : lambda service : _("Service %(service)s enabled successfully.") % {'service':service},  # <------
-    SuccessMessages.S_ACCESS_UPDATED : lambda service : _("Service %(service)s settings updated successfully.") % {'service':service},  # <------
-    SuccessMessages.S_ACCESS_DISABLED : lambda service : _("Service %(service)s disabled successfully.") % {'service':service},  # <------
+    SuccessMessages.S_ACCESS_ENABLED : lambda service : _("Service %(service)s enabled successfully.") % {'service':service},
+    SuccessMessages.S_ACCESS_UPDATED : lambda service : _("Service %(service)s settings updated successfully.") % {'service':service},
+    SuccessMessages.S_ACCESS_DISABLED : lambda service : _("Service %(service)s disabled successfully.") % {'service':service},
 
-    SuccessMessages.S_DISK_FORMATTED : lambda dev : _("Disk %(dev)s formatted successfully.") % {'dev':dev},  # <------
+    SuccessMessages.S_DISK_FORMATTED : lambda dev : _("Disk %(dev)s formatted successfully.") % {'dev':dev},
 }
 
 INFO_MESSAGES = {
-    InfoMessages.I_POOL_EXPANSION_ETA : lambda eta: _("Disk expansion is expected to take %(eta)s.") % {'eta':eta}, # <----------
-    InfoMessages.I_POOL_EXPANSION : lambda: _("Disk expansion in progress.") # <----------
+    InfoMessages.I_POOL_EXPANSION_ETA : lambda eta: _("Disk expansion is expected to take %(eta)s.") % {'eta':eta},
+    InfoMessages.I_POOL_EXPANSION : lambda: _("Disk expansion in progress."),
+    InfoMessages.I_POOL_DISK_REPLACEMENT : lambda: _("Disk replacement in progress. This operation may take a while.")
 }

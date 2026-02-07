@@ -3,11 +3,12 @@ from enum import Enum
 from flask import flash, session
 from flask_babel import _
 from traceback import format_exc
-from frontend.api.tasks import BackgroundTask
+from frontend.api.tasks import BackgroundTask, ResilverStatusTask
 from frontend.api.threads import TimerThread
 from frontend.utils.exception import NotAuthenticatedError
 from nms_shared import ErrorMessages, SuccessMessages, WarningMessages
 from nms_shared.disks import Disk, DiskStatus
+from nms_shared.enums import LogFilter
 from requests import get, post
 from requests.exceptions import HTTPError
 from typing import Optional, List, Any, Dict, Literal, Union
@@ -28,6 +29,13 @@ def parse_disks_from_request(d:Optional[List[dict]]) -> List[Disk]:
 
     return []
 
+
+
+def flash_once(message, category="message"):
+    flashes = session.get('_flashes', [])
+
+    if [category, message] not in flashes:
+        flash(message, category)
 
 def show_flash(type:str="error", code:str=ErrorMessages.E_UNKNOWN.name,params:List[Any]=None) -> None:
     make_flash(
@@ -59,7 +67,7 @@ def make_flash(data:dict) -> None:
         msg = str(e) or ErrorMessages.get_error(ErrorMessages.E_UNKNOWN)
         type = "error"
 
-    flash(msg,type)
+    flash_once(msg,type)
 
 unknown_response = lambda : show_flash(code=ErrorMessages.E_UNKNOWN_RESPONSE.name)
 
@@ -199,6 +207,21 @@ class BackEndProxy:
 
     #AUTH PROPERTIES
     @property
+    def is_authenticated(this) -> bool:
+        if (this.bearer_token is None):
+            return False
+
+        response = get(f"{BackEndProxy.API}/{BackEndProxy.VERSION}/system/test",headers={"Authorization": "Bearer " + this.bearer_token})
+
+        try:
+            response.raise_for_status()
+            return True
+        except:
+            return False
+
+
+
+    @property
     def bearer_token(this) -> Optional[str]:
         return this.get_session_token("login")
 
@@ -307,12 +330,15 @@ class BackEndProxy:
         return this._get_property_request("pool", "dataset_name")
 
 
-
     @property
     def attachable_disks(this) -> List[Disk]:
         disks = this._request("pool/get/attachable-disks",RequestMethod.GET)
         return parse_disks_from_request(disks)
 
+    @property
+    def pool_disks(this) -> List[Disk]:
+        disks = this._request("pool/get/disks", RequestMethod.GET)
+        return parse_disks_from_request(disks)
 
     #DISK PROPERTIES
     @property
@@ -412,6 +438,11 @@ class BackEndProxy:
             return r.get("provisioning_uri")
 
     #POOL METHODS
+    def replace_disk(this,new_device:str) -> None:
+        task = this._request("pool/replace",RequestMethod.POST,body_params={"old_device":new_device, "new_device":new_device})
+        if isinstance(task, dict):
+            this.register_task(id=task.get('task_id'),metadata="resilver",cls=ResilverStatusTask,**task)
+
     def pool_create(this, pool_name:str, dataset_name:str, redundancy:bool, encryption:bool, compression:bool,devs:List[str]) -> None:
         this._request("pool/create",RequestMethod.POST,body_params={
             "pool_name": pool_name,
@@ -484,6 +515,9 @@ class BackEndProxy:
 
 
     #SYSTEM METHODS
+    def get_logs(this,filter:LogFilter,since:Optional[int]=None,until:Optional[int]=None) -> Optional[Dict]:
+        return this._request(f'system/logs/{filter.value}',RequestMethod.GET,qstring_params={"date_from":since,"date_to":until})
+
     def shutdown(this) -> None:
         this._request("system/shutdown",RequestMethod.POST)
 

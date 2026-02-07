@@ -17,6 +17,7 @@
 <script nonce="{{ csp_nonce }}">
     function manageProgressBar(data)
     {
+      console.log(data)
       if (data.message)
       {
         document.getElementById("progress-msg").textContent = data.message;

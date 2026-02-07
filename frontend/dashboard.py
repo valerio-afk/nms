@@ -1,7 +1,7 @@
 from . import frontend as bp, NMSBACKEND as BACKEND
 from flask import  render_template, g, flash
 from typing import Optional, Tuple
-from widget import render_widget, get_widgets_css_files, get_widgets_html
+from frontend.utils.widget import render_widget, get_widgets_css_files, get_widgets_html
 
 
 def widget_disk_overview() -> Tuple[str,Optional[str]]:

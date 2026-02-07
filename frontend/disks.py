@@ -3,7 +3,7 @@ from datetime import datetime
 from flask import g, render_template, redirect, url_for, flash, Response, request
 from flask_wtf.csrf import validate_csrf
 from flask_babel import _
-from forms import ImportPoolForm, CreatePoolForm, AddDisksForm
+from frontend.utils.forms import ImportPoolForm, CreatePoolForm, AddDisksForm
 from frontend.utils.decorators import wait
 from pySMART import Device
 from typing import Union
@@ -11,6 +11,7 @@ from wtforms import ValidationError
 from nms_shared.msg import ErrorMessages
 from .api.backend_proxy import show_flash
 from .api.tasks import PoolExpansionTask
+import time
 
 
 # MAIN PAGE
@@ -67,7 +68,7 @@ def smart_disk() -> str:
     try:
         validate_csrf(request.form.get("csrf_token"))
     except ValidationError:
-        flash("CSRF validation failed","error")
+        show_flash(code=ErrorMessages.E_CSRF.name)
         return redirect(url_for("main.advanced"))
 
     d = BACKEND.smart_info(request.form.get("disk"))
@@ -172,19 +173,20 @@ def mount() -> Response:
 
 @bp.route("/disk/replace",methods=['POST'])
 def replace_disk():
+    disk = request.form.get("disk")
     try:
         validate_csrf(request.form.get("csrf_token"))
-        disk = request.form.get("disk")
 
         if (disk is None):
-            flash("Invalid disk to replace", "error")
+            show_flash(code=ErrorMessages.E_POOL_DISK_UNAVAL.name,params=[disk])
         else:
-            BACKEND.replace(disk)
+            BACKEND.replace_disk(disk)
     except ValidationError:
-        flash("CSRF validation failed", "error")
+        show_flash(code=ErrorMessages.E_CSRF.name)
     except Exception as e:
-        flash(f"Unable to replace disk: {str(e)}", "error")
+        show_flash(type="error", code=ErrorMessages.E_POOL_DISK_REPLACE.name,params=[disk,disk,str(e)])
 
+    time.sleep(0.5)
 
     return redirect(url_for("main.disk_management"))
 
@@ -215,5 +217,20 @@ def add_disk_wait() -> Union[str,Response]:
                            active_page="disk",
                            refresh_to=url_for("main.disk_management"),
                            task_id=add_disk_task.task_id,
+                           csp_nonce=g.csp_nonce)
+
+@bp.route('/disks/replace/wait')
+def replace_disk_wait() -> Union[str,Response]:
+    tasks = BACKEND.get_tasks_by_metadata("resilver")
+
+    if len(tasks) == 0:
+        return redirect(url_for("main.disk_management"))
+
+    resilver_task = tasks.pop()
+
+    return render_template("wait.determinate.html",
+                           active_page="disk",
+                           refresh_to=url_for("main.disk_management"),
+                           task_id=resilver_task.task_id,
                            csp_nonce=g.csp_nonce)
 

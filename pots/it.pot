@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-01-04 15:03+0000\n"
+"POT-Creation-Date: 2026-02-07 00:19+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,242 +17,546 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.17.0\n"
 
-#: disk.py:15
-msgid "New"
+#: frontend/disks.py:55
+msgid "Never"
 msgstr ""
 
-#: disk.py:16
-msgid "Online"
+#: frontend/api/backend_proxy.py:256
+msgid "Uptime"
 msgstr ""
 
-#: disk.py:17
-msgid "Offline"
+#: frontend/api/backend_proxy.py:256
+msgid "Since"
 msgstr ""
 
-#: disk.py:18
-msgid "Corrupted"
+#: frontend/api/backend_proxy.py:257
+msgid "NMS Version"
 msgstr ""
 
-#: filters.py:15
-msgid "Enabled"
+#: frontend/api/backend_proxy.py:258
+msgid "CPU"
 msgstr ""
 
-#: filters.py:15
-msgid "Disabled"
+#: frontend/api/backend_proxy.py:259
+msgid "OS"
 msgstr ""
 
-#: filters.py:20 templates/modal.confirm.html:18
-msgid "Yes"
-msgstr ""
-
-#: filters.py:20
-msgid "No"
-msgstr ""
-
-#: filters.py:45
-msgid "Device"
-msgstr ""
-
-#: filters.py:47
-msgid "Is SSD"
-msgstr ""
-
-#: filters.py:49
-msgid "Interface"
-msgstr ""
-
-#: backend/pool.py:237 forms.py:66
-msgid "Redundancy"
-msgstr ""
-
-#: backend/pool.py:238 forms.py:67
+#: frontend/api/backend_proxy.py:315 frontend/utils/forms.py:67
 msgid "Encryption"
 msgstr ""
 
-#: backend/pool.py:239 forms.py:68
+#: frontend/api/backend_proxy.py:316 frontend/utils/forms.py:66
+msgid "Redundancy"
+msgstr ""
+
+#: frontend/api/backend_proxy.py:317 frontend/utils/forms.py:68
 msgid "Compression"
 msgstr ""
 
-#: forms.py:69
+#: frontend/api/tasks.py:31
+msgid "h"
+msgstr ""
+
+#: frontend/api/tasks.py:33
+msgid "m"
+msgstr ""
+
+#: frontend/api/tasks.py:35
+msgid "s"
+msgstr ""
+
+#: frontend/utils/filters.py:15
+msgid "New"
+msgstr ""
+
+#: frontend/utils/filters.py:16
+msgid "Online"
+msgstr ""
+
+#: frontend/utils/filters.py:17
+msgid "Offline"
+msgstr ""
+
+#: frontend/utils/filters.py:18
+msgid "Corrupted"
+msgstr ""
+
+#: frontend/utils/filters.py:21
+msgid "Enabled"
+msgstr ""
+
+#: frontend/utils/filters.py:21
+msgid "Disabled"
+msgstr ""
+
+#: frontend/utils/filters.py:26 templates/modal.confirm.html:18
+msgid "Yes"
+msgstr ""
+
+#: frontend/utils/filters.py:26
+msgid "No"
+msgstr ""
+
+#: frontend/utils/filters.py:51
+msgid "Device"
+msgstr ""
+
+#: frontend/utils/filters.py:53
+msgid "Is SSD"
+msgstr ""
+
+#: frontend/utils/filters.py:55
+msgid "Interface"
+msgstr ""
+
+#: frontend/utils/forms.py:69
 msgid "Pool Name"
 msgstr ""
 
-#: forms.py:70
+#: frontend/utils/forms.py:70
 msgid "Dataset Name"
 msgstr ""
 
-#: forms.py:71
+#: frontend/utils/forms.py:71
 msgid "Disks"
 msgstr ""
 
-#: forms.py:71
+#: frontend/utils/forms.py:71
 msgid "You must select at least one disk to create an array"
 msgstr ""
 
-#: forms.py:87
+#: frontend/utils/forms.py:87
 msgid "Key"
 msgstr ""
 
-#: forms.py:104 forms.py:122
+#: frontend/utils/forms.py:104 frontend/utils/forms.py:122
 msgid "Port"
 msgstr ""
 
-#: forms.py:104 forms.py:122
+#: frontend/utils/forms.py:104 frontend/utils/forms.py:122
 #, python-format
 msgid "The port number must be between %(port_min)s-%(port_max)s"
 msgstr ""
 
-#: forms.py:105 forms.py:117 forms.py:123
+#: frontend/utils/forms.py:105 frontend/utils/forms.py:117
+#: frontend/utils/forms.py:123
 msgid "Username"
 msgstr ""
 
-#: forms.py:105 forms.py:125
+#: frontend/utils/forms.py:105 frontend/utils/forms.py:125
 msgid ""
 "Invalid username: must start with a letter or _, and contain only "
 "lowercase letters, digits, _ or -."
 msgstr ""
 
-#: forms.py:106 forms.py:118 forms.py:126
+#: frontend/utils/forms.py:106 frontend/utils/forms.py:118
+#: frontend/utils/forms.py:126
 msgid "Password"
 msgstr ""
 
-#: forms.py:107 forms.py:119 forms.py:127
+#: frontend/utils/forms.py:107 frontend/utils/forms.py:119
+#: frontend/utils/forms.py:127
 msgid "Confirm Password"
 msgstr ""
 
-#: forms.py:107 forms.py:119 forms.py:128
+#: frontend/utils/forms.py:107 frontend/utils/forms.py:119
+#: frontend/utils/forms.py:128
 msgid "Passwords must match"
 msgstr ""
 
-#: forms.py:114
+#: frontend/utils/forms.py:114
 msgid "Hostname"
 msgstr ""
 
-#: forms.py:124
+#: frontend/utils/forms.py:124
 msgid "You must specify a username if authentication is enabled."
 msgstr ""
 
-#: forms.py:129
+#: frontend/utils/forms.py:129
 msgid "Authentication:"
 msgstr ""
 
-#: msg.py:9
+#: nms_shared/msg.py:138
 msgid "Unknown Error"
 msgstr ""
 
-#: msg.py:11
+#: nms_shared/msg.py:139
+msgid "Unknown response from server"
+msgstr ""
+
+#: nms_shared/msg.py:140
+#, python-format
+msgid "Error while getting %(prop)s: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:141
+msgid "Form validation failed"
+msgstr ""
+
+#: nms_shared/msg.py:143
 msgid "The disk array is already configured."
 msgstr ""
 
-#: msg.py:12
+#: nms_shared/msg.py:144
 msgid "Disk array not configured yet."
 msgstr ""
 
-#: msg.py:13
+#: nms_shared/msg.py:145
+msgid "Disk array is configured."
+msgstr ""
+
+#: nms_shared/msg.py:146
+#, python-format
+msgid "Disk %(dev)s is not available to be in the new disk array."
+msgstr ""
+
+#: nms_shared/msg.py:147
+#, python-format
+msgid "Unable to create a new disk array: %(info)s)"
+msgstr ""
+
+#: nms_shared/msg.py:149
+#, python-format
+msgid "Unable to destroy the disk array: %(info)s)"
+msgstr ""
+
+#: nms_shared/msg.py:151
 msgid "You must have at least 3 disks connected to opt in redundancy."
 msgstr ""
 
-#: msg.py:14
+#: nms_shared/msg.py:152
 #, python-format
 msgid "Error while adding %(dev)s: %(info)s"
 msgstr ""
 
-#: msg.py:15
+#: nms_shared/msg.py:153
 #, python-format
 msgid "Could not retrieve information for the disk: %(dev)s"
 msgstr ""
 
-#: msg.py:16
+#: nms_shared/msg.py:154
 #, python-format
 msgid "Unable to get array expansion status: %(info)s"
 msgstr ""
 
-#: msg.py:17
+#: nms_shared/msg.py:155
 #, python-format
-msgid "Unable to attach new device to disk array%(details)s"
+msgid "Error while retrieving the encryption key: %(info)s"
 msgstr ""
 
-#: msg.py:18
+#: nms_shared/msg.py:156
 #, python-format
-msgid "Error while recovering the disk array: %(info)s)"
+msgid "Error while importing the encryption key: %(info)s"
 msgstr ""
 
-#: msg.py:19
+#: nms_shared/msg.py:157
+#, python-format
+msgid "Error while attaching an existing pool: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:158
+msgid "Unable to retrieve the list of pools."
+msgstr ""
+
+#: nms_shared/msg.py:159
+#, python-format
+msgid "Error while recovering the disk array: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:160
+#, python-format
+msgid "Error while retrieving the disks in the array: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:161
+#, python-format
+msgid "Unable to replace %(dev1)s with %(dev2)s: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:162
+#, python-format
+msgid "Error while detaching the disk array: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:163
+#, python-format
+msgid "Error while mounting the disk array: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:164
+#, python-format
+msgid "Error while unmounting the disk array: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:165
+msgid "Disk array is mounted."
+msgstr ""
+
+#: nms_shared/msg.py:166
+msgid "Disk array is unmounted."
+msgstr ""
+
+#: nms_shared/msg.py:167
+#, python-format
+msgid "Error while verifying the disk array: %(info)s."
+msgstr ""
+
+#: nms_shared/msg.py:168
+msgid "The provided mount point is not valid."
+msgstr ""
+
+#: nms_shared/msg.py:169
+#, python-format
+msgid "Error while retrieving the mount information the disk array: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:171
+#, python-format
+msgid "Error while retrieving the mount point: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:172
+#, python-format
+msgid "Error while removing the mount point: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:173
+#, python-format
+msgid "Error while formatting the disk array: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:174
+#, python-format
+msgid "Unable to read disk array capacity information: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:177
+msgid ""
+"One or more disks cannot be opened. Your disk array CANNOT be used in "
+"this state. Run a diagnostic to see if the disk is getting faulted and "
+"replace if necessary. Alternatively, you can format it in the Advanced "
+"page (this can likely cause data loss)."
+msgstr ""
+
+#: nms_shared/msg.py:178
+msgid ""
+"One or more disks seems missing. Your disk array CANNOT be used in this "
+"state. Insert back the missing disk. If the disk is inserted and still "
+"see this error, you can format it in the Advanced page (this can likely "
+"cause data loss)."
+msgstr ""
+
+#: nms_shared/msg.py:179
+msgid ""
+"The information related your disk array are corrupted. Recovery may be "
+"possible (but not guaranteed) and some data loss can occur. Use the "
+"`Attempt Recovery` button in Advanced. If the problem persists, back up "
+"your data, destroy and create a new array. Consider replacing one or more"
+" disks if their diagnostics suggest so."
+msgstr ""
+
+#: nms_shared/msg.py:180
+msgid "Your disk array seems to be outdated and cannot be used anymore."
+msgstr ""
+
+#: nms_shared/msg.py:182
 msgid "Invalid authorisation."
-msgstr "Autorizzazione non valida."
+msgstr ""
 
-#: msg.py:20
+#: nms_shared/msg.py:183
 msgid "Authorisation token expired."
-msgstr "Autorizzazione scaduta."
+msgstr ""
 
-#: msg.py:28
+#: nms_shared/msg.py:184
+msgid "Authorisation token revoked."
+msgstr ""
+
+#: nms_shared/msg.py:185
+msgid "Authorisation token malformed."
+msgstr ""
+
+#: nms_shared/msg.py:186
+msgid "OTP secret not configured yet."
+msgstr ""
+
+#: nms_shared/msg.py:187
+msgid "Invalid OTP."
+msgstr ""
+
+#: nms_shared/msg.py:189
+#, python-format
+msgid "Unable to attach new device to disk array: %(details)s"
+msgstr ""
+
+#: nms_shared/msg.py:190
+#, python-format
+msgid "Error while formatting %(dev)s: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:192
+#, python-format
+msgid "Unable to change permissions for %(path)s: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:194
+#, python-format
+msgid "Unable to get system updates: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:196
+#, python-format
+msgid "Error while enabling %(service)s: %(info)s)"
+msgstr ""
+
+#: nms_shared/msg.py:197
+#, python-format
+msgid "Error while disabling %(service)s: %(info)s)"
+msgstr ""
+
+#: nms_shared/msg.py:198
+#, python-format
+msgid "Unable to disable %(service)s. Please, disable it manually."
+msgstr ""
+
+#: nms_shared/msg.py:199
+#, python-format
+msgid "Access service %(service)s not recognised."
+msgstr ""
+
+#: nms_shared/msg.py:203
+msgid ""
+"One or more disks cannot be opened. As you have redundancy activated, you"
+" can still use your disk array. Run a diagnostic to see if the disk is "
+"getting faulted and replace if necessary. Alternatively, you can format "
+"it in the Advanced page."
+msgstr ""
+
+#: nms_shared/msg.py:204
+msgid ""
+"One or more disks seems missing. As you have redundancy activated, you "
+"can still use your disk array. Insert back the missing disk. If the disk "
+"is inserted and still see this error, press `Replace` in the Disk "
+"Management page."
+msgstr ""
+
+#: nms_shared/msg.py:205
+msgid ""
+"Some files and/or directories are corrupted and data cannot be recovered."
+" If the problem persists, back up your data, destroy and create a new "
+"array. Consider replacing one or more disks if their diagnostics suggest "
+"so."
+msgstr ""
+
+#: nms_shared/msg.py:206
+msgid ""
+"One or more disks appear to experience some problems. No imminent actions"
+" are required at the moment. However, you should investigate which "
+"disk(s) is getting old and consider replacing it."
+msgstr ""
+
+#: nms_shared/msg.py:207
+msgid ""
+"Your disk array is experiencing some format issues. To solve this issue, "
+"press `Verify` in the Disk Management page."
+msgstr ""
+
+#: nms_shared/msg.py:208
+msgid "You need to configure your disk array before enabling any access services"
+msgstr ""
+
+#: nms_shared/msg.py:209
+msgid ""
+"One or more of your disks in the array is offline. If redundancy is "
+"active, you can still use the array. Please, reinsert or replace your "
+"disk soon."
+msgstr ""
+
+#: nms_shared/msg.py:213
 msgid "Disk array created successfully."
 msgstr ""
 
-#: msg.py:29
+#: nms_shared/msg.py:214
 msgid "Disk array expanded successfully."
 msgstr ""
 
-#: msg.py:31
+#: nms_shared/msg.py:215
+msgid "Disk array formatted successfully."
+msgstr ""
+
+#: nms_shared/msg.py:216
+msgid "Disk array destroyed successfully."
+msgstr ""
+
+#: nms_shared/msg.py:217
+msgid "Disk array mounted successfully."
+msgstr ""
+
+#: nms_shared/msg.py:218
+msgid "Disk array unmounted successfully."
+msgstr ""
+
+#: nms_shared/msg.py:219
+msgid "Disk array verification performed successfully."
+msgstr ""
+
+#: nms_shared/msg.py:220
+msgid ""
+"Disk replaced successfully. An internal disk verification process in "
+"ongoing."
+msgstr "Sostituzione disco avvenuta con successo. Un processo di verifica interno dell'archivio è stato avviato."
+
+#: nms_shared/msg.py:222
 msgid "System updates retrieved successfully."
 msgstr ""
 
-#: msg.py:32
+#: nms_shared/msg.py:223
 msgid "System updates installed successfully."
 msgstr ""
 
-#: msg.py:34
+#: nms_shared/msg.py:225
 msgid ""
 "OTP Accepted. Please press again the button of the desired dangerous "
 "operation to continue."
 msgstr ""
 
-#: msg.py:36
+#: nms_shared/msg.py:227
 msgid "Disk array recovery attempted."
-msgstr "Recupero dell'archivio tentato con successo."
-
-#: backend/system.py:31
-msgid "Uptime"
 msgstr ""
 
-#: backend/system.py:31
-msgid "Since"
-msgstr ""
-
-#: backend/system.py:35
-msgid "NMS Version"
-msgstr ""
-
-#: frontend/disks.py:211
-msgid "The creation of a new disk array may take some time. Please wait..."
-msgstr ""
-
-#: frontend/tasks.py:58
-msgid "h"
-msgstr ""
-
-#: frontend/tasks.py:60
-msgid "m"
-msgstr ""
-
-#: frontend/tasks.py:62
-msgid "s"
-msgstr ""
-
-#: frontend/tasks.py:66
+#: nms_shared/msg.py:229
 #, python-format
-msgid "Disk expansion is expected to take %(eta)s"
+msgid "Service %(service)s enabled successfully."
 msgstr ""
 
-#: frontend/tasks.py:71
-msgid "Disk expansion in progress"
+#: nms_shared/msg.py:230
+#, python-format
+msgid "Service %(service)s settings updated successfully."
 msgstr ""
 
-#: templates/access.html:3 templates/index.html:34
+#: nms_shared/msg.py:231
+#, python-format
+msgid "Service %(service)s disabled successfully."
+msgstr ""
+
+#: nms_shared/msg.py:233
+#, python-format
+msgid "Disk %(dev)s formatted successfully."
+msgstr ""
+
+#: nms_shared/msg.py:237
+#, python-format
+msgid "Disk expansion is expected to take %(eta)s."
+msgstr ""
+
+#: nms_shared/msg.py:238
+msgid "Disk expansion in progress."
+msgstr ""
+
+#: templates/access.html:3 templates/index.html:35
 msgid "Remote Access"
 msgstr ""
 
-#: templates/advanced.html:3 templates/index.html:37
+#: templates/advanced.html:3 templates/index.html:38
 msgid "Advanced"
 msgstr ""
 
@@ -260,20 +564,16 @@ msgstr ""
 msgid "System Logs"
 msgstr ""
 
-#: templates/advanced.logs.html:9
+#: templates/advanced.logs.html:10
 msgid "Web App"
 msgstr ""
 
-#: templates/advanced.logs.html:12
+#: templates/advanced.logs.html:13
 msgid "Backend"
 msgstr ""
 
-#: templates/advanced.logs.html:15
-msgid "Worker Manager"
-msgstr ""
-
-#: templates/advanced.logs.html:18
-msgid "System Manager"
+#: templates/advanced.logs.html:32
+msgid "Filter"
 msgstr ""
 
 #: templates/card.access.ftp.html:12 templates/card.access.nfs.html:32
@@ -684,7 +984,7 @@ msgid "Go to %(disk_mngt)s to configure your disk array."
 msgstr ""
 
 #: templates/card.disk_list.html:39 templates/card.disk_usage.html:31
-#: templates/disk_mngt.html:3 templates/index.html:28
+#: templates/disk_mngt.html:3 templates/index.html:29
 msgid "Disk Management"
 msgstr ""
 
@@ -768,7 +1068,7 @@ msgstr ""
 msgid "Import %(pool)s"
 msgstr ""
 
-#: templates/card.network_list.html:3 templates/index.html:31
+#: templates/card.network_list.html:3 templates/index.html:32
 msgid "Network"
 msgstr ""
 
@@ -805,6 +1105,18 @@ msgstr ""
 
 #: templates/card.scrub_report.html:3
 msgid "Last Verification Report"
+msgstr ""
+
+#: templates/card.scrub_report.html:10
+msgid "Started at"
+msgstr ""
+
+#: templates/card.scrub_report.html:13
+msgid "Ended at"
+msgstr ""
+
+#: templates/card.scrub_report.html:16
+msgid "Errors"
 msgstr ""
 
 #: templates/card.sys_admin.html:3
@@ -852,7 +1164,7 @@ msgstr ""
 msgid "Network:"
 msgstr ""
 
-#: templates/dashboard.html:3 templates/index.html:6 templates/index.html:25
+#: templates/dashboard.html:3 templates/index.html:6 templates/index.html:26
 msgid "Dashboard"
 msgstr ""
 
@@ -864,27 +1176,27 @@ msgstr ""
 msgid "Disk Information"
 msgstr ""
 
-#: templates/index.html:79
+#: templates/index.html:80
 msgid "Are you sure you want to log out?"
 msgstr ""
 
-#: templates/index.html:79
+#: templates/index.html:80
 msgid "Logout"
 msgstr ""
 
-#: templates/index.html:81
+#: templates/index.html:82
 msgid "Are you sure you want to reboot the system?"
 msgstr ""
 
-#: templates/index.html:81
+#: templates/index.html:82
 msgid "Reboot"
 msgstr ""
 
-#: templates/index.html:82
+#: templates/index.html:83
 msgid "Are you sure you want to power off the system?"
 msgstr ""
 
-#: templates/index.html:82
+#: templates/index.html:83
 msgid "Shutdown"
 msgstr ""
 
@@ -892,7 +1204,7 @@ msgstr ""
 msgid "Enter OTP to log in"
 msgstr ""
 
-#: templates/login.auth.html:33
+#: templates/login.auth.html:35
 msgid "Login"
 msgstr ""
 

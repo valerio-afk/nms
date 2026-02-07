@@ -38,3 +38,7 @@ class PoolExpansionTask(BackgroundTask):
 
         else:
             return InfoMessages.get_message(InfoMessages.I_POOL_EXPANSION)
+
+class ResilverStatusTask(BackgroundTask):
+    def __str__(this):
+        return InfoMessages.get_message(InfoMessages.I_POOL_DISK_REPLACEMENT)

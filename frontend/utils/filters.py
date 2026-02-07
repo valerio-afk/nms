@@ -10,6 +10,13 @@ def disk_charm(disk_status:DiskStatus):
         case DiskStatus.OFFLINE: return "🔴"
         case DiskStatus.CORRUPTED: return "⚠️"
 
+def disk_status_babel(disk_status:DiskStatus):
+    match (disk_status):
+        case DiskStatus.NEW: return _("New")
+        case DiskStatus.ONLINE: return _("Online")
+        case DiskStatus.OFFLINE: return _("Offline")
+        case DiskStatus.CORRUPTED: return _("Corrupted")
+
 def enabled_fmt(status:bool):
     fmt = _("Enabled") if status else _("Disabled")
     badge = "success" if status else "danger"

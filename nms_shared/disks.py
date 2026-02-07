@@ -1,5 +1,5 @@
 from typing import Optional, Any, List, Union, Iterable, Dict
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from .enums import DiskStatus
 
 import subprocess
@@ -11,9 +11,7 @@ class Disk (BaseModel):
     size:Optional[int]
     status:Optional[DiskStatus]
     path:str
-
-    def __post_init__(this) -> None:
-        this.cached_physical_paths: List[str] = []
+    cached_physical_paths:List[int] = Field(default_factory=list)
 
     def serialise(this) -> Dict[str, Union[str,Iterable[str]]]:
         return {

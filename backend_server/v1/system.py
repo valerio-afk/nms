@@ -1,21 +1,24 @@
-from backend_server.utils.scheduler import SCHEDULER
-from backend_server.v1.net import net_counter
-from backend_server.v1.auth import verify_token_factory
+from backend_server.utils.cmdl import Shutdown, Reboot, SystemCtlRestart, LocalCommandLineTransaction, JournalCtl
 from backend_server.utils.config import CONFIG
-from backend_server.utils.responses import BackendProperty, ErrorMessage, BackgroundTask
-from backend_server.utils.cmdl import Shutdown, Reboot, SystemCtlRestart, LocalCommandLineTransaction, APTGetUpdate, \
-    APTGetUpgrade
+from backend_server.utils.responses import BackendProperty, BackgroundTask
+from backend_server.utils.scheduler import SCHEDULER
+from backend_server.utils.threads import AptGetUpdateThread, AptGetUpgradeThread
+
+from backend_server.v1.auth import verify_token_factory
+from backend_server.v1.net import net_counter
+
 from collections import OrderedDict
 from enum import Enum
 from fastapi import APIRouter, Depends, HTTPException
 from nms_shared.constants import APT_LISTS
+from nms_shared.enums import LogFilter
 from typing import Optional, Dict, Union
 import datetime
 import os
 import platform
 import psutil
 
-from nms_shared.threads import NMSThread
+
 
 system = APIRouter(
     prefix='/system',
@@ -85,57 +88,7 @@ class AptGetActions(Enum):
     upgrade = "upgrade"
 
 
-class AptGetUpdateThread (NMSThread):
-    def run(this) -> None:
-        cmd = APTGetUpdate()
-        process = cmd.execute()
 
-        try:
-            if (process.returncode != 0):
-                raise Exception(process.stderr)
-
-            cmd = APTGetUpgrade(dry_run=True)
-            process = cmd.execute()
-
-            if (process.returncode != 0):
-                raise Exception(process.stderr)
-
-            updates = []
-
-            for line in process.stdout.splitlines():
-                if (line.startswith("Inst ")):
-                    pkg = line.split()
-
-                    if (len(pkg) >= 2):
-                        updates.append(pkg[1])
-
-            CONFIG.system_updates = updates
-            CONFIG.flush_config()
-
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessage.E_APT_GET.name, params=[str(e)]))
-
-
-class AptGetUpgradeThread(NMSThread):
-    def run(this) -> None:
-        cmd = APTGetUpdate()
-        process = cmd.execute()
-
-        try:
-            if (process.returncode != 0):
-                raise Exception(process.stderr)
-
-            cmd = APTGetUpgrade(dry_run=False)
-            process = cmd.execute()
-
-            if (process.returncode != 0):
-                raise Exception(process.stderr)
-
-            CONFIG.system_updates = []
-            CONFIG.flush_config()
-
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessage.E_APT_GET.name, params=[str(e)]))
 
 
 
@@ -220,3 +173,39 @@ def get_task_info(task_id: str) ->Optional[Union[BackgroundTask,Dict]]:
                           eta=thread.eta,
                           detail=thread.message
                           )
+
+
+@system.get("/logs/{filter}",
+              responses={500: {"description": "Any internal error while disabling an access services"}},
+              response_model=Optional[str],
+              summary="Retrieve system logs",
+)
+def journalctl(filter:LogFilter,date_from:Optional[int]=None,date_to:Optional[int]=None) -> Optional[str]:
+    service = None
+
+    if (date_to is None):
+        date_to = int(datetime.datetime.now().timestamp())
+    if (date_from is None):
+        date_from = date_to - datetime.timedelta(hours=1).total_seconds()
+
+    since = datetime.datetime.fromtimestamp(date_from).strftime("%Y-%m-%d %H:%M:%S")
+    until = datetime.datetime.fromtimestamp(date_to).strftime("%Y-%m-%d %H:%M:%S")
+
+    match (filter):
+        case LogFilter.FRONTEND:
+            service = "nmswebapp.service"
+        case LogFilter.BACKEND:
+            service = "nmsbackend.service"
+
+    cmd = JournalCtl(service,since=since,until=until)
+
+    process = cmd.execute()
+
+    if (process.returncode == 0):
+        return process.stdout
+    else:
+        return process.stderr
+
+@system.get("/test",summary="Test checking if the client/server connection works properly")
+def test() -> None:
+    ...

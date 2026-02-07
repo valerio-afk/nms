@@ -5,9 +5,10 @@ from backend_server.utils.config import CONFIG
 from backend_server.utils.responses import ExpasionStatus, BackendProperty, ErrorMessage, SuccessMessage, BackgroundTask
 from backend_server.utils.scheduler import SCHEDULER
 from backend_server.v1.auth import verify_token_factory, verify_token_header_factory
+from backend_server.utils.threads import ScrubStateChecker, PoolExpansionStatus, ResilverStateChecker
 from datetime import timedelta
 from enum import Enum
-from fastapi import HTTPException, APIRouter, Depends, UploadFile, File, FastAPI
+from fastapi import HTTPException, APIRouter, Depends, UploadFile, File
 from backend_server.v1.services import disable_all_access_services
 from nms_shared import ErrorMessages, SuccessMessages
 from nms_shared.constants import KEYPATH
@@ -15,7 +16,6 @@ from nms_shared.enums import DiskStatus
 from nms_shared.disks import Disk
 from typing import  Optional, List, Callable, Dict
 from pydantic import BaseModel
-from backend_server.utils.threads import NMSThread
 import base64
 import datetime
 import json
@@ -23,7 +23,6 @@ import os
 import re
 import subprocess
 import traceback
-import time
 
 
 pool = APIRouter(
@@ -141,10 +140,12 @@ def get_pool_disks() -> List[Disk]:
                     .get("vdevs", {})
 
 
-            paths = [remove_partition(d['path']) for d in disks.values()]
+            paths = [remove_partition(p) for d in disks.values() if ((p:=d.get("path")) is not None)]
 
             attached_disks = [ x for x in get_system_disks() if x.has_any_paths(paths) ]
             detached_disks = []
+
+            statuses = ""
 
             for d in attached_disks:
                 for x in disks.values():
@@ -152,6 +153,7 @@ def get_pool_disks() -> List[Disk]:
                     if path is not None:
                         path = remove_partition(path)
                         if d.has_path(path):
+                            statuses += x.get("state") + "\n"
                             match (x.get("state")):
                                 case 'ONLINE':
                                     d.status = DiskStatus.ONLINE
@@ -165,6 +167,9 @@ def get_pool_disks() -> List[Disk]:
                     old_path = d.get("path") or d.get("was","")
 
                     old_path = remove_partition(old_path)
+
+                    if (any([x.has_path(old_path) for x in attached_disks])):
+                        continue
 
                     offline_disk = Disk(
                         name=d.get("name"),
@@ -181,10 +186,9 @@ def get_pool_disks() -> List[Disk]:
                             offline_disk.model = cfg_disk.model
                             offline_disk.serial = cfg_disk.serial
                             offline_disk.size = cfg_disk.size
-                            offline_disk.cached_physical_paths = cfg_disk.cached_physical_paths
+                            offline_disk.cached_physical_paths = list(set(cfg_disk.cached_physical_paths)) #make paths unique
 
                     detached_disks.append(offline_disk)
-
 
             return attached_disks + detached_disks
 
@@ -398,67 +402,7 @@ class PoolProperties(Enum):
     scrub_info = "scrub_info"
 
 
-class ScrubStateChecker(NMSThread):
-    def __init__(this, pool_name: str):
-        super().__init__()
-        this.pool_name = pool_name
 
-    def run(this) -> None:
-        try:
-            while (this.is_running):
-                output = ZPoolStatus(this.pool_name).execute()
-
-                if (output.returncode == 0):
-                    d = json.loads(output.stdout)
-                    scan_stats = d.get('pools', {}).get(this.pool_name, {}).get('scan_stats', {})
-
-                    if (scan_stats.get('function', "") == "SCRUB"):
-                        if (scan_stats.get('state', "FINISHED") != "FINISHED"):
-                            time.sleep(2)
-                        else:
-                            break
-                    else:
-                        break
-                else:
-                    error = output.stderr.decode('utf8')
-                    CONFIG.error(f"Scrub state checker: {error}")
-                    raise HTTPException(500,detail=ErrorMessage(code=ErrorMessages.E_POOL_SCRUB.name, params=[error]))
-        except Exception as e:
-            raise e
-        finally:
-            CONFIG.scrub_stopped()
-            CONFIG.flush_config()
-
-
-        this._message = SuccessMessage(code=SuccessMessages.S_POOL_SCRUB.name)
-        CONFIG.info("Scrub state checker terminated successfully")
-
-class PoolExpansionStatus(NMSThread):
-    def __init__(this, dev:str):
-        super().__init__()
-        this._device = dev
-
-
-    def run(this) -> None:
-        done = False
-        time.sleep(0.5)
-
-        while not done:
-            status = get_array_expansion_status()
-
-            if (status.progress is None) and (status.eta is None):
-                raise Exception(ErrorMessage.get_error(ErrorMessage.E_POOL_EXPAND_INFO, this._device))
-            else:
-                if (status.eta is not None):
-                    this._eta = status.eta
-                    this._progress = status.progress
-
-            done = not status.is_running
-
-            time.sleep(1)
-
-        this._message =  SuccessMessage(code=SuccessMessages.S_POOL_EXPANDED.name)
-        CONFIG.info("Pool expansion completed successfully")
 
 
 @pool.get("/get/disks",
@@ -666,6 +610,10 @@ class CreatePool(BaseModel):
     compression: bool
     disks: List[str]
 
+class ReplaceDevice(BaseModel):
+    old_device: str
+    new_device: str
+
 @pool.post("/create",
     responses={500: {"description": "Any internal errors"}},
     summary="Create a new disk array",)
@@ -805,28 +753,57 @@ def attempt_recovery(auth:Dict=Depends(verify_token_header_factory("recover"))) 
     return {"detail": SuccessMessage(code=SuccessMessages.S_RECOVERY.name)}
 
 @pool.post("/replace",
+    response_model=Optional[BackgroundTask],
     responses={500: {"description": "Any internal errors"}},
-    summary="Replace a device with another device in the disk array",)
-def replace(old_dev:str, new_dev:str) -> None:
-    cmd =  ZPoolReplace(CONFIG.pool_name, old_dev, new_dev)
+    summary="Replace a device with another device in the disk array")
+def replace(devices:ReplaceDevice) -> Optional[BackgroundTask]:
+    from backend_server.v1.disks import get_system_disks
+
+
+    cmd =  ZPoolReplace(CONFIG.pool_name, devices.old_device, devices.new_device)
+
+    old_disk = None
+    new_disk = None
+
+    for disk in get_pool_disks():
+        if disk.has_path(devices.old_device):
+            old_disk = disk
+
+    for disk in get_system_disks():
+        if disk.has_path(devices.new_device):
+            new_disk = disk
+
+    if (old_disk is None):
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_DISK_UNAVAL.name,params=[devices.old_device]))
+
+    if (new_disk is None):
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_DISK_UNAVAL.name,params=[devices.new_device]))
+
 
     process = cmd.execute()
 
     if (process.returncode != 0):
-        error = process.stderr.decode()
-        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_DISK_REPLACE.name, params=[old_dev, new_dev, error]))
+        error = process.stderr
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_DISK_REPLACE.name, params=[devices.old_device, devices.new_device, error]))
+
+    task = ResilverStateChecker(old_disk,new_disk)
+    task_id = SCHEDULER.schedule(task)
+
+    task.success_message = SuccessMessage(code=SuccessMessages.S_POOL_REPLACE_DISK.name)
+
+    return BackgroundTask(task_id=task_id,running=True,progress=None,eta=None,detail=None)
 
 @pool.post("/scrub",
     responses={500: {"description": "Any internal errors"}},
     summary="Start disk array scrubbing operation",)
-def pool_scrub() -> None:
+def pool_scrub() -> Optional[BackgroundTask]:
     pool_name = CONFIG.pool_name
     cmd =  ZPoolScrub(pool_name)
 
     process = cmd.execute()
 
     if (process.returncode != 0):
-        error = process.stderr.decode()
+        error = process.stderr
         raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_SCRUB.name,params=[error]))
 
     task = ScrubStateChecker(pool_name)

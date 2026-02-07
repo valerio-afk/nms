@@ -1,4 +1,5 @@
-from .api.backend_proxy import NMSBACKEND
+from nms_shared.enums import DiskStatus
+from .api.backend_proxy import NMSBACKEND, show_flash
 from flask import Blueprint, flash, session, redirect, Response ,url_for, request
 from flask_babel import get_locale
 from nms_shared import constants
@@ -18,6 +19,9 @@ def check_scrub_status() -> None:
 
 @frontend.before_request
 def check_pool_warnings() -> None:
+    if (not NMSBACKEND.is_authenticated):
+        return
+
     msgid = NMSBACKEND.pool_status_id
     if (msgid is not None):
         code = constants.MSGID.get(msgid,None)
@@ -26,6 +30,11 @@ def check_pool_warnings() -> None:
                 flash(ERROR_MESSAGES[code](),"error")
             elif (isinstance(code,WarningMessages)):
                 flash(WARNING_MESSAGES[code](), "warning")
+
+    disks = NMSBACKEND.pool_disks
+
+    if (any(d.status == DiskStatus.OFFLINE for d in disks)):
+        show_flash(type="warning",code=WarningMessages.W_POOL_DISK_OFFLINE.name)
 
 
 @frontend.before_request
@@ -72,6 +81,20 @@ def require_login() -> Optional[Response]:
                 redirect_params["next"] = parsed.path
 
             return redirect(url_for("main.login",**redirect_params))
+
+@frontend.before_request
+def resilvering_ongoing() -> Optional[Response]:
+    wait_endpoint = "main.replace_disk_wait"
+
+    skip_endpoints = ["main.check_tasks", "main.check_task_by_id", wait_endpoint]
+
+    if (request.endpoint in skip_endpoints):
+        return None
+
+    tasks = NMSBACKEND.get_tasks_by_metadata("resilver")
+
+    if len(tasks) > 0:
+        return redirect(url_for(wait_endpoint))
 
 
 

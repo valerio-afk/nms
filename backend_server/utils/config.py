@@ -547,7 +547,19 @@ class NMSConfig(Logger):
     def add_disk(this,disk:Disk) -> None:
         this._cfg['pool']['disks'].append(disk.serialise())
 
+    def replace_disk(this, old_disk:Disk, new_disk:Disk) -> None:
+        idx = None
 
+        for i,disk in enumerate(this._cfg['pool']['disks']):
+            paths = [disk.get('path')]
+            paths+= disk.get('physical_paths',[])
+
+            if (old_disk.has_any_paths(paths)):
+                idx = i
+                break
+
+        if (idx is not None):
+            this._cfg['pool']['disks'][idx] = new_disk.serialise()
 
 
 

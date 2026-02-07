@@ -10,7 +10,7 @@ def wait(redirect_to:Optional[str]=None, tag:Optional[str]=None) -> Callable:
             path = request.path.lower()
 
             for task in BACKEND.tasks:
-                if any([path.startswith(p.lower()) for p in task.pages]):
+                if any([path.startswith(p.lower()) for p in (task.pages or [])]):
                     if ((tag is None) or (task.metadata == tag)):
                         if (task.running):
                             if (redirect_to is not None):

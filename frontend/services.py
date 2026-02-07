@@ -2,7 +2,7 @@ from msg import WarningMessages
 from . import frontend as bp, NMSBACKEND as BACKEND
 from importlib import import_module
 from flask import render_template, request, flash, redirect, url_for, Response, g
-from widget import render_widget
+from frontend.utils.widget import render_widget
 from nms_shared.msg import ErrorMessages
 from .api.backend_proxy import  show_flash
 
@@ -11,7 +11,7 @@ from .api.backend_proxy import  show_flash
 
 @bp.route("/access")
 def access() -> str:
-    forms = import_module("forms")
+    forms =  import_module("frontend.utils.forms")
     widgets = []
     mountpoint  = BACKEND.mountpoint
 
@@ -56,7 +56,7 @@ def change_access_settings(service) -> Response:
             show_flash(code=ErrorMessages.E_ACCESS_SERV_UNK.name,params=[service.upper()])
             return redirect(url_for("main.access"))
 
-        forms = import_module("forms")
+        forms = import_module("frontend.utils.forms")
         service_form_cls = getattr(forms, f"{service.upper()}ServiceForm")
         service_enabled = serv['active']
         form = service_form_cls(enabled=service_enabled)

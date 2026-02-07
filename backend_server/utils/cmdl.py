@@ -813,7 +813,7 @@ class Reboot(CommandLine):
         return Reboot()
 
 class JournalCtl(CommandLine):
-    def __init__(this,service, grep=None):
+    def __init__(this,service:str, grep:Optional[str]=None,since:Optional[str]=None,until:Optional[str]=None):
         this._service = service
         this._grep = grep
 
@@ -821,6 +821,12 @@ class JournalCtl(CommandLine):
 
         if (grep is not None):
             cmd.extend(['--grep',grep])
+
+        if (since is not None):
+            cmd.extend(['--since',since])
+
+        if (until is not None):
+            cmd.extend(['--until',until])
 
         super().__init__(cmd,sudo=True,mask_output=True)
 
