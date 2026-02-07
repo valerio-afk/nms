@@ -129,3 +129,5 @@ class WEBServiceForm(AccessServiceForm):
     authentication = BooleanField(_("Authentication:"))
 
 
+class IFaceEnableForm(FlaskForm):
+    iface_enabler = BooleanField()

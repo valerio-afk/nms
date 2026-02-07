@@ -353,7 +353,8 @@ class BackEndProxy:
 
 
     #NET PROPERTIES
-    def iface_status(this) -> Optional[List[dict]]:
+    @property
+    def network_interfaces(this) -> Optional[List[dict]]:
         r = this._request("net/ifaces",RequestMethod.GET)
 
         return r or []
@@ -536,6 +537,16 @@ class BackEndProxy:
 
     def apt_get_upgrade(this) -> Optional[Dict]:
         return this.apt_get("upgrade")
+
+    #NETWORK METHODS
+    def change_iface_status(this,iface:str,action:Union[Literal['up'],Literal['down']]) -> None:
+        this._request(f"net/{iface}/{action}",RequestMethod.POST)
+
+    def iface_up(this,iface:str) -> None:
+        this.change_iface_status(iface,"up")
+
+    def iface_down(this,iface:str) -> None:
+        this.change_iface_status(iface,"down")
 
     #Other Method
     def register_task(this,

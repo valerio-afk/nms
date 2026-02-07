@@ -15,7 +15,7 @@
   <script src="{{ url_for('static', filename='refresher.js') }}"></script>
   <script src="{{ url_for('static', filename='showdown/dist/showdown.min.js') }}"></script>
   <script src="{{ url_for('static', filename='nl2br.js') }}"></script>
-  <script src="{{ url_for('static', filename='disable-submit.js') }}"></script>
+  <script src="{{ url_for('static', filename='form-controls.js') }}"></script>
 </head>
 <body>
   <nav id="main-nav" class="navbar navbar-expand navbar-light">
@@ -29,7 +29,7 @@
           <a href="{{ url_for('main.disk_management') }}" class="nav-link {% if active_page == 'disk' %}active{% endif %}" id="nav-disk"> <i class="bi bi-hdd-rack-fill"></i> {{ _("Disk Management") }}</a>
         </li>
         <li class="nav-item">
-          <a href="#" class="nav-link {% if active_page == 'network' %}active{% endif %}" id="nav-network"><i class="bi bi-link-45deg"></i> {{ _("Network") }}</a>
+          <a href="{{ url_for('main.network') }}" class="nav-link {% if active_page == 'network' %}active{% endif %}" id="nav-network"><i class="bi bi-link-45deg"></i> {{ _("Network") }}</a>
         </li>
         <li class="nav-item">
           <a href="{{ url_for('main.access') }}" class="nav-link {% if active_page == 'access' %}active{% endif %}" id="nav-access"><i class="bi bi-terminal-fill"></i> {{ _("Remote Access") }}</a>

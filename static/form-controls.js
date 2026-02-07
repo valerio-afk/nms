@@ -27,3 +27,11 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
 });
+
+document.addEventListener("change", function (e) {
+    if (e.target.classList.contains("auto-submit-switch")) {
+        if (e.target.form) {
+            e.target.form.submit();
+        }
+    }
+});

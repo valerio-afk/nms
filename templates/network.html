@@ -1,0 +1,15 @@
+{% extends "index.html" %}
+
+{% block title %}{{ _("Network") }}{% endblock %}
+
+{% block content %}
+
+{% if ifaces %}
+    <div class="row g-3">
+        {% for card in ifaces %}
+            {{ card | safe }}
+        {% endfor %}
+    </div>
+{% endif %}
+
+{% endblock %}

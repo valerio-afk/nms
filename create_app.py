@@ -1,4 +1,3 @@
-from celery import Celery, Task
 from frontend.utils.filters import (human_readable_bytes, enabled_fmt, disk_charm, markdown_filter, smart_label,
                                     boolean_fmt,disk_status_babel)
 from flask import Flask, g, request
@@ -12,7 +11,6 @@ import os
 import redis
 
 babel = Babel()
-
 
 def get_locale():
     lang = request.args.get('lang')
@@ -35,20 +33,20 @@ def create_flask_app():
     app.config['BABEL_DEFAULT_LOCALE'] = 'en'
     app.config['BABEL_SUPPORTED_LOCALES'] = ['en', 'it']
 
-    app.config.from_mapping(
-        CELERY=dict(
-            broker_url="redis://localhost:6379/0",
-            result_backend="redis://localhost:6379/1",
-            broker_transport_options={
-                "global_keyprefix": "celery:broker:"
-            },
-
-            result_backend_transport_options={
-                "global_keyprefix": "celery:result:"
-            },
-
-        ),
-    )
+    # app.config.from_mapping(
+    #     CELERY=dict(
+    #         broker_url="redis://localhost:6379/0",
+    #         result_backend="redis://localhost:6379/1",
+    #         broker_transport_options={
+    #             "global_keyprefix": "celery:broker:"
+    #         },
+    #
+    #         result_backend_transport_options={
+    #             "global_keyprefix": "celery:result:"
+    #         },
+    #
+    #     ),
+    # )
 
     app.add_template_filter(human_readable_bytes,"human_readable_bytes")
     app.add_template_filter(enabled_fmt, "enabled_fmt")
@@ -105,9 +103,9 @@ def create_flask_app():
         response.headers['Content-Security-Policy'] = csp
         return response
 
-    csrf = CSRFProtect(app)
+    CSRFProtect(app)
 
-    celery_init_app(app)
+    # celery_init_app(app)
     babel.init_app(app,locale_selector=get_locale)
 
 
@@ -115,14 +113,14 @@ def create_flask_app():
     return app
 
 
-def celery_init_app(app):
-    class FlaskTask(Task):
-        def __call__(self, *args: object, **kwargs: object) -> object:
-            with app.app_context():
-                return self.run(*args, **kwargs)
-
-    celery_app = Celery(app.name, task_cls=FlaskTask)
-    celery_app.config_from_object(app.config["CELERY"])
-    celery_app.set_default()
-    app.extensions["celery"] = celery_app
-    return celery_app
+# def celery_init_app(app):
+#     class FlaskTask(Task):
+#         def __call__(self, *args: object, **kwargs: object) -> object:
+#             with app.app_context():
+#                 return self.run(*args, **kwargs)
+#
+#     celery_app = Celery(app.name, task_cls=FlaskTask)
+#     celery_app.config_from_object(app.config["CELERY"])
+#     celery_app.set_default()
+#     app.extensions["celery"] = celery_app
+#     return celery_app

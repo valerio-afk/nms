@@ -17,7 +17,7 @@ def widget_sys_info() -> Tuple[str,Optional[str]]:
     return render_widget("system_info",system_info=sys_info)
 
 def widget_network_overview() -> Tuple[str,Optional[str]]:
-    ifaces = BACKEND.iface_status()
+    ifaces = BACKEND.network_interfaces
     return render_widget("network_list",ifaces=ifaces)
 
 def widget_access_overview() -> Tuple[str,Optional[str]]:
