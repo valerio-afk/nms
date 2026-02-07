@@ -8,10 +8,29 @@
 <dl class="row">
   {% for iface in ifaces %}
     <dt class="col-sm-4">{{ iface.name }}:</dt>
-    <dd class="col-sm-8">{{ iface.status | enabled_fmt | safe }}</dd>
-    {% if iface.ipv4 %}<dd class="ms-4 mb-1"><span class="fw-bold">IPv4 Address:</span> {{ iface.ipv4 }} </dd>{% endif %}
-    {% if iface.ipv6 %}<dd class="ms-4 mb-1"><span class="fw-bold">IPv6 Address:</span> {{ iface.ipv6 }} </dd>{% endif %}
-    {% if iface.network_name %}<dd class="ms-4 mb-1"><span class="fw-bold">Network:</span> {{ iface.network_name }} </dd>{% endif %}
+    <dd class="col-sm-8">{{ iface.enabled | enabled_fmt | safe }}</dd>
+    <dd>
+      <ul class="list-unstyled ps-3">
+      {% if iface.network_name %}<li><span class="fw-bold">{{ _("Network") }}:</span> {{ iface.network_name }} </li>{% endif %}
+      {% if iface.ipv4 %}
+        <li><span class="fw-bold">{{ _("IPv4 Address") }}:</span>
+          {% set ip = iface.ipv4 %}
+          {% include 'iface.ip_summary.html' %}
+
+        </li>
+      </ul>
+    </dd>
+    {% endif %}
+
+  {% if iface.ipv6 %}
+      <dd class="ms-4 mb-1"><span class="fw-bold">{{ _("IPv6 Address") }}:</span>
+        {% set ip = iface.ipv6 %}
+        {% include 'iface.ip_summary.html' %}
+
+      </dd>
+    {% endif %}
+
+
   {% endfor %}
 </dl>
 {% endif %}

@@ -16,7 +16,7 @@ class CommandLine(ABC):
         this._mask_output=mask_output
 
     def append(this,cmd):
-        if (isinstance(cmd,list)):
+        if (isinstance(cmd,list) or (isinstance(cmd,tuple))):
             this._command.extend([x for x in cmd])
         elif (isinstance(cmd,str)):
             this._command.append(cmd)
@@ -1418,3 +1418,76 @@ class DockerInspect(Docker):
         )
 
 
+class NMCLI(CommandLine):
+    def __init__(this,terse:bool=True,**kwargs):
+        this._terse = terse
+
+        cmd = ['nmcli']
+
+        if (terse):
+            cmd.append('-t')
+
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['terse'] = this._terse
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return NMCLI(
+            serialisation.get("terse", None),
+        )
+
+
+class NMCLIDevice(NMCLI):
+    def __init__(this,subcommand:str,*args,**kwargs):
+        super().__init__(**kwargs)
+        this.append("device")
+        this.append(subcommand)
+        this.append(args)
+
+        this._subcommand = subcommand
+        this._arguments = args
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['subcommand'] = this._subcommand
+        d['arguments'] = this._arguments
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        args = serialisation.get("arguments", [])
+        return NMCLIConnection(
+            serialisation.get("subcommand", None),
+            *args,
+        )
+
+class NMCLIConnection(NMCLI):
+    def __init__(this,subcommand:str,*args,**kwargs):
+        super().__init__(**kwargs)
+        this.append("connection")
+        this.append(subcommand)
+        this.append(args)
+
+        this._subcommand = subcommand
+        this._arguments = args
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['subcommand'] = this._subcommand
+        d['arguments'] = this._arguments
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        args = serialisation.get("arguments", [])
+        return NMCLIConnection(
+            serialisation.get("subcommand", None),
+            *args,
+        )
