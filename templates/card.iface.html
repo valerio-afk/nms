@@ -1,7 +1,7 @@
 {% extends "card.html" %}
 
 {% block card_title %}
-{{ iface.network_name }}
+{{ iface.type | iface_charm }}&nbsp;{{ iface.network_name }}
     <form method="POST" class="float-end" action=" {{ url_for('main.iface_change_status',iface=iface.name,action='down' if iface.enabled else 'up') }}">
         {{ enabler_form.hidden_tag() }}
         <span class="form-check form-switch">
@@ -11,9 +11,57 @@
 {% endblock %}
 
 {% block card_content %}
+<div class="accordion" id="accordion-{{ iface.name }}">
+{% for version,form in ip_forms.items() %}
+  <div class="accordion-item">
+    <h2 class="accordion-header">
+      <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#form-{{ iface.name }}-{{ version }}" aria-expanded="true" aria-controls="form-{{ iface.name }}-{{ version }}">
+        {{ form.version.data }}
+      </button>
+    </h2>
+    <div id="form-{{ iface.name }}-{{ version }}" class="accordion-collapse collapse" data-bs-parent="#accordion-{{ iface.name }}">
+      <div class="accordion-body">
+        <form method="POST" action="{{ url_for('main.iface_change_conf',iface=iface.name,profile=iface.network_name) }} ">
+            {{ form.hidden_tag() }}
 
-<form action="{{ url_for('main.change_access_settings',service='web') }}" method="POST" class="disable-on-submit">
+            {% if form.enabled %}
+                 <div class="mb-3 row">
+                  <div class="col-sm-4 col-form-label">{{ form.enabled.label }}</div>
+                  <div class="col-sm-8">
+                        <span class="form-check form-switch">
+                            {{ form.enabled(class=form.enabled.render_kw.class ~ " form-check-input") }}
+                        </span>
+                  </div>
+                </div>
+            {% endif %}
 
+            {% for field in form if (field.type not in ['HiddenField','CSRFTokenField']) and (field != form.enabled) %}
+                <div class="mb-3 row">
+                  <div class="col-sm-4 col-form-label">{{ field.label }}</div>
+                  <div class="col-sm-8">
+                      {% if field.type == "BooleanField" %}
+                        <span class="form-check form-switch">
+                            {{ field(class=field.render_kw.class ~ " form-check-input") }}
+                        </span>
+                      {% else %}
+                        {{ field(class=field.render_kw.class ~ " form-control") }}
+                      {% endif %}
+
+                  </div>
+                </div>
+            {% endfor %}
+
+            <div class="row g-1">
+                <div class="col-12">
+                    <button class="btn btn-success w-100" type="submit" name="action" value="apply"> {{ _("Apply changes") }} </button>
+                </div>
+            </div>
+        </form>
+      </div>
+    </div>
+  </div>
+{% endfor %}
+</div>
 {% endblock %}
 
 

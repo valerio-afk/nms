@@ -673,9 +673,13 @@ class CommandLineTransaction:
         POST_COMMAND =2
         POST_RUN = 3
 
-    def __init__(this, *args):
+    def __init__(this, *args, privileged:bool = False):
         this._cmds = [x for x in args]
         this._success = None
+
+        if (privileged):
+            for c in this._cmds:
+                c._sudo = True
 
         this._hooks = {
             CommandLineTransaction.Hooks.PRE_RUN : [],
@@ -711,7 +715,7 @@ class CommandLineTransaction:
 
 class LocalCommandLineTransaction(CommandLineTransaction):
 
-    def run(this):
+    def run(this) -> List[dict]:
         outputs = []
         failed = False
 

@@ -3,12 +3,18 @@ from typing import Optional
 from flask_babel import _
 from nms_shared.enums import DiskStatus
 
-def disk_charm(disk_status:DiskStatus):
+def disk_charm(disk_status:DiskStatus) -> str:
     match (disk_status):
         case DiskStatus.NEW: return "✴️"
         case DiskStatus.ONLINE: return "🟢"
         case DiskStatus.OFFLINE: return "🔴"
         case DiskStatus.CORRUPTED: return "⚠️"
+
+def iface_charm(iface_type:str) -> str:
+    match (iface_type):
+        case "ethernet": return "🔌️"
+        case "wifi": return "🛜"
+        case _: return ""
 
 def disk_status_babel(disk_status:DiskStatus):
     match (disk_status):

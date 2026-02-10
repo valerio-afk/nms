@@ -548,6 +548,14 @@ class BackEndProxy:
     def iface_down(this,iface:str) -> None:
         this.change_iface_status(iface,"down")
 
+    def iface_setup(this, iface, ip_version, profile, settings) -> None:
+        this._request(
+            f"net/{iface}/{ip_version}/config",
+            RequestMethod.POST,
+            qstring_params={"profile":profile},
+            body_params=settings
+        )
+
     #Other Method
     def register_task(this,
                       id:str,

@@ -66,6 +66,7 @@ class ErrorMessages(Enum):
     E_ACCESS_SERV_UNK = "E_ACCESS_SERV_UNK"
 
     E_NET_CHANGE_STATE = "E_NET_CHANGE_STATE"
+    E_NET_CONNECTION_STATUS = "E_NET_CONNECTION_STATUS"
 
     @staticmethod
     def get_error_from_string(error_code:str,*args,**kwargs) -> str:
@@ -119,6 +120,7 @@ class SuccessMessages(Enum):
     S_DISK_FORMATTED = "S_DISK_FORMATTED"
 
     S_POOL_REPLACE_DISK = "S_POOL_REPLACE_DISK"
+
 
     @staticmethod
     def get_message(success_code:"SuccessMessage",*args,**kwargs) -> str:
@@ -201,7 +203,8 @@ ERROR_MESSAGES = {
     ErrorMessages.E_ACCESS_DISABLING : lambda service,info: _("Unable to disable %(service)s. Please, disable it manually.") % {'service':service},
     ErrorMessages.E_ACCESS_SERV_UNK: lambda service: _("Access service %(service)s not recognised.") % {'service':service},
 
-    ErrorMessages.E_NET_CHANGE_STATE : lambda iface,info : _("Error while changing the state of the network interface %(iface)s: %(info)s") % {'info':info,'iface':iface},
+    ErrorMessages.E_NET_CHANGE_STATE : lambda iface,info : _("Error while changing the state of the network interface %(iface)s: %(info)s") % {'info':info,'iface':iface}, #<------
+    ErrorMessages.E_NET_CONNECTION_STATUS : lambda iface,info : _("Error while retrieving the connection status for %(iface)s: %(info)s") % {'info':info,'iface':iface}, #<------
 }
 
 WARNING_MESSAGES = {

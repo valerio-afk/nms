@@ -1,7 +1,14 @@
+from enum import Enum
+
 from pydantic import BaseModel, Field
 from pydantic.networks import IPv4Address, IPv6Address
 from typing import Optional, Any, List, Dict, Union
-from datetime import timedelta
+
+
+class InterfaceType(Enum):
+    ETHERNET = 'ethernet'
+    WIFI = 'wifi'
+    UNKNOWN = 'unknown'
 
 class StatusMessage(BaseModel):
     type:str
@@ -41,6 +48,7 @@ class IPv4(BaseModel):
 
 class IPv6(BaseModel):
     enabled:bool
+    dynamic: bool
     address: Optional[IPv6Address] = Field(None)
     netmask: Optional[IPv6Address] = Field(None)
     gateway: Optional[IPv6Address] = Field(None)
@@ -53,6 +61,7 @@ class NetworkInterface(BaseModel):
     ipv4: Optional[IPv4]
     ipv6: Optional[IPv6]
     network_name:Optional[str]
+    type:InterfaceType
 
 class WifiNetworkInterface(NetworkInterface):
     wpa23: bool

@@ -1,5 +1,5 @@
 from frontend.utils.filters import (human_readable_bytes, enabled_fmt, disk_charm, markdown_filter, smart_label,
-                                    boolean_fmt,disk_status_babel)
+                                    boolean_fmt, disk_status_babel, iface_charm)
 from flask import Flask, g, request
 from flask_babel import Babel
 from flask_session import Session
@@ -52,6 +52,7 @@ def create_flask_app():
     app.add_template_filter(enabled_fmt, "enabled_fmt")
     app.add_template_filter(boolean_fmt, "boolean_fmt")
     app.add_template_filter(disk_charm, "disk_charm")
+    app.add_template_filter(iface_charm, "iface_charm")
     app.add_template_filter(markdown_filter,"md")
     app.add_template_filter(smart_label,"smart_label")
     app.add_template_filter(disk_status_babel,"disk_status_babel")

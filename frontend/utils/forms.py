@@ -2,6 +2,7 @@ from flask_wtf import FlaskForm
 from flask_babel import lazy_gettext as _
 from wtforms import StringField, IntegerField,PasswordField,BooleanField, SelectMultipleField, FileField
 from wtforms.fields.choices import RadioField
+from wtforms.fields.simple import HiddenField, TextAreaField
 from wtforms.validators import DataRequired,NumberRange, EqualTo, Regexp,StopValidation
 from wtforms.widgets.core import CheckboxInput, ListWidget
 from nms_shared.disks import Disk
@@ -22,6 +23,22 @@ class ToggleInput(CheckboxInput):
 class MultiCheckboxField(SelectMultipleField):
 	widget			= ListWidget(prefix_label=False)
 	option_widget	= ToggleInput()
+
+class ListTextAreaField(TextAreaField):
+    def _value(self) -> str:
+        if isinstance(self.data, list):
+            return "\n".join(self.data)
+        return super()._value()
+
+    def process_formdata(self, valuelist) -> None:
+        if valuelist:
+            self.data = [
+                line.strip()
+                for line in valuelist[0].splitlines()
+                if line.strip()
+            ]
+        else:
+            self.data = []
 
 class DependentDataRequired(DataRequired):
     def __init__(self, fieldnames, message=None):
@@ -131,3 +148,14 @@ class WEBServiceForm(AccessServiceForm):
 
 class IFaceEnableForm(FlaskForm):
     iface_enabler = BooleanField()
+
+class IPForm(FlaskForm):
+    version = HiddenField()
+    dynamic = BooleanField(_("Dynamic IP"),render_kw = {"class" :"toggle toggle-reverse toggle-target enabled"})
+    address = StringField(_("Address"), render_kw =  {"class": "toggle-target dynamic enabled"})
+    netmask = StringField(_("Netmask"), render_kw =  {"class": "toggle-target dynamic enabled"})
+    gateway = StringField(_("Gateway"), render_kw =  {"class": "toggle-target dynamic enabled"})
+    dns = ListTextAreaField(_("DNS"), render_kw =  {"class": "toggle-target dynamic enabled"})
+
+class IPEnableForm(IPForm):
+    enabled = BooleanField(_("Enabled"),render_kw = {"class" :"toggle"})
