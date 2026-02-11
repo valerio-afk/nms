@@ -154,6 +154,14 @@ class NMSConfig(Logger):
     def net_counter(this) -> Optional[NetIOCounter]:
         return this._daemons.get("netcounter")
 
+    @property
+    def vpn_service(this) -> Optional[str]:
+        for s in this._cfg.get("systemd", {}).get("services", []):
+            if s.startswith("wg-quick"):
+                return s
+
+        return None
+
     # POOL PROPERTIES
 
     @property
@@ -366,7 +374,7 @@ class NMSConfig(Logger):
                 "apt" : []
             },
             "systemd": {
-                "services": ['nmswebapp.service','celeryworker.service','sudodaemon.service']
+                "services": ['nmswebapp.service','nmsbackend.service','wg-quick@wg0.service']
             }
         }
 

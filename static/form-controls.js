@@ -104,13 +104,37 @@ function shouldTargetBeEnabled(target, controllingToggles) {
   });
 }
 
+
+function togglePasswordVisibility(event) {
+    const button = event.currentTarget;
+    const inputId = button.getAttribute('data-password-id');
+    const passwordInput = document.getElementById(inputId);
+    if (!passwordInput) return;
+
+    const type = passwordInput.type === 'password' ? 'text' : 'password';
+    passwordInput.type = type;
+
+    button.innerHTML = type === 'password' ? '<i class="bi bi-eye"></i>️' : '<i class="bi bi-eye-slash"></i>';
+  }
+
+function enablePasswordToggle() {
+    document.querySelectorAll('button[data-password-id]').forEach(button => {
+     if (!button._passwordToggleAttached) {  // custom flag
+      button.addEventListener('click', togglePasswordVisibility);
+      button._passwordToggleAttached = true; // mark as added
+    }
+    });
+  }
+
 // Auto init
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initializeToggleControls);
     document.addEventListener('DOMContentLoaded', disableOnSubmit);
+    document.addEventListener('DOMContentLoaded', enablePasswordToggle);
 } else {
     initializeToggleControls();
     disableOnSubmit();
+    enablePasswordToggle()
 }
 
 

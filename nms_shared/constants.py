@@ -66,3 +66,7 @@ LANGS = {
 }
 
 HTTP_REPEAT_HEADER = "X-NMS-Keep-Repeating"
+
+WIREGUARD_CONF = "/etc/wireguard/wg0.conf"
+VPN_PUBLIC_KEY = "/root/vpn_public.key"
+VPN_PRIVATE_KEY = "/root/vpn_private.key"

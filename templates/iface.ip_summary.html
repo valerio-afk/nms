@@ -1,8 +1,8 @@
 <ul class="list-unstyled ps-3">
-    <li><span class="fw-bold pe-3">{{ _("Dynamic IP") }}:</span> {{ ip.dynamic | enabled_fmt | safe }}</li>
+    {% if iface_name != "vpn" %} <li><span class="fw-bold pe-3">{{ _("Dynamic IP") }}:</span> {{ ip.dynamic | enabled_fmt | safe }}</li> {% endif %}
     <li><span class="fw-bold">{{ _("Address") }}:</span> {{ ip.address }}</li>
     <li><span class="fw-bold">{{ _("Netmask") }}:</span> {{ ip.netmask }}</li>
-    <li><span class="fw-bold">{{ _("Gateway") }}:</span> {{ ip.gateway }}</li>
-    <li><span class="fw-bold">{{ _("DNS") }}:</span> {{ ip.dns | join(", ") }}</li>
+    {% if ip.gateway %}<li><span class="fw-bold">{{ _("Gateway") }}:</span> {{ ip.gateway }}</li> {% endif %}
+    {% if ip.dns|length > 0 %}<li><span class="fw-bold">{{ _("DNS") }}:</span> {{ ip.dns | join(", ") }}</li> {% endif %}
 
 </ul>

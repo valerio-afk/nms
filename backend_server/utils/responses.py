@@ -8,6 +8,7 @@ from typing import Optional, Any, List, Dict, Union
 class InterfaceType(Enum):
     ETHERNET = 'ethernet'
     WIFI = 'wifi'
+    VPN = 'vpn'
     UNKNOWN = 'unknown'
 
 class StatusMessage(BaseModel):
@@ -46,6 +47,10 @@ class IPv4(BaseModel):
     gateway: Optional[IPv4Address] = Field(None)
     dns: List[Union[str,IPv4Address]] = Field(default_factory=list)
 
+class IPv4Basic(BaseModel):
+    address: IPv4Address
+    netmask: IPv4Address
+
 class IPv6(BaseModel):
     enabled:bool
     dynamic: bool
@@ -58,9 +63,9 @@ class IPv6(BaseModel):
 class NetworkInterface(BaseModel):
     name:str
     enabled:bool
-    ipv4: Optional[IPv4]
-    ipv6: Optional[IPv6]
-    network_name:Optional[str]
+    ipv4: Optional[IPv4] = Field(None)
+    ipv6: Optional[IPv6] = Field(None)
+    network_name:Optional[str] = Field(None)
     type:InterfaceType
     has_profile: bool
 

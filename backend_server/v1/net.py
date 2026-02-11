@@ -1,22 +1,56 @@
 from enum import Enum
 from fastapi.params import Body, Query
-from nms_shared.msg import ErrorMessages
+from nms_shared.msg import ErrorMessages, SuccessMessages
+from nms_shared.constants import WIREGUARD_CONF, VPN_PUBLIC_KEY, VPN_PRIVATE_KEY
 from fastapi import APIRouter, HTTPException, Depends
-from backend_server.utils.cmdl import NMCLIConnection, NMCLIDevice, LocalCommandLineTransaction
+from backend_server.utils.cmdl import NMCLIConnection, NMCLIDevice, LocalCommandLineTransaction, SystemCtlIsActive, \
+    SystemCtlStart, SystemCtlStop, SystemCtlRestart
 from backend_server.utils.responses import NetCounter, NetworkInterface, IPv4, IPv6, ErrorMessage, InterfaceType, \
-    WifiNetwork, WifiConnect
+    WifiNetwork, WifiConnect, SuccessMessage, IPv4Basic
 from backend_server.utils.config import CONFIG
 from backend_server.utils.threads import NetIOCounter
 from backend_server.v1.auth import verify_token_factory
 from typing import Optional, List
+import configparser
 import ipaddress
+import subprocess
 import re
+import base64
+import io
 
 net = APIRouter(
     prefix='/net',
     tags=['net'],
     dependencies=[Depends(verify_token_factory())]
 )
+
+def read_wireguard_config_file() -> configparser.ConfigParser:
+    output = subprocess.run(["sudo", "cat", WIREGUARD_CONF], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    if (output.returncode != 0):
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_NET_CONNECTION_STATUS.name,
+                                                                 params=["VPN", output.stderr]))
+
+    wg = configparser.ConfigParser()
+    wg.read_string(output.stdout)
+
+    return wg
+
+
+def write_wireguard_config_file(wg:configparser.ConfigParser) -> None:
+    buffer = io.StringIO()
+    wg.write(buffer)
+    wg_config = buffer.getvalue()
+
+    result = subprocess.run(
+        ["sudo", "tee", WIREGUARD_CONF],
+        input=f"{wg_config}\n",
+        text=True,
+        capture_output=True
+    )
+
+    if (result.returncode != 0):
+        raise HTTPException(status_code=500, detail="Error while configuring private key")
 
 def net_counter() -> NetCounter:
     counter:Optional[NetIOCounter] = CONFIG.net_counter
@@ -34,28 +68,49 @@ class IFaceAction(Enum):
     UP = "up"
     DOWN = "down"
 
+def vpn_status() -> bool:
+    service = CONFIG.vpn_service
+    if (service is not None):
+        cmd = SystemCtlIsActive(service)
 
+        output = cmd.execute()
 
+        CONFIG.error(output)
 
-@net.get('/io',response_model=NetCounter,responses={500:{'description':'Error while retrieving network information'}})
-def net_io_counter() -> NetCounter:
-    return net_io_counter()
+        if (output.returncode not in [0, 3]):
+            raise HTTPException(status_code=500,
+                                detail=ErrorMessage(code=ErrorMessages.E_NET_VPN_STATE.name, params=[output.stderr]))
 
-@net.get('/ifaces', response_model=List[NetworkInterface])
-def net_ifaces() -> List[NetworkInterface]:
+        return False if "inactive" in output.stdout else True
+
+    raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_NET_VPN_NOTCONF.name))
+
+def get_vpn_public_key() -> Optional[str]:
+    fname = VPN_PUBLIC_KEY
+
+    result = subprocess.run(
+        ["sudo", "cat", fname],
+        stdout=subprocess.PIPE,
+        check=True
+    )
+
+    if result.returncode != 0:
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_KEY.name,params=[result.stderr.decode('utf8')]))
+
+    return base64.b64encode(result.stdout).decode("ascii")
+
+def get_network_interfaces() -> List[NetworkInterface]:
     cmd = NMCLIDevice("status")
     iface_process = cmd.execute()
 
-    ifaces = [ line.split(":") for line in iface_process.stdout.splitlines() ]
+    ifaces = [line.split(":") for line in iface_process.stdout.splitlines()]
 
     network_interfaces = []
 
+    for iface, type, state, connection in ifaces:
 
-    for iface,type,state,connection in ifaces:
-
-        if (type in ['loopback','bridge']) or ("unmanaged" in state):
+        if (type in ['loopback', 'bridge']) or ("unmanaged" in state):
             continue
-
 
         iface_type = InterfaceType.UNKNOWN
 
@@ -82,7 +137,7 @@ def net_ifaces() -> List[NetworkInterface]:
 
         if (iface_enabled):
 
-            cmd = NMCLIConnection("show",connection)
+            cmd = NMCLIConnection("show", connection)
             output = cmd.execute()
 
             if (output.returncode == 0):
@@ -105,63 +160,79 @@ def net_ifaces() -> List[NetworkInterface]:
                 }
 
                 for line in output.stdout.splitlines():
-                    pair = line.split(':',1)
+                    pair = line.split(':', 1)
                     property = pair[0].strip()
                     value = pair[1].strip() if len(pair) == 2 else None
 
                     match (property):
                         case "ipv4.method":
-                            ipv4["dynamic"] = False if value =="manual" else True
+                            ipv4["dynamic"] = False if value == "manual" else True
                         case "ipv4.addresses":
-                            if (len(value)>0):
+                            if (len(value) > 0):
                                 ip = ipaddress.IPv4Interface(value)
                                 ipv4["address"] = str(ip.ip)
                                 ipv4["netmask"] = str(ip.netmask)
                         case "ipv4.gateway":
-                            ipv4["gateway"] = value if (len(value)>0) else None
+                            ipv4["gateway"] = value if (len(value) > 0) else None
                         case "ipv4.dns":
                             values = value.split(",") if value is not None else []
-                            ipv4["dns"] = [x for x in values if len(x)>0]
+                            ipv4["dns"] = [x for x in values if len(x) > 0]
                         case "ipv6.method":
                             ipv6["dynamic"] = False if value == "manual" else True
-                            ipv6["enabled"] = False if value in ["disabled","ignore"] else True
+                            ipv6["enabled"] = False if value in ["disabled", "ignore"] else True
                         case "IP6.ADDRESS[1]":
                             if (len(value) > 0):
                                 ip = ipaddress.IPv6Interface(value)
                                 ipv6["address"] = str(ip.ip)
                                 ipv6["netmask"] = str(ip.netmask)
                         case "IP6.GATEWAY":
-                            ipv6["gateway"] = value if (len(value)>0) else None
+                            ipv6["gateway"] = value if (len(value) > 0) else None
                         case "ipv6.dns":
                             values = value.split(",") if value is not None else []
-                            ipv6["dns"] = [x for x in values if len(x)>0]
+                            ipv6["dns"] = [x for x in values if len(x) > 0]
                         case _:
                             if ("=" in value):
                                 try:
-                                    sub_property,sub_value = value.split("=")
+                                    sub_property, sub_value = value.split("=")
                                     sub_property = sub_property.strip()
                                     sub_value = sub_value.strip()
 
                                     match (sub_property):
-                                        case "ip_address": ipv4["address"] = sub_value if len(sub_value)>0 else None
-                                        case "subnet_mask": ipv4["netmask"] = sub_value
-                                        case "domain_name_servers": ipv4["dns"] = [sub_value]
-                                        case "routers": ipv4["gateway"] = sub_value
+                                        case "ip_address":
+                                            ipv4["address"] = sub_value if len(sub_value) > 0 else None
+                                        case "subnet_mask":
+                                            ipv4["netmask"] = sub_value
+                                        case "domain_name_servers":
+                                            ipv4["dns"] = [sub_value]
+                                        case "routers":
+                                            ipv4["gateway"] = sub_value
                                 except ValueError:
                                     ...
-
-
 
                 ipv4_info = IPv4(**ipv4)
                 ipv6_info = IPv6(**ipv6)
 
             else:
-                raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_CONNECTION_STATUS.name,params=[iface,output.stderr]))
+                raise HTTPException(status_code=500,
+                                    detail=ErrorMessage(code=ErrorMessages.E_NET_CONNECTION_STATUS.name,
+                                                        params=[iface, output.stderr]))
 
-        network_interface = NetworkInterface(ipv4=ipv4_info,ipv6=ipv6_info,**network_params)
+        network_interface = NetworkInterface(ipv4=ipv4_info, ipv6=ipv6_info, **network_params)
         network_interfaces.append(network_interface)
 
     return network_interfaces
+
+@net.get('/io',response_model=NetCounter,responses={500:{'description':'Error while retrieving network information'}})
+def net_io_counter() -> NetCounter:
+    return net_io_counter()
+
+@net.get('/ifaces', response_model=List[NetworkInterface])
+def net_ifaces() -> List[NetworkInterface]:
+    return get_network_interfaces()
+#
+# @net.get("/vpn/status",response_model=bool)
+# def get_vpn_status() -> bool:
+#     return vpn_status()
 
 
 @net.get('/{iface}/list',response_model=List[WifiNetwork])
@@ -216,6 +287,124 @@ def net_wifi_connect(iface:str,network:WifiConnect) -> None:
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_WIFI_CONNECT.name,params=[network.ssid, error]))
 
 
+@net.get("/vpn/pubkey",response_model=str)
+def net_vpn_pubkey() -> str:
+    return get_vpn_public_key()
+
+@net.post("/vpn/gen-keys")
+def net_vpn_genkey() -> dict:
+    result = subprocess.run(
+        ["wg", "genkey"],
+        capture_output=True,
+        text=True
+    )
+
+    if (result.returncode != 0):
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_VPN_GEN_PRIVATE.name,params=[result.stdout]))
+
+    private_key = result.stdout.strip()
+
+    result = subprocess.run(
+        ["sudo", "tee", VPN_PRIVATE_KEY],
+        input=f"{private_key}\n",
+        text=True,
+        capture_output=True
+    )
+
+    if (result.returncode != 0):
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_VPN_GEN_PRIVATE.name,params=[result.stdout]))
+
+    wg = read_wireguard_config_file()
+
+    wg['interface']['PrivateKey']= private_key
+
+    write_wireguard_config_file(wg)
+
+    result = subprocess.run(
+        ["wg", "pubkey"],
+        input=private_key,
+        capture_output=True,
+        text=True
+    )
+
+    if (result.returncode != 0):
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_VPN_GEN_PUBLIC.name,params=[result.stdout]))
+
+    public_key = result.stdout.strip()
+
+    result = subprocess.run(
+        ["sudo", "tee", VPN_PUBLIC_KEY],
+        input=f"{public_key}\n",
+        text=True,
+        capture_output=True
+    )
+
+    if (result.returncode != 0):
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_VPN_GEN_PUBLIC.name,params=[result.stdout]))
+
+    return {"detail": SuccessMessage(code=SuccessMessages.S_NET_VPN_KEYSGEN.name)}
+
+
+@net.post("/vpn/config")
+def net_vpn_config(config:IPv4Basic) -> dict:
+    netmask = config.netmask
+    try:
+        netmask = ipaddress.IPv4Address(netmask)
+        prefix = bin(int(netmask)).count("1")
+    except ipaddress.AddressValueError:
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_NET_INVALID_NETMASK.name))
+
+    ip_address = config.address
+
+    try:
+        ip_address = ipaddress.IPv4Address(ip_address)
+    except ipaddress.AddressValueError:
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_NET_INVALID_IP_ADDRESS.name))
+
+    wg = read_wireguard_config_file()
+    wg['interface']['Address'] = f"{str(ip_address)}/{prefix}"
+
+    write_wireguard_config_file(wg)
+
+    SystemCtlRestart(CONFIG.vpn_service).execute()
+
+    return {"detail": SuccessMessage(code=SuccessMessages.S_NET_VPN_CONFIG.name)}
+
+@net.post('/vpn/{action}')
+def net_iface_action(action:IFaceAction) -> None:
+    cmd = None
+    vpn_service = CONFIG.vpn_service
+
+    match(action):
+        case IFaceAction.UP:
+            cmd = SystemCtlStart(vpn_service)
+        case IFaceAction.DOWN:
+            cmd = SystemCtlStop(vpn_service)
+
+    output = cmd.execute()
+
+    if (output.returncode != 0):
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_CHANGE_STATE.name,params=["VPN",output.stderr]))
+
+@net.get('/vpn',response_model=NetworkInterface)
+def net_get_vpn_config() -> NetworkInterface:
+    wg = read_wireguard_config_file()
+
+    ip = ipaddress.IPv4Interface(wg['interface']['Address'])
+    ipv4 = {
+        "address": str(ip.ip) ,
+        "netmask": str(ip.netmask),
+        "dynamic": False,
+    }
+    network = NetworkInterface(name="vpn",
+                               enabled=vpn_status(),
+                               has_profile=False,
+                               ipv4=IPv4(**ipv4),
+                               network_name="VPN",
+                               type=InterfaceType.VPN)
+    return network
+
+
 @net.post('/{iface}/{action}')
 def net_iface_action(iface:str,action:IFaceAction) -> None:
     match(action):
@@ -224,11 +413,25 @@ def net_iface_action(iface:str,action:IFaceAction) -> None:
         case IFaceAction.DOWN:
             perform = "disconnect"
 
-    cmd = NMCLIDevice(perform,iface,sudo=True)
-    output = cmd.execute()
+    cmds = [NMCLIDevice(perform,iface,sudo=True)]
 
-    if (output.returncode != 0):
-        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_CHANGE_STATE.name,params=[iface,output.stderr]))
+
+    if (action == IFaceAction.DOWN):
+        ifaces = get_network_interfaces()
+        for x in ifaces:
+            if ((x.name != iface) and (x.enabled)):
+                cmds += [
+                    NMCLIConnection("down",x.network_name,sudo=True),
+                    NMCLIConnection("up", x.network_name, sudo=True),
+                ]
+
+    trans = LocalCommandLineTransaction(*cmds)
+    output = trans.run()
+
+
+    if (not trans.success):
+        error = "\n".join([x['stderr'] for x in output])
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_CHANGE_STATE.name,params=[iface,error]))
 
 
 
@@ -237,7 +440,7 @@ def net_iface_action(iface:str,action:IFaceAction) -> None:
 def net_iface_settings(iface:str,
                        ip_version:str,
                        settings:dict=Body(...),
-                       profile:str=Query(...)) -> None:
+                       profile:str=Query(...)) -> dict:
 
     cmds = []
 
@@ -301,3 +504,5 @@ def net_iface_settings(iface:str,
     if (not trans.success):
         error = "\n".join([t['stderr'] for t in output])
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_CHANGE_STATE.name,params=[iface,error]))
+
+    return {"detail": SuccessMessage(code=SuccessMessages.S_NET_CONFIG.name,params=[iface])}

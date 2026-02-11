@@ -359,6 +359,14 @@ class BackEndProxy:
 
         return r or []
 
+    @property
+    def vpn_config(this) -> dict:
+        return this._request("net/vpn", RequestMethod.GET)
+
+    @property
+    def vpn_public_key(this) -> Optional[str]:
+        return this._request("net/vpn/pubkey", RequestMethod.GET)
+
     #ACCESS SERVICES PROPERTIES
     @property
     def access_services(this) -> Dict[str,dict]:
@@ -564,6 +572,15 @@ class BackEndProxy:
             "ssid":ssid,
             "psk":psk,
             "profile":profile
+        })
+
+    def vpn_gen_keys(this) -> None:
+        this._request("net/vpn/gen-keys",RequestMethod.POST)
+
+    def vpn_change_config(this,address:str, netmask:str) -> None:
+        this._request(f"net/vpn/config",RequestMethod.POST,body_params={
+            "address":address,
+            "netmask":netmask
         })
 
     #Other Method

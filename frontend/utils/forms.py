@@ -159,3 +159,8 @@ class IPForm(FlaskForm):
 
 class IPEnableForm(IPForm):
     enabled = BooleanField(_("Enabled"),render_kw = {"class" :"toggle"})
+
+class VPNForm(FlaskForm):
+    address = StringField(_("Address"))
+    netmask = StringField(_("Netmask"))
+    reroute = BooleanField(_("Reroute all traffic"))

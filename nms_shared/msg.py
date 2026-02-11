@@ -73,6 +73,12 @@ class ErrorMessages(Enum):
     E_NET_INVALID_DNS = "E_NET_INVALID_DNS"
     E_NET_WIFI_LIST = "E_NET_WIFI_LIST"
     E_NET_WIFI_CONNECT = "E_NET_WIFI_CONNECT"
+    E_NET_VPN_NOTCONF = "E_NET_VPN_NOTCONF"
+    E_NET_VPN_STATE = "E_NET_VPN_STATE"
+    E_NET_VPN_KEY = "E_VPN_KEY"
+    E_NET_VPN_GEN_PRIVATE = "E_VPN_GEN_PRIVATE"
+    E_NET_VPN_GEN_PUBLIC = "E_VPN_GEN_PUBLIC"
+    E_NET_VPN_CONF = "E_NET_VPN_CONF"
 
     @staticmethod
     def get_error_from_string(error_code:str,*args,**kwargs) -> str:
@@ -126,6 +132,10 @@ class SuccessMessages(Enum):
     S_DISK_FORMATTED = "S_DISK_FORMATTED"
 
     S_POOL_REPLACE_DISK = "S_POOL_REPLACE_DISK"
+
+    S_NET_VPN_KEYSGEN = "S_VPN_KEYSGEN"
+    S_NET_VPN_CONFIG = "S_VPN_CONFIG"
+    S_NET_CONFIG = "S_NET_CONFIG"
 
 
     @staticmethod
@@ -217,6 +227,12 @@ ERROR_MESSAGES = {
     ErrorMessages.E_NET_INVALID_DNS : lambda : _("Invalid DNS address(es)"), #<------
     ErrorMessages.E_NET_WIFI_LIST : lambda iface,info: _("Error while retrieving the list of WiFi networks for %(iface)s: %(info)s"), #<------
     ErrorMessages.E_NET_WIFI_CONNECT : lambda ssid,info: _("Unable to connect to `%(ssid)s`: %(info)s") % {'info':info,'ssid':ssid}, #<------
+    ErrorMessages.E_NET_VPN_NOTCONF : lambda : _("VPN service not configured."),  #<------
+    ErrorMessages.E_NET_VPN_STATE : lambda info: _("Unable to get the state of the VPN service: %(info)s") % {'info':info},  #<------
+    ErrorMessages.E_NET_VPN_KEY : lambda info = None: _("Error while retrieving the VPN key: %(info)s") % {'info': info or ErrorMessages.fallback_message()},  #<------
+    ErrorMessages.E_NET_VPN_GEN_PRIVATE : lambda info: _("Error occurred while generating the private key: %(info)s") % {'info':info},  #<------
+    ErrorMessages.E_NET_VPN_GEN_PUBLIC : lambda info: _("Error occurred while generating the public key: %(info)s") % {'info':info},  #<------
+    ErrorMessages.E_NET_VPN_CONF : lambda info: _("Error occurred while reading the VPN configuration file: %(info)s") % {'info':info},  #<------
 }
 
 WARNING_MESSAGES = {
@@ -251,6 +267,10 @@ SUCCESS_MESSAGES = {
     SuccessMessages.S_ACCESS_DISABLED : lambda service : _("Service %(service)s disabled successfully.") % {'service':service},
 
     SuccessMessages.S_DISK_FORMATTED : lambda dev : _("Disk %(dev)s formatted successfully.") % {'dev':dev},
+
+    SuccessMessages.S_NET_VPN_KEYSGEN : lambda : _("VPN private and public keys generated successfully.") ,
+    SuccessMessages.S_NET_VPN_CONFIG : lambda : _("VPN configuration changes applied successfully.") ,
+    SuccessMessages.S_NET_CONFIG : lambda iface: _("Network configuration changes for %(iface)s applied successfully.") % {'iface':iface} ,
 }
 
 INFO_MESSAGES = {

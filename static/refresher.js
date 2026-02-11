@@ -92,6 +92,7 @@ class PartialRefresher {
                 onElUpdated: function(el) {
                   setInterval(initializeToggleControls,100)
                   setInterval(disableOnSubmit,100)
+                  setInterval(enablePasswordToggle,100)
                 },
                 onBeforeElUpdated: function (fromEl, toEl) {
                     const active = document.activeElement;

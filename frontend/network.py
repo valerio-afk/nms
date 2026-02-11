@@ -1,12 +1,26 @@
+from backend_server.utils.cmdl import SystemCtlStart
 from . import frontend as bp, NMSBACKEND as BACKEND
 from .api.backend_proxy import show_flash
-from .utils.forms import IFaceEnableForm, IPEnableForm, IPForm
+from .utils.forms import IFaceEnableForm, IPEnableForm, IPForm, VPNForm
 from .utils.widget import render_widget
-from flask import render_template,  redirect, url_for, Response, request, g
+from flask import render_template,  redirect, url_for, Response, request, g, send_file
 from flask_wtf.csrf import validate_csrf, generate_csrf, ValidationError
 from nms_shared import ErrorMessages
+from io import BytesIO
+import base64
 
 
+def get_vpn_public_key() -> Response:
+    key = BACKEND.vpn_public_key
+
+    if (key is None):
+        show_flash(code=ErrorMessages.E_NET_VPN_KEY.name)
+        return redirect(url_for("main.advanced"))
+
+    raw_data = base64.b64decode(key)
+    key_fname = f"{BACKEND.dataset_name}.key"
+
+    return send_file(BytesIO(raw_data),as_attachment=True,download_name=key_fname,mimetype="application/octet-stream")
 
 @bp.route("/network")
 def network() -> str:
@@ -14,7 +28,7 @@ def network() -> str:
     widgets = []
 
     for iface in BACKEND.network_interfaces:
-        enabler_form = IFaceEnableForm(iface_enabler=iface['enabled']) if ((iface.get("type")=="ethernet") or iface.get('has_profile') == True) else None
+        enabler_form = IFaceEnableForm(iface_enabler=iface['enabled'])
 
         ip_forms = {k:None for k in sorted([x for x in iface.keys() if x.startswith("ip")])}
 
@@ -41,6 +55,21 @@ def network() -> str:
 
         widget,css = render_widget("iface",enabler_form=enabler_form,ip_forms=ip_forms,iface=iface)
         widgets.append(widget)
+
+    # vpn is special
+    vpn_config = BACKEND.vpn_config
+    vpn_enabled = vpn_config.get("enabled")
+
+    vpn = {"enabled":vpn_enabled}
+    vpn_enabler_form = IFaceEnableForm(iface_enabler=vpn_enabled)
+
+    if (vpn_enabled):
+        vpn_data = BACKEND.vpn_config
+        vpn_form = VPNForm(address=vpn_data.get("ipv4",[]).get("address"),netmask=vpn_data.get("ipv4",[]).get("netmask"))
+        vpn['form'] = vpn_form
+
+    vpn_widget,_ = render_widget("vpn",vpn=vpn,enabler_form=vpn_enabler_form)
+    widgets.append(vpn_widget)
 
     return render_template("network.html",
                            active_page="network",
@@ -116,6 +145,16 @@ def async_wifi_list(iface:str) -> str:
     networks = BACKEND.wifi_list(iface)
     return render_template("wifi_network_list.html",networks=networks,iface=iface,csrf_token=generate_csrf())
 
+@bp.route("/network/vpn/<string:action>",methods=["POST"])
+def vpn_change_status(action:str) -> Response:
+    match (action.lower()):
+        case "up":
+            BACKEND.iface_up("vpn")
+        case "down":
+            BACKEND.iface_down("vpn")
+
+    return redirect(url_for("main.network"))
+
 
 @bp.route("/network/<string:iface>/<string:action>",methods=["POST"])
 def iface_change_status(iface:str, action:str) -> Response:
@@ -127,3 +166,27 @@ def iface_change_status(iface:str, action:str) -> Response:
 
     return redirect(url_for("main.network"))
 
+
+@bp.route("/network/vpn/config",methods=['POST'])
+def net_vpn_apply_changes() -> Response:
+    form = request.form
+
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+
+        match (form.get("action").lower()):
+            case "get-pubkey":
+                return get_vpn_public_key()
+            case "genkeys":
+                BACKEND.vpn_gen_keys()
+            case "changes":
+                BACKEND.vpn_change_config(
+                    address=form['address'],
+                    netmask=form['netmask']
+                )
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+
+
+
+    return redirect(url_for("main.network"))

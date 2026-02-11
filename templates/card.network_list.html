@@ -10,7 +10,13 @@
   <div class="accordion-item">
     <h2 class="accordion-header">
       <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#iface-{{ iface.name }}" aria-expanded="true" aria-controls="iface-{{ iface.name }}">
-        {{ iface.name }}&nbsp;&nbsp;{{ iface.enabled | enabled_fmt | safe }}
+       <div class="d-flex w-100 align-items-center">
+            <span>{{ iface.name }}</span>
+
+            <span class="ms-auto me-3">
+              {{ iface.enabled | enabled_fmt | safe }}
+            </span>
+          </div>
       </button>
     </h2>
 
@@ -18,6 +24,7 @@
       <div class="accordion-body">
         <ul class="list-unstyled ps-3">
           {% if iface.network_name %}<li><span class="fw-bold">{{ _("Network") }}:</span> {{ iface.network_name }} </li>{% endif %}
+          {% set iface_name = iface.name %}
           {% if iface.ipv4 %}
             <li><span class="fw-bold">{{ _("IPv4 Address") }}:</span>
               {% set ip = iface.ipv4 %}

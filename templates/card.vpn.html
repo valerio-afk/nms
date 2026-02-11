@@ -1,0 +1,65 @@
+{% extends "card.html" %}
+
+{% block card_title %}
+{{ _("VPN") }}
+    <form method="POST" class="float-end" action=" {{ url_for('main.vpn_change_status',action='down' if vpn.enabled else 'up') }}">
+        {{ enabler_form.hidden_tag() }}
+        <span class="form-check form-switch">
+            {{ enabler_form.iface_enabler(class="form-check-input auto-submit-switch")}}
+        </span>
+    </form>
+
+{% endblock %}
+
+{% block card_content %}
+
+{% if vpn.form %}
+<form method="POST" action="{{ url_for('main.net_vpn_apply_changes') }} ">
+
+        {{ vpn.form.hidden_tag() }}
+
+        {% for field in vpn.form if (field.type not in ['HiddenField','CSRFTokenField']) %}
+           <div class="mb-3 row">
+              <div class="col-sm-4 col-form-label">{{ field.label }}</div>
+              <div class="col-8">
+                  {% if field.type == "BooleanField" %}
+                    <span class="form-check form-switch">
+                        {{ field(class="form-check-input") }}
+                    </span>
+                  {% else %}
+                    {{ field(class="form-control") }}
+                  {% endif %}
+
+              </div>
+            </div>
+        {% endfor %}
+
+    <div class="mb-3 row">
+
+        <div class="col-sm-12">
+            <button type="submit" name="action" value="changes" class="btn btn-success w-100">{{ _("Apply changes") }}</button>
+        </div>
+    </div>
+
+    <div class="mb-3 row">
+        <div class="col-sm-6">
+            <button type="submit" name="action" value="get-pubkey" class="w-100 btn btn-info">{{ _("Get Public Key") }}</button>
+        </div>
+
+        <div class="col-sm-6">
+            <button type="submit" name="action" value="genkeys" class="w-100 btn btn-warning">{{ _("Regenerate Keys") }}</button>
+        </div>
+    </div>
+
+    <div class="col-sm-12">
+        <div class="form-text">
+            {{ _("Use the public key to configure the %(st_link)sWireGuard client%(e_link)s on your device(s).",st_link="<a href='https://www.wireguard.com/install/' target='_blank'>"|safe ,e_link="</a>"|safe) }}
+        </div>
+    </div>
+
+</form>
+{% endif %}
+
+{% endblock %}
+
+
