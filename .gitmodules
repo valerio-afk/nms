@@ -1,3 +1,6 @@
 [submodule "static/showdown"]
 	path = static/showdown
 	url = https://github.com/showdownjs/showdown.git
+[submodule "static/morphdom"]
+	path = static/morphdom
+	url = https://github.com/patrick-steele-idem/morphdom.git

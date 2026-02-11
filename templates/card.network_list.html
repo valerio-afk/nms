@@ -5,34 +5,39 @@
 {% block card_content %}
 
 {% if ifaces %}
-<dl class="row">
+<div class="accordion" id="accordion-iface-list">
   {% for iface in ifaces %}
-    <dt class="col-sm-4">{{ iface.name }}:</dt>
-    <dd class="col-sm-8">{{ iface.enabled | enabled_fmt | safe }}</dd>
-    <dd>
-      <ul class="list-unstyled ps-3">
-      {% if iface.network_name %}<li><span class="fw-bold">{{ _("Network") }}:</span> {{ iface.network_name }} </li>{% endif %}
-      {% if iface.ipv4 %}
-        <li><span class="fw-bold">{{ _("IPv4 Address") }}:</span>
-          {% set ip = iface.ipv4 %}
-          {% include 'iface.ip_summary.html' %}
+  <div class="accordion-item">
+    <h2 class="accordion-header">
+      <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#iface-{{ iface.name }}" aria-expanded="true" aria-controls="iface-{{ iface.name }}">
+        {{ iface.name }}&nbsp;&nbsp;{{ iface.enabled | enabled_fmt | safe }}
+      </button>
+    </h2>
 
-        </li>
-      </ul>
-    </dd>
-    {% endif %}
+    <div id="iface-{{ iface.name }}" class="accordion-collapse collapse" data-bs-parent="#accordion-{{ iface.name }}">
+      <div class="accordion-body">
+        <ul class="list-unstyled ps-3">
+          {% if iface.network_name %}<li><span class="fw-bold">{{ _("Network") }}:</span> {{ iface.network_name }} </li>{% endif %}
+          {% if iface.ipv4 %}
+            <li><span class="fw-bold">{{ _("IPv4 Address") }}:</span>
+              {% set ip = iface.ipv4 %}
+              {% include 'iface.ip_summary.html' %}
 
-  {% if iface.ipv6 %}
-      <dd class="ms-4 mb-1"><span class="fw-bold">{{ _("IPv6 Address") }}:</span>
-        {% set ip = iface.ipv6 %}
-        {% include 'iface.ip_summary.html' %}
+            </li>
+          {% endif %}
+          {% if iface.ipv6 %}
+          <li><span class="fw-bold">{{ _("IPv6 Address") }}:</span>
+              {% set ip = iface.ipv6 %}
+              {% include 'iface.ip_summary.html' %}
 
-      </dd>
-    {% endif %}
-
-
+            </li>
+        {% endif %}
+        </ul>
+      </div>
+    </div>
+  </div>
   {% endfor %}
-</dl>
+</div>
 {% endif %}
 
 

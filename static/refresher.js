@@ -7,6 +7,11 @@ class PartialRefresher {
     this.once_ids = new Map();
   }
 
+  registerAndRefresh(id,url)
+  {
+    this.register(id,url);
+    this.refreshAll();
+  }
   register(id, url) { this.targets.set(id, url); }
   register_once(id, url)
   {
@@ -77,7 +82,30 @@ class PartialRefresher {
           } else {
             // success -> replace content
             const el = document.getElementById(id);
-            if (el) el.outerHTML = text;
+            if (el) {
+                const template = document.createElement("template");
+                template.innerHTML = text.trim();
+
+                const newEl = template.content.firstElementChild;
+
+                morphdom(el, newEl, {
+                onElUpdated: function(el) {
+                  setInterval(initializeToggleControls,100)
+                  setInterval(disableOnSubmit,100)
+                },
+                onBeforeElUpdated: function (fromEl, toEl) {
+                    const active = document.activeElement;
+
+                    // if user is interacting anywhere inside this subtree,
+                    // don't update this element
+                    if (active && fromEl.contains(active)) {
+                        return false;
+                    }
+
+                    return true;
+                  }
+                });
+            }
           }
         } catch (err) {
           console.error(`[refresher] Fetch failed for ${id} (${url}):`, err);

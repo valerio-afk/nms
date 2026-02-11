@@ -1,4 +1,4 @@
-document.addEventListener("DOMContentLoaded", () => {
+function disableOnSubmit () {
 
     document.querySelectorAll("form.disable-on-submit")
         .forEach(form => {
@@ -26,7 +26,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         });
 
-});
+}
 
 document.addEventListener("change", function (e) {
     if (e.target.classList.contains("auto-submit-switch")) {
@@ -106,9 +106,11 @@ function shouldTargetBeEnabled(target, controllingToggles) {
 
 // Auto init
 if (document.readyState === 'loading') {
-document.addEventListener('DOMContentLoaded', initializeToggleControls);
+    document.addEventListener('DOMContentLoaded', initializeToggleControls);
+    document.addEventListener('DOMContentLoaded', disableOnSubmit);
 } else {
-initializeToggleControls();
+    initializeToggleControls();
+    disableOnSubmit();
 }
 
 

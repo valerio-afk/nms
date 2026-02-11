@@ -67,6 +67,12 @@ class ErrorMessages(Enum):
 
     E_NET_CHANGE_STATE = "E_NET_CHANGE_STATE"
     E_NET_CONNECTION_STATUS = "E_NET_CONNECTION_STATUS"
+    E_NET_INVALID_NETMASK = "E_NET_INVALID_NETMASK"
+    E_NET_INVALID_IP_ADDRESS = "E_NET_INVALID_IP_ADDRESS"
+    E_NET_INVALID_GATEWAY = "E_NET_INVALID_GATEWAY"
+    E_NET_INVALID_DNS = "E_NET_INVALID_DNS"
+    E_NET_WIFI_LIST = "E_NET_WIFI_LIST"
+    E_NET_WIFI_CONNECT = "E_NET_WIFI_CONNECT"
 
     @staticmethod
     def get_error_from_string(error_code:str,*args,**kwargs) -> str:
@@ -205,6 +211,12 @@ ERROR_MESSAGES = {
 
     ErrorMessages.E_NET_CHANGE_STATE : lambda iface,info : _("Error while changing the state of the network interface %(iface)s: %(info)s") % {'info':info,'iface':iface}, #<------
     ErrorMessages.E_NET_CONNECTION_STATUS : lambda iface,info : _("Error while retrieving the connection status for %(iface)s: %(info)s") % {'info':info,'iface':iface}, #<------
+    ErrorMessages.E_NET_INVALID_NETMASK : lambda : _("Invalid subnet mask"), #<------
+    ErrorMessages.E_NET_INVALID_IP_ADDRESS : lambda : _("Invalid IP address "), #<------
+    ErrorMessages.E_NET_INVALID_GATEWAY : lambda : _("Invalid gateway"), #<------
+    ErrorMessages.E_NET_INVALID_DNS : lambda : _("Invalid DNS address(es)"), #<------
+    ErrorMessages.E_NET_WIFI_LIST : lambda iface,info: _("Error while retrieving the list of WiFi networks for %(iface)s: %(info)s"), #<------
+    ErrorMessages.E_NET_WIFI_CONNECT : lambda ssid,info: _("Unable to connect to `%(ssid)s`: %(info)s") % {'info':info,'ssid':ssid}, #<------
 }
 
 WARNING_MESSAGES = {

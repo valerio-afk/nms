@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, conint
 from pydantic.networks import IPv4Address, IPv6Address
 from typing import Optional, Any, List, Dict, Union
 
@@ -62,6 +62,7 @@ class NetworkInterface(BaseModel):
     ipv6: Optional[IPv6]
     network_name:Optional[str]
     type:InterfaceType
+    has_profile: bool
 
 class WifiNetworkInterface(NetworkInterface):
     wpa23: bool
@@ -85,3 +86,14 @@ class BackgroundTask(BaseModel):
     eta: Optional[int]
     detail:Any
 
+class WifiNetwork(BaseModel):
+    connected: bool
+    bssid: str
+    ssid: Optional[str] = Field(None)
+    strength: int = conint(gt=0,le=4)
+    security: Optional[str] = Field(None)
+
+class WifiConnect(BaseModel):
+    ssid:str
+    psk:Optional[str] = Field(None)
+    profile:Optional[str] = Field(None)

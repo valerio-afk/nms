@@ -95,7 +95,7 @@ class BackEndProxy:
                  body_params:Optional[dict] = None,
                  extra_headers:Optional[dict] = None,
                  ignore_exception:bool = False,
-                 ) -> Optional[dict]:
+                 ) -> Optional[Union[dict,list]]:
         url = f"{BackEndProxy.API}/{BackEndProxy.VERSION}/{endpoint}"
 
         if (url_params is not None):
@@ -548,13 +548,23 @@ class BackEndProxy:
     def iface_down(this,iface:str) -> None:
         this.change_iface_status(iface,"down")
 
-    def iface_setup(this, iface, ip_version, profile, settings) -> None:
+    def iface_setup(this, iface:str, ip_version:str, profile:str, settings:dict) -> None:
         this._request(
             f"net/{iface}/{ip_version}/config",
             RequestMethod.POST,
             qstring_params={"profile":profile},
             body_params=settings
         )
+
+    def wifi_list(this,iface:str) -> List[Dict]:
+        return this._request(f"net/{iface}/list",RequestMethod.GET)
+
+    def wifi_connect(this,iface:str,ssid:str,psk:Optional[str],profile:Optional[str]) -> None:
+        this._request(f"net/{iface}/connect",RequestMethod.POST,body_params={
+            "ssid":ssid,
+            "psk":psk,
+            "profile":profile
+        })
 
     #Other Method
     def register_task(this,

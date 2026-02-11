@@ -1426,7 +1426,7 @@ class NMCLI(CommandLine):
     def __init__(this,terse:bool=True,**kwargs):
         this._terse = terse
 
-        cmd = ['nmcli']
+        cmd = ['nmcli','-c','no']
 
         if (terse):
             cmd.append('-t')

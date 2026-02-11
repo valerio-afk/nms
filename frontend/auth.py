@@ -23,7 +23,7 @@ def login() -> Union[Response,str]:
             try:
                 validate_csrf(request.form.get("csrf_token"))
             except ValidationError:
-                flash("CSRF validation failed", "error")
+                show_flash(code=ErrorMessages.E_CSRF.name)
                 return redirect(url_for("main.advanced"))
 
             otp = request.form.get("otp")
