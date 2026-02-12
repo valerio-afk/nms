@@ -102,3 +102,7 @@ class WifiConnect(BaseModel):
     ssid:str
     psk:Optional[str] = Field(None)
     profile:Optional[str] = Field(None)
+
+class VPNPeer(BaseModel):
+    name:str
+    public_key:str

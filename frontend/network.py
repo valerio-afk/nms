@@ -68,7 +68,7 @@ def network() -> str:
         vpn_form = VPNForm(address=vpn_data.get("ipv4",[]).get("address"),netmask=vpn_data.get("ipv4",[]).get("netmask"))
         vpn['form'] = vpn_form
 
-    vpn_widget,_ = render_widget("vpn",vpn=vpn,enabler_form=vpn_enabler_form)
+    vpn_widget,_ = render_widget("vpn",vpn=vpn,enabler_form=vpn_enabler_form,peers=BACKEND.vpn_peers,csrf_token=generate_csrf())
     widgets.append(vpn_widget)
 
     return render_template("network.html",
@@ -158,11 +158,16 @@ def vpn_change_status(action:str) -> Response:
 
 @bp.route("/network/<string:iface>/<string:action>",methods=["POST"])
 def iface_change_status(iface:str, action:str) -> Response:
-    match (action.lower()):
-        case "up":
-            BACKEND.iface_up(iface)
-        case "down":
-            BACKEND.iface_down(iface)
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+    else:
+        match (action.lower()):
+            case "up":
+                BACKEND.iface_up(iface)
+            case "down":
+                BACKEND.iface_down(iface)
 
     return redirect(url_for("main.network"))
 
@@ -173,7 +178,9 @@ def net_vpn_apply_changes() -> Response:
 
     try:
         validate_csrf(request.form.get("csrf_token"))
-
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+    else:
         match (form.get("action").lower()):
             case "get-pubkey":
                 return get_vpn_public_key()
@@ -184,8 +191,26 @@ def net_vpn_apply_changes() -> Response:
                     address=form['address'],
                     netmask=form['netmask']
                 )
+
+
+    return redirect(url_for("main.network"))
+
+@bp.route("/network/vpn/peers",methods=['POST'])
+def vpn_peers() -> Response:
+    form = request.form
+
+    try:
+        validate_csrf(form.get("csrf_token"))
     except ValidationError:
         show_flash(code=ErrorMessages.E_CSRF.name)
+    else:
+        if ((peer:=form.get("remove")) is not None):
+            BACKEND.vpn_remove_peer(peer)
+        elif form.get("new") is not None:
+            name = form.get("peer_name")
+            public_key = form.get("public_key")
+            BACKEND.vpn_add_peer(name, public_key)
+
 
 
 

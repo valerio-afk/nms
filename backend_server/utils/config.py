@@ -162,6 +162,10 @@ class NMSConfig(Logger):
 
         return None
 
+    @property
+    def vpn_peers(this) -> List[str]:
+        return this._cfg.get("vpn",{}).get('peers', [])
+
     # POOL PROPERTIES
 
     @property
@@ -373,6 +377,7 @@ class NMSConfig(Logger):
             "updates":{
                 "apt" : []
             },
+            "vpn": {"peers": []},
             "systemd": {
                 "services": ['nmswebapp.service','nmsbackend.service','wg-quick@wg0.service']
             }
@@ -568,6 +573,19 @@ class NMSConfig(Logger):
 
         if (idx is not None):
             this._cfg['pool']['disks'][idx] = new_disk.serialise()
+
+    #NET METHODS
+    def vpn_remove_peer(this,idx:int) -> None:
+        peers = this.vpn_peers
+        peers.remove(this.vpn_peers[idx])
+        this._cfg['vpn']['peers'] = peers
+
+    def vpn_add_peer(this,name:str)->int:
+        peers = this.vpn_peers
+        peers.append(name)
+        this._cfg['vpn']['peers'] = peers
+
+        return len(peers)
 
 
 

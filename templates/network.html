@@ -12,4 +12,52 @@
     </div>
 {% endif %}
 
+<div class="modal fade" id="warningModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">{{ _("Warning") }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+          {{ _("By rerouting all the VPN traffic, you will be able to access the NAS only by the VPN. Make sure you have
+          configured your device(s) properly before proceeding.") }}
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">{{ _("Understood") }}</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+function attachWarningSwitches() {
+
+  document.querySelectorAll('[data-bs-warning-modal]')
+    .forEach(function (checkbox) {
+
+      checkbox.addEventListener('change', function () {
+
+        // Only trigger when switched ON
+        if (this.checked) {
+
+          const modalSelector = this.dataset.bsWarningModal;
+          const modalEl = document.querySelector(modalSelector);
+
+          const modal = new bootstrap.Modal(modalEl);
+          modal.show();
+        }
+
+      });
+
+    });
+}
+
+attachWarningSwitches();
+</script>
+
 {% endblock %}

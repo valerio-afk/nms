@@ -367,10 +367,15 @@ class BackEndProxy:
     def vpn_public_key(this) -> Optional[str]:
         return this._request("net/vpn/pubkey", RequestMethod.GET)
 
+    @property
+    def vpn_peers(this) -> List[dict]:
+        return this._request("net/vpn/peers", RequestMethod.GET)
+
     #ACCESS SERVICES PROPERTIES
     @property
     def access_services(this) -> Dict[str,dict]:
         return this._request("services/get", RequestMethod.GET) or {}
+
 
     #AUTH METHOD
     def get_session_token(this,purpose:str) -> Optional[str]:
@@ -582,6 +587,17 @@ class BackEndProxy:
             "address":address,
             "netmask":netmask
         })
+
+    def vpn_add_peer(this,name:str,public_key:str) -> None:
+        this._request(f"net/vpn/peers/add",RequestMethod.POST,body_params={
+            "name":name,
+            "public_key":public_key
+        })
+
+    def vpn_remove_peer(this,peer:str) -> None :
+        this._request(f"net/vpn/peers/remove",RequestMethod.POST,qstring_params={"name":peer})
+
+
 
     #Other Method
     def register_task(this,

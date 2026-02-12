@@ -79,6 +79,8 @@ class ErrorMessages(Enum):
     E_NET_VPN_GEN_PRIVATE = "E_VPN_GEN_PRIVATE"
     E_NET_VPN_GEN_PUBLIC = "E_VPN_GEN_PUBLIC"
     E_NET_VPN_CONF = "E_NET_VPN_CONF"
+    E_VPN_USER = "E_VPN_USER"
+    E_VPN_USER_INVALID = "E_VPN_USER_INVALID"
 
     @staticmethod
     def get_error_from_string(error_code:str,*args,**kwargs) -> str:
@@ -136,6 +138,9 @@ class SuccessMessages(Enum):
     S_NET_VPN_KEYSGEN = "S_VPN_KEYSGEN"
     S_NET_VPN_CONFIG = "S_VPN_CONFIG"
     S_NET_CONFIG = "S_NET_CONFIG"
+    S_NET_VPN_PEER_DELETED = "S_NET_VPN_PEER_DELETED"
+    S_NET_VPN_PEER_ADDED = "S_NET_VPN_PEER_ADDED"
+
 
 
     @staticmethod
@@ -233,6 +238,8 @@ ERROR_MESSAGES = {
     ErrorMessages.E_NET_VPN_GEN_PRIVATE : lambda info: _("Error occurred while generating the private key: %(info)s") % {'info':info},  #<------
     ErrorMessages.E_NET_VPN_GEN_PUBLIC : lambda info: _("Error occurred while generating the public key: %(info)s") % {'info':info},  #<------
     ErrorMessages.E_NET_VPN_CONF : lambda info: _("Error occurred while reading the VPN configuration file: %(info)s") % {'info':info},  #<------
+    ErrorMessages.E_VPN_USER : lambda user: _("VPN configuration `%(user)s` not found.") % {'user':user},  #<------
+    ErrorMessages.E_VPN_USER_INVALID : lambda : _("VPN device not valid."),  #<------
 }
 
 WARNING_MESSAGES = {
@@ -268,9 +275,11 @@ SUCCESS_MESSAGES = {
 
     SuccessMessages.S_DISK_FORMATTED : lambda dev : _("Disk %(dev)s formatted successfully.") % {'dev':dev},
 
-    SuccessMessages.S_NET_VPN_KEYSGEN : lambda : _("VPN private and public keys generated successfully.") ,
-    SuccessMessages.S_NET_VPN_CONFIG : lambda : _("VPN configuration changes applied successfully.") ,
-    SuccessMessages.S_NET_CONFIG : lambda iface: _("Network configuration changes for %(iface)s applied successfully.") % {'iface':iface} ,
+    SuccessMessages.S_NET_VPN_KEYSGEN : lambda : _("VPN private and public keys generated successfully.") , #<------
+    SuccessMessages.S_NET_VPN_CONFIG : lambda : _("VPN configuration changes applied successfully.") , #<------
+    SuccessMessages.S_NET_CONFIG : lambda iface: _("Network configuration changes for %(iface)s applied successfully.") % {'iface':iface} , #<------
+    SuccessMessages.S_NET_VPN_PEER_DELETED : lambda peer: _("Device `%(peer)s` deleted successfully.") % {'peer':peer} , #<------
+    SuccessMessages.S_NET_VPN_PEER_ADDED : lambda peer: _("Device `%(peer)s` added successfully.") % {'peer':peer} , #<------
 }
 
 INFO_MESSAGES = {

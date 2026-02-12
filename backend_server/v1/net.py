@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from backend_server.utils.cmdl import NMCLIConnection, NMCLIDevice, LocalCommandLineTransaction, SystemCtlIsActive, \
     SystemCtlStart, SystemCtlStop, SystemCtlRestart
 from backend_server.utils.responses import NetCounter, NetworkInterface, IPv4, IPv6, ErrorMessage, InterfaceType, \
-    WifiNetwork, WifiConnect, SuccessMessage, IPv4Basic
+    WifiNetwork, WifiConnect, SuccessMessage, IPv4Basic, VPNPeer
 from backend_server.utils.config import CONFIG
 from backend_server.utils.threads import NetIOCounter
 from backend_server.v1.auth import verify_token_factory
@@ -17,6 +17,7 @@ import subprocess
 import re
 import base64
 import io
+import requests
 
 net = APIRouter(
     prefix='/net',
@@ -31,8 +32,19 @@ def read_wireguard_config_file() -> configparser.ConfigParser:
         raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_NET_CONNECTION_STATUS.name,
                                                                  params=["VPN", output.stderr]))
 
+    config = output.stdout
+
+    counts = {}
+
+    def repl(match):
+        name = match.group(1)
+        counts[name] = counts.get(name, 0) + 1
+        return f"[{name}@{counts[name]}]" if (name.lower() == "peer") else f"[{name}]"
+
+    config = re.sub(r'\[(.*?)\]', repl, config)
+
     wg = configparser.ConfigParser()
-    wg.read_string(output.stdout)
+    wg.read_string(config)
 
     return wg
 
@@ -41,6 +53,8 @@ def write_wireguard_config_file(wg:configparser.ConfigParser) -> None:
     buffer = io.StringIO()
     wg.write(buffer)
     wg_config = buffer.getvalue()
+
+    wg_config = re.sub(r'\[([^\]@]+)@\d+\]', r'[\1]', wg_config)
 
     result = subprocess.run(
         ["sudo", "tee", WIREGUARD_CONF],
@@ -74,8 +88,6 @@ def vpn_status() -> bool:
         cmd = SystemCtlIsActive(service)
 
         output = cmd.execute()
-
-        CONFIG.error(output)
 
         if (output.returncode not in [0, 3]):
             raise HTTPException(status_code=500,
@@ -290,6 +302,70 @@ def net_wifi_connect(iface:str,network:WifiConnect) -> None:
 @net.get("/vpn/pubkey",response_model=str)
 def net_vpn_pubkey() -> str:
     return get_vpn_public_key()
+
+@net.get("/vpn/peers",response_model=List[str])
+def net_vpn_peers() -> List[str]:
+    return CONFIG.vpn_peers
+
+@net.post("/vpn/peers/remove")
+def net_vpn_peer_remove(name:str=Query(...)) -> dict:
+    peers = CONFIG.vpn_peers
+
+    try:
+        idx = peers.index(name)
+    except ValueError:
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_VPN_USER.name,params=[name]))
+
+    CONFIG.vpn_remove_peer(idx)
+
+    wg_conf = read_wireguard_config_file()
+    section_name = None
+    pattern = f"peer@{idx+1}"
+
+    for k,v in wg_conf.items():
+        if (k.lower() == pattern):
+            section_name = k
+            break
+
+    if (section_name is not None):
+        wg_conf.remove_section(section_name)
+
+    write_wireguard_config_file(wg_conf)
+    CONFIG.flush_config()
+
+    return {"detail":SuccessMessage(code=SuccessMessages.S_NET_VPN_PEER_DELETED.name,params=[name])}
+
+@net.post("/vpn/peers/add")
+def net_vpn_peer_add(peer:VPNPeer) -> dict:
+    name = peer.name.strip()
+
+    if (len(name)==0):
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_VPN_USER_INVALID.name))
+
+    try:
+        CONFIG.vpn_peers.index(name)
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_VPN_USER_INVALID.name))
+    except ValueError:
+        ... #no duplicates
+
+
+    idx = CONFIG.vpn_add_peer(name)
+    public_ip = requests.get("https://api.ipify.org").text
+
+
+    wg_conf = read_wireguard_config_file()
+    section_name = f"Peer@{idx}"
+
+    wg_conf.add_section(section_name)
+    wg_conf.set(section_name,"PublicKey",peer.public_key)
+    wg_conf.set(section_name, "AllowedIPs", f"0.0.0.0/0")
+    wg_conf.set(section_name, "PersistentKeepalive", f"25")
+
+    write_wireguard_config_file(wg_conf)
+    CONFIG.flush_config()
+
+    return {"detail":SuccessMessage(code=SuccessMessages.S_NET_VPN_PEER_ADDED.name,params=[name])}
+
 
 @net.post("/vpn/gen-keys")
 def net_vpn_genkey() -> dict:
