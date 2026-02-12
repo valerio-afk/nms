@@ -1,0 +1,59 @@
+{% extends "card.html" %}
+
+{% block card_title %}<i class="bi bi-sign-turn-slight-left-fill"></i> {{ _("Dynamic DNS") }}{% endblock %}
+
+{% block card_content %}
+{% if ddns_providers %}
+    <div class="accordion" id="accordion-ddns">
+    {% for name,properties in ddns_providers.items() %}
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+              <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#ddns-{{ name }}" aria-expanded="true" aria-controls="ddns-{{ name }}">
+               <div class="d-flex w-100 align-items-center">
+                    <span>{{ properties.ui_name }}</span>
+
+                    <span class="ms-auto me-3">
+                      {{ properties.enabled | enabled_fmt | safe }}
+                    </span>
+                  </div>
+              </button>
+            </h2>
+
+            <div id="ddns-{{ name }}" class="accordion-collapse collapse" data-bs-parent="#accordion-ddns">
+              <div class="accordion-body">
+                  <div class="mb-3 row">
+                      <div class="col-6">{{ _("Last Update") }}</div>
+                      <div class="col-6">{{ properties.last_update if properties.last_update is not none else _("Never") }}</div>
+                  </div>
+
+                  <form method="POST" action="{{ url_for('main.ddns_conf',provider=name)}}" class="disable-on-submit">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                      {% if not properties.enabled %}
+                       <div class="mb-3 row">
+                          <div class="col-6 col-form-label"><label for="ddns_{{ name }}_username">{{ _("Username") }}</label></div>
+                          <div class="col-6"><input type="text" class="form-control" name="username" id="ddns_{{ name }}_username"/></div>
+                      </div>
+
+                      <div class="mb-3 row">
+                          <div class="col-6 col-form-label"><label for="ddns_{{ name }}_password">{{ _("Password") }}</label></div>
+                          <div class="col-6"><input type="password" class="form-control" name="password" id="ddns_{{ name }}_password"/></div>
+                      </div>
+
+                      <div class="mb-3 row">
+                          <div class="col-12"><button type="submit" name="action" value="enable" class="w-100 btn btn-success">{{ _("Enable") }}</button></div>
+                      </div>
+                      {% else %}
+                      <div class="mb-3 row">
+                          <div class="col-12"><button type="submit" name="action" value="disable" class="w-100 btn btn-danger">{{ _("Disable") }}</button></div>
+                      </div>
+                      {% endif %}
+                  </form>
+              </div>
+            </div>
+        </div>
+    {% endfor %}
+    </div>
+{% endif %}
+{% endblock %}
+
+

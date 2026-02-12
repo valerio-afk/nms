@@ -79,8 +79,11 @@ class ErrorMessages(Enum):
     E_NET_VPN_GEN_PRIVATE = "E_VPN_GEN_PRIVATE"
     E_NET_VPN_GEN_PUBLIC = "E_VPN_GEN_PUBLIC"
     E_NET_VPN_CONF = "E_NET_VPN_CONF"
-    E_VPN_USER = "E_VPN_USER"
-    E_VPN_USER_INVALID = "E_VPN_USER_INVALID"
+    E_NET_VPN_USER = "E_VPN_USER"
+    E_NET_VPN_USER_INVALID = "E_VPN_USER_INVALID"
+    E_NET_VPN_IP_MAX = "E_VPN_IP_MAX"
+    E_NET_DDNS_INVALID = "E_NET_DDNS_INVALID"
+    E_NET_DDNS_SERVICE = "E_NET_DDNS_SERVICE"
 
     @staticmethod
     def get_error_from_string(error_code:str,*args,**kwargs) -> str:
@@ -102,6 +105,7 @@ class WarningMessages(Enum):
     W_DISK_ISSUE = "W_DISK_ISSUE"
     W_DISK_FORMAT = "W_DISK_FORMAT"
     W_POOL_DISK_OFFLINE = "W_POOL_DISK_OFFLINE"
+
 
     @staticmethod
     def get_warning(warn_code: "WarningMessages", *args, **kwargs) -> str:
@@ -140,6 +144,8 @@ class SuccessMessages(Enum):
     S_NET_CONFIG = "S_NET_CONFIG"
     S_NET_VPN_PEER_DELETED = "S_NET_VPN_PEER_DELETED"
     S_NET_VPN_PEER_ADDED = "S_NET_VPN_PEER_ADDED"
+    S_NET_DDNS_ENABLED = "S_NET_DDNS_ENABLED"
+    S_NET_DDNS_DISABLED = "S_NET_DDNS_DISABLED"
 
 
 
@@ -224,22 +230,25 @@ ERROR_MESSAGES = {
     ErrorMessages.E_ACCESS_DISABLING : lambda service,info: _("Unable to disable %(service)s. Please, disable it manually.") % {'service':service},
     ErrorMessages.E_ACCESS_SERV_UNK: lambda service: _("Access service %(service)s not recognised.") % {'service':service},
 
-    ErrorMessages.E_NET_CHANGE_STATE : lambda iface,info : _("Error while changing the state of the network interface %(iface)s: %(info)s") % {'info':info,'iface':iface}, #<------
-    ErrorMessages.E_NET_CONNECTION_STATUS : lambda iface,info : _("Error while retrieving the connection status for %(iface)s: %(info)s") % {'info':info,'iface':iface}, #<------
-    ErrorMessages.E_NET_INVALID_NETMASK : lambda : _("Invalid subnet mask"), #<------
-    ErrorMessages.E_NET_INVALID_IP_ADDRESS : lambda : _("Invalid IP address "), #<------
-    ErrorMessages.E_NET_INVALID_GATEWAY : lambda : _("Invalid gateway"), #<------
-    ErrorMessages.E_NET_INVALID_DNS : lambda : _("Invalid DNS address(es)"), #<------
-    ErrorMessages.E_NET_WIFI_LIST : lambda iface,info: _("Error while retrieving the list of WiFi networks for %(iface)s: %(info)s"), #<------
-    ErrorMessages.E_NET_WIFI_CONNECT : lambda ssid,info: _("Unable to connect to `%(ssid)s`: %(info)s") % {'info':info,'ssid':ssid}, #<------
-    ErrorMessages.E_NET_VPN_NOTCONF : lambda : _("VPN service not configured."),  #<------
-    ErrorMessages.E_NET_VPN_STATE : lambda info: _("Unable to get the state of the VPN service: %(info)s") % {'info':info},  #<------
-    ErrorMessages.E_NET_VPN_KEY : lambda info = None: _("Error while retrieving the VPN key: %(info)s") % {'info': info or ErrorMessages.fallback_message()},  #<------
-    ErrorMessages.E_NET_VPN_GEN_PRIVATE : lambda info: _("Error occurred while generating the private key: %(info)s") % {'info':info},  #<------
-    ErrorMessages.E_NET_VPN_GEN_PUBLIC : lambda info: _("Error occurred while generating the public key: %(info)s") % {'info':info},  #<------
-    ErrorMessages.E_NET_VPN_CONF : lambda info: _("Error occurred while reading the VPN configuration file: %(info)s") % {'info':info},  #<------
-    ErrorMessages.E_VPN_USER : lambda user: _("VPN configuration `%(user)s` not found.") % {'user':user},  #<------
-    ErrorMessages.E_VPN_USER_INVALID : lambda : _("VPN device not valid."),  #<------
+    ErrorMessages.E_NET_CHANGE_STATE : lambda iface,info : _("Error while changing the state of the network interface %(iface)s: %(info)s") % {'info':info,'iface':iface},
+    ErrorMessages.E_NET_CONNECTION_STATUS : lambda iface,info : _("Error while retrieving the connection status for %(iface)s: %(info)s") % {'info':info,'iface':iface},
+    ErrorMessages.E_NET_INVALID_NETMASK : lambda : _("Invalid subnet mask"),
+    ErrorMessages.E_NET_INVALID_IP_ADDRESS : lambda : _("Invalid IP address "),
+    ErrorMessages.E_NET_INVALID_GATEWAY : lambda : _("Invalid gateway"),
+    ErrorMessages.E_NET_INVALID_DNS : lambda : _("Invalid DNS address(es)"),
+    ErrorMessages.E_NET_WIFI_LIST : lambda iface,info: _("Error while retrieving the list of WiFi networks for %(iface)s: %(info)s") % {"iface":iface,"info":info},
+    ErrorMessages.E_NET_WIFI_CONNECT : lambda ssid,info: _("Unable to connect to `%(ssid)s`: %(info)s") % {'info':info,'ssid':ssid},
+    ErrorMessages.E_NET_VPN_NOTCONF : lambda : _("VPN service not configured."),
+    ErrorMessages.E_NET_VPN_STATE : lambda info: _("Unable to get the state of the VPN service: %(info)s") % {'info':info},
+    ErrorMessages.E_NET_VPN_KEY : lambda info = None: _("Error while retrieving the VPN key: %(info)s") % {'info': info or ErrorMessages.fallback_message()},
+    ErrorMessages.E_NET_VPN_GEN_PRIVATE : lambda info: _("Error occurred while generating the private key: %(info)s") % {'info':info},
+    ErrorMessages.E_NET_VPN_GEN_PUBLIC : lambda info: _("Error occurred while generating the public key: %(info)s") % {'info':info},
+    ErrorMessages.E_NET_VPN_CONF : lambda info: _("Error occurred while reading the VPN configuration file: %(info)s") % {'info':info},
+    ErrorMessages.E_NET_VPN_USER : lambda user: _("VPN device `%(user)s` not found.") % {'user':user},
+    ErrorMessages.E_NET_VPN_USER_INVALID : lambda : _("VPN device not valid."),
+    ErrorMessages.E_NET_VPN_IP_MAX : lambda : _("You have reached the maximum number of devices."),
+    ErrorMessages.E_NET_DDNS_INVALID : lambda provider : _("Invalid dynamic DNS provider `%(provider)`.") % {'provider':provider},
+    ErrorMessages.E_NET_DDNS_SERVICE : lambda provider,info : _("Error occurred during the execution of the dynamic DNS provider `%(provider)`: %(info)s") % {'provider':provider,"info":info},
 }
 
 WARNING_MESSAGES = {
@@ -275,11 +284,15 @@ SUCCESS_MESSAGES = {
 
     SuccessMessages.S_DISK_FORMATTED : lambda dev : _("Disk %(dev)s formatted successfully.") % {'dev':dev},
 
-    SuccessMessages.S_NET_VPN_KEYSGEN : lambda : _("VPN private and public keys generated successfully.") , #<------
-    SuccessMessages.S_NET_VPN_CONFIG : lambda : _("VPN configuration changes applied successfully.") , #<------
-    SuccessMessages.S_NET_CONFIG : lambda iface: _("Network configuration changes for %(iface)s applied successfully.") % {'iface':iface} , #<------
-    SuccessMessages.S_NET_VPN_PEER_DELETED : lambda peer: _("Device `%(peer)s` deleted successfully.") % {'peer':peer} , #<------
-    SuccessMessages.S_NET_VPN_PEER_ADDED : lambda peer: _("Device `%(peer)s` added successfully.") % {'peer':peer} , #<------
+    SuccessMessages.S_NET_VPN_KEYSGEN : lambda : _("VPN private and public keys generated successfully.") ,
+    SuccessMessages.S_NET_VPN_CONFIG : lambda : _("VPN configuration changes applied successfully.") ,
+    SuccessMessages.S_NET_CONFIG : lambda iface: _("Network configuration changes for %(iface)s applied successfully.") % {'iface':iface} ,
+    SuccessMessages.S_NET_VPN_PEER_DELETED : lambda peer: _("Device `%(peer)s` deleted successfully.") % {'peer':peer} ,
+    SuccessMessages.S_NET_VPN_PEER_ADDED : lambda peer: _("Device `%(peer)s` added successfully.") % {'peer':peer} ,
+    SuccessMessages.S_NET_DDNS_ENABLED : lambda provider: _("Dynamic DNS provider `%(provider)s` enabled successfully.") % {'provider':provider} ,
+    SuccessMessages.S_NET_DDNS_DISABLED : lambda provider: _("Dynamic DNS provider `%(provider)s` disabled successfully.") % {'provider':provider},
+
+
 }
 
 INFO_MESSAGES = {

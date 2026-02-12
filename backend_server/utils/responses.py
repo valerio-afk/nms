@@ -47,9 +47,10 @@ class IPv4(BaseModel):
     gateway: Optional[IPv4Address] = Field(None)
     dns: List[Union[str,IPv4Address]] = Field(default_factory=list)
 
-class IPv4Basic(BaseModel):
+class VPNServerConf(BaseModel):
     address: IPv4Address
     netmask: IPv4Address
+    endpoint: Union[IPv4Address,str]
 
 class IPv6(BaseModel):
     enabled:bool
@@ -106,3 +107,12 @@ class WifiConnect(BaseModel):
 class VPNPeer(BaseModel):
     name:str
     public_key:str
+
+class DDNSProvider(BaseModel):
+    enabled: bool
+    username:Optional[str]
+    last_update:Optional[int]
+
+class DDNSDefaultProviderConfiguration(BaseModel):
+    username:str
+    password:str

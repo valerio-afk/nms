@@ -6,11 +6,12 @@ from fastapi import APIRouter, HTTPException, Depends
 from backend_server.utils.cmdl import NMCLIConnection, NMCLIDevice, LocalCommandLineTransaction, SystemCtlIsActive, \
     SystemCtlStart, SystemCtlStop, SystemCtlRestart
 from backend_server.utils.responses import NetCounter, NetworkInterface, IPv4, IPv6, ErrorMessage, InterfaceType, \
-    WifiNetwork, WifiConnect, SuccessMessage, IPv4Basic, VPNPeer
+    WifiNetwork, WifiConnect, SuccessMessage, VPNServerConf, VPNPeer, DDNSProvider, DDNSDefaultProviderConfiguration
 from backend_server.utils.config import CONFIG
 from backend_server.utils.threads import NetIOCounter
 from backend_server.v1.auth import verify_token_factory
-from typing import Optional, List
+from typing import Optional, List, Tuple, Dict
+from collections import OrderedDict
 import configparser
 import ipaddress
 import subprocess
@@ -110,6 +111,34 @@ def get_vpn_public_key() -> Optional[str]:
         raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_KEY.name,params=[result.stderr.decode('utf8')]))
 
     return base64.b64encode(result.stdout).decode("ascii")
+
+def get_peers() -> List[Tuple[str,str]]:
+    peer_names = CONFIG.vpn_peer_names
+    wg_conf = {k: v for k, v in read_wireguard_config_file().items() if k.lower().startswith("peer")}
+    peers_ordered = OrderedDict(sorted(wg_conf.items(), key=lambda x: int(x[0].split("@")[1])))
+
+    return list(zip(peer_names, [x.get("allowedips") for x in peers_ordered.values()]))
+
+def vpn_assign_ip() -> Optional[str]:
+    used_ips = [ipaddress.IPv4Interface(ip) for _,ip in get_peers()]
+    wg_conf = read_wireguard_config_file()
+    used_ips.append(ipaddress.IPv4Interface(wg_conf.get("interface","address")))
+
+    network = used_ips[0].network
+
+    # Build a set of used host IPs (faster lookup)
+    used_hosts = {iface.ip for iface in used_ips}
+
+    # Find first free IP
+    free_ip = None
+
+    for host in network.hosts():  # excludes network and broadcast automatically
+        if host not in used_hosts:
+            free_ip = ipaddress.IPv4Interface(f"{host}/{network.prefixlen}")
+            break
+
+    return str(free_ip)
+
 
 def get_network_interfaces() -> List[NetworkInterface]:
     cmd = NMCLIDevice("status")
@@ -303,18 +332,24 @@ def net_wifi_connect(iface:str,network:WifiConnect) -> None:
 def net_vpn_pubkey() -> str:
     return get_vpn_public_key()
 
-@net.get("/vpn/peers",response_model=List[str])
-def net_vpn_peers() -> List[str]:
-    return CONFIG.vpn_peers
+@net.get("/vpn/public-ip",response_model=Optional[str])
+def net_vpn_endpoint() -> Optional[str]:
+    return CONFIG.vpn_public_ip
+
+@net.get("/vpn/peers",response_model=List[Tuple[str,str]])
+def net_vpn_peers() -> List[Tuple[str, str]]:
+    return get_peers()
+
+
 
 @net.post("/vpn/peers/remove")
 def net_vpn_peer_remove(name:str=Query(...)) -> dict:
-    peers = CONFIG.vpn_peers
+    peers = CONFIG.vpn_peer_names
 
     try:
         idx = peers.index(name)
     except ValueError:
-        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_VPN_USER.name,params=[name]))
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_NET_VPN_USER.name, params=[name]))
 
     CONFIG.vpn_remove_peer(idx)
 
@@ -333,6 +368,8 @@ def net_vpn_peer_remove(name:str=Query(...)) -> dict:
     write_wireguard_config_file(wg_conf)
     CONFIG.flush_config()
 
+    SystemCtlRestart(CONFIG.vpn_service).execute()
+
     return {"detail":SuccessMessage(code=SuccessMessages.S_NET_VPN_PEER_DELETED.name,params=[name])}
 
 @net.post("/vpn/peers/add")
@@ -340,17 +377,22 @@ def net_vpn_peer_add(peer:VPNPeer) -> dict:
     name = peer.name.strip()
 
     if (len(name)==0):
-        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_VPN_USER_INVALID.name))
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_NET_VPN_USER_INVALID.name))
 
     try:
-        CONFIG.vpn_peers.index(name)
-        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_VPN_USER_INVALID.name))
+        CONFIG.vpn_peer_names.index(name)
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_NET_VPN_USER_INVALID.name))
     except ValueError:
         ... #no duplicates
 
 
     idx = CONFIG.vpn_add_peer(name)
-    public_ip = requests.get("https://api.ipify.org").text
+    public_ip = CONFIG.vpn_public_ip
+    assigned_ip = vpn_assign_ip()
+
+    if (assigned_ip is None):
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_NET_VPN_IP_MAX.name))
+
 
 
     wg_conf = read_wireguard_config_file()
@@ -358,11 +400,14 @@ def net_vpn_peer_add(peer:VPNPeer) -> dict:
 
     wg_conf.add_section(section_name)
     wg_conf.set(section_name,"PublicKey",peer.public_key)
-    wg_conf.set(section_name, "AllowedIPs", f"0.0.0.0/0")
+    wg_conf.set(section_name, "AllowedIPs", assigned_ip)
     wg_conf.set(section_name, "PersistentKeepalive", f"25")
+    wg_conf.set(section_name, "Endpoint", f"{public_ip}:51820")
 
     write_wireguard_config_file(wg_conf)
     CONFIG.flush_config()
+
+    SystemCtlRestart(CONFIG.vpn_service).execute()
 
     return {"detail":SuccessMessage(code=SuccessMessages.S_NET_VPN_PEER_ADDED.name,params=[name])}
 
@@ -422,7 +467,7 @@ def net_vpn_genkey() -> dict:
 
 
 @net.post("/vpn/config")
-def net_vpn_config(config:IPv4Basic) -> dict:
+def net_vpn_config(config:VPNServerConf) -> dict:
     netmask = config.netmask
     try:
         netmask = ipaddress.IPv4Address(netmask)
@@ -440,7 +485,14 @@ def net_vpn_config(config:IPv4Basic) -> dict:
     wg = read_wireguard_config_file()
     wg['interface']['Address'] = f"{str(ip_address)}/{prefix}"
 
+    for section in wg.sections():
+        if section.lower().startswith("peer"):
+            wg.set(section,"endpoint",f"{config.endpoint}:51820")
+
     write_wireguard_config_file(wg)
+
+    CONFIG.vpn_public_ip = config.endpoint
+    CONFIG.flush_config()
 
     SystemCtlRestart(CONFIG.vpn_service).execute()
 
@@ -582,3 +634,56 @@ def net_iface_settings(iface:str,
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_CHANGE_STATE.name,params=[iface,error]))
 
     return {"detail": SuccessMessage(code=SuccessMessages.S_NET_CONFIG.name,params=[iface])}
+
+@net.get('/ddns/providers',response_model=Dict[str,DDNSProvider])
+def ddns_provider_list() -> Dict[str,DDNSProvider]:
+    providers = {name:DDNSProvider(
+        enabled=props["enabled"],
+        username=props["username"],
+        last_update=props["last_update"])
+        for name,props in CONFIG.ddns_providers.items()}
+
+    for k,v in providers.items():
+        if (v.enabled):
+            force_disable = False
+            try:
+                CONFIG.check_daemon(k,"ddns")
+            except HTTPException as e:
+                force_disable = True
+                raise e
+            except Exception as e:
+                force_disable = True
+                raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_DDNS_SERVICE.name,params=[str(e)]))
+            finally:
+                if (force_disable):
+                    CONFIG.ddns_provider_enabled(k,False)
+                    CONFIG.flush_config()
+
+
+    return providers
+
+@net.post('/ddns/{provider}/start')
+def ddns_provider_start(provider:str,config:Optional[DDNSDefaultProviderConfiguration]) -> dict:
+    match (provider):
+        case "noip":
+            if (config is not None):
+                CONFIG.ddns_noip_set(config.username,config.password)
+            CONFIG.ddns_noip_start()
+            CONFIG.flush_config()
+        case _:
+            raise HTTPException(status_code=500,detail="Invalid DDNS service provider")
+
+
+    return {"details":SuccessMessage(code=SuccessMessages.S_NET_DDNS_ENABLED.name,params=[provider])}
+
+@net.post('/ddns/{provider}/stop')
+def ddns_provider_stop(provider:str) -> dict:
+    match (provider):
+        case "noip":
+            CONFIG.ddns_noip_stop()
+            CONFIG.flush_config()
+        case _:
+            raise HTTPException(status_code=500,detail="Invalid DDNS service provider")
+
+
+    return {"details":SuccessMessage(code=SuccessMessages.S_NET_DDNS_DISABLED.name,params=[provider])}

@@ -2,11 +2,14 @@ import datetime
 import json
 import os
 import pwd
+from cryptography import fernet
+from cryptography.fernet import Fernet
+
 from backend_server.utils.services import SystemService
 from nms_shared.enums import DiskStatus
 from nms_shared.disks import Disk
 from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet, UserModChangeHomeDir
-from backend_server.utils.threads import NetIOCounter
+from backend_server.utils.threads import NetIOCounter, DDNSNoIP
 from backend_server.utils.logger import Logger
 from backend_server.utils.cmdl import ZPoolList
 from fastapi import HTTPException
@@ -42,6 +45,8 @@ class NMSConfig(Logger):
         this._access_services = {}
         this._setup_access_services()
         this._issued_tokens = {}
+
+        this._ddns_init()
 
 
     def _setup_access_services(this) -> None:
@@ -163,8 +168,20 @@ class NMSConfig(Logger):
         return None
 
     @property
-    def vpn_peers(this) -> List[str]:
+    def vpn_public_ip(this) -> str:
+        return this._cfg.get("vpn",{}).get("endpoint")
+
+    @vpn_public_ip.setter
+    def vpn_public_ip(this,endpoint:str) -> None:
+        this._cfg["vpn"]['endpoint'] = endpoint
+
+    @property
+    def vpn_peer_names(this) -> List[str]:
         return this._cfg.get("vpn",{}).get('peers', [])
+
+    @property
+    def ddns_providers(this)->List[Dict[str,Any]]:
+        return this._cfg.get('ddns',{})
 
     # POOL PROPERTIES
 
@@ -323,6 +340,20 @@ class NMSConfig(Logger):
 
     # BASE METHODS
 
+    def check_daemon(this,name:str,prefix:Optional[str]=None) -> Any:
+        if (prefix is not None):
+            name = f"{prefix}_{name}"
+
+        if ((thread:=this._daemons.get(name))):
+            if (not thread.is_running):
+                if (isinstance(thread.message,Exception)):
+                    raise thread.message
+                else:
+                    raise RuntimeError(thread.message)
+            return thread.message
+
+        return None
+
     def load_configuration_file(this) -> None:
         this.info(f"Loading configuration file `{this.config_filename}`")
         if os.path.exists(this.config_filename):
@@ -377,7 +408,10 @@ class NMSConfig(Logger):
             "updates":{
                 "apt" : []
             },
-            "vpn": {"peers": []},
+            "vpn": {
+                "peers": [],
+                "endpoint": None
+            },
             "systemd": {
                 "services": ['nmswebapp.service','nmsbackend.service','wg-quick@wg0.service']
             }
@@ -576,16 +610,61 @@ class NMSConfig(Logger):
 
     #NET METHODS
     def vpn_remove_peer(this,idx:int) -> None:
-        peers = this.vpn_peers
-        peers.remove(this.vpn_peers[idx])
+        peers = this.vpn_peer_names
+        peers.remove(this.vpn_peer_names[idx])
         this._cfg['vpn']['peers'] = peers
 
     def vpn_add_peer(this,name:str)->int:
-        peers = this.vpn_peers
+        peers = this.vpn_peer_names
         peers.append(name)
         this._cfg['vpn']['peers'] = peers
 
         return len(peers)
+
+    def ddns_provider_enabled(this,provider:str,enabled:bool) -> None:
+        this._cfg['ddns'][provider]['enabled'] = enabled
+
+    def ddns_noip_set(this,username:str,password:str) -> None:
+        SECRET_KEY = os.environ.get("NMS_SECRET_KEY")
+        
+        fernet = Fernet(SECRET_KEY)
+        encrypted_password = fernet.encrypt(password.encode())
+
+        this._cfg['ddns']['noip']['username'] = username
+        this._cfg['ddns']['noip']['password'] = encrypted_password.decode("utf-8")
+        
+    def ddns_noip_start(this):
+        if ("ddns_noip" in this._daemons):
+            this.ddns_noip_stop()
+
+        username = this._cfg['ddns']['noip']['username']
+        password = this._cfg['ddns']['noip']['password']
+        
+        thread = DDNSNoIP(username,password)
+        thread.start()
+        this._daemons["ddns_noip"] = thread
+
+        this.ddns_provider_enabled('noip',True)
+
+
+    def ddns_noip_stop(this):
+        if ("ddns_noip" in this._daemons):
+            this._daemons["ddns_noip"].stop()
+            del this._daemons["ddns_noip"]
+
+        this.ddns_provider_enabled('noip',False)
+
+    def _ddns_init(this) -> None:
+        for k,v in this._cfg['ddns'].items():
+            if (v.get('enabled',False) == True):
+                method = f"ddns_{k}_start"
+
+                if (hasattr(this,method)):
+                    mtd = getattr(this,method)
+                    mtd()
+
+
+
 
 
 

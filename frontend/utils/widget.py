@@ -2,9 +2,15 @@ from typing import Optional, Tuple, List
 from flask import render_template, current_app, g
 import os
 
+from flask_wtf.csrf import generate_csrf
+
+
 def render_widget(id:str,**kwargs)->Tuple[str,Optional[str]]:
     template_fname = f"card.{id}.html"
     css_fname = f"card.{id}.css"
+
+    if ("csrf_token" not in kwargs):
+        kwargs["csrf_token"] = generate_csrf()
 
     return render_template(template_fname,
                            card_id=id,

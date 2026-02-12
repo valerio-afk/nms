@@ -1,3 +1,5 @@
+from enum import Enum
+
 from backend_server.utils.cmdl import SystemCtlStart
 from . import frontend as bp, NMSBACKEND as BACKEND
 from .api.backend_proxy import show_flash
@@ -9,6 +11,8 @@ from nms_shared import ErrorMessages
 from io import BytesIO
 import base64
 
+class DDNSProviders(Enum):
+    noip = "No-IP"
 
 def get_vpn_public_key() -> Response:
     key = BACKEND.vpn_public_key
@@ -65,11 +69,22 @@ def network() -> str:
 
     if (vpn_enabled):
         vpn_data = BACKEND.vpn_config
-        vpn_form = VPNForm(address=vpn_data.get("ipv4",[]).get("address"),netmask=vpn_data.get("ipv4",[]).get("netmask"))
+        vpn_form = VPNForm(
+            address=vpn_data.get("ipv4",[]).get("address"),
+            netmask=vpn_data.get("ipv4",[]).get("netmask"),
+            public_ip = BACKEND.vpn_public_ip,
+        )
         vpn['form'] = vpn_form
 
-    vpn_widget,_ = render_widget("vpn",vpn=vpn,enabler_form=vpn_enabler_form,peers=BACKEND.vpn_peers,csrf_token=generate_csrf())
+    vpn_widget,_ = render_widget("vpn", vpn=vpn, enabler_form=vpn_enabler_form, peers=BACKEND.vpn_get_peers)
     widgets.append(vpn_widget)
+
+    #ddns is also special
+    ddns_providers = BACKEND.ddns_providers
+    for k in ddns_providers.keys():
+        ddns_providers[k]['ui_name'] = DDNSProviders[k].value
+    ddns_widget,_ = render_widget("ddns",ddns_providers=ddns_providers)
+    widgets.append(ddns_widget)
 
     return render_template("network.html",
                            active_page="network",
@@ -189,7 +204,8 @@ def net_vpn_apply_changes() -> Response:
             case "changes":
                 BACKEND.vpn_change_config(
                     address=form['address'],
-                    netmask=form['netmask']
+                    netmask=form['netmask'],
+                    endpoint=form['public_ip'],
                 )
 
 
@@ -210,8 +226,20 @@ def vpn_peers() -> Response:
             name = form.get("peer_name")
             public_key = form.get("public_key")
             BACKEND.vpn_add_peer(name, public_key)
+    return redirect(url_for("main.network"))
 
+@bp.route("/network/ddns/<string:provider>", methods=['POST'])
+def ddns_conf(provider:str) -> Response:
+    form = request.form
 
-
+    try:
+        validate_csrf(form.get("csrf_token"))
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+    else:
+        if form.get("action") == "enable":
+            BACKEND.ddns_enable(provider,{"username":form.get("username"),"password":form.get("password")})
+        elif form.get("action") == "disable":
+            BACKEND.ddns_disable(provider)
 
     return redirect(url_for("main.network"))

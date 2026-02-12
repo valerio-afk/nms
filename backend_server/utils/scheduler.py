@@ -1,7 +1,5 @@
 import datetime
 from dataclasses import dataclass
-
-from backend_server.utils.config import CONFIG
 from nms_shared.threads import NMSThread
 from uuid import uuid4
 from typing import Optional

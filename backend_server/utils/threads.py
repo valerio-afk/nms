@@ -1,3 +1,5 @@
+import datetime
+
 from nms_shared.disks import Disk
 from nms_shared.threads import NMSThread
 from backend_server.utils.cmdl import ZPoolStatus, APTGetUpdate, APTGetUpgrade
@@ -5,9 +7,28 @@ from nms_shared import ErrorMessages, SuccessMessages
 from backend_server.utils.responses import ErrorMessage, SuccessMessage
 from fastapi import HTTPException
 from typing import Optional
+from pytimeparse.timeparse import timeparse
 import psutil
 import time
 import json
+import threading
+import subprocess
+
+class LongWaitThread(NMSThread):
+    def __init__(this, interval:int) -> None:
+        super().__init__()
+        this._interval:int = interval
+        this._stop_event:threading.Event = threading.Event()
+
+    # def run(this) -> None:
+    #     while (this.is_running):
+    #         if this._stop_event.wait(timeout=this._interval):
+    #             break
+    #         this._callback()
+
+    def stop(this) -> None:
+        this._stop_event.set()
+        super().stop()
 
 class NetIOCounter (NMSThread):
 
@@ -204,3 +225,58 @@ class ResilverStateChecker(NMSThread):
 
         this._message = this.success_message
         CONFIG.info("Resilver state checker terminated successfully")
+
+
+class DDNSServiceThread(LongWaitThread):
+    def __init__(this,*args,**kwargs) -> None:
+        super().__init__(*args,**kwargs)
+        this._last_update: Optional[int] = None
+        this._next_update: Optional[int] = None
+
+    @property
+    def last_update(this) -> Optional[int]:
+        return this._last_update
+
+    @property
+    def next_update(this) -> Optional[int]:
+        return this._next_update
+
+class DDNSNoIP(DDNSServiceThread):
+
+    def __init__(this,userame:str,password:str,interval:int=300):
+        super().__init__(interval=interval)
+        this._username = userame
+        this._password = password
+
+    def run(this) -> None:
+
+        process = subprocess.Popen(
+            ["noip-duc","-g","all.ddnskey.com","--username",this._username,"--password",this._password],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # optional: merge stderr into stdout
+            text=True,  # decode to string
+            bufsize=1  # line-buffered
+        )
+        time.sleep(2)
+
+        try:
+            while (this.is_running):
+                for line in process.stdout:
+                    if "update failed" in line:
+                        error = line.rsplit(line,";",1)[1]
+                        raise Exception(error)
+                    elif "update successful" in line:
+                        this._last_update = int(datetime.datetime.now().timestamp())
+                    elif "checking ip" in line:
+                        delta = line.rsplit(" ",1)[1]
+                        secs = timeparse(delta)
+                        this._next_update = this._last_update + int(secs)
+
+                if this._stop_event.wait(timeout=this._interval):
+                    break
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                process.kill()

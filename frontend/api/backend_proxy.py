@@ -11,7 +11,7 @@ from nms_shared.disks import Disk, DiskStatus
 from nms_shared.enums import LogFilter
 from requests import get, post
 from requests.exceptions import HTTPError
-from typing import Optional, List, Any, Dict, Literal, Union
+from typing import Optional, List, Any, Dict, Literal, Union, Tuple
 from nms_shared.threads import NMSThread
 
 def parse_disks_from_request(d:Optional[List[dict]]) -> List[Disk]:
@@ -368,8 +368,16 @@ class BackEndProxy:
         return this._request("net/vpn/pubkey", RequestMethod.GET)
 
     @property
-    def vpn_peers(this) -> List[dict]:
+    def vpn_get_peers(this) -> List[Tuple[str,str]]:
         return this._request("net/vpn/peers", RequestMethod.GET)
+
+    @property
+    def vpn_public_ip(this) -> List[Tuple[str, str]]:
+        return this._request("net/vpn/public-ip", RequestMethod.GET)
+
+    @property
+    def ddns_providers(this) -> Dict[str,dict]:
+        return this._request("net/ddns/providers", RequestMethod.GET)
 
     #ACCESS SERVICES PROPERTIES
     @property
@@ -582,10 +590,11 @@ class BackEndProxy:
     def vpn_gen_keys(this) -> None:
         this._request("net/vpn/gen-keys",RequestMethod.POST)
 
-    def vpn_change_config(this,address:str, netmask:str) -> None:
+    def vpn_change_config(this,address:str, netmask:str,endpoint:str) -> None:
         this._request(f"net/vpn/config",RequestMethod.POST,body_params={
             "address":address,
-            "netmask":netmask
+            "netmask":netmask,
+            "endpoint":endpoint
         })
 
     def vpn_add_peer(this,name:str,public_key:str) -> None:

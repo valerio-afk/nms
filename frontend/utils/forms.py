@@ -163,3 +163,4 @@ class IPEnableForm(IPForm):
 class VPNForm(FlaskForm):
     address = StringField(_("Address"))
     netmask = StringField(_("Netmask"))
+    public_ip = StringField(_("Public IP"))
