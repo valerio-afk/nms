@@ -1,5 +1,8 @@
 import datetime
+from abc import abstractmethod
+from string import Template
 
+import requests
 from nms_shared.disks import Disk
 from nms_shared.threads import NMSThread
 from backend_server.utils.cmdl import ZPoolStatus, APTGetUpdate, APTGetUpgrade
@@ -7,7 +10,7 @@ from nms_shared import ErrorMessages, SuccessMessages
 from backend_server.utils.responses import ErrorMessage, SuccessMessage
 from fastapi import HTTPException
 from typing import Optional
-from pytimeparse.timeparse import timeparse
+
 import psutil
 import time
 import json
@@ -19,12 +22,6 @@ class LongWaitThread(NMSThread):
         super().__init__()
         this._interval:int = interval
         this._stop_event:threading.Event = threading.Event()
-
-    # def run(this) -> None:
-    #     while (this.is_running):
-    #         if this._stop_event.wait(timeout=this._interval):
-    #             break
-    #         this._callback()
 
     def stop(this) -> None:
         this._stop_event.set()
@@ -228,6 +225,7 @@ class ResilverStateChecker(NMSThread):
 
 
 class DDNSServiceThread(LongWaitThread):
+    DEFAULT_INTERVAL:int = 600 # 10 mins
     def __init__(this,*args,**kwargs) -> None:
         super().__init__(*args,**kwargs)
         this._last_update: Optional[int] = None
@@ -241,42 +239,78 @@ class DDNSServiceThread(LongWaitThread):
     def next_update(this) -> Optional[int]:
         return this._next_update
 
+
+class TokenBasedDDNSThread(DDNSServiceThread):
+    def __init__(this, url: str,*args,**kwargs) -> None:
+        super().__init__(*args,**kwargs)
+        this._url = url
+
+    @abstractmethod
+    def _check_success(this,response:requests.Response)->bool:
+        ...
+
+    def run(this) -> None:
+        from .config import CONFIG
+        CONFIG.error(this._url)
+        while (this.is_running):
+            response = requests.get(this._url)
+
+            CONFIG.error(response.text)
+
+            success = this._check_success(response)
+
+            if (not success):
+                raise Exception(response.text)
+
+            this._last_update = int(datetime.datetime.now().timestamp())
+            this._next_update = this._last_update + this._interval
+
+            if this._stop_event.wait(timeout=this._interval):
+                break
+
 class DDNSNoIP(DDNSServiceThread):
 
-    def __init__(this,userame:str,password:str,interval:int=300):
+    def __init__(this,userame:str,password:str,interval:int=DDNSServiceThread.DEFAULT_INTERVAL):
         super().__init__(interval=interval)
         this._username = userame
         this._password = password
 
     def run(this) -> None:
+        while (this.is_running):
+            process = subprocess.run(
+                ["noip-duc", "-g", "all.ddnskey.com",
+                 "--username", this._username, "--password", this._password,
+                 "--once"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,  # optional: merge stderr into stdout
+                text=True,  # decode to string
+            )
 
-        process = subprocess.Popen(
-            ["noip-duc","-g","all.ddnskey.com","--username",this._username,"--password",this._password],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,  # optional: merge stderr into stdout
-            text=True,  # decode to string
-            bufsize=1  # line-buffered
-        )
-        time.sleep(2)
+            for line in process.stdout.splitlines():
+                if "update failed" in line:
+                    error = line.rsplit(";",1)[1]
+                    raise Exception(error)
+                elif "update successful" in line:
+                    this._last_update = int(datetime.datetime.now().timestamp())
+                    this._next_update = this._last_update + this._interval
 
-        try:
-            while (this.is_running):
-                for line in process.stdout:
-                    if "update failed" in line:
-                        error = line.rsplit(line,";",1)[1]
-                        raise Exception(error)
-                    elif "update successful" in line:
-                        this._last_update = int(datetime.datetime.now().timestamp())
-                    elif "checking ip" in line:
-                        delta = line.rsplit(" ",1)[1]
-                        secs = timeparse(delta)
-                        this._next_update = this._last_update + int(secs)
+            if this._stop_event.wait(timeout=this._interval):
+                break
 
-                if this._stop_event.wait(timeout=this._interval):
-                    break
-        finally:
-            process.terminate()
-            try:
-                process.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                process.kill()
+class DuckDNS(TokenBasedDDNSThread):
+    UPDATE_ENDPOINT:Template = Template("https://www.duckdns.org/update?domains=$domain&token=$token&verbose=true&ip=")
+    def __init__(this,domain:str,token:str,interval:int=DDNSServiceThread.DEFAULT_INTERVAL):
+        url = DuckDNS.UPDATE_ENDPOINT.substitute(domain=domain,token=token)
+        super().__init__(url,interval=interval)
+
+    def _check_success(this,response:requests.Response)->bool:
+        return (response.status_code == 200) and (response.text.strip().startswith("OK"))
+
+class DynuDDNS(TokenBasedDDNSThread):
+    UPDATE_ENDPOINT:Template = Template("http://api.dynu.com/nic/update?username=$username&password=$password")
+    def __init__(this,username:str,password:str,interval:int=DDNSServiceThread.DEFAULT_INTERVAL):
+        url = DynuDDNS.UPDATE_ENDPOINT.substitute(username=username,password=password)
+        super().__init__(url,interval=interval)
+
+    def _check_success(this,response:requests.Response)->bool:
+        return (response.text.strip().startswith("good"))

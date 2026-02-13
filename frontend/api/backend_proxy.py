@@ -606,6 +606,16 @@ class BackEndProxy:
     def vpn_remove_peer(this,peer:str) -> None :
         this._request(f"net/vpn/peers/remove",RequestMethod.POST,qstring_params={"name":peer})
 
+    def ddns_enable(this,provider:str,config:Dict[str,str]) -> None:
+        if (config.get("username") is None):
+            config = None
+
+        this._request(f"net/ddns/{provider}/start",RequestMethod.POST,body_params=config)
+
+    def ddns_disable(this,provider:str) -> None:
+        this._request(f"net/ddns/{provider}/stop",RequestMethod.POST)
+
+
 
 
     #Other Method

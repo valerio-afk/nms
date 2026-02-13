@@ -248,7 +248,7 @@ ERROR_MESSAGES = {
     ErrorMessages.E_NET_VPN_USER_INVALID : lambda : _("VPN device not valid."),
     ErrorMessages.E_NET_VPN_IP_MAX : lambda : _("You have reached the maximum number of devices."),
     ErrorMessages.E_NET_DDNS_INVALID : lambda provider : _("Invalid dynamic DNS provider `%(provider)`.") % {'provider':provider},
-    ErrorMessages.E_NET_DDNS_SERVICE : lambda provider,info : _("Error occurred during the execution of the dynamic DNS provider `%(provider)`: %(info)s") % {'provider':provider,"info":info},
+    ErrorMessages.E_NET_DDNS_SERVICE : lambda provider,info : _("Error occurred during the execution of the dynamic DNS provider `%(provider)s`: %(info)s") % {'provider':provider,"info":info},
 }
 
 WARNING_MESSAGES = {

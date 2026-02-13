@@ -18,7 +18,7 @@ import subprocess
 import re
 import base64
 import io
-import requests
+
 
 net = APIRouter(
     prefix='/net',
@@ -647,13 +647,16 @@ def ddns_provider_list() -> Dict[str,DDNSProvider]:
         if (v.enabled):
             force_disable = False
             try:
-                CONFIG.check_daemon(k,"ddns")
+                thread = CONFIG.check_daemon(k,"ddns")
+                v.last_update = thread.last_update
+                v.next_update = thread.next_update
+                CONFIG.ddns_provider_set_last_update(k,v.last_update)
             except HTTPException as e:
                 force_disable = True
                 raise e
             except Exception as e:
                 force_disable = True
-                raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_DDNS_SERVICE.name,params=[str(e)]))
+                raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_DDNS_SERVICE.name,params=[k,str(e)]))
             finally:
                 if (force_disable):
                     CONFIG.ddns_provider_enabled(k,False)
@@ -663,27 +666,30 @@ def ddns_provider_list() -> Dict[str,DDNSProvider]:
     return providers
 
 @net.post('/ddns/{provider}/start')
-def ddns_provider_start(provider:str,config:Optional[DDNSDefaultProviderConfiguration]) -> dict:
+def ddns_provider_start(provider:str,config:Optional[DDNSDefaultProviderConfiguration]=None) -> dict:
     match (provider):
         case "noip":
             if (config is not None):
                 CONFIG.ddns_noip_set(config.username,config.password)
             CONFIG.ddns_noip_start()
-            CONFIG.flush_config()
+        case "duckdns":
+            if (config is not None):
+                CONFIG.ddns_duckdns_set(config.username, config.password)
+            CONFIG.ddns_duckdns_start()
+        case "dynu":
+            if (config is not None):
+                CONFIG.ddns_dynu_set(config.username, config.password)
+            CONFIG.ddns_dynu_start()
         case _:
-            raise HTTPException(status_code=500,detail="Invalid DDNS service provider")
+            raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_DDNS_INVALID.name,params=[provider]))
+
+    CONFIG.flush_config()
 
 
     return {"details":SuccessMessage(code=SuccessMessages.S_NET_DDNS_ENABLED.name,params=[provider])}
 
 @net.post('/ddns/{provider}/stop')
 def ddns_provider_stop(provider:str) -> dict:
-    match (provider):
-        case "noip":
-            CONFIG.ddns_noip_stop()
-            CONFIG.flush_config()
-        case _:
-            raise HTTPException(status_code=500,detail="Invalid DDNS service provider")
-
-
+    CONFIG.ddns_stop(provider.lower())
+    CONFIG.flush_config()
     return {"details":SuccessMessage(code=SuccessMessages.S_NET_DDNS_DISABLED.name,params=[provider])}

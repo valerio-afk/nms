@@ -1,6 +1,5 @@
+import datetime
 from enum import Enum
-
-from backend_server.utils.cmdl import SystemCtlStart
 from . import frontend as bp, NMSBACKEND as BACKEND
 from .api.backend_proxy import show_flash
 from .utils.forms import IFaceEnableForm, IPEnableForm, IPForm, VPNForm
@@ -13,6 +12,8 @@ import base64
 
 class DDNSProviders(Enum):
     noip = "No-IP"
+    duckdns = "DuckDNS"
+    dynu = "Dynu"
 
 def get_vpn_public_key() -> Response:
     key = BACKEND.vpn_public_key
@@ -81,8 +82,15 @@ def network() -> str:
 
     #ddns is also special
     ddns_providers = BACKEND.ddns_providers
-    for k in ddns_providers.keys():
-        ddns_providers[k]['ui_name'] = DDNSProviders[k].value
+    if (ddns_providers is not None):
+        for k in ddns_providers.keys():
+            ddns_providers[k]['ui_name'] = DDNSProviders[k].value
+            if (ddns_providers[k].get("last_update") is not None):
+                ddns_providers[k]['last_update'] = datetime.datetime.fromtimestamp(ddns_providers[k]['last_update']).strftime("%A, %d %B %Y at %H:%M:%S")
+
+            if (ddns_providers[k].get("next_update") is not None):
+                ddns_providers[k]['next_update'] = datetime.datetime.fromtimestamp(ddns_providers[k]['next_update']).strftime("%A, %d %B %Y at %H:%M:%S")
+
     ddns_widget,_ = render_widget("ddns",ddns_providers=ddns_providers)
     widgets.append(ddns_widget)
 
@@ -238,7 +246,13 @@ def ddns_conf(provider:str) -> Response:
         show_flash(code=ErrorMessages.E_CSRF.name)
     else:
         if form.get("action") == "enable":
-            BACKEND.ddns_enable(provider,{"username":form.get("username"),"password":form.get("password")})
+            username = form.get("username")
+            password = form.get("password")
+
+            if (isinstance(username,str) and (len(username) == 0)): username = None
+            if (isinstance(password, str) and (len(password) == 0)): password = None
+
+            BACKEND.ddns_enable(provider,{"username":username,"password":password})
         elif form.get("action") == "disable":
             BACKEND.ddns_disable(provider)
 

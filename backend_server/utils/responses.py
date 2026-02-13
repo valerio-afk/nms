@@ -112,6 +112,7 @@ class DDNSProvider(BaseModel):
     enabled: bool
     username:Optional[str]
     last_update:Optional[int]
+    next_update:Optional[int] = Field(None)
 
 class DDNSDefaultProviderConfiguration(BaseModel):
     username:str

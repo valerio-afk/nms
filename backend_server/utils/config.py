@@ -1,22 +1,22 @@
+from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet, UserModChangeHomeDir
+from backend_server.utils.cmdl import ZPoolList
+from backend_server.utils.logger import Logger
+from backend_server.utils.responses import ErrorMessage
+from backend_server.utils.services import SystemService
+from backend_server.utils.threads import NetIOCounter, DDNSNoIP, LongWaitThread, DDNSServiceThread, DuckDNS, DynuDDNS
+from cryptography.fernet import Fernet
+from fastapi import HTTPException
+from importlib import import_module
+from nms_shared import ErrorMessages
+from nms_shared.disks import Disk
+from nms_shared.enums import DiskStatus
+from typing import Optional, Dict, List, Any, Type
+import base64
 import datetime
+import hashlib
 import json
 import os
 import pwd
-from cryptography import fernet
-from cryptography.fernet import Fernet
-
-from backend_server.utils.services import SystemService
-from nms_shared.enums import DiskStatus
-from nms_shared.disks import Disk
-from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet, UserModChangeHomeDir
-from backend_server.utils.threads import NetIOCounter, DDNSNoIP
-from backend_server.utils.logger import Logger
-from backend_server.utils.cmdl import ZPoolList
-from fastapi import HTTPException
-from typing import Optional, Dict, List, Any
-from importlib import import_module
-from backend_server.utils.responses import ErrorMessage
-from nms_shared import ErrorMessages
 
 
 class NMSConfig(Logger):
@@ -154,7 +154,6 @@ class NMSConfig(Logger):
         return list(this._issued_tokens.keys())
 
     #NETWORK PROPERTIES
-
     @property
     def net_counter(this) -> Optional[NetIOCounter]:
         return this._daemons.get("netcounter")
@@ -182,6 +181,10 @@ class NMSConfig(Logger):
     @property
     def ddns_providers(this)->List[Dict[str,Any]]:
         return this._cfg.get('ddns',{})
+
+    def ddns_provider_set_last_update(this,provider:str,timestamp:int) -> None:
+        this._cfg['ddns'][provider]['last_update'] = timestamp
+
 
     # POOL PROPERTIES
 
@@ -340,7 +343,7 @@ class NMSConfig(Logger):
 
     # BASE METHODS
 
-    def check_daemon(this,name:str,prefix:Optional[str]=None) -> Any:
+    def check_daemon(this,name:str,prefix:Optional[str]=None) -> Optional[LongWaitThread]:
         if (prefix is not None):
             name = f"{prefix}_{name}"
 
@@ -350,7 +353,7 @@ class NMSConfig(Logger):
                     raise thread.message
                 else:
                     raise RuntimeError(thread.message)
-            return thread.message
+            return thread
 
         return None
 
@@ -624,35 +627,78 @@ class NMSConfig(Logger):
     def ddns_provider_enabled(this,provider:str,enabled:bool) -> None:
         this._cfg['ddns'][provider]['enabled'] = enabled
 
-    def ddns_noip_set(this,username:str,password:str) -> None:
+    def ddns_config_set(this,provider:str,username:str,password:str) -> None:
         SECRET_KEY = os.environ.get("NMS_SECRET_KEY")
-        
-        fernet = Fernet(SECRET_KEY)
+        digest = hashlib.sha256(SECRET_KEY.encode()).digest()
+        fernet_key = base64.urlsafe_b64encode(digest)
+
+        fernet = Fernet(fernet_key)
         encrypted_password = fernet.encrypt(password.encode())
 
-        this._cfg['ddns']['noip']['username'] = username
-        this._cfg['ddns']['noip']['password'] = encrypted_password.decode("utf-8")
+        this._cfg['ddns'][provider]['username'] = username
+        this._cfg['ddns'][provider]['password'] = encrypted_password.decode("utf-8")
+
+    def ddns_noip_set(this,username:str,password:str) -> None:
+        this.ddns_config_set("noip",username,password)
+
+    def ddns_duckdns_set(this,domain:str,token:str) -> None:
+        this.ddns_config_set("duckdns",domain,token)
+
+    def ddns_dynu_set(this, username:str, password:str) -> None:
+        digest = hashlib.md5(password.encode()).hexdigest()
+
+        this._cfg['ddns']["dynu"]['username'] = username
+        this._cfg['ddns']["dynu"]['password'] = digest
+
+
+    def ddns_start(this,thread_cls:Type[DDNSServiceThread],provider:str) -> None:
+        this.ddns_stop(provider)
+
+        username = this._cfg['ddns'][provider]['username']
+        password = this._cfg['ddns'][provider]['password']
+
+        SECRET_KEY = os.environ.get("NMS_SECRET_KEY")
+        digest = hashlib.sha256(SECRET_KEY.encode()).digest()
+        fernet_key = base64.urlsafe_b64encode(digest)
+
+        fernet = Fernet(fernet_key)
+        decrypted_password = fernet.decrypt(password.encode())
+
+        thread = thread_cls(username, decrypted_password.decode("utf-8"))
+        thread.start()
+        this._daemons[f"ddns_{provider}"] = thread
+
+        this.ddns_provider_enabled(provider, True)
+
         
     def ddns_noip_start(this):
-        if ("ddns_noip" in this._daemons):
-            this.ddns_noip_stop()
+        this.ddns_start(DDNSNoIP,"noip")
 
-        username = this._cfg['ddns']['noip']['username']
-        password = this._cfg['ddns']['noip']['password']
-        
-        thread = DDNSNoIP(username,password)
+    def ddns_duckdns_start(this):
+        this.ddns_start(DuckDNS,"duckdns")
+
+    def ddns_dynu_start(this):
+        provider = "dynu"
+        this.ddns_stop(provider)
+
+        username = this._cfg['ddns'][provider]['username']
+        password = this._cfg['ddns'][provider]['password']
+
+
+        thread = DynuDDNS(username, password)
         thread.start()
-        this._daemons["ddns_noip"] = thread
+        this._daemons[f"ddns_{provider}"] = thread
 
-        this.ddns_provider_enabled('noip',True)
+        this.ddns_provider_enabled(provider, True)
 
 
-    def ddns_noip_stop(this):
-        if ("ddns_noip" in this._daemons):
-            this._daemons["ddns_noip"].stop()
-            del this._daemons["ddns_noip"]
+    def ddns_stop(this,provider:str) -> None:
+        thread_name = f"ddns_{provider}"
+        if (thread_name in this._daemons):
+            this._daemons[thread_name].stop()
+            del this._daemons[thread_name]
 
-        this.ddns_provider_enabled('noip',False)
+        this.ddns_provider_enabled(provider,False)
 
     def _ddns_init(this) -> None:
         for k,v in this._cfg['ddns'].items():

@@ -1,0 +1,22 @@
+<form method="POST" action="{{ url_for('main.ddns_conf',provider=name)}}" class="disable-on-submit">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% if not properties.enabled %}
+    <div class="mb-3 row">
+        <div class="col-6 col-form-label"><label for="ddns_{{ name }}_username">{{ _("Domain") }}</label></div>
+        <div class="col-6"><input type="text" class="form-control" placeholder="{{ properties.username if properties.username else '' }}" name="username" id="ddns_{{ name }}_username"/></div>
+    </div>
+
+    <div class="mb-3 row">
+        <div class="col-6 col-form-label"><label for="ddns_{{ name }}_password">{{ _("Token") }}</label></div>
+        <div class="col-6"><input type="password" class="form-control"  name="password" id="ddns_{{ name }}_password"/></div>
+    </div>
+
+    <div class="mb-3 row">
+    <div class="col-12"><button type="submit" name="action" value="enable" class="w-100 btn btn-success">{{ _("Enable") }}</button></div>
+    </div>
+    {% else %}
+    <div class="mb-3 row">
+        <div class="col-12"><button type="submit" name="action" value="disable" class="w-100 btn btn-danger">{{ _("Disable") }}</button></div>
+    </div>
+    {% endif %}
+</form>
