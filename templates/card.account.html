@@ -5,16 +5,23 @@
 {% block card_content %}
 
 
-<dl class="row">
-    <dt class="col-sm-6">{{ _("User name") }}:</dt>
-    <dd class="col-sm-6">{{ user.username }}</dd>
+<div class="row">
+    <dt class="col-sm-5">{{ _("User name") }}:</dt>
+    <dd class="col-sm-7">{{ user.username }}</dd>
+</div>
+<form method="POST" class="disable-on-submit"  action="{{ url_for('main.account_fullname') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="row">
+            <dt class="col-sm-5 col-form-label">{{ _("Visible Name") }}:</dt>
+            <div class="col-sm-5"><input type="text" name="fullname" value="{{ user.visible_name }}" class="form-control" /> </div>
+            <div class="col-sm-2"><button type="submit" class="btn btn-success"><i class="bi bi-send-fill"></i></button></div>
+    </div>
+</form>
 
-    <dt class="col-sm-6">{{ _("Visible Name") }}:</dt>
-    <dd class="col-sm-6">{{ user.visible_name }}</dd>
-
-    <dt class="col-sm-6">{{ _("Quota") }}:</dt>
-    <dd class="col-sm-6">{{ user.quota if user.quota else _("No") }}</dd>
-</dl>
+<div class="row">
+    <dt class="col-sm-5">{{ _("Quota") }}:</dt>
+    <dd class="col-sm-7">{{ user.quota if user.quota else _("No") }}</dd>
+</div>
 
 
 <div class="accordion" id="user_permission">

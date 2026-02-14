@@ -1,9 +1,12 @@
 from . import frontend as bp
+from .api.backend_proxy import NMSBACKEND as BACKEND, show_flash
 from .utils.forms import ChangePasswordForm
 from .utils.widget import get_widgets_html, get_widgets_css_files, render_widget
-from flask import session, render_template, g, flash, redirect, url_for
+from flask import session, render_template, g, flash, redirect, url_for, request, Response
 from flask_babel import _
+from flask_wtf.csrf import validate_csrf, ValidationError
 from nms_shared.enums import UserPermissions
+from nms_shared.msg import ErrorMessages
 from typing import Dict, Tuple
 
 USER_PERMISSIONS={
@@ -122,6 +125,23 @@ def user_account() -> str:
                            extra_css=get_widgets_css_files(dashboard_widgets)
                            )
 
+@bp.route("/account/fullname",methods=["POST"])
+def account_fullname() -> Response:
+    form = request.form
+
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+    else:
+        user = session.get("user")
+        BACKEND.set_user_fullname(user.get("username"),form["fullname"])
+        session["user"] = BACKEND.current_user
+
+    return redirect(url_for("main.user_account"))
+
+
+
 @bp.route("/account/service/<string:service>",methods=["POST"])
 def user_service_account(service:str):
     user = session.get("user")
@@ -129,7 +149,8 @@ def user_service_account(service:str):
     form = ChangePasswordForm()
 
     if (form.validate_on_submit()):
-        ...
+        BACKEND.change_password_to_service(service,user.get("username"),form.password.data)
+
     else:
         for errors in form.errors.values():
             for error in errors:

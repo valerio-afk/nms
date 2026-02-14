@@ -625,8 +625,13 @@ class BackEndProxy:
     def ddns_disable(this,provider:str) -> None:
         this._request(f"net/ddns/{provider}/stop",RequestMethod.POST)
 
+    #USERS METHODS
 
+    def change_password_to_service(this,service:str,username:str,password:str) -> None:
+        this._request(f"users/service/{service}",RequestMethod.POST,body_params={"username":username,"password":password})
 
+    def set_user_fullname(this, username:str, fullname:str) -> None:
+        this._request(f"users/set/fullname", RequestMethod.POST,body_params={"username": username, "fullname": fullname})
 
     #Other Method
     def register_task(this,

@@ -237,31 +237,13 @@ class SSHService(SystemService):
         if (output.returncode != 0):
             raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_PASSWD.name,params=[username]))
 
-    def _update_data(this,port):
-        if (port != this.get("port")):
-            this.set("port",port)
-        # if (username != this.get("username")):
-        #     this.set("username",username)
-        # if (len(password)!=0):
-        #     this.set("password",password)
-
     def enable(this,port,**kwargs):
-        this._update_data(int(port))
+        if (port != this.get("port")):
+            this.set("port", port)
         this.start()
 
     def disable(this,*args,**kwargs):
         this.stop()
-
-    def update(this, port, **kwargs):
-        this._update_data(port)
-
-        cmd = SystemCtlRestart(this.service_names)
-
-        trans = LocalCommandLineTransaction(cmd)
-        output = trans.run()
-
-        if (not trans.success):
-            raise Exception(f"{this.service_names} could not be restarted")
 
 
 
@@ -445,8 +427,6 @@ class SMBService(SystemService):
 
         config[SMBService.SECTION] = {
             'path': this.mountpoint,
-            'browseable': "yes",
-            'read only': 'no',
         }
 
         new_output = io.StringIO()
@@ -468,20 +448,26 @@ class SMBService(SystemService):
         trans.run()
         os.remove(patch_fname)
 
-    # def _smbpasswd(this,username,password=None,flag=None):
-    #     cmd = SMBPasswd(username=username,password=password,flag=flag)
-    #     trans = LocalCommandLineTransaction(cmd)
-    #
-    #     trans.run()
+    def set_password(this,username,password):
+        cmd = SMBPasswd(username=username,password=password,flag=SMBPasswd.Flags.ADD)
+        trans = LocalCommandLineTransaction(cmd)
+        trans.run()
 
-    # def _update_password(this,username,password):
-    #     this._smbpasswd(username,password,flag=SMBPasswd.Flags.UPDATE)
-    #
-    # def _delete_user(this,username):
-    #     this._smbpasswd(username,flag=SMBPasswd.Flags.DELETE)
-    #
-    # def _add_user(this,username,password):
-    #     this._smbpasswd(username,password,flag=SMBPasswd.Flags.ADD)
+    def enable_user(this,username):
+        cmd = SMBPasswd(username=username, flag=SMBPasswd.Flags.ENABLE)
+        trans = LocalCommandLineTransaction(cmd)
+        trans.run()
+
+    def disable_user(this,username):
+        cmd = SMBPasswd(username=username, flag=SMBPasswd.Flags.ENABLE)
+        trans = LocalCommandLineTransaction(cmd)
+        trans.run()
+
+    def delete_user(this,username):
+        cmd = SMBPasswd(username=username, flag=SMBPasswd.Flags.DELETE)
+        trans = LocalCommandLineTransaction(cmd)
+        trans.run()
+
 
 
     def enable(this,**kwargs):

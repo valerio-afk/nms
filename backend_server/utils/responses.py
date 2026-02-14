@@ -122,3 +122,11 @@ class UserProfile(BaseModel):
     username:str
     visible_name:str
     permissions:List[str]
+
+class AccessServiceCredentials(BaseModel):
+    username:str
+    password:str
+
+class ChgFullnameData(BaseModel):
+    username:str
+    fullname:str

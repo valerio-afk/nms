@@ -11,6 +11,7 @@ class ErrorMessages(Enum):
     E_UNKNOWN_RESPONSE = "E_UNKNOWN_RESPONSE"
     E_PROPERTY = "E_PROPERTY"
     E_CSRF = "E_CSRF"
+    E_UNKNOWN_METHOD = "E_UNKNOWN_METHOD"
 
     E_POOL_ALREADY_CONF = "E_POOL_ALREADY_CONF"
     E_POOL_NO_CONF = "E_POOL_NO_CONF"
@@ -152,6 +153,9 @@ class SuccessMessages(Enum):
     S_NET_DDNS_ENABLED = "S_NET_DDNS_ENABLED"
     S_NET_DDNS_DISABLED = "S_NET_DDNS_DISABLED"
 
+    S_USER_PASSWORD = "S_USER_PASSWORD"
+    S_USER_FULLNAME = "S_USER_FULLNAME"
+
 
 
     @staticmethod
@@ -176,6 +180,7 @@ ERROR_MESSAGES = {
     ErrorMessages.E_UNKNOWN_RESPONSE : lambda: _("Unknown response from server"),
     ErrorMessages.E_PROPERTY : lambda prop, info: _("Error while getting %(prop)s: %(info)s") % {'prop': prop, 'info': info},
     ErrorMessages.E_CSRF : lambda : _("Form validation failed"),
+    ErrorMessages.E_UNKNOWN_METHOD : lambda : _("Unknown operation."),
 
     ErrorMessages.E_POOL_ALREADY_CONF : lambda: _("The disk array is already configured."),
     ErrorMessages.E_POOL_NO_CONF : lambda: _("Disk array not configured yet."),
@@ -301,6 +306,8 @@ SUCCESS_MESSAGES = {
     SuccessMessages.S_NET_DDNS_ENABLED : lambda provider: _("Dynamic DNS provider `%(provider)s` enabled successfully.") % {'provider':provider} ,
     SuccessMessages.S_NET_DDNS_DISABLED : lambda provider: _("Dynamic DNS provider `%(provider)s` disabled successfully.") % {'provider':provider},
 
+    SuccessMessages.S_USER_PASSWORD : lambda : _("Password changed successfully."),
+    SuccessMessages.S_USER_FULLNAME : lambda : _("Visible name changed successfully."),
 
 }
 

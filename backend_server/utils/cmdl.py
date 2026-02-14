@@ -1159,6 +1159,8 @@ class SMBPasswd(CommandLine):
         ADD = '-a'
         DELETE = '-x'
         UPDATE = ''
+        DISABLE = '-d'
+        ENABLE = '-e'
 
 
     def __init__(this,username,password=None,flag=Flags.UPDATE):

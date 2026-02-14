@@ -473,6 +473,9 @@ class NMSConfig(Logger):
         if user is not None:
             return UserProfile(username=username,visible_name=user["fullname"],permissions=user["permissions"])
 
+    def set_user_fullname(this,username:str,fullname:str) -> None:
+        this._cfg['users'][username]["fullname"] = fullname
+
 
     #AUTH/OTP METHODS
 
