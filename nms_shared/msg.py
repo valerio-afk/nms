@@ -46,6 +46,7 @@ class ErrorMessages(Enum):
     E_POOL_CORRUPTED = "E_POOL_CORRUPTED"
     E_POOL_OUTDATED = "E_POOL_OUTDATED"
 
+    E_AUTH_ALREADY_CONFIG = "E_AUTH_ALREADY_CONFIG"
     E_AUTH_INVALID = "E_AUTH_INVALID"
     E_AUTH_EXPIRED = "E_AUTH_EXPIRED"
     E_AUTH_REVOKED = "E_AUTH_REVOKED"
@@ -84,6 +85,9 @@ class ErrorMessages(Enum):
     E_NET_VPN_IP_MAX = "E_VPN_IP_MAX"
     E_NET_DDNS_INVALID = "E_NET_DDNS_INVALID"
     E_NET_DDNS_SERVICE = "E_NET_DDNS_SERVICE"
+    E_NET_DDNS_CONFIG = "E_NET_DDNS_CONFIG"
+
+    E_USER_NOT_FOUND = "E_USER_NOT_FOUND"
 
     @staticmethod
     def get_error_from_string(error_code:str,*args,**kwargs) -> str:
@@ -210,7 +214,7 @@ ERROR_MESSAGES = {
     ErrorMessages.E_POOL_CORRUPTED: lambda : _("The information related your disk array are corrupted. Recovery may be possible (but not guaranteed) and some data loss can occur. Use the `Attempt Recovery` button in Advanced. If the problem persists, back up your data, destroy and create a new array. Consider replacing one or more disks if their diagnostics suggest so."),
     ErrorMessages.E_POOL_OUTDATED: lambda : _("Your disk array seems to be outdated and cannot be used anymore."),
 
-
+    ErrorMessages.E_AUTH_ALREADY_CONFIG : lambda _: ("You have already an OTP credentials configured."),
     ErrorMessages.E_AUTH_INVALID : lambda: _("Invalid authorisation."),
     ErrorMessages.E_AUTH_EXPIRED : lambda: _("Authorisation token expired."),
     ErrorMessages.E_AUTH_REVOKED : lambda: _("Authorisation token revoked."),
@@ -249,6 +253,9 @@ ERROR_MESSAGES = {
     ErrorMessages.E_NET_VPN_IP_MAX : lambda : _("You have reached the maximum number of devices."),
     ErrorMessages.E_NET_DDNS_INVALID : lambda provider : _("Invalid dynamic DNS provider `%(provider)`.") % {'provider':provider},
     ErrorMessages.E_NET_DDNS_SERVICE : lambda provider,info : _("Error occurred during the execution of the dynamic DNS provider `%(provider)s`: %(info)s") % {'provider':provider,"info":info},
+    ErrorMessages.E_NET_DDNS_CONFIG : lambda : _("Missing Dynamic DNS configuration. Check if username/domain and password/token are properly set for the chosen provider."),
+
+    ErrorMessages.E_USER_NOT_FOUND : lambda user : _("User %(user)s not found.") % {'user':user}, # <------
 }
 
 WARNING_MESSAGES = {

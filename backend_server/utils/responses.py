@@ -115,5 +115,10 @@ class DDNSProvider(BaseModel):
     next_update:Optional[int] = Field(None)
 
 class DDNSDefaultProviderConfiguration(BaseModel):
-    username:str
+    username:Optional[str]
     password:str
+
+class UserProfile(BaseModel):
+    username:str
+    visible_name:str
+    permissions:List[str]

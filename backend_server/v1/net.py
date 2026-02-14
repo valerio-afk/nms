@@ -680,6 +680,22 @@ def ddns_provider_start(provider:str,config:Optional[DDNSDefaultProviderConfigur
             if (config is not None):
                 CONFIG.ddns_dynu_set(config.username, config.password)
             CONFIG.ddns_dynu_start()
+        case "cloudns":
+            if (config is not None):
+                CONFIG.ddns_cloudns_set(config.password)
+            CONFIG.ddns_cloudns_start()
+        case "freedns":
+            if (config is not None):
+                CONFIG.ddns_freedns_set(config.password)
+            CONFIG.ddns_freedns_start()
+        case "dnsexit":
+            if (config is not None):
+                CONFIG.ddns_dnsexit_set(config.username,config.password)
+            CONFIG.ddns_dnsexit_start()
+        case "dynv6":
+            if (config is not None):
+                CONFIG.ddns_dynv6_set(config.username, config.password)
+            CONFIG.ddns_dynv6_start()
         case _:
             raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_DDNS_INVALID.name,params=[provider]))
 

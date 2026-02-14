@@ -1,19 +1,24 @@
-import datetime
-from enum import Enum
 from . import frontend as bp, NMSBACKEND as BACKEND
 from .api.backend_proxy import show_flash
 from .utils.forms import IFaceEnableForm, IPEnableForm, IPForm, VPNForm
 from .utils.widget import render_widget
+from enum import Enum
 from flask import render_template,  redirect, url_for, Response, request, g, send_file
+from flask_babel import format_datetime
 from flask_wtf.csrf import validate_csrf, generate_csrf, ValidationError
-from nms_shared import ErrorMessages
 from io import BytesIO
+from nms_shared import ErrorMessages
 import base64
+import datetime
 
 class DDNSProviders(Enum):
     noip = "No-IP"
     duckdns = "DuckDNS"
     dynu = "Dynu"
+    freedns = "FreeDNS"
+    dnsexit = "DNSExit"
+    dynv6 = "DynV6"
+    cloudns = "ClouDNS"
 
 def get_vpn_public_key() -> Response:
     key = BACKEND.vpn_public_key
@@ -86,10 +91,10 @@ def network() -> str:
         for k in ddns_providers.keys():
             ddns_providers[k]['ui_name'] = DDNSProviders[k].value
             if (ddns_providers[k].get("last_update") is not None):
-                ddns_providers[k]['last_update'] = datetime.datetime.fromtimestamp(ddns_providers[k]['last_update']).strftime("%A, %d %B %Y at %H:%M:%S")
+                ddns_providers[k]['last_update'] = format_datetime(datetime.datetime.fromtimestamp(ddns_providers[k]['last_update']),"EEEE, d MMMM yyyy HH:mm:ss").title()
 
             if (ddns_providers[k].get("next_update") is not None):
-                ddns_providers[k]['next_update'] = datetime.datetime.fromtimestamp(ddns_providers[k]['next_update']).strftime("%A, %d %B %Y at %H:%M:%S")
+                ddns_providers[k]['next_update'] = format_datetime(datetime.datetime.fromtimestamp(ddns_providers[k]['next_update']), "EEEE, d MMMM yyyy HH:mm:ss").title()
 
     ddns_widget,_ = render_widget("ddns",ddns_providers=ddns_providers)
     widgets.append(ddns_widget)

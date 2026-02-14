@@ -5,7 +5,7 @@
           {% endif %}
       <form action="{{ btn_link }}" method="{{ btn_method }}">
           {% if btn_method.upper() == 'POST' %}
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           {% endif %}
       {% endif %}
           <div class="square-btn-wrapper">

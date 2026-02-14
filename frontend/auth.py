@@ -4,7 +4,6 @@ from flask import Response, render_template, send_file, g
 from flask_wtf.csrf import generate_csrf, validate_csrf, ValidationError
 from io import BytesIO
 from typing import Union, Tuple
-import pyotp
 import qrcode
 import time
 
@@ -16,10 +15,14 @@ from .api.backend_proxy import show_flash
 @bp.route("/login",methods=['GET','POST'])
 def login() -> Union[Response,str]:
     authenticated = False
-    if (BACKEND.is_otp_configured or BACKEND.is_new_otp_ready):
+    temp_token = session.get("temp_token",False)
+
+    is_otp_conf = BACKEND.is_otp_configured
+
+
+    if (is_otp_conf or temp_token):
 
         if (request.method == 'POST'):
-
             try:
                 validate_csrf(request.form.get("csrf_token"))
             except ValidationError:
@@ -34,6 +37,8 @@ def login() -> Union[Response,str]:
                 session["last_activity"] = time.time()
                 session["ip"] = request.remote_addr
                 authenticated = True
+            elif (not is_otp_conf):
+                session.clear()
 
         elif session.get("authenticated",False):
             authenticated = True
@@ -41,6 +46,7 @@ def login() -> Union[Response,str]:
         if authenticated:
             next_url = request.args.get("next")
             return redirect(next_url or url_for("main.dashboard"))
+
 
         return render_template("login.auth.html",csp_nonce=g.csp_nonce,csrf_token= generate_csrf())
     else:
@@ -72,7 +78,8 @@ def reauth(operation:str) -> Union[Response,str]:
 
 @bp.route("/login/config/show_qrcode")
 def otp_qr() -> Union[Response,Tuple[str,int]]:
-    uri = BACKEND.get_new_otp()
+    token = request.args.get("token")
+    uri = BACKEND.get_new_otp(token)
 
 
     img = qrcode.make(uri)
@@ -85,10 +92,11 @@ def otp_qr() -> Union[Response,Tuple[str,int]]:
 @bp.route("/login/config",methods=['GET','POST'])
 def configure_otp() -> Union[Response,str]:
     if ((BACKEND.is_otp_configured) or (request.method == 'POST')):
+        session["temp_token"] = True
         return redirect(url_for("main.login"))
 
-
-    return render_template("login.otp.html",csrf_token= generate_csrf())
+    token = request.args.get("token")
+    return render_template("login.otp.html",token=token,csrf_token= generate_csrf())
 
 
 # ACTION PAGES

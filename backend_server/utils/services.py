@@ -139,12 +139,9 @@ class SystemService:
 
 class SSHService(SystemService):
     port:int
-    username:str
-    password:str
 
-    def __init__(this,service_name,username,**kwargs):
+    def __init__(this,service_name,**kwargs):
         super().__init__(service_name,"/etc/ssh/sshd_config",**kwargs)
-        this._username = username
 
     def get_port(this):
         port = 22  # default
@@ -168,8 +165,6 @@ class SSHService(SystemService):
 
         return port
 
-    def get_username(this):
-        return this._username
 
     def set_port(this,new_port):
         orig_lines = read_lines_from_file(this.config_file)
@@ -201,62 +196,62 @@ class SSHService(SystemService):
         trans.run()
         os.remove(patch_fname)
 
-    def set_username(this,value):
-        cmd = UserModChangeUsername(this.get("username"),value)
+    # def set_username(this,value):
+    #     cmd = UserModChangeUsername(this.get("username"),value)
+    #
+    #     trans = LocalCommandLineTransaction(cmd)
+    #     output = trans.run()
+    #
+    #     if (len(output) == 1):
+    #         if (not trans.success):
+    #             raise Exception(f"Unable to change username: {output[0]['stderr']}")
+    #         else:
+    #             this._username = value
+    #
+    # def set_password(this,value):
+    #     shadow_cmd = GetEntShadow(this.get("username"))
+    #
+    #     trans = LocalCommandLineTransaction(shadow_cmd)
+    #     output = trans.run()
+    #
+    #     if (len(output)!=1):
+    #         raise Exception("Unable to retrieve the current password")
+    #
+    #     stdout_getent = output[0].get("stdout","").split(":",2)
+    #     uname = stdout_getent[0].strip()
+    #     shadow_password = stdout_getent[1].strip()
+    #
+    #     if (len(shadow_password) == 0):
+    #         raise Exception("Unable to retrieve the current password")
+    #
+    #     if (uname != this.get("username")):
+    #         raise Exception("Usernames don't match")
+    #
+    #     chpasswd = ChPasswd(uname,value,shadow_password)
+    #
+    #     trans = LocalCommandLineTransaction(chpasswd)
+    #     output = trans.run()
+    #
+    #     if ((len(output)!=1) or (output[0].get("returncode",-1) != 0)):
+    #         raise Exception(f"Unable to change password for `{uname}`")
 
-        trans = LocalCommandLineTransaction(cmd)
-        output = trans.run()
-
-        if (len(output) == 1):
-            if (not trans.success):
-                raise Exception(f"Unable to change username: {output[0]['stderr']}")
-            else:
-                this._username = value
-
-    def set_password(this,value):
-        shadow_cmd = GetEntShadow(this.get("username"))
-
-        trans = LocalCommandLineTransaction(shadow_cmd)
-        output = trans.run()
-
-        if (len(output)!=1):
-            raise Exception("Unable to retrieve the current password")
-
-        stdout_getent = output[0].get("stdout","").split(":",2)
-        uname = stdout_getent[0].strip()
-        shadow_password = stdout_getent[1].strip()
-
-        if (len(shadow_password) == 0):
-            raise Exception("Unable to retrieve the current password")
-
-        if (uname != this.get("username")):
-            raise Exception("Usernames don't match")
-
-        chpasswd = ChPasswd(uname,value,shadow_password)
-
-        trans = LocalCommandLineTransaction(chpasswd)
-        output = trans.run()
-
-        if ((len(output)!=1) or (output[0].get("returncode",-1) != 0)):
-            raise Exception(f"Unable to change password for `{uname}`")
-
-    def _update_data(this,port,username,password):
+    def _update_data(this,port):
         if (port != this.get("port")):
             this.set("port",port)
-        if (username != this.get("username")):
-            this.set("username",username)
-        if (len(password)!=0):
-            this.set("password",password)
+        # if (username != this.get("username")):
+        #     this.set("username",username)
+        # if (len(password)!=0):
+        #     this.set("password",password)
 
-    def enable(this,port,username,password,**kwargs):
-        this._update_data(int(port),username,password)
+    def enable(this,port,**kwargs):
+        this._update_data(int(port))
         this.start()
 
     def disable(this,*args,**kwargs):
         this.stop()
 
-    def update(this, port, username, password, **kwargs):
-        this._update_data(port, username, password)
+    def update(this, port, **kwargs):
+        this._update_data(port)
 
         cmd = SystemCtlRestart(this.service_names)
 
@@ -331,23 +326,23 @@ class NFSService(SystemService):
     ip:str
     default_options = ['rw','sync','no_subtree_check','all_squash']
 
-    def __init__(this,service_name,username,group,mountpoint=None,**kwargs):
+    def __init__(this,service_name,mountpoint=None,**kwargs):
         super().__init__(service_name,"/etc/exports",**kwargs)
         this._mountpoint = mountpoint
-        this._username = username
-        this._group = group
+        # this._username = username
+        # this._group = group
 
     @property
     def mountpoint(this):
         return this._mountpoint
 
-    @property
-    def uid(this):
-        return pwd.getpwnam(this._username).pw_uid
-
-    @property
-    def gid(this):
-        return grp.getgrnam(this._group).gr_gid
+    # @property
+    # def uid(this):
+    #     return pwd.getpwnam(this._username).pw_uid
+    #
+    # @property
+    # def gid(this):
+    #     return grp.getgrnam(this._group).gr_gid
 
     def get_ip(this):
         exports = read_lines_from_file(this.config_file)
@@ -424,22 +419,22 @@ class SMBService(SystemService):
     username:str
     SECTION = "NMS"
 
-    def __init__(this,username,mountpoint,service_name,**kwargs):
+    def __init__(this,mountpoint,service_name,**kwargs):
         super().__init__(service_name,config_file="/etc/samba/smb.conf")
-        this._username = username
+        # this._username = username
         this._mountpoint = mountpoint
 
     @property
     def mountpoint(this):
         return this._mountpoint
 
-    def get_username(this):
-        return this._username
+    # def get_username(this):
+    #     return this._username
+    #
+    # def set_username(this,uname):
+    #     this._username = uname
 
-    def set_username(this,uname):
-        this._username = uname
-
-    def _patch_configuration(this, username):
+    def _patch_configuration(this):
         if (this.mountpoint is None):
             raise Exception("You cannot activate this service if you don't set up a new disk array")
 
@@ -450,7 +445,6 @@ class SMBService(SystemService):
             'path': this.mountpoint,
             'browseable': "yes",
             'read only': 'no',
-            'valid users': username
         }
 
         new_output = io.StringIO()
@@ -472,39 +466,39 @@ class SMBService(SystemService):
         trans.run()
         os.remove(patch_fname)
 
-    def _smbpasswd(this,username,password=None,flag=None):
-        cmd = SMBPasswd(username=username,password=password,flag=flag)
-        trans = LocalCommandLineTransaction(cmd)
+    # def _smbpasswd(this,username,password=None,flag=None):
+    #     cmd = SMBPasswd(username=username,password=password,flag=flag)
+    #     trans = LocalCommandLineTransaction(cmd)
+    #
+    #     trans.run()
 
-        trans.run()
-
-    def _update_password(this,username,password):
-        this._smbpasswd(username,password,flag=SMBPasswd.Flags.UPDATE)
-
-    def _delete_user(this,username):
-        this._smbpasswd(username,flag=SMBPasswd.Flags.DELETE)
-
-    def _add_user(this,username,password):
-        this._smbpasswd(username,password,flag=SMBPasswd.Flags.ADD)
+    # def _update_password(this,username,password):
+    #     this._smbpasswd(username,password,flag=SMBPasswd.Flags.UPDATE)
+    #
+    # def _delete_user(this,username):
+    #     this._smbpasswd(username,flag=SMBPasswd.Flags.DELETE)
+    #
+    # def _add_user(this,username,password):
+    #     this._smbpasswd(username,password,flag=SMBPasswd.Flags.ADD)
 
 
     def enable(this,username,password,**kwargs):
-        this._patch_configuration(username)
+        this._patch_configuration()
 
-        if (password is not None):
-            this._add_user(username,password)
+        # if (password is not None):
+        #     this._add_user(username,password)
 
 
         this.start()
 
     def disable(this,username,**kwargs):
-        this._delete_user(username)
+        # this._delete_user(username)
         this.stop()
 
     def update(this,username,password,**kwargs):
-        this._patch_configuration(username)
-        if (password is not None):
-            this._update_password(username,password)
+        this._patch_configuration()
+        # if (password is not None):
+        #     this._update_password(username,password)
 
         this.stop()
         this.start()
@@ -528,7 +522,7 @@ class WEBService(SystemService):
         "IFM_AJAXREQUEST": "0"
     }
 
-    def __init__(this,service_name,mountpoint,port,username,group,authentication=None,credential=None,*args,**kwargs):
+    def __init__(this,service_name,mountpoint,port,username=None,group=None,authentication=None,credential=None,*args,**kwargs):
         this._mountpoint = mountpoint
         this._port = port
         this._username = username

@@ -70,10 +70,14 @@ def dashboard() -> str:
     if (BACKEND.is_pool_configured):
         dashboard_widgets.insert(0,widget_disk_usage())
 
+    user = BACKEND.get_current_user()
+    visible_name = user.get("visible_name")
+    uname = visible_name if visible_name else user.get("username")
 
     return render_template("dashboard.html",
                            active_page="dashboard",
                            csp_nonce=g.csp_nonce,
                            widgets=get_widgets_html(dashboard_widgets),
+                           uname = uname,
                            extra_css = get_widgets_css_files(dashboard_widgets)
                            )

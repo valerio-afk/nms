@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-02-12 10:18+0000\n"
+"POT-Creation-Date: 2026-02-14 01:57+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,39 +17,39 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.17.0\n"
 
-#: frontend/disks.py:56
+#: frontend/disks.py:56 templates/card.ddns.html:26
 msgid "Never"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:256
+#: frontend/api/backend_proxy.py:263
 msgid "Uptime"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:256
+#: frontend/api/backend_proxy.py:263
 msgid "Since"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:257
+#: frontend/api/backend_proxy.py:264
 msgid "NMS Version"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:258
+#: frontend/api/backend_proxy.py:265
 msgid "CPU"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:259
+#: frontend/api/backend_proxy.py:266
 msgid "OS"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:315 frontend/utils/forms.py:84
+#: frontend/api/backend_proxy.py:322 frontend/utils/forms.py:84
 msgid "Encryption"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:316 frontend/utils/forms.py:83
+#: frontend/api/backend_proxy.py:323 frontend/utils/forms.py:83
 msgid "Redundancy"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:317 frontend/utils/forms.py:85
+#: frontend/api/backend_proxy.py:324 frontend/utils/forms.py:85
 msgid "Compression"
 msgstr ""
 
@@ -139,7 +139,7 @@ msgid "The port number must be between %(port_min)s-%(port_max)s"
 msgstr ""
 
 #: frontend/utils/forms.py:122 frontend/utils/forms.py:134
-#: frontend/utils/forms.py:140
+#: frontend/utils/forms.py:140 templates/form.ddns.html:5
 msgid "Username"
 msgstr ""
 
@@ -150,7 +150,8 @@ msgid ""
 msgstr ""
 
 #: frontend/utils/forms.py:123 frontend/utils/forms.py:135
-#: frontend/utils/forms.py:143 templates/wifi_network_list.html:43
+#: frontend/utils/forms.py:143 templates/form.ddns.html:10
+#: templates/wifi_network_list.html:43
 msgid "Password"
 msgstr ""
 
@@ -200,163 +201,163 @@ msgstr ""
 
 #: frontend/utils/forms.py:166
 msgid "Public IP"
-msgstr "IP Pubblico"
-
-#: nms_shared/msg.py:166
-msgid "Unknown Error"
-msgstr ""
-
-#: nms_shared/msg.py:167
-msgid "Unknown response from server"
-msgstr ""
-
-#: nms_shared/msg.py:168
-#, python-format
-msgid "Error while getting %(prop)s: %(info)s"
-msgstr ""
-
-#: nms_shared/msg.py:169
-msgid "Form validation failed"
-msgstr ""
-
-#: nms_shared/msg.py:171
-msgid "The disk array is already configured."
-msgstr ""
-
-#: nms_shared/msg.py:172
-msgid "Disk array not configured yet."
-msgstr ""
-
-#: nms_shared/msg.py:173
-msgid "Disk array is configured."
 msgstr ""
 
 #: nms_shared/msg.py:174
-#, python-format
-msgid "Disk %(dev)s is not available to be in the new disk array."
+msgid "Unknown Error"
 msgstr ""
 
 #: nms_shared/msg.py:175
-#, python-format
-msgid "Unable to create a new disk array: %(info)s)"
+msgid "Unknown response from server"
 msgstr ""
 
 #: nms_shared/msg.py:176
 #, python-format
-msgid "Unable to destroy the disk array: %(info)s)"
+msgid "Error while getting %(prop)s: %(info)s"
 msgstr ""
 
 #: nms_shared/msg.py:177
-msgid "You must have at least 3 disks connected to opt in redundancy."
-msgstr ""
-
-#: nms_shared/msg.py:178
-#, python-format
-msgid "Error while adding %(dev)s: %(info)s"
+msgid "Form validation failed"
 msgstr ""
 
 #: nms_shared/msg.py:179
-#, python-format
-msgid "Could not retrieve information for the disk: %(dev)s"
+msgid "The disk array is already configured."
 msgstr ""
 
 #: nms_shared/msg.py:180
-#, python-format
-msgid "Unable to get array expansion status: %(info)s"
+msgid "Disk array not configured yet."
 msgstr ""
 
 #: nms_shared/msg.py:181
-#, python-format
-msgid "Error while retrieving the encryption key: %(info)s"
+msgid "Disk array is configured."
 msgstr ""
 
 #: nms_shared/msg.py:182
 #, python-format
-msgid "Error while importing the encryption key: %(info)s"
+msgid "Disk %(dev)s is not available to be in the new disk array."
 msgstr ""
 
 #: nms_shared/msg.py:183
 #, python-format
-msgid "Error while attaching an existing pool: %(info)s"
+msgid "Unable to create a new disk array: %(info)s)"
 msgstr ""
 
 #: nms_shared/msg.py:184
-msgid "Unable to retrieve the list of pools."
+#, python-format
+msgid "Unable to destroy the disk array: %(info)s)"
 msgstr ""
 
 #: nms_shared/msg.py:185
-#, python-format
-msgid "Error while recovering the disk array: %(info)s"
+msgid "You must have at least 3 disks connected to opt in redundancy."
 msgstr ""
 
 #: nms_shared/msg.py:186
 #, python-format
-msgid "Error while retrieving the disks in the array: %(info)s"
+msgid "Error while adding %(dev)s: %(info)s"
 msgstr ""
 
 #: nms_shared/msg.py:187
 #, python-format
-msgid "Unable to replace %(dev1)s with %(dev2)s: %(info)s"
+msgid "Could not retrieve information for the disk: %(dev)s"
 msgstr ""
 
 #: nms_shared/msg.py:188
 #, python-format
-msgid "Error while detaching the disk array: %(info)s"
+msgid "Unable to get array expansion status: %(info)s"
 msgstr ""
 
 #: nms_shared/msg.py:189
 #, python-format
-msgid "Error while mounting the disk array: %(info)s"
+msgid "Error while retrieving the encryption key: %(info)s"
 msgstr ""
 
 #: nms_shared/msg.py:190
 #, python-format
-msgid "Error while unmounting the disk array: %(info)s"
+msgid "Error while importing the encryption key: %(info)s"
 msgstr ""
 
 #: nms_shared/msg.py:191
-msgid "Disk array is mounted."
+#, python-format
+msgid "Error while attaching an existing pool: %(info)s"
 msgstr ""
 
 #: nms_shared/msg.py:192
-msgid "Disk array is unmounted."
+msgid "Unable to retrieve the list of pools."
 msgstr ""
 
 #: nms_shared/msg.py:193
 #, python-format
-msgid "Error while verifying the disk array: %(info)s."
+msgid "Error while recovering the disk array: %(info)s"
 msgstr ""
 
 #: nms_shared/msg.py:194
-msgid "The provided mount point is not valid."
+#, python-format
+msgid "Error while retrieving the disks in the array: %(info)s"
 msgstr ""
 
 #: nms_shared/msg.py:195
 #, python-format
-msgid "Error while retrieving the mount information the disk array: %(info)s"
+msgid "Unable to replace %(dev1)s with %(dev2)s: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:196
+#, python-format
+msgid "Error while detaching the disk array: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:197
+#, python-format
+msgid "Error while mounting the disk array: %(info)s"
 msgstr ""
 
 #: nms_shared/msg.py:198
 #, python-format
-msgid "Error while retrieving the mount point: %(info)s"
+msgid "Error while unmounting the disk array: %(info)s"
 msgstr ""
 
 #: nms_shared/msg.py:199
-#, python-format
-msgid "Error while removing the mount point: %(info)s"
+msgid "Disk array is mounted."
 msgstr ""
 
 #: nms_shared/msg.py:200
-#, python-format
-msgid "Error while formatting the disk array: %(info)s"
+msgid "Disk array is unmounted."
 msgstr ""
 
 #: nms_shared/msg.py:201
 #, python-format
+msgid "Error while verifying the disk array: %(info)s."
+msgstr ""
+
+#: nms_shared/msg.py:202
+msgid "The provided mount point is not valid."
+msgstr ""
+
+#: nms_shared/msg.py:203
+#, python-format
+msgid "Error while retrieving the mount information the disk array: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:206
+#, python-format
+msgid "Error while retrieving the mount point: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:207
+#, python-format
+msgid "Error while removing the mount point: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:208
+#, python-format
+msgid "Error while formatting the disk array: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:209
+#, python-format
 msgid "Unable to read disk array capacity information: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:204
+#: nms_shared/msg.py:212
 msgid ""
 "One or more disks cannot be opened. Your disk array CANNOT be used in "
 "this state. Run a diagnostic to see if the disk is getting faulted and "
@@ -364,7 +365,7 @@ msgid ""
 "page (this can likely cause data loss)."
 msgstr ""
 
-#: nms_shared/msg.py:205
+#: nms_shared/msg.py:213
 msgid ""
 "One or more disks seems missing. Your disk array CANNOT be used in this "
 "state. Insert back the missing disk. If the disk is inserted and still "
@@ -372,7 +373,7 @@ msgid ""
 "cause data loss)."
 msgstr ""
 
-#: nms_shared/msg.py:206
+#: nms_shared/msg.py:214
 msgid ""
 "The information related your disk array are corrupted. Recovery may be "
 "possible (but not guaranteed) and some data loss can occur. Use the "
@@ -381,156 +382,179 @@ msgid ""
 " disks if their diagnostics suggest so."
 msgstr ""
 
-#: nms_shared/msg.py:207
+#: nms_shared/msg.py:215
 msgid "Your disk array seems to be outdated and cannot be used anymore."
 msgstr ""
 
-#: nms_shared/msg.py:210
+#: nms_shared/msg.py:218
 msgid "Invalid authorisation."
 msgstr ""
 
-#: nms_shared/msg.py:211
+#: nms_shared/msg.py:219
 msgid "Authorisation token expired."
 msgstr ""
 
-#: nms_shared/msg.py:212
+#: nms_shared/msg.py:220
 msgid "Authorisation token revoked."
 msgstr ""
 
-#: nms_shared/msg.py:213
+#: nms_shared/msg.py:221
 msgid "Authorisation token malformed."
 msgstr ""
 
-#: nms_shared/msg.py:214
+#: nms_shared/msg.py:222
 msgid "OTP secret not configured yet."
 msgstr ""
 
-#: nms_shared/msg.py:215
+#: nms_shared/msg.py:223
 msgid "Invalid OTP."
-msgstr ""
-
-#: nms_shared/msg.py:217
-#, python-format
-msgid "Unable to attach new device to disk array: %(details)s"
-msgstr ""
-
-#: nms_shared/msg.py:218
-#, python-format
-msgid "Error while formatting %(dev)s: %(info)s"
-msgstr ""
-
-#: nms_shared/msg.py:220
-#, python-format
-msgid "Unable to change permissions for %(path)s: %(info)s"
-msgstr ""
-
-#: nms_shared/msg.py:222
-#, python-format
-msgid "Unable to get system updates: %(info)s"
-msgstr ""
-
-#: nms_shared/msg.py:224
-#, python-format
-msgid "Error while enabling %(service)s: %(info)s)"
 msgstr ""
 
 #: nms_shared/msg.py:225
 #, python-format
-msgid "Error while disabling %(service)s: %(info)s)"
+msgid "Unable to attach new device to disk array: %(details)s"
 msgstr ""
 
 #: nms_shared/msg.py:226
 #, python-format
+msgid "Error while formatting %(dev)s: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:228
+#, python-format
+msgid "Unable to change permissions for %(path)s: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:230
+#, python-format
+msgid "Unable to get system updates: %(info)s"
+msgstr ""
+
+#: nms_shared/msg.py:232
+#, python-format
+msgid "Error while enabling %(service)s: %(info)s)"
+msgstr ""
+
+#: nms_shared/msg.py:233
+#, python-format
+msgid "Error while disabling %(service)s: %(info)s)"
+msgstr ""
+
+#: nms_shared/msg.py:234
+#, python-format
 msgid "Unable to disable %(service)s. Please, disable it manually."
 msgstr ""
 
-#: nms_shared/msg.py:227
+#: nms_shared/msg.py:235
 #, python-format
 msgid "Access service %(service)s not recognised."
 msgstr ""
 
-#: nms_shared/msg.py:229
+#: nms_shared/msg.py:237
 #, python-format
 msgid ""
 "Error while changing the state of the network interface %(iface)s: "
 "%(info)s"
-msgstr "Errore durante la modifica dell'interfaccia di rete %(iface)s: "
-"%(info)s"
+msgstr ""
 
-#: nms_shared/msg.py:230
+#: nms_shared/msg.py:238
 #, python-format
 msgid "Error while retrieving the connection status for %(iface)s: %(info)s"
-msgstr "Errore durante la lettura dello stato di connenssione per %(iface)s: %(info)s"
+msgstr ""
 
-#: nms_shared/msg.py:231
+#: nms_shared/msg.py:239
 msgid "Invalid subnet mask"
-msgstr "Maschera di sottorete non valida"
+msgstr ""
 
-#: nms_shared/msg.py:232
+#: nms_shared/msg.py:240
 msgid "Invalid IP address "
-msgstr "Indirizzo IP non valido"
+msgstr ""
 
-#: nms_shared/msg.py:233
+#: nms_shared/msg.py:241
 msgid "Invalid gateway"
-msgstr "Gateway non valido"
+msgstr ""
 
-#: nms_shared/msg.py:234
+#: nms_shared/msg.py:242
 msgid "Invalid DNS address(es)"
-msgstr "Indirizzi DNS non validi"
+msgstr ""
 
-#: nms_shared/msg.py:235
+#: nms_shared/msg.py:243
 #, python-format
 msgid "Error while retrieving the list of WiFi networks for %(iface)s: %(info)s"
-msgstr "Errore nell'ottenere la lista delle reti WiFi per %(iface)s: %(info)s"
+msgstr "Errore nell'ottenere la lista di reti WiFi per %(iface)s: %(info)s"
 
-#: nms_shared/msg.py:236
+#: nms_shared/msg.py:244
 #, python-format
 msgid "Unable to connect to `%(ssid)s`: %(info)s"
 msgstr "Impossibile connettersi a `%(ssid)s`: %(info)s"
 
-#: nms_shared/msg.py:237
+#: nms_shared/msg.py:245
 msgid "VPN service not configured."
-msgstr "VPN non configurata."
+msgstr "Servizio VPN non configurato."
 
-#: nms_shared/msg.py:238
+#: nms_shared/msg.py:246
 #, python-format
 msgid "Unable to get the state of the VPN service: %(info)s"
-msgstr "Impossibile ottenere lo stato della VPN: %(info)s"
+msgstr "Impossibile ottenere lo stato del servizio VPN: %(info)s"
 
-#: nms_shared/msg.py:239
+#: nms_shared/msg.py:247
 #, python-format
 msgid "Error while retrieving the VPN key: %(info)s"
 msgstr "Errore nell'ottenere la chiave VPN: %(info)s"
 
-#: nms_shared/msg.py:240
+#: nms_shared/msg.py:248
 #, python-format
 msgid "Error occurred while generating the private key: %(info)s"
-msgstr "Errore durante la generazione della chiave privata: %(info)s"
+msgstr "Errore nel generare la chiave privata: %(info)s"
 
-#: nms_shared/msg.py:241
+#: nms_shared/msg.py:249
 #, python-format
 msgid "Error occurred while generating the public key: %(info)s"
-msgstr "Errore durante la generazione della chiave pubblica: %(info)s"
+msgstr "Errore nel generare la chiave pubblica: %(info)s"
 
-#: nms_shared/msg.py:242
+#: nms_shared/msg.py:250
 #, python-format
 msgid "Error occurred while reading the VPN configuration file: %(info)s"
-msgstr "Errore durante la lettura della configurazione VPN: %(info)s"
+msgstr "Errore durante la lettura del file di configurazione VPN: %(info)s"
 
-#: nms_shared/msg.py:243
+#: nms_shared/msg.py:251
 #, python-format
 msgid "VPN device `%(user)s` not found."
 msgstr "Dispositivo VPN `%(user)s` non trovato."
 
-#: nms_shared/msg.py:244
+#: nms_shared/msg.py:252
 msgid "VPN device not valid."
 msgstr "Dispositivo VPN non valido"
 
-#: nms_shared/msg.py:245
+#: nms_shared/msg.py:253
 msgid "You have reached the maximum number of devices."
 msgstr "Hai raggiunto il numero massimo di dispositivi."
 
-#: nms_shared/msg.py:249
+#: nms_shared/msg.py:254
+msgid "Invalid dynamic DNS provider `%(provider)`."
+msgstr "Provider di DNS Dinamico `%(provider)` non valido."
+
+#: nms_shared/msg.py:255
+#, python-format
+msgid ""
+"Error occurred during the execution of the dynamic DNS provider "
+"`%(provider)s`: %(info)s"
+msgstr "Errore durante l'esecuzione del provider di DNS Dinamico "
+"`%(provider)s`: %(info)s"
+
+#: nms_shared/msg.py:256
+msgid ""
+"Missing Dynamic DNS configuration. Check if username/domain and "
+"password/token are properly set for the chosen provider."
+msgstr "Configurazione DNS Dinamico mancante. Controlla se lo username/dominio e la password/token "
+"sono impostati correttamente per il provider scelto"
+
+#: nms_shared/msg.py:258
+#, python-format
+msgid "User %(user)s not found."
+msgstr "Utente %(user)s non trovato."
+
+#: nms_shared/msg.py:262
 msgid ""
 "One or more disks cannot be opened. As you have redundancy activated, you"
 " can still use your disk array. Run a diagnostic to see if the disk is "
@@ -538,7 +562,7 @@ msgid ""
 "it in the Advanced page."
 msgstr ""
 
-#: nms_shared/msg.py:250
+#: nms_shared/msg.py:263
 msgid ""
 "One or more disks seems missing. As you have redundancy activated, you "
 "can still use your disk array. Insert back the missing disk. If the disk "
@@ -546,7 +570,7 @@ msgid ""
 "Management page."
 msgstr ""
 
-#: nms_shared/msg.py:251
+#: nms_shared/msg.py:264
 msgid ""
 "Some files and/or directories are corrupted and data cannot be recovered."
 " If the problem persists, back up your data, destroy and create a new "
@@ -554,141 +578,167 @@ msgid ""
 "so."
 msgstr ""
 
-#: nms_shared/msg.py:252
+#: nms_shared/msg.py:265
 msgid ""
 "One or more disks appear to experience some problems. No imminent actions"
 " are required at the moment. However, you should investigate which "
 "disk(s) is getting old and consider replacing it."
 msgstr ""
 
-#: nms_shared/msg.py:253
+#: nms_shared/msg.py:266
 msgid ""
 "Your disk array is experiencing some format issues. To solve this issue, "
 "press `Verify` in the Disk Management page."
 msgstr ""
 
-#: nms_shared/msg.py:254
+#: nms_shared/msg.py:267
 msgid "You need to configure your disk array before enabling any access services"
 msgstr ""
 
-#: nms_shared/msg.py:255
+#: nms_shared/msg.py:268
 msgid ""
 "One or more of your disks in the array is offline. If redundancy is "
 "active, you can still use the array. Please, reinsert or replace your "
 "disk soon."
 msgstr ""
 
-#: nms_shared/msg.py:259
+#: nms_shared/msg.py:272
 msgid "Disk array created successfully."
 msgstr ""
 
-#: nms_shared/msg.py:260
+#: nms_shared/msg.py:273
 msgid "Disk array expanded successfully."
 msgstr ""
 
-#: nms_shared/msg.py:261
+#: nms_shared/msg.py:274
 msgid "Disk array formatted successfully."
 msgstr ""
 
-#: nms_shared/msg.py:262
+#: nms_shared/msg.py:275
 msgid "Disk array destroyed successfully."
 msgstr ""
 
-#: nms_shared/msg.py:263
+#: nms_shared/msg.py:276
 msgid "Disk array mounted successfully."
 msgstr ""
 
-#: nms_shared/msg.py:264
+#: nms_shared/msg.py:277
 msgid "Disk array unmounted successfully."
 msgstr ""
 
-#: nms_shared/msg.py:265
+#: nms_shared/msg.py:278
 msgid "Disk array verification performed successfully."
 msgstr ""
 
-#: nms_shared/msg.py:266
+#: nms_shared/msg.py:279
 msgid "Disk replaced successfully."
 msgstr ""
 
-#: nms_shared/msg.py:268
+#: nms_shared/msg.py:281
 msgid "System updates retrieved successfully."
 msgstr ""
 
-#: nms_shared/msg.py:269
+#: nms_shared/msg.py:282
 msgid "System updates installed successfully."
 msgstr ""
 
-#: nms_shared/msg.py:271
+#: nms_shared/msg.py:284
 msgid ""
 "OTP Accepted. Please press again the button of the desired dangerous "
 "operation to continue."
 msgstr ""
 
-#: nms_shared/msg.py:273
+#: nms_shared/msg.py:286
 msgid "Disk array recovery attempted."
 msgstr ""
 
-#: nms_shared/msg.py:275
+#: nms_shared/msg.py:288
 #, python-format
 msgid "Service %(service)s enabled successfully."
 msgstr ""
 
-#: nms_shared/msg.py:276
+#: nms_shared/msg.py:289
 #, python-format
 msgid "Service %(service)s settings updated successfully."
 msgstr ""
 
-#: nms_shared/msg.py:277
+#: nms_shared/msg.py:290
 #, python-format
 msgid "Service %(service)s disabled successfully."
 msgstr ""
 
-#: nms_shared/msg.py:279
+#: nms_shared/msg.py:292
 #, python-format
 msgid "Disk %(dev)s formatted successfully."
 msgstr ""
 
-#: nms_shared/msg.py:281
+#: nms_shared/msg.py:294
 msgid "VPN private and public keys generated successfully."
-msgstr "Chiavi pubbliche e private della VPN generate con successo."
+msgstr ""
 
-#: nms_shared/msg.py:282
+#: nms_shared/msg.py:295
 msgid "VPN configuration changes applied successfully."
-msgstr "Configurazione VPN cambiata con successo."
+msgstr ""
 
-#: nms_shared/msg.py:283
+#: nms_shared/msg.py:296
 #, python-format
 msgid "Network configuration changes for %(iface)s applied successfully."
-msgstr "Impostazioni di rete per %(iface)s applicate con successo."
+msgstr ""
 
-#: nms_shared/msg.py:284
+#: nms_shared/msg.py:297
 #, python-format
 msgid "Device `%(peer)s` deleted successfully."
-msgstr "Dispositivo %(peer)s` cancellato con successo."
+msgstr ""
 
-#: nms_shared/msg.py:285
+#: nms_shared/msg.py:298
 #, python-format
 msgid "Device `%(peer)s` added successfully."
-msgstr "Dispositivo %(peer)s` aggiunto con successo."
+msgstr ""
 
-#: nms_shared/msg.py:290
+#: nms_shared/msg.py:299
+#, python-format
+msgid "Dynamic DNS provider `%(provider)s` enabled successfully."
+msgstr ""
+
+#: nms_shared/msg.py:300
+#, python-format
+msgid "Dynamic DNS provider `%(provider)s` disabled successfully."
+msgstr ""
+
+#: nms_shared/msg.py:306
 #, python-format
 msgid "Disk expansion is expected to take %(eta)s."
 msgstr ""
 
-#: nms_shared/msg.py:291
+#: nms_shared/msg.py:307
 msgid "Disk expansion in progress."
 msgstr ""
 
-#: nms_shared/msg.py:292
+#: nms_shared/msg.py:308
 msgid "Disk replacement in progress. This operation may take a while."
-msgstr ""
+msgstr "Sostituzione disco in corso. Questa operazione potrebbe richiedere del tempo."
 
-#: templates/access.html:3 templates/index.html:36
+#: templates/401.html:13
+msgid "Unauthorized Access"
+msgstr "Accesso non autorizzato"
+
+#: templates/401.html:17
+msgid "You do not have permission to access this resource."
+msgstr "Non hai i permessi necessari per accedere."
+
+#: templates/401.html:18
+msgid "Please log in with appropriate credentials or contact the administrator."
+msgstr "Effettua il login con le credenziali appropriate oppure contatta l'amministratore."
+
+#: templates/401.html:24
+msgid "Go to Login"
+msgstr "Vai a Login"
+
+#: templates/access.html:3 templates/index.html:39
 msgid "Remote Access"
 msgstr ""
 
-#: templates/advanced.html:3 templates/index.html:39
+#: templates/advanced.html:3 templates/index.html:42
 msgid "Advanced"
 msgstr ""
 
@@ -710,13 +760,17 @@ msgstr ""
 
 #: templates/card.access.ftp.html:12 templates/card.access.nfs.html:32
 #: templates/card.access.smb.html:38 templates/card.access.ssh.html:44
-#: templates/card.access.web.html:50
+#: templates/card.access.web.html:50 templates/form.ddns.dnsexit.html:19
+#: templates/form.ddns.duckdns.html:19 templates/form.ddns.freedns.html:15
+#: templates/form.ddns.html:19
 msgid "Disable"
 msgstr ""
 
 #: templates/card.access.ftp.html:18 templates/card.access.nfs.html:38
 #: templates/card.access.smb.html:44 templates/card.access.ssh.html:50
-#: templates/card.access.web.html:56
+#: templates/card.access.web.html:56 templates/form.ddns.dnsexit.html:15
+#: templates/form.ddns.duckdns.html:15 templates/form.ddns.freedns.html:11
+#: templates/form.ddns.html:15
 msgid "Enable"
 msgstr ""
 
@@ -862,7 +916,7 @@ msgstr ""
 
 #: templates/card.access.smb.html:35
 msgid "Change Password"
-msgstr ""
+msgstr "Cambia Password"
 
 #: templates/card.access.smb.html:66
 #, python-format
@@ -1076,6 +1130,18 @@ msgstr ""
 
 #: templates/card.danger_zone.html:28
 msgid "Format Disk"
+msgstr ""
+
+#: templates/card.ddns.html:3
+msgid "Dynamic DNS"
+msgstr ""
+
+#: templates/card.ddns.html:25
+msgid "Last Update"
+msgstr ""
+
+#: templates/card.ddns.html:32
+msgid "Next Update"
 msgstr ""
 
 #: templates/card.disk.html:3
@@ -1315,26 +1381,26 @@ msgstr ""
 
 #: templates/card.vpn.html:46
 msgid "Get Public Key"
-msgstr "Scarica Chiave Pubblica"
+msgstr ""
 
 #: templates/card.vpn.html:50
 msgid "Regenerate Keys"
-msgstr "Rigenera Chiavi"
+msgstr ""
 
 #: templates/card.vpn.html:56
 #, python-format
 msgid ""
 "Use the public key to configure the %(st_link)sWireGuard%(e_link)s on "
 "your device(s)."
-msgstr "Usa la chiave pubblica per configure %(st_link)sWireGuard%(e_link)s sui tuoi dispositivi."
+msgstr ""
 
 #: templates/card.vpn.html:62
 msgid "Allowed Devices"
-msgstr "Dispositivi Approvati"
+msgstr ""
 
 #: templates/card.vpn.html:79
 msgid "Public Key"
-msgstr "Chiave Pubblica"
+msgstr ""
 
 #: templates/card.vpn.html:91
 #, python-format
@@ -1343,13 +1409,14 @@ msgid ""
 "%(st_link1)sWireGuard%(e_link)s. %(st_link2)sRead this%(e_link)s page to "
 "learn how to generate private and public keys from your end. An example "
 "configuration file is provided below:"
-msgstr "Per configurare i tuoi dispositivi, devi installare "
-"%(st_link1)sWireGuard%(e_link)s. %(st_link2)sLeggiq questa guida %(e_link)s "
-"per apprendere come generare le chiavi pubbliche e private. Un file di configurazione "
-"d'esempio è mostrato di seguito:"
+msgstr ""
 
 #: templates/dashboard.html:3 templates/index.html:6 templates/index.html:27
 msgid "Dashboard"
+msgstr ""
+
+#: templates/dashboard.html:7
+msgid "Welcome"
 msgstr ""
 
 #: templates/disk_smart.html:3
@@ -1360,27 +1427,43 @@ msgstr ""
 msgid "Disk Information"
 msgstr ""
 
-#: templates/index.html:81
+#: templates/form.ddns.dnsexit.html:5 templates/form.ddns.duckdns.html:5
+msgid "Domain"
+msgstr ""
+
+#: templates/form.ddns.dnsexit.html:10
+msgid "API Key"
+msgstr ""
+
+#: templates/form.ddns.duckdns.html:10 templates/form.ddns.freedns.html:6
+msgid "Token"
+msgstr ""
+
+#: templates/index.html:36
+msgid "Users"
+msgstr ""
+
+#: templates/index.html:84
 msgid "Are you sure you want to log out?"
 msgstr ""
 
-#: templates/index.html:81
+#: templates/index.html:84
 msgid "Logout"
 msgstr ""
 
-#: templates/index.html:83
+#: templates/index.html:86
 msgid "Are you sure you want to reboot the system?"
 msgstr ""
 
-#: templates/index.html:83
+#: templates/index.html:86
 msgid "Reboot"
 msgstr ""
 
-#: templates/index.html:84
+#: templates/index.html:87
 msgid "Are you sure you want to power off the system?"
 msgstr ""
 
-#: templates/index.html:84
+#: templates/index.html:87
 msgid "Shutdown"
 msgstr ""
 
@@ -1449,7 +1532,7 @@ msgstr ""
 
 #: templates/network.html:30
 msgid "Understood"
-msgstr ""
+msgstr "Ho capito"
 
 #: templates/warning.no_hdd.html:2
 msgid "No hard drive inserted!"
@@ -1457,13 +1540,13 @@ msgstr ""
 
 #: templates/wifi_network_list.html:36
 msgid "Insert network name manually"
-msgstr ""
+msgstr "Inserisci nome della rete manualmente"
 
 #: templates/wifi_network_list.html:44
 msgid "If required"
-msgstr ""
+msgstr "Se richiesto"
 
 #: templates/wifi_network_list.html:49
 msgid "Connect"
-msgstr ""
+msgstr "Connetti"
 

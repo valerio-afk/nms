@@ -1,6 +1,9 @@
 import datetime
-from enum import Enum
-from flask import flash, session
+
+import werkzeug.exceptions
+
+from nms_shared.enums import RequestMethod
+from flask import flash, session, abort
 from flask_babel import _
 from traceback import format_exc
 from frontend.api.tasks import BackgroundTask, ResilverStatusTask
@@ -71,10 +74,6 @@ def make_flash(data:dict) -> None:
 
 unknown_response = lambda : show_flash(code=ErrorMessages.E_UNKNOWN_RESPONSE.name)
 
-class RequestMethod(Enum):
-    GET = "GET"
-    POST = "POST"
-
 class BackEndProxy:
     TOKEN_LONGEVITY:int = 30 # 30 mins
     API = "http://localhost:8000"
@@ -132,6 +131,8 @@ class BackEndProxy:
         except HTTPError as err:
             if (not ignore_exception):
                 try:
+                    if (err.response.status_code == 401):
+                        abort(401)
                     if (err.response.status_code == 422):
                         error = f"URL: {err.request.url}\n"
                         error+= f"Data: {err.request.body}\n"
@@ -150,7 +151,7 @@ class BackEndProxy:
                         raise NotAuthenticatedError()
 
                     make_flash(detail)
-                except RuntimeError as err:
+                except (RuntimeError,werkzeug.exceptions.Unauthorized) as err:
                     raise err
                 except Exception as e:
                     show_flash(code=ErrorMessages.E_UNKNOWN.name)
@@ -230,10 +231,16 @@ class BackEndProxy:
         r =  this._get_bool_property_request("auth/otp","is_configured")
         return r if r is not None else True
 
-    @property
-    def is_new_otp_ready(this):
-        r = this._get_bool_property_request("auth/otp", "is_new_otp_ready")
-        return r if r is not None else True
+    # @property
+    # def is_new_otp_ready(this):
+    #     r = this._get_bool_property_request("auth/otp", "is_new_otp_ready")
+    #     return r if r is not None else True
+
+    # USERS PROPERTIES
+    def get_current_user(this) -> dict:
+        return this._request("users/get")
+
+
 
 
     #SYSTEM PROPERTIES
@@ -450,11 +457,11 @@ class BackEndProxy:
        if (r is not None) and ((new_token := r.get("token")) is not None):
            this.set_session_token("login",new_token)
 
-    def reset_otp_secret(this) -> None:
-        this._request("auth/otp/reset",RequestMethod.POST)
+    # def reset_otp_secret(this) -> None:
+    #     this._request("auth/otp/reset",RequestMethod.POST)
 
-    def get_new_otp(this) -> Optional[str]:
-        r = this._request("auth/otp/new",RequestMethod.GET)
+    def get_new_otp(this,token) -> Optional[str]:
+        r = this._request("auth/otp/new",RequestMethod.GET,qstring_params={"token":token})
 
         if (isinstance(r, dict)):
             return r.get("provisioning_uri")
@@ -607,7 +614,7 @@ class BackEndProxy:
         this._request(f"net/vpn/peers/remove",RequestMethod.POST,qstring_params={"name":peer})
 
     def ddns_enable(this,provider:str,config:Dict[str,str]) -> None:
-        if (config.get("username") is None):
+        if ((config.get("username") is None) and (config.get("password") is None)):
             config = None
 
         this._request(f"net/ddns/{provider}/start",RequestMethod.POST,body_params=config)

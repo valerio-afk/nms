@@ -1,9 +1,10 @@
 from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet, UserModChangeHomeDir
 from backend_server.utils.cmdl import ZPoolList
 from backend_server.utils.logger import Logger
-from backend_server.utils.responses import ErrorMessage
+from backend_server.utils.responses import ErrorMessage, UserProfile
 from backend_server.utils.services import SystemService
-from backend_server.utils.threads import NetIOCounter, DDNSNoIP, LongWaitThread, DDNSServiceThread, DuckDNS, DynuDDNS
+from backend_server.utils.threads import NetIOCounter, DDNSNoIP, LongWaitThread, DDNSServiceThread, DuckDNS, DynuDDNS, \
+    FreeDNS, DNSExit, Dynv6, ClouDNS
 from cryptography.fernet import Fernet
 from fastapi import HTTPException
 from importlib import import_module
@@ -29,7 +30,7 @@ class NMSConfig(Logger):
         super().__init__()
         this._config_file = config_file
         this._cfg = {}
-        this._tmp_secret = None
+        this._tmp_secret = {}
         this._daemons = {
             'netcounter': NetIOCounter()
         }
@@ -51,21 +52,21 @@ class NMSConfig(Logger):
 
     def _setup_access_services(this) -> None:
         module = import_module("backend_server.utils.services")
-        account = this._cfg.get("access",{}).get("account",{})
+        # account = this._cfg.get("access",{}).get("account",{})
 
 
         for service,args in this._cfg.get("access",{}).get("services",{}).items():
             try:
                 cls = getattr(module,f"{service.upper()}Service")
                 arguments = args.copy()
-                arguments.update(account)
+                # arguments.update(account)
                 arguments['mountpoint'] = this.mountpoint
                 this._access_services[service] = cls(**arguments)
             except AttributeError:
                 ... #service not implemented yet
 
-        this._access_services['ssh'].add_change_hook("username", this._sys_username_changed)
-        this._access_services['ftp'].add_pre_start_hook(this._set_pwd)
+        # this._access_services['ssh'].add_change_hook("username", this._sys_username_changed)
+        # this._access_services['ftp'].add_pre_start_hook(this._set_pwd)
         this._access_services['web'].add_change_hook("port", this._web_port_changed)
         this._access_services['web'].add_change_hook("credential", this._web_credentials_changed)
         this._access_services['web'].add_change_hook("authentication", this._web_authentication_changed)
@@ -128,23 +129,26 @@ class NMSConfig(Logger):
 
     @property
     def is_otp_configured(this) -> bool:
-        return this.otp_secret is not None
+        secrets = this.otp_secrets
+        return len(secrets) > 0
 
     @property
-    def temporary_otp_secret(this) -> Optional[str]:
-        return this._tmp_secret
-
-    @temporary_otp_secret.setter
-    def temporary_otp_secret(this,value:Optional[str]) -> None:
-        this._tmp_secret = value
+    def temporary_otp_secrets(this) -> Dict[str, str]:
+        return {k:v for k,v in this._tmp_secret.items()}
+    #
+    # @temporary_otp_secret.setter
+    # def temporary_otp_secret(this,value:Optional[str]) -> None:
+    #     this._tmp_secret = value
 
     @property
-    def otp_secret(this) -> Optional[str]:
-        return this._cfg['access'].get("otp_secret")
+    def otp_secrets(this) -> Dict[str,str]:
+        users = this._cfg.get("users",{})
 
-    @otp_secret.setter
-    def otp_secret(this, value:Optional[str]) -> None:
-        this._cfg['access']["otp_secret"] = value
+        return {uname:secret for uname,props in users.items() if (secret:=props.get("otp_secret")) is not None }
+
+    # @otp_secret.setter
+    # def otp_secret(this, value:Optional[str]) -> None:
+    #     this._cfg['access']["otp_secret"] = value
 
     @property
     def issued_tokens(this) -> List[str]:
@@ -369,6 +373,14 @@ class NMSConfig(Logger):
 
     def create_default_config_file(this) -> None:
         this.info(f"Creating default configuration file")
+
+        ddns_def = {
+            "enabled": False,
+            "username": None,
+            "password": None,
+            "last_update": None,
+        }
+
         cfg = {
             "pool" : {
                 "name": None,
@@ -384,12 +396,16 @@ class NMSConfig(Logger):
                 }
             },
             "dataset": None,
+            "root": {
+                "user": {
+                    "otp_secret": None,
+                    "fullname": "Admin",
+                    "permissions": ["*"],
+                    "quota": None,
+                    "ssh_uid": 1000
+                }
+            },
             "access": {
-                "account" : {
-                  "otp_secret": None,
-                  "username": "tuttoweb",
-                  "group": "users"
-                },
                 "services":
                     {
                         "ssh": {
@@ -415,6 +431,15 @@ class NMSConfig(Logger):
                 "peers": [],
                 "endpoint": None
             },
+            "ddns": {
+                "noip":    ddns_def.copy(),
+                "duckdns": ddns_def.copy(),
+                "dynu":    ddns_def.copy(),
+                "freedns": ddns_def.copy(),
+                "dnsexit": ddns_def.copy(),
+                "dynv6":   ddns_def.copy(),
+                "cloudns": ddns_def.copy()
+            },
             "systemd": {
                 "services": ['nmswebapp.service','nmsbackend.service','wg-quick@wg0.service']
             }
@@ -435,6 +460,20 @@ class NMSConfig(Logger):
         except Exception as e:
             this.error(f"Unable to flush the configuration file `{this.config_filename}`: {str(e)}")
 
+    # USERS METHODS
+
+    def user_permissions(this,username:str)->List[str]:
+        u = this.get_user(username)
+
+        return [] if u is None else u.permissions
+
+    def get_user(this,username:str)->Optional[UserProfile]:
+        user = this._cfg.get("users", {}).get(username, None)
+
+        if user is not None:
+            return UserProfile(username=username,visible_name=user["fullname"],permissions=user["permissions"])
+
+
     #AUTH/OTP METHODS
 
     def add_issued_token(this,token:str,expire_date:datetime.datetime) -> None:
@@ -443,10 +482,41 @@ class NMSConfig(Logger):
     def revoke_token(this,token:str) -> None:
         del this._issued_tokens[token]
 
-    def save_otp_secret(this) -> None:
-        this._cfg['access']["otp_secret"] = this.temporary_otp_secret
-        this.temporary_otp_secret = None
+    def is_otp_configured_for(this,username:str)->bool:
+        return this._cfg.get("users",{}).get(username,{}).get("otp_secret",None) is not None
+
+    def set_temporary_otp_secret(this,username:Optional[str],secret:str) -> None:
+        if (username is not None):
+            if (this.is_otp_configured_for(username)):
+                raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_AUTH_ALREADY_CONFIG.name))
+        elif (this.is_otp_configured):
+            raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_AUTH_ALREADY_CONFIG.name))
+
+        this._tmp_secret[username] = secret
+
+
+    def save_temporary_otp(this,username:Optional[str]) -> str:
+        secret = this._tmp_secret[username]
+
+        CONFIG.warning(f"I am here - temp secret: {secret}")
+
+        if (username is not None):
+            u = this._cfg.get("users",{}).get(username)
+            if (u is None):
+                raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name,params=[username]))
+
+            this._cfg["users"][username]["otp_secret"] = secret
+        else:
+            CONFIG.warning("right path")
+            if (this.is_otp_configured):
+                raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_AUTH_ALREADY_CONFIG.name))
+
+            username = list(this._cfg.get("users",{}).keys())[0]
+            CONFIG.warning(f"first username: {username}")
+            this._cfg["users"][username]["otp_secret"] = secret
+
         this.flush_config()
+        return username
 
     #POOL METHODS
     def init_pool(this) -> None:
@@ -627,7 +697,7 @@ class NMSConfig(Logger):
     def ddns_provider_enabled(this,provider:str,enabled:bool) -> None:
         this._cfg['ddns'][provider]['enabled'] = enabled
 
-    def ddns_config_set(this,provider:str,username:str,password:str) -> None:
+    def ddns_config_set(this,provider:str,username:Optional[str],password:str) -> None:
         SECRET_KEY = os.environ.get("NMS_SECRET_KEY")
         digest = hashlib.sha256(SECRET_KEY.encode()).digest()
         fernet_key = base64.urlsafe_b64encode(digest)
@@ -644,38 +714,60 @@ class NMSConfig(Logger):
     def ddns_duckdns_set(this,domain:str,token:str) -> None:
         this.ddns_config_set("duckdns",domain,token)
 
+    def ddns_dynv6_set(this,domain:str,token:str) -> None:
+        this.ddns_config_set("dynv6",domain,token)
+
+    def ddns_dnsexit_set(this,host:str,apikey:str) -> None:
+        this.ddns_config_set("dnsexit",host,apikey)
+
     def ddns_dynu_set(this, username:str, password:str) -> None:
         digest = hashlib.md5(password.encode()).hexdigest()
 
         this._cfg['ddns']["dynu"]['username'] = username
         this._cfg['ddns']["dynu"]['password'] = digest
 
+    def ddns_freedns_set(this,token:str) -> None:
+        this.ddns_config_set("freedns",None,token)
 
-    def ddns_start(this,thread_cls:Type[DDNSServiceThread],provider:str) -> None:
-        this.ddns_stop(provider)
+    def ddns_cloudns_set(this,token:str) -> None:
+        this.ddns_config_set("cloudns",None,token)
 
-        username = this._cfg['ddns'][provider]['username']
-        password = this._cfg['ddns'][provider]['password']
 
-        SECRET_KEY = os.environ.get("NMS_SECRET_KEY")
-        digest = hashlib.sha256(SECRET_KEY.encode()).digest()
-        fernet_key = base64.urlsafe_b64encode(digest)
+    def ddns_start(this,thread_cls:Type[DDNSServiceThread],provider:str,only_token:bool=False) -> None:
+        try:
+            this.ddns_stop(provider)
 
-        fernet = Fernet(fernet_key)
-        decrypted_password = fernet.decrypt(password.encode())
+            username = this._cfg['ddns'][provider]['username']
+            password = this._cfg['ddns'][provider]['password']
 
-        thread = thread_cls(username, decrypted_password.decode("utf-8"))
-        thread.start()
-        this._daemons[f"ddns_{provider}"] = thread
+            SECRET_KEY = os.environ.get("NMS_SECRET_KEY")
+            digest = hashlib.sha256(SECRET_KEY.encode()).digest()
+            fernet_key = base64.urlsafe_b64encode(digest)
 
-        this.ddns_provider_enabled(provider, True)
+            fernet = Fernet(fernet_key)
+            decrypted_password = fernet.decrypt(password.encode()).decode("utf-8")
 
-        
+            thread = thread_cls(decrypted_password) if only_token else thread_cls(username, decrypted_password)
+            thread.start()
+            this._daemons[f"ddns_{provider}"] = thread
+
+            this.ddns_provider_enabled(provider, True)
+        except (AttributeError, ValueError):
+            raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_DDNS_CONFIG.name))
+
+
+
     def ddns_noip_start(this):
         this.ddns_start(DDNSNoIP,"noip")
 
     def ddns_duckdns_start(this):
         this.ddns_start(DuckDNS,"duckdns")
+
+    def ddns_dynv6_start(this):
+        this.ddns_start(Dynv6, "dynv6")
+
+    def ddns_dnsexit_start(this):
+        this.ddns_start(DNSExit,"dnsexit")
 
     def ddns_dynu_start(this):
         provider = "dynu"
@@ -690,6 +782,12 @@ class NMSConfig(Logger):
         this._daemons[f"ddns_{provider}"] = thread
 
         this.ddns_provider_enabled(provider, True)
+
+    def ddns_freedns_start(this) -> None:
+        this.ddns_start(FreeDNS,"freedns",True)
+
+    def ddns_cloudns_start(this) -> None:
+        this.ddns_start(ClouDNS,"cloudns",True)
 
 
     def ddns_stop(this,provider:str) -> None:

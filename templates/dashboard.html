@@ -4,6 +4,8 @@
 
 {% block content %}
 
+<h3 class="mb-3">{{ _("Welcome") }}, {{ uname }}.</h3>
+
 <div class="row g-3">
     {% for widget in widgets %}
         {{ widget|safe }}

@@ -1,10 +1,10 @@
 from nms_shared.enums import DiskStatus
 from .api.backend_proxy import NMSBACKEND, show_flash
-from flask import Blueprint, flash, session, redirect, Response ,url_for, request
+from flask import Blueprint, flash, session, redirect, Response ,url_for, request, render_template
 from flask_babel import get_locale
 from nms_shared import constants
 from nms_shared.msg import ErrorMessages, WarningMessages, ERROR_MESSAGES, WARNING_MESSAGES
-from typing import Optional
+from typing import Optional, Tuple
 from urllib.parse import urlparse,urlencode
 import time
 from .utils.exception import NotAuthenticatedError
@@ -70,6 +70,7 @@ def require_login() -> Optional[Response]:
         else:
             session["last_activity"] = current_time
 
+
     if request.endpoint not in ("main.login", "static","main.configure_otp","main.otp_qr"):
         if session.get("authenticated",False) is not True:
             redirection = request.full_path
@@ -127,13 +128,15 @@ def set_language_frontend() -> dict:
 
 
 @frontend.errorhandler(NotAuthenticatedError)
-def handle_token_expired(_):
+def handle_token_expired(_) -> Response:
     session.clear()
+
     return redirect(url_for("main.login"))
 
-# @frontend.after_request
-# def debug_session(response):
-#     BACKEND.logger.error(f"SESSION CONTENT: {session}")
-#     return response
+@frontend.errorhandler(401)
+def unauthorized(_) -> Tuple[str,int]:
+    import logging
+    logging.getLogger().error("do i even get here?")
+    return render_template("401.html"), 401
 
 from . import dashboard, services, disks, utilities, auth, advanced, network

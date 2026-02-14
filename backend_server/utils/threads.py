@@ -1,7 +1,7 @@
 import datetime
 from abc import abstractmethod
 from string import Template
-
+from nms_shared.enums import RequestMethod
 import requests
 from nms_shared.disks import Disk
 from nms_shared.threads import NMSThread
@@ -10,7 +10,7 @@ from nms_shared import ErrorMessages, SuccessMessages
 from backend_server.utils.responses import ErrorMessage, SuccessMessage
 from fastapi import HTTPException
 from typing import Optional
-
+from urllib.parse import quote_plus
 import psutil
 import time
 import json
@@ -241,9 +241,11 @@ class DDNSServiceThread(LongWaitThread):
 
 
 class TokenBasedDDNSThread(DDNSServiceThread):
-    def __init__(this, url: str,*args,**kwargs) -> None:
+    def __init__(this, url: str,method:RequestMethod=RequestMethod.GET,params:Optional[dict]=None,*args,**kwargs) -> None:
         super().__init__(*args,**kwargs)
         this._url = url
+        this._method = method
+        this._params = params
 
     @abstractmethod
     def _check_success(this,response:requests.Response)->bool:
@@ -253,7 +255,11 @@ class TokenBasedDDNSThread(DDNSServiceThread):
         from .config import CONFIG
         CONFIG.error(this._url)
         while (this.is_running):
-            response = requests.get(this._url)
+            match (this._method):
+                case RequestMethod.GET:
+                    response = requests.get(this._url)
+                case RequestMethod.POST:
+                    response = requests.post(this._url,data=this._params)
 
             CONFIG.error(response.text)
 
@@ -300,7 +306,7 @@ class DDNSNoIP(DDNSServiceThread):
 class DuckDNS(TokenBasedDDNSThread):
     UPDATE_ENDPOINT:Template = Template("https://www.duckdns.org/update?domains=$domain&token=$token&verbose=true&ip=")
     def __init__(this,domain:str,token:str,interval:int=DDNSServiceThread.DEFAULT_INTERVAL):
-        url = DuckDNS.UPDATE_ENDPOINT.substitute(domain=domain,token=token)
+        url = DuckDNS.UPDATE_ENDPOINT.substitute(domain=quote_plus(domain),token=quote_plus(token))
         super().__init__(url,interval=interval)
 
     def _check_success(this,response:requests.Response)->bool:
@@ -309,8 +315,46 @@ class DuckDNS(TokenBasedDDNSThread):
 class DynuDDNS(TokenBasedDDNSThread):
     UPDATE_ENDPOINT:Template = Template("http://api.dynu.com/nic/update?username=$username&password=$password")
     def __init__(this,username:str,password:str,interval:int=DDNSServiceThread.DEFAULT_INTERVAL):
-        url = DynuDDNS.UPDATE_ENDPOINT.substitute(username=username,password=password)
+        url = DynuDDNS.UPDATE_ENDPOINT.substitute(username=quote_plus(username),password=quote_plus(password))
         super().__init__(url,interval=interval)
 
     def _check_success(this,response:requests.Response)->bool:
         return (response.text.strip().startswith("good"))
+
+class FreeDNS(TokenBasedDDNSThread):
+    UPDATE_ENDPOINT:Template = Template("https://freedns.afraid.org/dynamic/update.php?$token")
+    def __init__(this,token:str,interval:int=DDNSServiceThread.DEFAULT_INTERVAL):
+        url = FreeDNS.UPDATE_ENDPOINT.substitute(token=quote_plus(token))
+        super().__init__(url,interval=interval)
+
+    def _check_success(this,response:requests.Response)->bool:
+        return "Unable to locate this record" not in response.text
+
+class DNSExit(TokenBasedDDNSThread):
+    UPDATE_ENDPOINT:Template = Template("https://api.dnsexit.com/dns/ud/?apikey=$password")
+    def __init__(this,username:str,password:str,interval:int=DDNSServiceThread.DEFAULT_INTERVAL):
+        url = DNSExit.UPDATE_ENDPOINT.substitute(password=quote_plus(password))
+        super().__init__(url,method=RequestMethod.POST,params={"host":username},interval=interval)
+
+    def _check_success(this,response:requests.Response)->bool:
+        return response.json().get("code") == 0
+
+class Dynv6(TokenBasedDDNSThread):
+    UPDATE_ENDPOINT:Template = Template("https://ipv4.dynv6.com/api/update?hostname=$domain&token=$token&ipv4=auto")
+    def __init__(this,domain:str,token:str,interval:int=DDNSServiceThread.DEFAULT_INTERVAL):
+        url = Dynv6.UPDATE_ENDPOINT.substitute(domain=quote_plus(domain),token=quote_plus(token))
+        super().__init__(url,interval=interval)
+
+    def _check_success(this,response:requests.Response)->bool:
+        return response.status_code == 200
+
+class ClouDNS(TokenBasedDDNSThread):
+    UPDATE_ENDPOINT:Template = Template("https://ipv4.cloudns.net/api/dynamicURL/?q=$token")
+    def __init__(this,token:str,interval:int=DDNSServiceThread.DEFAULT_INTERVAL):
+        url = ClouDNS.UPDATE_ENDPOINT.substitute(token=quote_plus(token))
+        super().__init__(url,interval=interval)
+
+    def _check_success(this,response:requests.Response)->bool:
+        return response.text.strip() == "OK"
+
+# MTE3NTc3MzY6NzIwNDcyMTU2OjVhNzIyNjM0ZDQ1OTgxODZlYjEwNDVkMjNiZDk2ODU2ZTA3ODE3YTI5ODJiYjllYWM3ZjQ4NmYxNTEwYWU5MTY

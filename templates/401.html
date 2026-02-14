@@ -1,0 +1,30 @@
+{% extends "login.html" %}
+
+{% block content %}
+
+<div class="container min-vh-100 d-flex align-items-center justify-content-center">
+    <div class="text-center">
+
+        <!-- Icon -->
+        <div class="mb-4">
+            <i class="bi bi-shield-lock display-1 text-warning"></i>
+        </div>
+
+        <h1 class="mb-3">{{ _("Unauthorized Access") }}</h1>
+
+        <!-- Description -->
+        <p class="text-muted mb-4">
+            {{ _("You do not have permission to access this resource.") }}<br/>
+            {{ _("Please log in with appropriate credentials or contact the administrator.") }}
+        </p>
+
+        <!-- Actions -->
+        <div class="d-flex gap-2 justify-content-center">
+            <a href="{{ url_for('main.login') }}" class="btn btn-primary">
+                {{ _("Go to Login") }}
+            </a>
+
+    </div>
+</div>
+
+{% endblock %}
