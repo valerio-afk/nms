@@ -1,5 +1,5 @@
 from . import frontend as bp, NMSBACKEND as BACKEND
-from flask import  render_template, g, flash
+from flask import  render_template, g, flash, session
 from typing import Optional, Tuple
 from frontend.utils.widget import render_widget, get_widgets_css_files, get_widgets_html
 
@@ -70,7 +70,7 @@ def dashboard() -> str:
     if (BACKEND.is_pool_configured):
         dashboard_widgets.insert(0,widget_disk_usage())
 
-    user = BACKEND.get_current_user()
+    user = session['user']
     visible_name = user.get("visible_name")
     uname = visible_name if visible_name else user.get("username")
 

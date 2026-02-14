@@ -10,47 +10,20 @@
     <div class="mb-3 row">
       <div class="col-sm-4 col-form-label">{{ form.port.label }}</div>
       <div class="col-sm-8">
-        {{ form.port(class="form-control") }}
+        {{ form.port(class="form-control",disabled=enabled) }}
       </div>
     </div>
 
-    <div class="mb-3 row">
-      <div class="col-sm-4 col-form-label">{{ form.username.label }}</div>
-      <div class="col-sm-8">
-        {{ form.username(class="form-control") }}
-      </div>
-    </div>
-
-    <div class="mb-3 row">
-      <div class="col-sm-4 col-form-label">{{ form.password.label }}</div>
-      <div class="col-sm-8">
-        {{ form.password(class="form-control") }}
-      </div>
-    </div>
-
-        <div class="mb-3 row">
-      <div class="col-sm-4 col-form-label">{{ form.confirm_password.label }}</div>
-      <div class="col-sm-8">
-        {{ form.confirm_password(class="form-control") }}
-      </div>
-    </div>
+    <div class="row g-1">
+        <div class="col-12">
 
     {% if enabled %}
-      <div class="row g-2">
-        <div class="col-6">
-            <button class="btn btn-success w-100" type="submit" name="action" value="update">{{ _("Update settings") }}</button>
-        </div>
-        <div class="col-6">
             <button class="btn btn-danger w-100" type="submit" name="action" value="disable">{{ _("Disable") }}</button>
-        </div>
-      </div>
     {% else %}
-      <div class="row g-1">
-        <div class="col-12">
             <button class="btn btn-success w-100" type="submit" name="action" value="enable" {{ "" if mountpoint else "disabled" }}>{{ _("Enable") }}</button>
+    {% endif %}
         </div>
     </div>
-    {% endif %}
 </form>
 
 <div class="mt-4">
@@ -67,7 +40,7 @@
                     <ol>
                         <li>{{ _("Open the %(st_st)sTerminal%(e_st)s %(icon)s",st_st="<strong>"|safe,e_st="</strong>"|safe,icon='<i class="bi bi-terminal-fill"></i>'|safe) }}</li>
                         <li>{{ _("Type the following command") }} <br/>
-                            <code>$ ssh {{ form.username.default }}@<strong>IP</strong> -p {{ form.port.default }} </code>
+                            <code>$ ssh {{ current_user.username }}@<strong>IP</strong> -p {{ form.port.default }} </code>
                         </li>
                         <li>{{ _("You should replace %(st_code)sIP%(e_code)s with the IP address you can find in the Network tab.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
                         <li>{{ _("The first time you connect, please accept the fingerprint by typing %(st_code)syes%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>

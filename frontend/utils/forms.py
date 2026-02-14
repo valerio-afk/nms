@@ -119,9 +119,9 @@ class AccessServiceForm(FlaskForm):
 
 class SSHServiceForm(AccessServiceForm):
     port = IntegerField(_("Port"),validators=[NumberRange(min=PORT_MIN,max=PORT_MAX,message=_("The port number must be between %(port_min)s-%(port_max)s",port_min=PORT_MIN,port_max=PORT_MAX))])
-    username = StringField(_("Username"),validators=[DataRequired(),Regexp(r'^[a-z_][a-z0-9_-]*[$]?$',message=_("Invalid username: must start with a letter or _, and contain only lowercase letters, digits, _ or -."))])
-    password = PasswordField(_("Password"))
-    confirm_password = PasswordField(_("Confirm Password"), validators=[EqualTo('password', message=_('Passwords must match'))])
+    # username = StringField(_("Username"),validators=[DataRequired(),Regexp(r'^[a-z_][a-z0-9_-]*[$]?$',message=_("Invalid username: must start with a letter or _, and contain only lowercase letters, digits, _ or -."))])
+    # password = PasswordField(_("Password"))
+    # confirm_password = PasswordField(_("Confirm Password"), validators=[EqualTo('password', message=_('Passwords must match'))])
 
 class FTPServiceForm(AccessServiceForm):
     ...
@@ -131,9 +131,10 @@ class NFSServiceForm(AccessServiceForm):
     ip = StringField(_("Hostname"),validators=[DataRequired()])
 
 class SMBServiceForm(AccessServiceForm):
-    username = StringField(_("Username"),validators=[DataRequired()])
-    password = PasswordField(_("Password"))
-    confirm_password = PasswordField(_("Confirm Password"), validators=[EqualTo('password', message=_('Passwords must match'))])
+    ...
+    # username = StringField(_("Username"),validators=[DataRequired()])
+    # password = PasswordField(_("Password"))
+    # confirm_password = PasswordField(_("Confirm Password"), validators=[EqualTo('password', message=_('Passwords must match'))])
 
 class WEBServiceForm(AccessServiceForm):
     port = IntegerField(_("Port"),validators=[NumberRange(min=PORT_MIN,max=PORT_MAX,message=_("The port number must be between %(port_min)s-%(port_max)s",port_min=PORT_MIN,port_max=PORT_MAX))])
@@ -164,3 +165,7 @@ class VPNForm(FlaskForm):
     address = StringField(_("Address"))
     netmask = StringField(_("Netmask"))
     public_ip = StringField(_("Public IP"))
+
+class ChangePasswordForm(FlaskForm):
+    password = PasswordField(_("Password"), validators=[DataRequired()])
+    confirm_password = PasswordField(_("Confirm Password"), validators=[EqualTo('password', message=_('Passwords must match'))])

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-02-14 01:57+0000\n"
+"POT-Creation-Date: 2026-02-14 12:50+0000\n"
 "PO-Revision-Date: 2025-12-31 10:19+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: it\n"
@@ -22,35 +22,158 @@ msgstr ""
 msgid "Never"
 msgstr "Mai"
 
-#: frontend/api/backend_proxy.py:263
-msgid "Uptime"
-msgstr "Attivo dal"
+#: frontend/users.py:10
+msgid "Web Client"
+msgstr "Client Web"
 
-#: frontend/api/backend_proxy.py:263
-msgid "Since"
+#: frontend/users.py:11 templates/dashboard.html:3 templates/index.html:6
+#: templates/index.html:27
+msgid "Dashboard"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:264
-msgid "NMS Version"
-msgstr "Versione NMS"
+#: frontend/users.py:12
+msgid "Access"
+msgstr "Accesso Remoto"
 
-#: frontend/api/backend_proxy.py:265
-msgid "CPU"
+#: frontend/users.py:13 frontend/users.py:31 templates/card.network_list.html:3
+#: templates/card.network_list.html:26 templates/index.html:33
+#: templates/network.html:3
+msgid "Network"
+msgstr "Rete"
+
+#: frontend/users.py:14 templates/card.access_list.html:3
+msgid "Access Services"
+msgstr "Servizi di Accesso Remoto"
+
+#: frontend/users.py:15 templates/index.html:36
+msgid "Users"
+msgstr "Utenti"
+
+#: frontend/users.py:16 templates/advanced.html:3 templates/index.html:42
+msgid "Advanced"
+msgstr "Avanzato"
+
+#: frontend/users.py:18
+msgid "Disk Array"
+msgstr "Archivio"
+
+#: frontend/users.py:19 frontend/utils/forms.py:88
+msgid "Disks"
+msgstr "Dischi"
+
+#: frontend/users.py:20
+msgid "Health"
+msgstr "Stato dei dischi"
+
+#: frontend/users.py:21
+msgid "Format"
+msgstr "Formatta Disco"
+
+#: frontend/users.py:22
+msgid "Tools"
+msgstr "Strumenti"
+
+#: frontend/users.py:23 templates/card.disk_tools.html:10
+msgid "Verify"
+msgstr "Verifica"
+
+#: frontend/users.py:24 templates/card.disk_tools.html:47
+msgid "Mount"
+msgstr "Monta"
+
+#: frontend/users.py:25
+msgid "Configuration"
+msgstr "Configurazione"
+
+#: frontend/users.py:26
+msgid "Create"
+msgstr "Crea Archivio"
+
+#: frontend/users.py:27
+msgid "Import"
+msgstr "Importa"
+
+#: frontend/users.py:28
+msgid "Expand"
+msgstr "Espandere"
+
+#: frontend/users.py:29
+msgid "Destroy"
+msgstr "Distruggere"
+
+#: frontend/users.py:32 frontend/utils/filters.py:61
+msgid "Interface"
+msgstr "Interfaccia"
+
+#: frontend/users.py:33
+msgid "Manage"
+msgstr "Gestire"
+
+#: frontend/users.py:34 templates/card.ddns.html:3
+msgid "Dynamic DNS"
+msgstr "DNS Dinamico"
+
+#: frontend/users.py:35 templates/card.vpn.html:4
+msgid "VPN"
+msgstr ""
+
+#: frontend/users.py:37
+msgid "System"
+msgstr "Sistema"
+
+#: frontend/users.py:38
+msgid "Administration"
+msgstr "Amministrazione"
+
+#: frontend/users.py:39
+msgid "Power Control"
+msgstr "Gestione Alimentazione"
+
+#: frontend/users.py:40
+msgid "Updates"
+msgstr "Aggiornare"
+
+#: frontend/users.py:41
+msgid "System Services"
+msgstr "Servizi di Sistema"
+
+#: frontend/users.py:42
+msgid "Logs"
+msgstr "Log"
+
+#: frontend/users.py:44 templates/account.html:3 templates/card.account.html:3
+msgid "Account"
 msgstr ""
 
 #: frontend/api/backend_proxy.py:266
+msgid "Uptime"
+msgstr "Attivo"
+
+#: frontend/api/backend_proxy.py:266
+msgid "Since"
+msgstr "da"
+
+#: frontend/api/backend_proxy.py:267
+msgid "NMS Version"
+msgstr "Versione NMS"
+
+#: frontend/api/backend_proxy.py:268
+msgid "CPU"
+msgstr ""
+
+#: frontend/api/backend_proxy.py:269
 msgid "OS"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:322 frontend/utils/forms.py:84
+#: frontend/api/backend_proxy.py:325 frontend/utils/forms.py:84
 msgid "Encryption"
 msgstr "Cifratura"
 
-#: frontend/api/backend_proxy.py:323 frontend/utils/forms.py:83
+#: frontend/api/backend_proxy.py:326 frontend/utils/forms.py:83
 msgid "Redundancy"
 msgstr "Ridondanza"
 
-#: frontend/api/backend_proxy.py:324 frontend/utils/forms.py:85
+#: frontend/api/backend_proxy.py:327 frontend/utils/forms.py:85
 msgid "Compression"
 msgstr "Compressione"
 
@@ -82,7 +205,7 @@ msgstr ""
 msgid "Corrupted"
 msgstr "Corrotto"
 
-#: frontend/utils/filters.py:27 frontend/utils/forms.py:161
+#: frontend/utils/filters.py:27 frontend/utils/forms.py:162
 msgid "Enabled"
 msgstr "Attivato"
 
@@ -94,7 +217,7 @@ msgstr "Disattivato"
 msgid "Yes"
 msgstr "Si"
 
-#: frontend/utils/filters.py:32
+#: frontend/utils/filters.py:32 templates/card.account.html:16
 msgid "No"
 msgstr ""
 
@@ -106,10 +229,6 @@ msgstr "Dispositivo"
 msgid "Is SSD"
 msgstr "È SSD"
 
-#: frontend/utils/filters.py:61
-msgid "Interface"
-msgstr "Interfaccia"
-
 #: frontend/utils/forms.py:86
 msgid "Pool Name"
 msgstr "Nome Pool"
@@ -119,10 +238,6 @@ msgid "Dataset Name"
 msgstr "Nome Dataset"
 
 #: frontend/utils/forms.py:88
-msgid "Disks"
-msgstr "Dischi"
-
-#: frontend/utils/forms.py:88
 msgid "You must select at least one disk to create an array"
 msgstr "Devi selezionare almeno un disco per creare un archivio"
 
@@ -130,21 +245,28 @@ msgstr "Devi selezionare almeno un disco per creare un archivio"
 msgid "Key"
 msgstr "Chiave"
 
-#: frontend/utils/forms.py:121 frontend/utils/forms.py:139
+#: frontend/utils/forms.py:121 frontend/utils/forms.py:140
 msgid "Port"
 msgstr "Porta"
 
-#: frontend/utils/forms.py:121 frontend/utils/forms.py:139
+#: frontend/utils/forms.py:121 frontend/utils/forms.py:140
 #, python-format
 msgid "The port number must be between %(port_min)s-%(port_max)s"
 msgstr "Il numero di porta deve essere tra %(port_min)s-%(port_max)s"
 
-#: frontend/utils/forms.py:122 frontend/utils/forms.py:134
-#: frontend/utils/forms.py:140 templates/form.ddns.html:5
+#: frontend/utils/forms.py:131
+msgid "Hostname"
+msgstr ""
+
+#: frontend/utils/forms.py:141 templates/form.ddns.html:5
 msgid "Username"
 msgstr "Nome Utente"
 
-#: frontend/utils/forms.py:122 frontend/utils/forms.py:142
+#: frontend/utils/forms.py:142
+msgid "You must specify a username if authentication is enabled."
+msgstr "Devi specificare un nome utente se attivi l'autenticazione."
+
+#: frontend/utils/forms.py:143
 msgid ""
 "Invalid username: must start with a letter or _, and contain only "
 "lowercase letters, digits, _ or -."
@@ -152,57 +274,46 @@ msgstr ""
 "Nome utente non valido: deve iniziare con una lettera oppure _, e puo "
 "contenere solo caratteri minuscoli, numeri, oppure _"
 
-#: frontend/utils/forms.py:123 frontend/utils/forms.py:135
-#: frontend/utils/forms.py:143 templates/form.ddns.html:10
+#: frontend/utils/forms.py:144 templates/form.ddns.html:10
 #: templates/wifi_network_list.html:43
 msgid "Password"
 msgstr ""
 
-#: frontend/utils/forms.py:124 frontend/utils/forms.py:136
-#: frontend/utils/forms.py:144
+#: frontend/utils/forms.py:145
 msgid "Confirm Password"
 msgstr "Conferma Password"
 
-#: frontend/utils/forms.py:124 frontend/utils/forms.py:136
-#: frontend/utils/forms.py:145
+#: frontend/utils/forms.py:146
 msgid "Passwords must match"
 msgstr "Le password devono coincidere."
 
-#: frontend/utils/forms.py:131
-msgid "Hostname"
-msgstr ""
-
-#: frontend/utils/forms.py:141
-msgid "You must specify a username if authentication is enabled."
-msgstr "Devi specificare un nome utente se attivi l'autenticazione."
-
-#: frontend/utils/forms.py:146
+#: frontend/utils/forms.py:147
 msgid "Authentication:"
 msgstr "Autenticazione:"
 
-#: frontend/utils/forms.py:154 templates/iface.ip_summary.html:2
+#: frontend/utils/forms.py:155 templates/iface.ip_summary.html:2
 msgid "Dynamic IP"
 msgstr "IP Dinamico"
 
-#: frontend/utils/forms.py:155 frontend/utils/forms.py:164
+#: frontend/utils/forms.py:156 frontend/utils/forms.py:165
 #: templates/iface.ip_summary.html:3
 msgid "Address"
 msgstr "Indirizzo"
 
-#: frontend/utils/forms.py:156 frontend/utils/forms.py:165
+#: frontend/utils/forms.py:157 frontend/utils/forms.py:166
 #: templates/iface.ip_summary.html:4
 msgid "Netmask"
 msgstr "Sottorete"
 
-#: frontend/utils/forms.py:157 templates/iface.ip_summary.html:5
+#: frontend/utils/forms.py:158 templates/iface.ip_summary.html:5
 msgid "Gateway"
 msgstr ""
 
-#: frontend/utils/forms.py:158 templates/iface.ip_summary.html:6
+#: frontend/utils/forms.py:159 templates/iface.ip_summary.html:6
 msgid "DNS"
 msgstr ""
 
-#: frontend/utils/forms.py:166
+#: frontend/utils/forms.py:167
 msgid "Public IP"
 msgstr "IP Pubblico"
 
@@ -562,8 +673,9 @@ msgstr "Provider di DNS Dinamico `%(provider)` non valido."
 msgid ""
 "Error occurred during the execution of the dynamic DNS provider "
 "`%(provider)s`: %(info)s"
-msgstr "Errore durante l'esecuzione del provider di DNS Dinamico "
-"`%(provider)s`: %(info)s"
+msgstr ""
+"Errore durante l'esecuzione del provider di DNS Dinamico `%(provider)s`: "
+"%(info)s"
 
 #: nms_shared/msg.py:256
 msgid ""
@@ -574,7 +686,7 @@ msgstr ""
 "la password/token sono impostati correttamente per il provider scelto"
 
 #: nms_shared/msg.py:258
-#,  python-format
+#, python-format
 msgid "User %(user)s not found."
 msgstr "Utente %(user)s non trovato."
 
@@ -788,10 +900,6 @@ msgstr "Torna alla pagina di login"
 msgid "Remote Access"
 msgstr "Accesso Remoto"
 
-#: templates/advanced.html:3 templates/index.html:42
-msgid "Advanced"
-msgstr "Avanzato"
-
 #: templates/advanced.logs.html:3 templates/card.sys_admin.html:10
 msgid "System Logs"
 msgstr "Log di Sistema"
@@ -809,7 +917,7 @@ msgid "Filter"
 msgstr "Filtra"
 
 #: templates/card.access.ftp.html:12 templates/card.access.nfs.html:32
-#: templates/card.access.smb.html:38 templates/card.access.ssh.html:44
+#: templates/card.access.smb.html:16 templates/card.access.ssh.html:21
 #: templates/card.access.web.html:50 templates/form.ddns.dnsexit.html:19
 #: templates/form.ddns.duckdns.html:19 templates/form.ddns.freedns.html:15
 #: templates/form.ddns.html:19
@@ -817,7 +925,7 @@ msgid "Disable"
 msgstr "Disattiva"
 
 #: templates/card.access.ftp.html:18 templates/card.access.nfs.html:38
-#: templates/card.access.smb.html:44 templates/card.access.ssh.html:50
+#: templates/card.access.smb.html:18 templates/card.access.ssh.html:23
 #: templates/card.access.web.html:56 templates/form.ddns.dnsexit.html:15
 #: templates/form.ddns.duckdns.html:15 templates/form.ddns.freedns.html:11
 #: templates/form.ddns.html:15
@@ -825,7 +933,7 @@ msgid "Enable"
 msgstr "Attiva"
 
 #: templates/card.access.ftp.html:25 templates/card.access.nfs.html:45
-#: templates/card.access.smb.html:51 templates/card.access.ssh.html:57
+#: templates/card.access.smb.html:25 templates/card.access.ssh.html:30
 #: templates/card.access.web.html:63
 #, python-format
 msgid "Connecting using %(service)s"
@@ -913,12 +1021,12 @@ msgstr ""
 "sarà diverso da quello della LAN. Pertanto, devi usare quell'indirizzo IP"
 " (o quelli della sottorete VPN)."
 
-#: templates/card.access.nfs.html:50 templates/card.access.smb.html:81
+#: templates/card.access.nfs.html:50 templates/card.access.smb.html:55
 msgid "most distributions"
 msgstr "la maggior parte delle distribuzioni"
 
 #: templates/card.access.nfs.html:56 templates/card.access.nfs.html:87
-#: templates/card.access.smb.html:87 templates/card.access.ssh.html:68
+#: templates/card.access.smb.html:61 templates/card.access.ssh.html:41
 #, python-format
 msgid "Open the %(st_st)sTerminal%(e_st)s %(icon)s"
 msgstr "Apri il %(st_st)sTerminale%(e_st)s %(icon)s"
@@ -933,7 +1041,7 @@ msgstr ""
 "Installa il client %(st_code)snfs%(e_code)s se ancora non c'è. Di seguito"
 " tovi le istruzioni su alcune delle distribuzioni più importanti:"
 
-#: templates/card.access.nfs.html:65 templates/card.access.smb.html:96
+#: templates/card.access.nfs.html:65 templates/card.access.smb.html:70
 #, python-format
 msgid ""
 "Create a mount directory in either %(st_code)s/media%(e_code)s or "
@@ -943,14 +1051,14 @@ msgstr ""
 "%(st_code)s/mnt%(e_code)s. Per esempio"
 
 #: templates/card.access.nfs.html:68 templates/card.access.nfs.html:91
-#: templates/card.access.nfs.html:115 templates/card.access.smb.html:99
-#: templates/card.access.ssh.html:69
+#: templates/card.access.nfs.html:115 templates/card.access.smb.html:73
+#: templates/card.access.ssh.html:42
 msgid "Type the following command"
 msgstr "Scrivi il seguente comando"
 
 #: templates/card.access.nfs.html:71 templates/card.access.nfs.html:94
-#: templates/card.access.nfs.html:118 templates/card.access.smb.html:102
-#: templates/card.access.ssh.html:72
+#: templates/card.access.nfs.html:118 templates/card.access.smb.html:76
+#: templates/card.access.ssh.html:45
 #, python-format
 msgid ""
 "You should replace %(st_code)sIP%(e_code)s with the IP address you can "
@@ -987,18 +1095,27 @@ msgstr ""
 "Puoi scegliere un'unità con una lettera diversa da "
 "%(st_code)sZ:%(e_code)s."
 
-#: templates/card.access.smb.html:14
+# python-format
+#: templates/card.access.smb.html:36
+#, python-format
+msgid "Open %(st_code)sFiles%(e_code)s."
+msgstr "Apri %(st_code)sFile%(e_code)s."
+
+#: templates/card.access.smb.html:37
+#, python-format
+msgid "Go to %(st_code)sOther locations%(e_code)s."
+msgstr "Vai su %(st_code)sAltre posizioni%(e_code)s."
+
+#: templates/card.access.smb.html:38
 #, python-format
 msgid ""
-"The username is the same as in the %(st_code)sSSH%(e_code)s service. If "
-"the username is changed, %(st_code)sSMB%(e_code)s will be disabled."
+"Go to the textbox at the bottom saying %(st_code)sEnter server "
+"address...%(e_code)s."
 msgstr ""
+"Vai nel campo di testo in basso con la dicitura %(st_code)sInserire "
+"indirizzo server...%(e_code)s."
 
-#: templates/card.access.smb.html:35
-msgid "Change Password"
-msgstr ""
-
-#: templates/card.access.smb.html:66
+#: templates/card.access.smb.html:40
 #, python-format
 msgid ""
 "Type %(st_code)ssmb://IP/NMS%(e_code)s. Replace %(st_code)sIP%(e_code)s "
@@ -1010,19 +1127,19 @@ msgstr ""
 "puoi trovare nella pagina Rete)."
 
 # python-format
-#: templates/card.access.smb.html:67 templates/card.access.smb.html:70
-#: templates/card.access.smb.html:139
+#: templates/card.access.smb.html:41 templates/card.access.smb.html:44
+#: templates/card.access.smb.html:113
 #, python-format
 msgid "Press %(st_code)sConnect%(e_code)s."
 msgstr "Premi  %(st_code)sConnetti%(e_code)s"
 
 # python-format
-#: templates/card.access.smb.html:68
+#: templates/card.access.smb.html:42
 #, python-format
 msgid "When prompted, selected %(st_code)sRegistered user%(e_code)s."
 msgstr "Quando richiesto, selezione %(st_code)sUtente registrato%(e_code)s."
 
-#: templates/card.access.smb.html:69 templates/card.access.smb.html:138
+#: templates/card.access.smb.html:43 templates/card.access.smb.html:112
 #, python-format
 msgid ""
 "Type %(st_code)s%(uname)s%(e_code)s and the password you have set for "
@@ -1032,7 +1149,7 @@ msgstr ""
 " questo servizio."
 
 # python-format
-#: templates/card.access.smb.html:88
+#: templates/card.access.smb.html:62
 #, python-format
 msgid ""
 "Install the Common Internet File System (%(st_code)sCIFS%(e_code)s) "
@@ -1043,28 +1160,28 @@ msgstr ""
 "non è già installato. Qui ci sono alcuni esempi per le distribuzioni più "
 "importanti"
 
-#: templates/card.access.smb.html:103 templates/card.access.ssh.html:74
+#: templates/card.access.smb.html:77 templates/card.access.ssh.html:47
 msgid "Type your password once asked."
 msgstr "Scrivi la password quando richiesta."
 
 # python-format
-#: templates/card.access.smb.html:118
+#: templates/card.access.smb.html:92
 #, python-format
 msgid "Open %(st_code)sFinder%(e_code)s."
 msgstr "Apri %(st_code)sFinder%(e_code)s."
 
-#: templates/card.access.smb.html:119
+#: templates/card.access.smb.html:93
 #, python-format
 msgid "In the menu on top, press %(st_code)sGo > Connect to Server%(e_code)s."
 msgstr "Nel menu in alto, premi %(st_code)sVai > Connessione al server%(e_code)s"
 
 # python-format
-#: templates/card.access.smb.html:135
+#: templates/card.access.smb.html:109
 #, python-format
 msgid "Open %(st_code)sFile Manager%(e_code)s."
 msgstr "Apri %(st_code)sEsplora file%(e_code)s."
 
-#: templates/card.access.smb.html:136
+#: templates/card.access.smb.html:110
 #, python-format
 msgid ""
 "In the textbox for the path, insert %(st_code)s\\\\IP\\NMS%(e_code)s. "
@@ -1077,15 +1194,11 @@ msgstr ""
 " l'indirizzo IP/hostname di questo NAS (lo puoi trovare nella pagina "
 "Rete)."
 
-#: templates/card.access.smb.html:137
+#: templates/card.access.smb.html:111
 msgid "When prompted, insert your credential."
 msgstr "Quando richiesto, inserisci le tue credenziali."
 
-#: templates/card.access.ssh.html:41
-msgid "Update settings"
-msgstr "Aggiorna impostazioni"
-
-#: templates/card.access.ssh.html:73
+#: templates/card.access.ssh.html:46
 #, python-format
 msgid ""
 "The first time you connect, please accept the fingerprint by typing "
@@ -1094,12 +1207,12 @@ msgstr ""
 "Quando ti connetti per la prima volta, accetta la fingerprint scrivendo "
 "%(st_code)syes%(e_code)s."
 
-#: templates/card.access.ssh.html:89
+#: templates/card.access.ssh.html:62
 #, python-format
 msgid "Download %(putty)s."
 msgstr "Scarica %(putty)s."
 
-#: templates/card.access.ssh.html:90
+#: templates/card.access.ssh.html:63
 #, python-format
 msgid ""
 "Once you have opened PuTTY, select %(st_code)sSSH%(e_code)s in "
@@ -1108,7 +1221,7 @@ msgstr ""
 "Una volta scaricato, seleziona  %(st_code)sSSH%(e_code)s in "
 "%(st_em)sConnection type%(e_em)s."
 
-#: templates/card.access.ssh.html:91
+#: templates/card.access.ssh.html:64
 #, python-format
 msgid ""
 "Insert the IP of this NAS (you can find in the Network tab) in "
@@ -1117,18 +1230,18 @@ msgstr ""
 "Inserisci l'indirizzo IP di questo NAS (lo trovi nella pagina Rete) in "
 "%(st_code)sHostname%(e_code)s."
 
-#: templates/card.access.ssh.html:92
+#: templates/card.access.ssh.html:65
 #, python-format
 msgid "Change %(st_code)sPort%(e_code)s with %(st_code)s%(port)i%(e_code)s."
 msgstr "Cambia %(st_code)sPort%(e_code)s con %(st_code)s%(port)i%(e_code)s."
 
 # python-format
-#: templates/card.access.ssh.html:93
+#: templates/card.access.ssh.html:66
 #, python-format
 msgid "Press %(st_code)sOpen%(e_code)s."
 msgstr "Premi  %(st_code)sOpen%(e_code)s."
 
-#: templates/card.access.ssh.html:94
+#: templates/card.access.ssh.html:67
 #, python-format
 msgid ""
 "You will be asked for your %(st_code)slogin%(e_code)s (username) and "
@@ -1158,9 +1271,17 @@ msgstr ""
 "Se usi l'autenticazione, la password predefinita è "
 "%(st_code)safk%(e_code)s (se non cambiata)."
 
-#: templates/card.access_list.html:3
-msgid "Access Services"
-msgstr "Servizi di Accesso Remoto"
+#: templates/card.account.html:9
+msgid "User name"
+msgstr "Nome Utente"
+
+#: templates/card.account.html:12
+msgid "Visible Name"
+msgstr "Nome Visible"
+
+#: templates/card.account.html:15
+msgid "Quota"
+msgstr ""
 
 #: templates/card.add_disks.html:3
 msgid "Add Disk"
@@ -1248,10 +1369,6 @@ msgstr "Prova Ripristino"
 msgid "Format Disk"
 msgstr "Formatta Disco"
 
-#: templates/card.ddns.html:3
-msgid "Dynamic DNS"
-msgstr "DNS Dinamico"
-
 #: templates/card.ddns.html:25
 msgid "Last Update"
 msgstr "Ultimo Aggiornamento"
@@ -1306,10 +1423,6 @@ msgstr "Gestione Dischi"
 msgid "Disk Tools"
 msgstr "Strumenti"
 
-#: templates/card.disk_tools.html:10
-msgid "Verify"
-msgstr "Verifica"
-
 #: templates/card.disk_tools.html:12
 msgid "Last verification:"
 msgstr "Ultima verifica:"
@@ -1333,10 +1446,6 @@ msgstr "Smonta"
 #: templates/card.disk_tools.html:42
 msgid "Disk array is mounted"
 msgstr "L'archivio è montato"
-
-#: templates/card.disk_tools.html:47
-msgid "Mount"
-msgstr "Monta"
 
 #: templates/card.disk_tools.html:49
 msgid "Disk array is unmounted"
@@ -1389,11 +1498,6 @@ msgstr "Se questo archivio non era stato criptato, lascia vuoto."
 #, python-format
 msgid "Import %(pool)s"
 msgstr "Importa %(pool)s"
-
-#: templates/card.network_list.html:3 templates/card.network_list.html:26
-#: templates/index.html:33 templates/network.html:3
-msgid "Network"
-msgstr "Rete"
 
 #: templates/card.network_list.html:29
 msgid "IPv4 Address"
@@ -1506,10 +1610,6 @@ msgstr "Uso RAM:"
 msgid "Network:"
 msgstr "Rete:"
 
-#: templates/card.vpn.html:4
-msgid "VPN"
-msgstr ""
-
 #: templates/card.vpn.html:46
 msgid "Get Public Key"
 msgstr "Scarica Chiave Pubblica"
@@ -1548,13 +1648,9 @@ msgstr ""
 " per sapere come generare le chiavi pubbliche e private. Un file di "
 "configurazione d'esempio è mostrato di seguito:"
 
-#: templates/dashboard.html:3 templates/index.html:6 templates/index.html:27
-msgid "Dashboard"
-msgstr ""
-
 #: templates/dashboard.html:7
 msgid "Welcome"
-msgstr ""
+msgstr "Benvenuto"
 
 #: templates/disk_smart.html:3
 msgid "Disk Diagnostic"
@@ -1576,31 +1672,27 @@ msgstr "Chiave API"
 msgid "Token"
 msgstr ""
 
-#: templates/index.html:36
-msgid "Users"
-msgstr "Utenti"
-
-#: templates/index.html:84
+#: templates/index.html:95
 msgid "Are you sure you want to log out?"
 msgstr "Sei sicuro di volere uscire?"
 
-#: templates/index.html:84
+#: templates/index.html:95
 msgid "Logout"
 msgstr "Esci"
 
-#: templates/index.html:86
+#: templates/index.html:97
 msgid "Are you sure you want to reboot the system?"
 msgstr "Sei sicuro di voler riavviare il sistema?"
 
-#: templates/index.html:86
+#: templates/index.html:97
 msgid "Reboot"
 msgstr "Riavvia"
 
-#: templates/index.html:87
+#: templates/index.html:98
 msgid "Are you sure you want to power off the system?"
 msgstr "Sei sicuro di voler spegnere il sistema?"
 
-#: templates/index.html:87
+#: templates/index.html:98
 msgid "Shutdown"
 msgstr "Spegni"
 
@@ -1700,4 +1792,23 @@ msgstr ""
 
 #~ msgid "System Manager"
 #~ msgstr "Manager di Sistema"
+
+#~ msgid ""
+#~ "The username is the same as in "
+#~ "the %(st_code)sSSH%(e_code)s service. If the"
+#~ " username is changed, %(st_code)sSMB%(e_code)s"
+#~ " will be disabled."
+#~ msgstr ""
+
+#~ msgid "Change Password"
+#~ msgstr ""
+
+#~ msgid "Update settings"
+#~ msgstr "Aggiorna impostazioni"
+
+#~ msgid "Client"
+#~ msgstr ""
+
+#~ msgid "Networking"
+#~ msgstr "Rete"
 

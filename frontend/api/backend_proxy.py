@@ -4,7 +4,7 @@ import werkzeug.exceptions
 
 from nms_shared.enums import RequestMethod
 from flask import flash, session, abort
-from flask_babel import _
+from flask_babel import _, format_datetime
 from traceback import format_exc
 from frontend.api.tasks import BackgroundTask, ResilverStatusTask
 from frontend.api.threads import TimerThread
@@ -237,7 +237,8 @@ class BackEndProxy:
     #     return r if r is not None else True
 
     # USERS PROPERTIES
-    def get_current_user(this) -> dict:
+    @property
+    def current_user(this) -> dict:
         return this._request("users/get")
 
 
@@ -259,8 +260,10 @@ class BackEndProxy:
         r = this._get_property_request("system","system_information")
 
         if (r is not None):
+            uptime = r.get("uptime")
+            uptime = format_datetime(uptime, "EEEE, d MMMM yyyy HH:mm").title() if uptime is not None else ""
             return {
-                _('Uptime'): f"{_("Since")} {r.get('uptime',"")}",
+                _('Uptime'): f"{_("Since")} {uptime}",
                 _('NMS Version'): r.get('nms_ver',""),
                 _('CPU'): r.get('cpu',""),
                 _('OS'): r.get('os',""),

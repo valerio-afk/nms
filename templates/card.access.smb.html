@@ -7,44 +7,18 @@
 <form action="{{ url_for('main.change_access_settings',service='smb') }}" method="POST" class="disable-on-submit">
     {{ form.hidden_tag() }}
 
-    <div class="mb-3 row">
-      <div class="col-sm-4 col-form-label">{{ form.username.label }}</div>
-      <div class="col-sm-8">
-        {{ form.username(class="form-control",readonly=True) }}
-        <div class="form-text">{{ _("The username is the same as in the %(st_code)sSSH%(e_code)s service. If the username is changed, %(st_code)sSMB%(e_code)s will be disabled.",st_code="<code>"|safe,e_code="</code>"|safe)}}</div>
-      </div>
-    </div>
 
-    <div class="mb-3 row">
-      <div class="col-sm-4 col-form-label">{{ form.password.label }}</div>
-      <div class="col-sm-8">
-        {{ form.password(class="form-control") }}
-      </div>
-    </div>
 
-        <div class="mb-3 row">
-      <div class="col-sm-4 col-form-label">{{ form.confirm_password.label }}</div>
-      <div class="col-sm-8">
-        {{ form.confirm_password(class="form-control") }}
-      </div>
-    </div>
+ <div class="row g-1">
+        <div class="col-12">
 
     {% if enabled %}
-      <div class="row g-2">
-        <div class="col-6">
-            <button class="btn btn-success w-100" type="submit" name="action" value="update">{{ _("Change Password") }}</button>
-        </div>
-        <div class="col-6">
             <button class="btn btn-danger w-100" type="submit" name="action" value="disable">{{ _("Disable") }}</button>
-        </div>
-      </div>
     {% else %}
-      <div class="row g-1">
-        <div class="col-12">
             <button class="btn btn-success w-100" type="submit" name="action" value="enable" {{ "" if mountpoint else "disabled" }}>{{ _("Enable") }}</button>
+    {% endif %}
         </div>
     </div>
-    {% endif %}
 </form>
 
 <div class="mt-4">
@@ -59,14 +33,14 @@
             <div id="ubuntu" class="accordion-collapse collapse" data-bs-parent="#smb_explanations">
                 <div class="accordion-body">
                     <ol>
-                        <li>Open <code>Files</code>.</li>
-                        <li>Go to <code>Other locations</code>.</li>
-                        <li>Go to the textbox at the bottom saying <code>Enter server address...</code></li>
+                        <li>{{ _("Open %(st_code)sFiles%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
+                        <li>{{ _("Go to %(st_code)sOther locations%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
+                        <li>{{ _("Go to the textbox at the bottom saying %(st_code)sEnter server address...%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
                         {% set gui_steps %}
                             <li>{{ _("Type %(st_code)ssmb://IP/NMS%(e_code)s. Replace %(st_code)sIP%(e_code)s with the IP address/hostname of this NAS (you can find in the Network tab).",st_code="<code>"|safe,e_code="</code>"|safe)}}</li>
                             <li>{{ _("Press %(st_code)sConnect%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
                             <li>{{ _("When prompted, selected %(st_code)sRegistered user%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe)}}</li>
-                            <li>{{ _("Type %(st_code)s%(uname)s%(e_code)s and the password you have set for this service.",st_code="<code>"|safe,e_code="</code>"|safe,uname=form.username.default) }}</li>
+                            <li>{{ _("Type %(st_code)s%(uname)s%(e_code)s and the password you have set for this service.",st_code="<code>"|safe,e_code="</code>"|safe,uname=current_user.username) }}</li>
                             <li>{{ _("Press %(st_code)sConnect%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
                         {% endset %}
                         {{ gui_steps }}
@@ -97,7 +71,7 @@
                             <code>$ sudo mkdir /media/nms</code>
                         </li>
                         <li>{{ _("Type the following command") }} <br/>
-                            <code>$ sudo mount -t cifs //SERVER/<strong>IP</strong>/NMS /media/nms -o username={{ form.username.default }}</code>
+                            <code>$ sudo mount -t cifs //SERVER/<strong>IP</strong>/NMS /media/nms -o username={{ current_user.username }}</code>
                         </li>
                         <li>{{ _("You should replace %(st_code)sIP%(e_code)s with the IP address you can find in the Network tab.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
                         <li>{{ _("Type your password once asked.") }}</li>
@@ -135,7 +109,7 @@
                         <li>{{ _("Open %(st_code)sFile Manager%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
                         <li>{% trans st_code="<code>"|safe,e_code="</code>"|safe %}In the textbox for the path, insert {{ st_code }}\\IP\NMS{{ e_code }}. Replace {{ st_code }}IP{{ e_code }} with the IP address/hostname of this NAS (you can find in the Network tab). Then, press {{ st_code }}Enter{{ e_code }} key.{% endtrans %}</li>
                         <li>{{ _("When prompted, insert your credential.") }}</li>
-                        <li>{{ _("Type %(st_code)s%(uname)s%(e_code)s and the password you have set for this service.",st_code="<code>"|safe,e_code="</code>"|safe,uname=form.username.default) }}</li>
+                        <li>{{ _("Type %(st_code)s%(uname)s%(e_code)s and the password you have set for this service.",st_code="<code>"|safe,e_code="</code>"|safe,uname=current_user.username) }}</li>
                          <li>{{ _("Press %(st_code)sConnect%(e_code)s.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
                     </ol>
                 </div>

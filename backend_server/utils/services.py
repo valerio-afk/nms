@@ -5,12 +5,15 @@ import re
 import configparser
 import bcrypt
 from abc import abstractmethod
+from .responses import ErrorMessage
+from fastapi import HTTPException
 
 from backend_server.utils.cmdl import SystemCtlIsActive, ApplyPatch, UserModChangeUsername, GetEntShadow, \
     ChPasswd, SystemCtlUnmask, SystemCtlEnable, SystemCtlStart, SystemCtlDisable, SystemCtlMask, SystemCtlStop, \
     SystemCtlRestart, ExportfsRA, SMBPasswd, DockerRun, DockerStop, DockerInspect, DockerRemove, \
     LocalCommandLineTransaction
 from nms_shared.utils import make_diff, read_lines_from_file
+from nms_shared.msg import ErrorMessages
 from pathlib import Path
 import pwd
 import grp
@@ -208,32 +211,31 @@ class SSHService(SystemService):
     #         else:
     #             this._username = value
     #
-    # def set_password(this,value):
-    #     shadow_cmd = GetEntShadow(this.get("username"))
-    #
-    #     trans = LocalCommandLineTransaction(shadow_cmd)
-    #     output = trans.run()
-    #
-    #     if (len(output)!=1):
-    #         raise Exception("Unable to retrieve the current password")
-    #
-    #     stdout_getent = output[0].get("stdout","").split(":",2)
-    #     uname = stdout_getent[0].strip()
-    #     shadow_password = stdout_getent[1].strip()
-    #
-    #     if (len(shadow_password) == 0):
-    #         raise Exception("Unable to retrieve the current password")
-    #
-    #     if (uname != this.get("username")):
-    #         raise Exception("Usernames don't match")
-    #
-    #     chpasswd = ChPasswd(uname,value,shadow_password)
-    #
-    #     trans = LocalCommandLineTransaction(chpasswd)
-    #     output = trans.run()
-    #
-    #     if ((len(output)!=1) or (output[0].get("returncode",-1) != 0)):
-    #         raise Exception(f"Unable to change password for `{uname}`")
+    def set_password(this,username,new_password):
+        shadow_cmd = GetEntShadow(username)
+
+        trans = LocalCommandLineTransaction(shadow_cmd)
+        output = trans.run()
+
+        if (len(output)!=1):
+            raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name,params=[username]))
+
+        stdout_getent = output[0].get("stdout","").split(":",2)
+        uname = stdout_getent[0].strip()
+        shadow_password = stdout_getent[1].strip()
+
+        if (len(shadow_password) == 0):
+            raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name,params=[username]))
+
+        if (uname != username):
+            raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name,params=[username]))
+
+        chpasswd = ChPasswd(uname,new_password,shadow_password)
+
+        output = chpasswd.execute()
+
+        if (output.returncode != 0):
+            raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_PASSWD.name,params=[username]))
 
     def _update_data(this,port):
         if (port != this.get("port")):
@@ -482,7 +484,7 @@ class SMBService(SystemService):
     #     this._smbpasswd(username,password,flag=SMBPasswd.Flags.ADD)
 
 
-    def enable(this,username,password,**kwargs):
+    def enable(this,**kwargs):
         this._patch_configuration()
 
         # if (password is not None):
@@ -491,17 +493,17 @@ class SMBService(SystemService):
 
         this.start()
 
-    def disable(this,username,**kwargs):
+    def disable(this,**kwargs):
         # this._delete_user(username)
         this.stop()
 
-    def update(this,username,password,**kwargs):
-        this._patch_configuration()
-        # if (password is not None):
-        #     this._update_password(username,password)
-
-        this.stop()
-        this.start()
+    # def update(this,username,password,**kwargs):
+    #     this._patch_configuration()
+    #     # if (password is not None):
+    #     #     this._update_password(username,password)
+    #
+    #     this.stop()
+    #     this.start()
 
 class WEBService(SystemService):
     port:int

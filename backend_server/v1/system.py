@@ -52,9 +52,8 @@ def system_information() -> Dict[str, str]:
 
     # uptime
     boot_ts = psutil.boot_time()  # epoch seconds when system booted
-    boot_dt = datetime.datetime.fromtimestamp(boot_ts)
 
-    sys_info['uptime'] = boot_dt.strftime("%A, %d %B %Y at %H:%M")
+    sys_info['uptime'] = boot_ts
 
     # NMS version
 

@@ -60,9 +60,9 @@ def change_access_settings(service) -> Response:
         service_form_cls = getattr(forms, f"{service.upper()}ServiceForm")
         service_enabled = serv['active']
         form = service_form_cls(enabled=service_enabled)
+        form_action = request.form.get('action')
 
-        if (form.validate_on_submit()):
-            form_action = request.form.get('action')
+        if (form.validate_on_submit()) or (form_action=="disable"):
             form_data = {k:v.data for k,v in form._fields.items() if k not in ["action","csrf_token"]}
 
             match (form_action):

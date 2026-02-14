@@ -1,0 +1,48 @@
+{% extends "card.html" %}
+
+{% block card_title %}<i class="bi bi-person-circle"></i> {{ _("Account") }}{% endblock %}
+
+{% block card_content %}
+
+
+<dl class="row">
+    <dt class="col-sm-6">{{ _("User name") }}:</dt>
+    <dd class="col-sm-6">{{ user.username }}</dd>
+
+    <dt class="col-sm-6">{{ _("Visible Name") }}:</dt>
+    <dd class="col-sm-6">{{ user.visible_name }}</dd>
+
+    <dt class="col-sm-6">{{ _("Quota") }}:</dt>
+    <dd class="col-sm-6">{{ user.quota if user.quota else _("No") }}</dd>
+</dl>
+
+
+<div class="accordion" id="user_permission">
+  {% for perm_domain,subdomains in user_permissions.items() %}
+  <div class="accordion-item">
+    <h2 class="accordion-header">
+      <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#perm-dom-{{ loop.index0 }}" aria-expanded="true" aria-controls="perm-dom-{{ loop.index0 }}">
+          {{ perm_domain }}
+      </button>
+    </h2>
+    <div id="perm-dom-{{ loop.index0 }}" class="accordion-collapse collapse hide" data-bs-parent="#user_permission">
+      <div class="accordion-body">
+          {% for subdomain,actions in subdomains.items() %}
+          <h6>{{ subdomain }}</h6>
+            <div class="row">
+                {% for action, enabled in actions.items() %}
+                    <dd class="col-sm-1"></dd>
+                    <dd class="col-sm-7">{{ action }}:</dd>
+                    <dd class="col-sm-4">{{ enabled | enabled_fmt | safe }}</dd>
+                {% endfor %}
+            </div>
+          {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}
+
+

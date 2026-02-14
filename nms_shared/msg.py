@@ -88,6 +88,7 @@ class ErrorMessages(Enum):
     E_NET_DDNS_CONFIG = "E_NET_DDNS_CONFIG"
 
     E_USER_NOT_FOUND = "E_USER_NOT_FOUND"
+    E_USER_PASSWD = "E_USER_PASSWD"
 
     @staticmethod
     def get_error_from_string(error_code:str,*args,**kwargs) -> str:
@@ -256,6 +257,7 @@ ERROR_MESSAGES = {
     ErrorMessages.E_NET_DDNS_CONFIG : lambda : _("Missing Dynamic DNS configuration. Check if username/domain and password/token are properly set for the chosen provider."),
 
     ErrorMessages.E_USER_NOT_FOUND : lambda user : _("User %(user)s not found.") % {'user':user}, # <------
+    ErrorMessages.E_USER_PASSWD : lambda user : _("Unable to change the password for %(user)s.") % {'user':user}, # <------
 }
 
 WARNING_MESSAGES = {

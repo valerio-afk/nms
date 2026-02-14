@@ -72,16 +72,10 @@ def require_login() -> Optional[Response]:
 
 
     if request.endpoint not in ("main.login", "static","main.configure_otp","main.otp_qr"):
-        if session.get("authenticated",False) is not True:
-            redirection = request.full_path
-            parsed = urlparse(redirection)
+        if (not NMSBACKEND.is_authenticated):
+            return handle_token_expired(None)
 
-            redirect_params = {}
 
-            if (parsed.path != url_for('main.login')):
-                redirect_params["next"] = parsed.path
-
-            return redirect(url_for("main.login",**redirect_params))
 
 @frontend.before_request
 def resilvering_ongoing() -> Optional[Response]:
@@ -97,6 +91,31 @@ def resilvering_ongoing() -> Optional[Response]:
     if len(tasks) > 0:
         return redirect(url_for(wait_endpoint))
 
+@frontend.context_processor
+def user_data():
+    initials = None
+
+    if ((user:=session.get("user")) is not None):
+        if (user.get("initials") is None):
+            if ((initials := user.get("visible_name")) is None):
+                if ((initials := user.get("username")) is not None):
+                    initials = initials[:2]
+
+            else:
+                parts = initials.split(" ")
+                if (len(parts) >= 2):
+                    initials = f"{parts[0][0]}{parts[-1][0]}"
+                else:
+                    initials = initials[:2]
+
+            initials = initials.upper() if initials is not None else "?"
+            user['initials'] = initials
+
+
+
+    return dict(
+        current_user=user
+    )
 
 
 @frontend.after_request
@@ -131,12 +150,19 @@ def set_language_frontend() -> dict:
 def handle_token_expired(_) -> Response:
     session.clear()
 
-    return redirect(url_for("main.login"))
+    redirection = request.full_path
+    parsed = urlparse(redirection)
+
+    redirect_params = {}
+
+    if (parsed.path != url_for('main.login')):
+        redirect_params["next"] = parsed.path
+
+    return redirect(url_for("main.login", **redirect_params))
+
 
 @frontend.errorhandler(401)
 def unauthorized(_) -> Tuple[str,int]:
-    import logging
-    logging.getLogger().error("do i even get here?")
     return render_template("401.html"), 401
 
-from . import dashboard, services, disks, utilities, auth, advanced, network
+from . import dashboard, services, disks, utilities, auth, advanced, network, users
