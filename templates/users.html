@@ -1,0 +1,31 @@
+{% extends "index.html" %}
+
+{% block title %}{{ _("Users") }}{% endblock %}
+
+{% block content %}
+
+<div class="hstack gap-3">
+    <form method="GET" class="disable-on-submit flex-fill hstack gap-3" action="{{ url_for('main.users') }}">
+        <div class="dropdown flex-fill">
+          <input id="user_search" name="q" class="form-control w-100" list="user_list" placeholder="{{ _('Type a username...') }}">
+
+           <datalist id="user_list">
+               {% for u in users %}
+                    <option value="{{ u.username }}">{{ u.visible_name }}</option>
+               {% endfor %}
+           </datalist>
+        </div>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-send-fill"></i></button>
+    </form>
+    <div class="vr"></div>
+    <button type="button" class="btn btn-success"><i class="bi bi-person-fill-add"></i> {{ _("Add User") }}</button>
+</div>
+
+<div class="row g-3 mt-4">
+    {% for widget in widgets %}
+        {{ widget|safe }}
+    {% endfor %}
+</div>
+
+
+{% endblock %}

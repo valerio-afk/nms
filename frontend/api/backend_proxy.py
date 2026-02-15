@@ -2,6 +2,7 @@ import datetime
 
 import werkzeug.exceptions
 
+from backend_server.utils.responses import UserProfile
 from nms_shared.enums import RequestMethod
 from flask import flash, session, abort
 from flask_babel import _, format_datetime
@@ -240,6 +241,10 @@ class BackEndProxy:
     @property
     def current_user(this) -> dict:
         return this._request("users/get")
+
+    @property
+    def users(this) -> List[dict]:
+        return this._request("users/get/all")
 
 
 
@@ -632,6 +637,12 @@ class BackEndProxy:
 
     def set_user_fullname(this, username:str, fullname:str) -> None:
         this._request(f"users/set/fullname", RequestMethod.POST,body_params={"username": username, "fullname": fullname})
+
+    def set_user_quota(this,username:str,quota:str) -> None:
+        this._request("users/set/quota",RequestMethod.POST,body_params={"username": username, "quota": quota})
+
+    def change_username(this,old_username:str,new_username:str) -> None:
+        this._request("users/set/username",RequestMethod.POST,body_params={"old_username": old_username, "new_username": new_username})
 
     #Other Method
     def register_task(this,

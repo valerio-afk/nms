@@ -1,7 +1,8 @@
-from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet, UserModChangeHomeDir
+from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet, UserModChangeHomeDir, ZFSGetQuota, Chmod, \
+    Chown, LocalCommandLineTransaction
 from backend_server.utils.cmdl import ZPoolList
 from backend_server.utils.logger import Logger
-from backend_server.utils.responses import ErrorMessage, UserProfile
+from backend_server.utils.responses import ErrorMessage, UserProfile, Quota
 from backend_server.utils.services import SystemService
 from backend_server.utils.threads import NetIOCounter, DDNSNoIP, LongWaitThread, DDNSServiceThread, DuckDNS, DynuDDNS, \
     FreeDNS, DNSExit, Dynv6, ClouDNS
@@ -135,20 +136,12 @@ class NMSConfig(Logger):
     @property
     def temporary_otp_secrets(this) -> Dict[str, str]:
         return {k:v for k,v in this._tmp_secret.items()}
-    #
-    # @temporary_otp_secret.setter
-    # def temporary_otp_secret(this,value:Optional[str]) -> None:
-    #     this._tmp_secret = value
 
     @property
     def otp_secrets(this) -> Dict[str,str]:
         users = this._cfg.get("users",{})
 
         return {uname:secret for uname,props in users.items() if (secret:=props.get("otp_secret")) is not None }
-
-    # @otp_secret.setter
-    # def otp_secret(this, value:Optional[str]) -> None:
-    #     this._cfg['access']["otp_secret"] = value
 
     @property
     def issued_tokens(this) -> List[str]:
@@ -343,6 +336,14 @@ class NMSConfig(Logger):
     def systemd_services(this) -> List[str]:
         return [service for service in this._cfg.get('systemd',{}).get('services',[])]
 
+    # USER PROPERTIES
+
+    @property
+    def users(this) -> List[UserProfile]:
+        usernames = this._cfg.get("users", {}).keys()
+
+        return [this.get_user(u) for u in usernames]
+
 
 
     # BASE METHODS
@@ -399,9 +400,8 @@ class NMSConfig(Logger):
             "root": {
                 "user": {
                     "otp_secret": None,
-                    "fullname": "Admin",
+                    "fullname": "admin",
                     "permissions": ["*"],
-                    "quota": None,
                     "ssh_uid": 1000
                 }
             },
@@ -451,6 +451,13 @@ class NMSConfig(Logger):
 
         this.flush_config()
 
+        cmds = [
+            Chmod(this.config_filename,"600",sudo=True),
+            Chown("root","root",this.config_filename,sudo=True),
+        ]
+
+        LocalCommandLineTransaction(*cmds).run()
+
     def flush_config(this) -> None:
         this.info(f"Flushing configuration file `{this.config_filename}`")
         try:
@@ -471,10 +478,32 @@ class NMSConfig(Logger):
         user = this._cfg.get("users", {}).get(username, None)
 
         if user is not None:
-            return UserProfile(username=username,visible_name=user["fullname"],permissions=user["permissions"])
+            cmd = ZFSGetQuota(this.pool_name,this.dataset_name,sudo=True)
+            output = cmd.execute()
+
+            quota = None
+
+            if (output.returncode == 0):
+                for line in output.stdout.splitlines():
+                    uname,used,limit = line.split("\t")
+
+                    if (uname == username):
+                        quota = Quota(used=int(used),quota=int(limit))
+            else:
+                CONFIG.error(f"Unable to get quota for user {username}: {output.stderr}")
+
+            return UserProfile(
+                username=username,
+                visible_name=user["fullname"],
+                permissions=user["permissions"],
+                quota = quota
+            )
 
     def set_user_fullname(this,username:str,fullname:str) -> None:
         this._cfg['users'][username]["fullname"] = fullname
+
+    def change_username(this,old_username:str,new_username:str) -> None:
+        this._cfg['users'][new_username] = this._cfg['users'].pop(old_username)
 
 
     #AUTH/OTP METHODS

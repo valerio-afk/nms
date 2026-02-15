@@ -39,6 +39,7 @@
 
 <script nonce="{{ csp_nonce }}">
     const inputs = document.querySelectorAll(".otp-input");
+    document.getElementById("otp0").focus();
 
     // Auto-advance and auto-backspace behaviour
     inputs.forEach((input, index) => {

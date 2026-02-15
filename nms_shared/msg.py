@@ -90,6 +90,8 @@ class ErrorMessages(Enum):
 
     E_USER_NOT_FOUND = "E_USER_NOT_FOUND"
     E_USER_PASSWD = "E_USER_PASSWD"
+    E_USER_QUOTA = "E_USER_QUOTA"
+    E_USER_NAME = "E_USER_NAME"
 
     @staticmethod
     def get_error_from_string(error_code:str,*args,**kwargs) -> str:
@@ -155,7 +157,8 @@ class SuccessMessages(Enum):
 
     S_USER_PASSWORD = "S_USER_PASSWORD"
     S_USER_FULLNAME = "S_USER_FULLNAME"
-
+    S_USER_QUOTA = "S_USER_QUOTA"
+    S_USER_NAME = "S_USER_NAME"
 
 
     @staticmethod
@@ -261,8 +264,10 @@ ERROR_MESSAGES = {
     ErrorMessages.E_NET_DDNS_SERVICE : lambda provider,info : _("Error occurred during the execution of the dynamic DNS provider `%(provider)s`: %(info)s") % {'provider':provider,"info":info},
     ErrorMessages.E_NET_DDNS_CONFIG : lambda : _("Missing Dynamic DNS configuration. Check if username/domain and password/token are properly set for the chosen provider."),
 
-    ErrorMessages.E_USER_NOT_FOUND : lambda user : _("User %(user)s not found.") % {'user':user}, # <------
-    ErrorMessages.E_USER_PASSWD : lambda user : _("Unable to change the password for %(user)s.") % {'user':user}, # <------
+    ErrorMessages.E_USER_NOT_FOUND : lambda user : _("User %(user)s not found.") % {'user':user},
+    ErrorMessages.E_USER_PASSWD : lambda user : _("Unable to change the password for %(user)s.") % {'user':user},
+    ErrorMessages.E_USER_QUOTA : lambda info: _("Error occurred while setting the user quota: %(info)s.") % {'info':info}, #<-----
+    ErrorMessages.E_USER_NAME: lambda info: _("Error occurred while changing username: %(info)s.") % {'info':info}, #<-----
 }
 
 WARNING_MESSAGES = {
@@ -308,6 +313,8 @@ SUCCESS_MESSAGES = {
 
     SuccessMessages.S_USER_PASSWORD : lambda : _("Password changed successfully."),
     SuccessMessages.S_USER_FULLNAME : lambda : _("Visible name changed successfully."),
+    SuccessMessages.S_USER_QUOTA : lambda : _("User quota set successfully."),
+    SuccessMessages.S_USER_NAME : lambda : _("Username changed successfully."),
 
 }
 

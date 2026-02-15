@@ -20,7 +20,13 @@
 
 <div class="row">
     <dt class="col-sm-5">{{ _("Quota") }}:</dt>
-    <dd class="col-sm-7">{{ user.quota if user.quota else _("No") }}</dd>
+    <dd class="col-sm-7">
+        {% if user.quota and user.quota.quota > 0 %}
+            {{ user.quota.used | human_readable_bytes }} / {{ user.quota.quota | human_readable_bytes }}
+        {% else %}
+            {{ _("No") }}
+        {% endif %}
+    </dd>
 </div>
 
 

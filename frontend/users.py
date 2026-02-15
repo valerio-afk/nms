@@ -4,7 +4,7 @@ from .utils.forms import ChangePasswordForm
 from .utils.widget import get_widgets_html, get_widgets_css_files, render_widget
 from flask import session, render_template, g, flash, redirect, url_for, request, Response
 from flask_babel import _
-from flask_wtf.csrf import validate_csrf, ValidationError
+from flask_wtf.csrf import validate_csrf, ValidationError, generate_csrf
 from nms_shared.enums import UserPermissions
 from nms_shared.msg import ErrorMessages
 from typing import Dict, Tuple
@@ -95,6 +95,13 @@ def widget_user_account() -> Tuple[str,str]:
 
     return render_widget("account",user=user,user_permissions=user_permissions)
 
+def widget_user_account_admin(user:dict) -> Tuple[str,str]:
+    user_permissions = {p.value:check_permission(user,p) for p in sorted([x for x in UserPermissions],key=lambda y:y.value)}
+
+    user_permissions = nest_permissions(user_permissions)
+
+    return render_widget("account_admin",user=user,user_permissions=user_permissions)
+
 def widget_access_services() -> Tuple[str,str]:
     user = session.get("user")
 
@@ -114,15 +121,15 @@ def widget_access_services() -> Tuple[str,str]:
 
 @bp.route("/account")
 def user_account() -> str:
-    dashboard_widgets = [
+    widgets = [
         widget_user_account(),
         widget_access_services(),
     ]
 
     return render_template("account.html",
                            csp_nonce=g.csp_nonce,
-                           widgets=get_widgets_html(dashboard_widgets),
-                           extra_css=get_widgets_css_files(dashboard_widgets)
+                           widgets=get_widgets_html(widgets),
+                           extra_css=get_widgets_css_files(widgets)
                            )
 
 @bp.route("/account/fullname",methods=["POST"])
@@ -158,5 +165,68 @@ def user_service_account(service:str):
 
     return redirect(url_for("main.user_account"))
 
+@bp.route("/users",methods=["GET"])
+def users() -> str:
+
+    widgets = []
+    all_users = BACKEND.users
+    user = None
 
 
+    query = request.args.get("q")
+    if (query is not None):
+        for u in all_users:
+            if (query == u.get("username")):
+                user = u
+                break
+
+        if (user is not None):
+            widgets = [
+                widget_user_account_admin(user),
+                widget_access_services(),
+            ]
+        else:
+            show_flash(code=ErrorMessages.E_USER_NOT_FOUND.name, params=[query])
+
+
+    return render_template("users.html",
+                           users = all_users,
+                           widgets=get_widgets_html(widgets),
+                           extra_css=get_widgets_css_files(widgets),
+                           csp_nonce=g.csp_nonce
+    )
+
+
+@bp.route("/users/quota",methods=["POST"])
+def user_quota() -> Response:
+    username = request.form.get("username")
+
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+    else:
+
+        new_quota = request.form.get("quota")
+
+        BACKEND.set_user_quota(username,new_quota)
+
+    return redirect(url_for("main.users",q=username))
+
+@bp.route("/users/username",methods=["POST"])
+def change_username() -> Response:
+    username = request.form.get("username")
+
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+    else:
+
+        new_username = request.form.get("new_username")
+
+        BACKEND.change_username(username,new_username)
+
+        return redirect(url_for("main.users", q=new_username))
+
+    return redirect(url_for("main.users",q=username))

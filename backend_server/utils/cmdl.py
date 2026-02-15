@@ -1,12 +1,12 @@
-import json
-import subprocess
-import socket
-from subprocess import CompletedProcess
-from tempfile import gettempdir
-import os
 from abc import abstractmethod, ABC
 from enum import Enum
-from typing import Optional, List, Dict, Any
+from subprocess import CompletedProcess
+from tempfile import gettempdir
+from typing import Optional, List, Dict, Any, Union
+import json
+import os
+import socket
+import subprocess
 
 
 class CommandLine(ABC):
@@ -388,6 +388,25 @@ class ZFSCommand(RevertibleCommandLine):
         cmd = ["zfs", subcommand]
         super().__init__(cmd,**kwargs)
 
+class ZFSGetQuota(ZFSCommand):
+    def __init__(this, pool:str,dataset:str,**kwargs):
+        super().__init__("userspace",**kwargs)
+
+        this.append(['-p','-H','-o','name,used,quota',f"{pool}/{dataset}"])
+
+        this._pool = pool
+        this._dataset = dataset
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['pool'] = this._pool
+        d['dataset'] = this._dataset
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ZFSGetQuota(serialisation.get('pool'),serialisation.get("dataset"))
+
 
 class ZFSGet(ZFSCommand):
     def __init__(this, pool):
@@ -402,6 +421,36 @@ class ZFSGet(ZFSCommand):
     @staticmethod
     def from_dict(serialisation):
         return ZFSGet(serialisation.get('pool',None))
+
+class ZFSSetQuota(ZFSCommand):
+    def __init__(this, username:str,quota:Union[str,int],pool:str,dataset:str,**kwargs):
+        super().__init__("set",**kwargs)
+
+        this.append(f"userquota@{username}={quota}")
+        this.append(f"{pool}/{dataset}")
+
+        this._pool = pool
+        this._dataset = dataset
+        this._username = username
+        this._quota = quota
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['pool'] = this._pool
+        d['dataset'] = this._dataset
+        d['username'] = this._username
+        d['quota'] = this._quota
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ZFSSetQuota(
+            serialisation.get('username', None),
+            serialisation.get('quota', None),
+            serialisation.get('pool', None),
+            serialisation.get('dataset',None)
+        )
+
 
 class ZFSList(ZFSCommand):
     def __init__(this,properties=None):
@@ -1081,6 +1130,30 @@ class UserModChangeHomeDir(RevertibleCommandLine):
             serialisation.get('new', None),
         )
 
+class RenameFile(RevertibleCommandLine):
+    def __init__(this,old,new):
+        cmd = ['mv', old, new]
+        revert_cmd = ['mv', new, old]
+        super().__init__(cmd,revert_cmd,sudo=True)
+
+        this._old = old
+        this._new = new
+
+    def to_dict(this):
+        d = super().to_dict()
+
+        d['old'] = this._old
+        d['new'] = this._new
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return RenameFile(
+            serialisation.get('old',None),
+            serialisation.get('new', None),
+        )
+
 class GetEntShadow(RevertibleCommandLine):
     def __init__(this,username):
         cmd = ['getent','shadow',username]
@@ -1497,3 +1570,4 @@ class NMCLIConnection(NMCLI):
             serialisation.get("subcommand", None),
             *args,
         )
+

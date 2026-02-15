@@ -1,0 +1,82 @@
+{% extends "card.html" %}
+
+{% block card_title %}<i class="bi bi-person-circle"></i> {{ _("Account") }}{% endblock %}
+
+{% block card_content %}
+
+
+<form method="POST" class="disable-on-submit"  action="{{ url_for('main.change_username') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="username" value="{{ user.username }}">
+    <div class="row mb-3">
+            <dt class="col-sm-5 col-form-label">{{ _("Username") }}:</dt>
+            <div class="col-sm-5"><input type="text" name="new_username" value="{{ user.username }}" class="form-control" /> </div>
+            <div class="col-sm-2"><button type="submit" class="btn btn-success"><i class="bi bi-send-fill"></i></button></div>
+    </div>
+</form>
+<form method="POST" class="disable-on-submit"  action="{{ url_for('main.account_fullname') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="username" value="{{ user.username }}">
+    <div class="row mb-3">
+            <dt class="col-sm-5 col-form-label">{{ _("Visible Name") }}:</dt>
+            <div class="col-sm-5"><input type="text" name="fullname" value="{{ user.visible_name }}" class="form-control" /> </div>
+            <div class="col-sm-2"><button type="submit" class="btn btn-success"><i class="bi bi-send-fill"></i></button></div>
+    </div>
+</form>
+
+
+<form method="POST" class="disable-on-submit"  action="{{ url_for('main.user_quota') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="username" value="{{ user.username }}">
+    <div class="row mb-3">
+            <dt class="col-sm-5 col-form-label">{{ _("Quota") }}:</dt>
+            <div class="col-sm-5"><input type="text" name="quota" value="{{ user.quota.quota | human_readable_bytes }}" class="form-control" /> </div>
+            <div class="col-sm-2"><button type="submit" class="btn btn-success"><i class="bi bi-send-fill"></i></button></div>
+    </div>
+</form>
+
+<div class="row mb-3">
+    <dt class="col-sm-5">{{ _("Used Space") }}:</dt>
+    <dd class="col-sm-7">
+        {% if user.quota %}
+            {{ user.quota.used | human_readable_bytes }}
+        {% else %}
+            {{ _("Unknown") }}
+        {% endif %}
+    </dd>
+</div>
+
+
+
+<div class="accordion" id="user_permission">
+  {% for perm_domain,subdomains in user_permissions.items() %}
+  <div class="accordion-item">
+    <h2 class="accordion-header">
+      <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#perm-dom-{{ loop.index0 }}" aria-expanded="true" aria-controls="perm-dom-{{ loop.index0 }}">
+          {{ perm_domain }}
+      </button>
+    </h2>
+    <div id="perm-dom-{{ loop.index0 }}" class="accordion-collapse collapse hide" data-bs-parent="#user_permission">
+      <div class="accordion-body">
+          {% for subdomain,actions in subdomains.items() %}
+          <h6>{{ subdomain }}</h6>
+            <div class="row">
+                {% for action, enabled in actions.items() %}
+                    <dd class="col-sm-12">
+                        <div class="form-check form-switch">
+                          <input class="form-check-input" type="checkbox" role="switch" id="switch-{{ action }}" {{ "checked" if enabled else ""}}>
+                          <label class="form-check-label" for="switch-{{ action }}">{{ action  }}</label>
+                        </div>
+                    </dd>
+                {% endfor %}
+            </div>
+          {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}
+
+

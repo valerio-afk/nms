@@ -118,14 +118,27 @@ class DDNSDefaultProviderConfiguration(BaseModel):
     username:Optional[str]
     password:str
 
+class Quota(BaseModel):
+    quota:int
+    used:int
+
 class UserProfile(BaseModel):
     username:str
     visible_name:str
     permissions:List[str]
+    quota:Optional[Quota]
 
 class AccessServiceCredentials(BaseModel):
     username:str
     password:str
+
+class ChangeQuotaData(BaseModel):
+    username: str
+    quota: Union[str,int]
+
+class ChangeUsernameData(BaseModel):
+    old_username:str
+    new_username:str
 
 class ChgFullnameData(BaseModel):
     username:str
