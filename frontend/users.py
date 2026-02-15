@@ -82,8 +82,7 @@ def nest_permissions(permissions:Dict[str,bool]) -> Dict[str,bool]:
         for part in parts[:-1]:
             current = current.setdefault(lang_key(part), {})
 
-
-        current[lang_key(parts[-1])] = value
+        current[lang_key(parts[-1])] = (key.replace('.','-'),value)
 
     return result
 
@@ -131,6 +130,8 @@ def user_account() -> str:
                            widgets=get_widgets_html(widgets),
                            extra_css=get_widgets_css_files(widgets)
                            )
+
+
 
 @bp.route("/account/fullname",methods=["POST"])
 def account_fullname() -> Response:
@@ -196,6 +197,16 @@ def users() -> str:
                            csp_nonce=g.csp_nonce
     )
 
+@bp.route("/users/add",methods=["GET"])
+def add_user() -> str:
+
+    all_permissions = {p.value:False for p in UserPermissions}
+
+    return render_template("user.add.html",
+                           all_permissions = nest_permissions(all_permissions),
+                           csp_nonce=g.csp_nonce
+    )
+
 
 @bp.route("/users/quota",methods=["POST"])
 def user_quota() -> Response:
@@ -228,5 +239,21 @@ def change_username() -> Response:
         BACKEND.change_username(username,new_username)
 
         return redirect(url_for("main.users", q=new_username))
+
+    return redirect(url_for("main.users",q=username))
+
+
+@bp.route("/users/sudo",methods=["POST"])
+def set_sudo() -> Response:
+    username = request.form.get("username")
+
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+    else:
+        sudo = request.form.get("sudo",False)
+        BACKEND.set_sudo(username,sudo)
+
 
     return redirect(url_for("main.users",q=username))

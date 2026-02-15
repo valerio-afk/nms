@@ -1,16 +1,15 @@
-import os.path
-
+from .auth import check_permission
+from backend_server.utils.cmdl import LocalCommandLineTransaction, UserModAddGroup, GPasswdRemoveGroup
+from backend_server.utils.cmdl import ZFSSetQuota, UserModChangeUsername, SMBPasswd, RenameFile, UserModChangeHomeDir
 from backend_server.utils.config import CONFIG
-from backend_server.utils.responses import UserProfile, AccessServiceCredentials, ErrorMessage, SuccessMessage, \
-    ChgFullnameData, ChangeQuotaData, ChangeUsernameData
+from backend_server.utils.responses import ChgFullnameData, ChangeQuotaData, ChangeUsernameData, SudoData
+from backend_server.utils.responses import UserProfile, AccessServiceCredentials, ErrorMessage, SuccessMessage
 from backend_server.v1.auth import verify_token_factory
 from fastapi import APIRouter, Depends, HTTPException
-from typing import Optional, Any, List
 from nms_shared.enums import UserPermissions
 from nms_shared.msg import ErrorMessages, SuccessMessages
-from .auth import check_permission
-from ..utils.cmdl import ZFSSetQuota, UserModChangeUsername, SMBPasswd, RenameFile, UserModChangeHomeDir, \
-    LocalCommandLineTransaction
+from typing import Optional, Any, List
+import os.path
 
 verify_token = verify_token_factory()
 
@@ -89,6 +88,20 @@ def set_username(data:ChangeUsernameData,token:dict=Depends(verify_token)) -> di
 
     return {"detail": SuccessMessage(code=SuccessMessages.S_USER_NAME.name)}
 
+@users.post("/set/sudo",summary="Add or remove a user from sudoers")
+def sudoers(data:SudoData,token:dict=Depends(verify_token)) -> dict:
+    username = token.get("username")
+    check_user_permissions(username,data)
+
+    cmd = UserModAddGroup(data.username,"sudo")  if (data.sudo) else GPasswdRemoveGroup(data.username,"sudo")
+
+    output = cmd.execute()
+
+    if (output.returncode != 0):
+        HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_USER_SUDO.name,params=[output.stderr]))
+
+    return {"detail":SuccessMessage(code=SuccessMessages.S_USER_SUDO.name)}
+
 @users.post("/service/{service}",summary="Change the password for a specific access service")
 def change_password(service:str,credentials:AccessServiceCredentials,token:dict=Depends(verify_token)) -> dict:
     username = token.get("username")
@@ -108,3 +121,4 @@ def change_password(service:str,credentials:AccessServiceCredentials,token:dict=
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_ACCESS_SERV_UNK.name,params=[service]))
 
     return {"detail":SuccessMessage(code=SuccessMessages.S_USER_PASSWORD.name)}
+

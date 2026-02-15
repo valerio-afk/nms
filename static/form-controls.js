@@ -126,15 +126,94 @@ function enablePasswordToggle() {
     });
   }
 
+function initPermissionSwitches() {
+
+    // find all forms with class form-perms
+    const forms = document.querySelectorAll("form.form-perms");
+
+    forms.forEach(form => {
+
+        // helper to extract index from id
+        function getIndexFromId(id, prefix) {
+            return id.replace(prefix, "");
+        }
+
+        // ---------------------------------
+        // HEADER SWITCH -> BODY SWITCHES
+        // ---------------------------------
+        form.querySelectorAll('[id^="switch--"]').forEach(headerSwitch => {
+
+            headerSwitch.addEventListener("click", function (e) {
+                e.stopPropagation();
+            });
+
+            headerSwitch.addEventListener("change", function (e) {
+
+                const idx = getIndexFromId(this.id, "switch--");
+
+                const container = form.querySelector(`#perm-dom-${idx}`);
+                if (!container) return;
+
+                const bodySwitches = container.querySelectorAll('input[type="checkbox"]');
+
+                bodySwitches.forEach(sw => {
+                    sw.checked = this.checked;
+                });
+
+                e.stopPropagation();
+
+            });
+
+        });
+
+        // ---------------------------------
+        // BODY SWITCHES -> HEADER SWITCH
+        // ---------------------------------
+        form.querySelectorAll('[id^="perm-dom-"] input[type="checkbox"]').forEach(bodySwitch => {
+
+            bodySwitch.addEventListener("change", function () {
+
+                // find parent container
+                const container = this.closest('[id^="perm-dom-"]');
+                if (!container) return;
+
+                // extract index from container id
+                const match = container.id.match(/^perm-dom-(\d+)/);
+                if (!match) return;
+
+                const idx = match[1];
+
+                const headerSwitch = form.querySelector(`#switch--${idx}`);
+                if (!headerSwitch) return;
+
+                // get ALL switches inside this container
+                const bodySwitches = container.querySelectorAll('input[type="checkbox"]');
+
+                const allChecked = Array.from(bodySwitches)
+                    .every(sw => sw.checked);
+
+                headerSwitch.checked = allChecked;
+
+            });
+
+        });
+
+
+    });
+
+}
+
 // Auto init
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initializeToggleControls);
     document.addEventListener('DOMContentLoaded', disableOnSubmit);
     document.addEventListener('DOMContentLoaded', enablePasswordToggle);
+    document.addEventListener('DOMContentLoaded', initPermissionSwitches);
 } else {
-    initializeToggleControls();
-    disableOnSubmit();
+    initializeToggleControls()
+    disableOnSubmit()
     enablePasswordToggle()
+    initPermissionSwitches()
 }
 
 

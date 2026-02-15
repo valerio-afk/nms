@@ -1,17 +1,16 @@
-from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet, UserModChangeHomeDir, ZFSGetQuota, Chmod, \
-    Chown, LocalCommandLineTransaction
-from backend_server.utils.cmdl import ZPoolList
+from backend_server.utils.cmdl import Chown, LocalCommandLineTransaction, Groups, ZPoolList
+from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet, UserModChangeHomeDir, ZFSGetQuota, Chmod
 from backend_server.utils.logger import Logger
 from backend_server.utils.responses import ErrorMessage, UserProfile, Quota
 from backend_server.utils.services import SystemService
-from backend_server.utils.threads import NetIOCounter, DDNSNoIP, LongWaitThread, DDNSServiceThread, DuckDNS, DynuDDNS, \
-    FreeDNS, DNSExit, Dynv6, ClouDNS
+from backend_server.utils.threads import FreeDNS, DNSExit, Dynv6, ClouDNS
+from backend_server.utils.threads import NetIOCounter, DDNSNoIP, LongWaitThread, DDNSServiceThread, DuckDNS, DynuDDNS
 from cryptography.fernet import Fernet
 from fastapi import HTTPException
 from importlib import import_module
 from nms_shared import ErrorMessages
 from nms_shared.disks import Disk
-from nms_shared.enums import DiskStatus
+from nms_shared.enums import DiskStatus, UserPermissions
 from typing import Optional, Dict, List, Any, Type
 import base64
 import datetime
@@ -470,9 +469,7 @@ class NMSConfig(Logger):
     # USERS METHODS
 
     def user_permissions(this,username:str)->List[str]:
-        u = this.get_user(username)
-
-        return [] if u is None else u.permissions
+        return [p for p in this._cfg.get("users", {}).get(username, {}).get('permissions', [])]
 
     def get_user(this,username:str)->Optional[UserProfile]:
         user = this._cfg.get("users", {}).get(username, None)
@@ -492,11 +489,22 @@ class NMSConfig(Logger):
             else:
                 CONFIG.error(f"Unable to get quota for user {username}: {output.stderr}")
 
+            sudo = False
+
+            cmd = Groups(username)
+            output = cmd.execute()
+
+            if (output.returncode == 0):
+                sudo = "sudo" in output.stdout.strip()
+
+
             return UserProfile(
                 username=username,
                 visible_name=user["fullname"],
                 permissions=user["permissions"],
-                quota = quota
+                quota = quota,
+                sudo = sudo,
+                admin=this.is_admin(username),
             )
 
     def set_user_fullname(this,username:str,fullname:str) -> None:
@@ -504,6 +512,28 @@ class NMSConfig(Logger):
 
     def change_username(this,old_username:str,new_username:str) -> None:
         this._cfg['users'][new_username] = this._cfg['users'].pop(old_username)
+
+    def has_user_permission(this,username:str,perm:UserPermissions)->bool:
+        user_permissions = this.user_permissions(username)
+
+        if "*" in user_permissions:
+            return True
+
+        parts = perm.value.split(".")
+
+        for i in range(len(parts), 0, -1):
+            candidate = ".".join(parts[:i])
+            if candidate in user_permissions:
+                return True
+
+            wildcard = candidate + ".*"
+            if wildcard in user_permissions:
+                return True
+
+        return False
+
+    def is_admin(this,username:str)->bool:
+        return all([this.has_user_permission(username, p) for p in UserPermissions])
 
 
     #AUTH/OTP METHODS

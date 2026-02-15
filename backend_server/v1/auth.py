@@ -21,24 +21,10 @@ SECRET_KEY = os.environ.get("NMS_SECRET_KEY")
 
 bearer = HTTPBearer()
 
+
 def check_permission(username:str, perm:UserPermissions) -> None:
-    user_permissions = CONFIG.user_permissions(username)
-
-    if "*" in user_permissions:
-        return
-
-    parts = perm.value.split(".")
-
-    for i in range(len(parts), 0, -1):
-        candidate = ".".join(parts[:i])
-        if candidate in user_permissions:
-            return
-
-        wildcard = candidate + ".*"
-        if wildcard in user_permissions:
-            return
-
-    raise HTTPException(status_code=401)
+    if (not CONFIG.has_user_permission(username,perm)):
+        raise HTTPException(status_code=401)
 
 def create_token(username:str,purpose:str, duration:int) -> str:
     released = datetime.now(pytz.timezone("UTC"))

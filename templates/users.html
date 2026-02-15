@@ -18,7 +18,9 @@
         <button type="submit" class="btn btn-primary"><i class="bi bi-send-fill"></i></button>
     </form>
     <div class="vr"></div>
-    <button type="button" class="btn btn-success"><i class="bi bi-person-fill-add"></i> {{ _("Add User") }}</button>
+    <a href="{{ url_for('main.add_user') }}">
+        <button type="button" class="btn btn-success"><i class="bi bi-person-fill-add"></i> {{ _("Add User") }}</button>
+    </a>
 </div>
 
 <div class="row g-3 mt-4">

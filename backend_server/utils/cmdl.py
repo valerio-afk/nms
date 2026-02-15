@@ -1103,6 +1103,54 @@ class UserModChangeUsername(RevertibleCommandLine):
             serialisation.get('new', None),
         )
 
+class UserModAddGroup(RevertibleCommandLine):
+    def __init__(this,username:str,group:str):
+        cmd = ['usermod','-aG',group,username]
+        revert_cmd = ['gpasswd', '-d', username, group]
+        super().__init__(cmd,revert_cmd,sudo=True)
+
+        this._username = username
+        this._group = group
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['username'] = this._username
+        d['group'] = this._group
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return UserModAddGroup(
+            serialisation.get('username',None),
+            serialisation.get('group', None),
+        )
+
+class GPasswdRemoveGroup(RevertibleCommandLine):
+    def __init__(this,username:str,group:str):
+        cmd = ['gpasswd', '-d', username, group]
+        revert_cmd = ['usermod', '-aG', group, username]
+
+        super().__init__(cmd, revert_cmd, sudo=True)
+
+        this._username = username
+        this._group = group
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['username'] = this._username
+        d['group'] = this._group
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return GPasswdRemoveGroup(
+            serialisation.get('username',None),
+            serialisation.get('group', None),
+        )
+
+
 class UserModChangeHomeDir(RevertibleCommandLine):
     def __init__(this,username, old,new):
         cmd = ['usermod', '-d', new, username]
@@ -1571,3 +1619,20 @@ class NMCLIConnection(NMCLI):
             *args,
         )
 
+class Groups(CommandLine):
+    def __init__(this,username:str,**kwargs):
+        super().__init__(["groups",username],**kwargs)
+
+        this._username = username
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['username'] = this._username
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return Groups(
+            serialisation.get("username", None),
+        )

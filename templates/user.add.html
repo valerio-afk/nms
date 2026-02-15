@@ -1,0 +1,107 @@
+
+{% extends "index.html" %}
+
+{% block title %}{{ _("Add User") }}{% endblock %}
+
+{% block content %}
+
+<h3>{{ _("Add User") }}</h3>
+
+<form method="POST" class="disable-on-submit form-perms"  action="{{ url_for('main.change_username') }}">
+
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="row g-3">
+          <div class="col-12 col-sm-12 col-md-6 col-lg-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="row mb-3">
+                            <dt class="col-sm-5 col-form-label">{{ _("Username") }}:</dt>
+                            <div class="col-sm-7"><input type="text" name="username" class="form-control" required /> </div>
+                    </div>
+
+                    <div class="row mb-3">
+                            <dt class="col-sm-5 col-form-label">{{ _("Visible Name") }}:</dt>
+                            <div class="col-sm-7"><input type="text" name="fullname" class="form-control" /> </div>
+                    </div>
+
+                    <div class="row mb-3">
+                            <dt class="col-sm-5 col-form-label">{{ _("Quota") }}:</dt>
+                            <div class="col-sm-7"><input type="text" name="quota" class="form-control" /> </div>
+                    </div>
+
+                    <div class="row mb-3">
+                            <dt class="col-sm-5 col-form-label">{{ _("Superuser") }}:</dt>
+                            <div class="col-sm-7">
+                                <span class="form-check form-switch">
+                                     <input class="form-check-input" type="checkbox" role="switch" name="sudo" id="sudo">
+                                </span>
+                            </div>
+                    </div>
+                </div>
+            </div>
+          </div>
+
+        <div class="col-12 col-sm-12 col-md-6 col-lg-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="accordion" id="user_permission">
+                      {% for perm_domain,subdomains in all_permissions.items() %}
+                      <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <div class="d-flex w-100 align-items-center">
+                                <button class="accordion-button flex-grow-1"
+                                    type="button"
+                                    data-bs-toggle="collapse"
+                                    data-bs-target="#perm-dom-{{ loop.index0 }}">
+                                    {{ perm_domain }}
+                                </button>
+
+                                <span class="ms-3 me-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input"
+                                               type="checkbox"
+                                               role="switch"
+                                               id="switch--{{ loop.index0 }}">
+                                    </div>
+                                </span>
+
+                            </div>
+
+                        </h2>
+                        <div id="perm-dom-{{ loop.index0 }}" class="accordion-collapse collapse hide" data-bs-parent="#user_permission">
+                          <div class="accordion-body">
+                              {% for subdomain,actions in subdomains.items() %}
+                              <h6>{{ subdomain }}</h6>
+                                <div class="row">
+                                    {% for action, (perm,_) in actions.items() %}
+                                        <dd class="col-sm-12">
+                                            <div class="form-check form-switch">
+                                              <input class="form-check-input" type="checkbox" role="switch" id="switch--{{ perm }}">
+                                              <label class="form-check-label" for="switch--{{ perm }}">{{ action  }}</label>
+                                            </div>
+                                        </dd>
+                                    {% endfor %}
+                                </div>
+                              {% endfor %}
+                          </div>
+                        </div>
+                      </div>
+                      {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-3">
+        <button type="submit" class="btn btn-success w-100">{{ _("Add User") }}</button>
+    </div>
+</form>
+
+
+
+
+
+{% endblock %}
+
+

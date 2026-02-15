@@ -127,6 +127,8 @@ class UserProfile(BaseModel):
     visible_name:str
     permissions:List[str]
     quota:Optional[Quota]
+    sudo:bool
+    admin:bool
 
 class AccessServiceCredentials(BaseModel):
     username:str
@@ -143,3 +145,7 @@ class ChangeUsernameData(BaseModel):
 class ChgFullnameData(BaseModel):
     username:str
     fullname:str
+
+class SudoData(BaseModel):
+    username:str
+    sudo:bool

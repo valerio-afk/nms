@@ -644,6 +644,9 @@ class BackEndProxy:
     def change_username(this,old_username:str,new_username:str) -> None:
         this._request("users/set/username",RequestMethod.POST,body_params={"old_username": old_username, "new_username": new_username})
 
+    def set_sudo(this,username:str,sudo:bool) -> None:
+        this._request("users/set/sudo",RequestMethod.POST,body_params={"username": username, "sudo": sudo})
+
     #Other Method
     def register_task(this,
                       id:str,

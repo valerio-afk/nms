@@ -40,7 +40,7 @@
     </h2>
     <div id="perm-dom-{{ loop.index0 }}" class="accordion-collapse collapse hide" data-bs-parent="#user_permission">
       <div class="accordion-body">
-          {% for subdomain,actions in subdomains.items() %}
+          {% for action, (key,enabled) in actions.items() %}
           <h6>{{ subdomain }}</h6>
             <div class="row">
                 {% for action, enabled in actions.items() %}

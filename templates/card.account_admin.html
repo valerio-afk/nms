@@ -1,6 +1,14 @@
 {% extends "card.html" %}
 
-{% block card_title %}<i class="bi bi-person-circle"></i> {{ _("Account") }}{% endblock %}
+{% block card_title %}
+{% if user.admin %}
+<i class="bi bi-person-fill-check" data-bs-toggle="tooltip" data-bs-title="{{ _('System Admin') }}"></i>
+{% else %}
+<i class="bi bi-person-circle"></i>
+{% endif %}
+{{ _("Account") }} <span class="float-end"></span>
+{% endblock %}
+
 
 {% block card_content %}
 
@@ -46,6 +54,20 @@
     </dd>
 </div>
 
+<form method="POST" class="disable-on-submit" action="{{ url_for('main.set_sudo') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="username" value="{{ user.username }}">
+    <div class="row mb-3">
+            <dt class="col-sm-5 col-form-label">{{ _("Superuser") }}:</dt>
+            <div class="col-sm-5">
+                <span class="form-check form-switch">
+                     <input class="form-check-input" type="checkbox" role="switch" name="sudo" id="sudo" {{ 'checked' if user.sudo else '' }}>
+                </span>
+            </div>
+            <div class="col-sm-2"><button type="submit" class="btn btn-success"><i class="bi bi-send-fill"></i></button></div>
+    </div>
+</form>
+
 
 
 <div class="accordion" id="user_permission">
@@ -61,11 +83,11 @@
           {% for subdomain,actions in subdomains.items() %}
           <h6>{{ subdomain }}</h6>
             <div class="row">
-                {% for action, enabled in actions.items() %}
+                {% for action, (key,enabled) in actions.items() %}
                     <dd class="col-sm-12">
                         <div class="form-check form-switch">
-                          <input class="form-check-input" type="checkbox" role="switch" id="switch-{{ action }}" {{ "checked" if enabled else ""}}>
-                          <label class="form-check-label" for="switch-{{ action }}">{{ action  }}</label>
+                          <input class="form-check-input" type="checkbox" role="switch" id="switch--{{ key }}" {{ "checked" if enabled else ""}}>
+                          <label class="form-check-label" for="switch--{{ key }}">{{ action  }}</label>
                         </div>
                     </dd>
                 {% endfor %}
