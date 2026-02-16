@@ -160,3 +160,15 @@ class ChgFullnameData(BaseModel):
 class SudoData(BaseModel):
     username:str
     sudo:bool
+
+class Token(BaseModel):
+    token:str
+
+class AuthToken(Token):
+    token:str
+    username:str
+
+
+class UserPermissionsData(BaseModel):
+    username:str
+    permissions:List[str]

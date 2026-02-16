@@ -8,6 +8,16 @@ from flask_wtf.csrf import validate_csrf, ValidationError, generate_csrf
 from nms_shared.enums import UserPermissions
 from nms_shared.msg import ErrorMessages
 from typing import Dict, Tuple
+from . import frontend as bp
+from .api.backend_proxy import NMSBACKEND as BACKEND, show_flash
+from .utils.forms import ChangePasswordForm
+from .utils.widget import get_widgets_html, get_widgets_css_files, render_widget
+from flask import session, render_template, g, flash, redirect, url_for, request, Response
+from flask_babel import _
+from flask_wtf.csrf import validate_csrf, ValidationError, generate_csrf
+from nms_shared.enums import UserPermissions
+from nms_shared.msg import ErrorMessages
+from typing import Dict, Tuple
 
 USER_PERMISSIONS={
     "client" : lambda : _("Web Client"),
@@ -258,6 +268,22 @@ def set_sudo() -> Response:
 
     return redirect(url_for("main.users",q=username))
 
+@bp.route("/users/permissions",methods=["POST"])
+def set_user_permissions() -> Response:
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+    else:
+        username = request.form.get("username")
+        permissions = [p.split("--")[1].replace("-",".") for p in request.form if p.startswith("switch--")]
+
+        BACKEND.set_permissions(username,permissions)
+
+        return redirect(url_for("main.users", q=username))
+
+    return redirect(url_for("main.users"))
+
 @bp.route("/users/new",methods=["POST"])
 def new_user() -> Response:
     try:
@@ -270,11 +296,11 @@ def new_user() -> Response:
         quota = request.form.get("quota")
         sudo = request.form.get("sudo", False)
 
-        permissions = [p.split("--")[1] for p in request.form if p.startswith("switch--")]
+        permissions = [p.split("--")[1].replace("-",".") for p in request.form if p.startswith("switch--")]
 
 
         BACKEND.new_user(username,fullname,quota,sudo,permissions)
 
         return redirect(url_for("main.users", q=username))
 
-    return redirect(url_for("main.new_user"))
+    return redirect(url_for("main.users"))

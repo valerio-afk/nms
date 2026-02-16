@@ -1,6 +1,6 @@
 from nms_shared import ErrorMessages, SuccessMessages
 from . import frontend as bp, request,  redirect, url_for, session, NMSBACKEND as BACKEND
-from flask import Response, render_template, send_file, g
+from flask import Response, render_template, send_file, g, abort
 from flask_wtf.csrf import generate_csrf, validate_csrf, ValidationError
 from io import BytesIO
 from typing import Union, Tuple
@@ -17,8 +17,16 @@ def login() -> Union[Response,str]:
     authenticated = False
     temp_token = session.get("temp_token",False)
 
-    is_otp_conf = BACKEND.is_otp_configured
+    first_login_token = request.args.get("token",None)
+    is_otp_conf = False
 
+    if (first_login_token):
+        if (not BACKEND.verify_first_login_token(first_login_token)):
+            is_otp_conf = False
+        else:
+            abort(401)
+    else:
+        is_otp_conf = BACKEND.is_otp_configured # to check for admin first time login
 
     if (is_otp_conf or temp_token):
 
@@ -51,7 +59,7 @@ def login() -> Union[Response,str]:
 
         return render_template("login.auth.html",csp_nonce=g.csp_nonce,csrf_token= generate_csrf())
     else:
-        return redirect(url_for("main.configure_otp"))
+        return redirect(url_for("main.configure_otp",token=first_login_token))
 
 @bp.route("/login/reauth/<string:operation>",methods=['GET','POST'])
 def reauth(operation:str) -> Union[Response,str]:
@@ -92,11 +100,14 @@ def otp_qr() -> Union[Response,Tuple[str,int]]:
 
 @bp.route("/login/config",methods=['GET','POST'])
 def configure_otp() -> Union[Response,str]:
-    if ((BACKEND.is_otp_configured) or (request.method == 'POST')):
+    token = request.args.get("token")
+
+    is_otp_configured = BACKEND.is_otp_configured if token is None else BACKEND.verify_first_login_token(token)
+
+    if (is_otp_configured or (request.method == 'POST')):
         session["temp_token"] = True
         return redirect(url_for("main.login"))
 
-    token = request.args.get("token")
     return render_template("login.otp.html",token=token,csrf_token= generate_csrf())
 
 

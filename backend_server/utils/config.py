@@ -618,7 +618,7 @@ class NMSConfig(Logger):
         this.user_set_permissions(username,permissions)
 
     def user_set_permissions(this,username:str,permissions:List[str]) -> None:
-        all_permissions = [p.name for p in UserPermissions]
+        all_permissions = [p.value for p in UserPermissions]
 
         collapsed_permissions = collapse_permissions(permissions,all_permissions)
 

@@ -79,37 +79,41 @@
 </div>
 {% endif %}
 
-<div class="accordion" id="user_permission">
-  {% for perm_domain,subdomains in user_permissions.items() %}
-  <div class="accordion-item">
-    <h2 class="accordion-header">
-      <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#perm-dom-{{ loop.index0 }}" aria-expanded="true" aria-controls="perm-dom-{{ loop.index0 }}">
-          {{ perm_domain }}
-      </button>
-    </h2>
-    <div id="perm-dom-{{ loop.index0 }}" class="accordion-collapse collapse hide" data-bs-parent="#user_permission">
-      <div class="accordion-body">
-          {% for subdomain,actions in subdomains.items() %}
-          <h6>{{ subdomain }}</h6>
-            <div class="row">
-                {% for action, (key,enabled) in actions.items() %}
-                    <dd class="col-sm-12">
-                        <div class="form-check form-switch">
-                          <input class="form-check-input" type="checkbox" role="switch" name="switch--{{ key }}" id="switch--{{ key }}" {{ "checked" if enabled else ""}}>
-                          <label class="form-check-label" for="switch--{{ key }}">{{ action  }}</label>
-                        </div>
-                    </dd>
-                {% endfor %}
-            </div>
-          {% endfor %}
+<form method="POST" class="disable-on-submit" action="{{ url_for('main.set_user_permissions') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="username" value="{{ user.username }}">
+    <div class="accordion" id="user_permission">
+      {% for perm_domain,subdomains in user_permissions.items() %}
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#perm-dom-{{ loop.index0 }}" aria-expanded="true" aria-controls="perm-dom-{{ loop.index0 }}">
+              {{ perm_domain }}
+          </button>
+        </h2>
+        <div id="perm-dom-{{ loop.index0 }}" class="accordion-collapse collapse hide" data-bs-parent="#user_permission">
+          <div class="accordion-body">
+              {% for subdomain,actions in subdomains.items() %}
+              <h6>{{ subdomain }}</h6>
+                <div class="row">
+                    {% for action, (key,enabled) in actions.items() %}
+                        <dd class="col-sm-12">
+                            <div class="form-check form-switch">
+                              <input class="form-check-input" type="checkbox" role="switch" name="switch--{{ key }}" id="switch--{{ key }}" {{ "checked" if enabled else ""}}>
+                              <label class="form-check-label" for="switch--{{ key }}">{{ action  }}</label>
+                            </div>
+                        </dd>
+                    {% endfor %}
+                </div>
+              {% endfor %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+      <div class="row mt-2 mb-1">
+        <div class="col-sm-12"><button type="submit" class="btn btn-success w-100">{{ _("Change Permissions") }}</button> </div>
       </div>
     </div>
-  </div>
-  {% endfor %}
-  <div class="row mt-2 mb-1">
-    <div class="col-sm-12"><button type="submit" class="btn btn-success w-100">{{ _("Change Permissions") }}</button> </div>
-  </div>
-</div>
+</form>
 
 {% endblock %}
 

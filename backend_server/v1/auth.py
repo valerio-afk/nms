@@ -10,7 +10,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Any, Dict, Optional
 from backend_server.utils.config import CONFIG
-from backend_server.utils.responses import OTPVerification, ErrorMessage
+from backend_server.utils.responses import OTPVerification, ErrorMessage, AuthToken, Token
 from nms_shared import ErrorMessages
 from nms_shared.enums import UserPermissions
 
@@ -39,8 +39,7 @@ def create_token(username:str,purpose:str, duration:int) -> str:
 
 def token_verification(token:str,requested_purpose:str) -> Dict[str, Any]:
     try:
-        if (token not in CONFIG.issued_tokens):
-            raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_REVOKED.name))
+
 
         payload = jwt.decode(token, SECRET_KEY, algorithms="HS256")
 
@@ -51,6 +50,9 @@ def token_verification(token:str,requested_purpose:str) -> Dict[str, Any]:
         elif (purpose != requested_purpose):
             CONFIG.error(f"Purpose claim not matching ({purpose} != {requested_purpose})")
             raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_INVALID.name))
+
+        if ( (purpose != "first_login") and (token not in CONFIG.issued_tokens)):
+            raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_REVOKED.name))
 
         exp = payload.get("exp")
 
@@ -126,8 +128,10 @@ def auth_new_secret(token:Optional[str]=Query(default=None)) -> AuthUri:
     username = None
 
     if (token is not None):
-        token_data = token_verification(token,"otp")
+        token_data = token_verification(token,"first_login")
         username = token_data["username"]
+        if (CONFIG.is_otp_configured_for(username)):
+            raise HTTPException(status_code=401)
 
     secret = pyotp.random_base32()
     CONFIG.set_temporary_otp_secret(username,secret)
@@ -143,9 +147,7 @@ def auth_new_secret(token:Optional[str]=Query(default=None)) -> AuthUri:
 
     return AuthUri(provisioning_uri=uri)
 
-class AuthToken(BaseModel):
-    token:str
-    username:str
+
 
 @auth.post("/otp/verify",response_model=AuthToken,responses={403: {"description": "Invalid token/OTP not configured"}})
 def auth_otp_verify(data:OTPVerification) -> AuthToken:
@@ -212,3 +214,12 @@ def auth_token_refresh(token:Dict[str,Any] = Depends(verify_token_factory())) ->
 def auth_logout(token:dict = Depends(verify_token_factory())) -> None:
     CONFIG.revoke_token(token['token'])
     CONFIG.info(f"`{token['username']}` has logged out")
+
+@auth.get("/token/first_login")
+def auth_first_login(token:Optional[str]=Query(default=None)) -> bool:
+    try:
+        payload = token_verification(token,"first_login")
+        return CONFIG.is_otp_configured_for(payload["username"])
+
+    except HTTPException:
+        return False

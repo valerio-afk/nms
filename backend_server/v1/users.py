@@ -3,7 +3,8 @@ from backend_server.utils.cmdl import LocalCommandLineTransaction, UserModAddGro
     GetUserUID
 from backend_server.utils.cmdl import ZFSSetQuota, UserModChangeUsername, SMBPasswd, RenameFile, UserModChangeHomeDir
 from backend_server.utils.config import CONFIG
-from backend_server.utils.responses import ChgFullnameData, ChangeQuotaData, ChangeUsernameData, SudoData
+from backend_server.utils.responses import ChgFullnameData, ChangeQuotaData, ChangeUsernameData, SudoData, \
+    UserPermissionsData
 from backend_server.utils.responses import NewUserProfile, WarningMessage
 from backend_server.utils.responses import UserProfile, AccessServiceCredentials, ErrorMessage, SuccessMessage
 from backend_server.v1.auth import verify_token_factory
@@ -104,6 +105,22 @@ def sudoers(data:SudoData,token:dict=Depends(verify_token)) -> dict:
 
     return {"detail":SuccessMessage(code=SuccessMessages.S_USER_SUDO.name)}
 
+@users.post("/set/permissions",summary="Set user from permissions")
+def set_permissions(data:UserPermissionsData,token:dict=Depends(verify_token)) -> dict:
+    username = token.get("username")
+    check_permission(username,UserPermissions.USERS_ACCOUNT_MANAGE)
+
+    # if the user is the only admin, don't do anything
+    admins = [u for u in CONFIG.users if u.admin]
+
+    if ((len(admins)==1) and (admins[0].username==data.username)):
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_PERM_ADMIN.name))
+
+    CONFIG.user_set_permissions(data.username,data.permissions)
+    CONFIG.flush_config()
+
+    return {"detail": SuccessMessage(code=SuccessMessages.S_USER_PERM.name)}
+
 @users.post("/service/{service}",summary="Change the password for a specific access service")
 def change_password(service:str,credentials:AccessServiceCredentials,token:dict=Depends(verify_token)) -> dict:
     username = token.get("username")
@@ -166,3 +183,4 @@ def new_users(profile:NewUserProfile,token:dict=Depends(verify_token)) -> dict:
             return {"detail": WarningMessage(code=WarningMessages.W_NEW_USER.name, params=[profile.username,output.stderr])}
 
     return {"detail": SuccessMessage(code=SuccessMessages.S_NEW_USER.name,params=[profile.username])}
+

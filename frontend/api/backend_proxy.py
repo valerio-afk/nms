@@ -95,7 +95,7 @@ class BackEndProxy:
                  body_params:Optional[dict] = None,
                  extra_headers:Optional[dict] = None,
                  ignore_exception:bool = False,
-                 ) -> Optional[Union[dict,list]]:
+                 ) -> Optional[Union[bool,dict,list]]:
         url = f"{BackEndProxy.API}/{BackEndProxy.VERSION}/{endpoint}"
 
         if (url_params is not None):
@@ -648,6 +648,12 @@ class BackEndProxy:
     def set_sudo(this,username:str,sudo:bool) -> None:
         this._request("users/set/sudo",RequestMethod.POST,body_params={"username": username, "sudo": sudo})
 
+    def set_permissions(this,username:str,permissions:List[str]) -> None:
+        this._request(
+            "users/set/permissions",
+            RequestMethod.POST,
+            body_params={"username": username, "permissions": permissions} )
+
     def new_user(this,username:str,fullname:str,quota:str,sudo:bool,permissions:List[str]) -> None:
         this._request("users/new",RequestMethod.POST,body_params={
             "username":username,
@@ -656,6 +662,9 @@ class BackEndProxy:
             "sudo":sudo,
             "permissions":permissions
         })
+
+    def verify_first_login_token(this,token:str) -> bool:
+        r = this._request(f"auth/token/first_login",RequestMethod.GET,qstring_params={"token":token})
 
     #Other Method
     def register_task(this,
