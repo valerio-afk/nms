@@ -1,10 +1,12 @@
-import logging
-import difflib
-import sys
 from .constants import ANSI_RESET, ANSI_COLOURS,ANSI2HTML_MAP, ANSI_RE
+from .enums import UserPermissions
 from datetime import datetime
 from logging import Logger
 from pathlib import Path
+from typing import List
+import difflib
+import logging
+import sys
 
 
 class ColourFormatter(logging.Formatter):
@@ -76,3 +78,19 @@ def ansi_to_html(text):
     return converted
 
 
+def match_permissions(user_permissions:List[str], target_permission:UserPermissions) -> bool:
+    if "*" in user_permissions:
+        return True
+
+    parts = target_permission.value.split(".")
+
+    for i in range(len(parts), 0, -1):
+        candidate = ".".join(parts[:i])
+        if candidate in user_permissions:
+            return True
+
+        wildcard = candidate + ".*"
+        if wildcard in user_permissions:
+            return True
+
+    return False

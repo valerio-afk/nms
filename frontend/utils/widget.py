@@ -19,8 +19,8 @@ def render_widget(id:str,**kwargs)->Tuple[str,Optional[str]]:
                            ), css_fname if os.path.exists(os.path.join(current_app.static_folder,css_fname)) else None
 
 
-def get_widgets_html(widgets:List[Tuple[str,Optional[str]]]) -> List[str]:
-    return [w for w,c in widgets]
+def get_widgets_html(widgets:List[Optional[Tuple[str,Optional[str]]]]) -> List[str]:
+    return [x[0] for x in widgets if (x is not None)]
 
-def get_widgets_css_files(widgets:List[Tuple[str,Optional[str]]]) -> List[str]:
-    return [c for w,c in widgets if c is not None]
+def get_widgets_css_files(widgets:List[Optional[Tuple[str,Optional[str]]]]) -> List[str]:
+    return [x[1] for x in widgets if ((x is not None) and (x[1] is not None))]

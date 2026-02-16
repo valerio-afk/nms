@@ -60,15 +60,24 @@ def async_widget_disk_usage() -> str:
 
 @bp.route('/')
 def dashboard() -> str:
-    dashboard_widgets = [
-        widget_disk_overview(),
-        widget_network_overview(),
-        widget_access_overview(),
-        widget_sys_info()
-    ]
+    dashboard_widgets = []
+
+    current_user = session['user']
 
     if (BACKEND.is_pool_configured):
-        dashboard_widgets.insert(0,widget_disk_usage())
+        dashboard_widgets.append(widget_disk_usage())
+
+    if (current_user.get("main_pages",{}).get("disks",False)):
+        dashboard_widgets.append(widget_disk_overview())
+
+    if (current_user.get("main_pages", {}).get("network", False)):
+        dashboard_widgets.append(widget_network_overview())
+
+    if (current_user.get("main_pages", {}).get("access", False)):
+        dashboard_widgets.append(widget_access_overview())
+
+    if (current_user.get("main_pages", {}).get("advanced", False)):
+        dashboard_widgets.append(widget_sys_info())
 
     user = session['user']
     visible_name = user.get("visible_name")

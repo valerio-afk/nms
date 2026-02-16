@@ -22,11 +22,9 @@ users = APIRouter(
     dependencies=[Depends(verify_token)]
 )
 
-def check_user_permissions(username:str,data:Any):
-    if (username != data.username):
-        raise HTTPException(status_code=401)
-
-    check_permission(username, UserPermissions.USERS_ACCOUNT_MANAGE)
+def allow_self_change(current_username:str,target_username:str):
+    if (current_username!= target_username):
+        check_permission(current_username, UserPermissions.USERS_ACCOUNT_MANAGE)
 
 
 @users.get("/get",response_model=Optional[UserProfile],summary="Get the information of the logged user")
@@ -41,10 +39,10 @@ def get_all_users(token:dict=Depends(verify_token)) -> List[UserProfile]:
 
 @users.post("/set/fullname")
 def set_fullname(data:ChgFullnameData,token:dict=Depends(verify_token)) -> dict:
-    username = token.get("username")
-    check_user_permissions(username, data)
+    current_username = token.get("username")
+    allow_self_change(current_username,data.username)
 
-    CONFIG.set_user_fullname(username,data.fullname)
+    CONFIG.set_user_fullname(data.username,data.fullname)
     CONFIG.flush_config()
 
     return {"detail": SuccessMessage(code=SuccessMessages.S_USER_FULLNAME.name)}
@@ -52,7 +50,7 @@ def set_fullname(data:ChgFullnameData,token:dict=Depends(verify_token)) -> dict:
 @users.post("/set/quota")
 def set_quota(data:ChangeQuotaData,token:dict=Depends(verify_token)) -> dict:
     username = token.get("username")
-    check_user_permissions(username, data)
+    check_permission(username,UserPermissions.USERS_ACCOUNT_MANAGE)
 
     cmd = ZFSSetQuota(data.username,data.quota,CONFIG.pool_name,CONFIG.dataset_name,sudo=True)
     output = cmd.execute()
@@ -94,7 +92,7 @@ def set_username(data:ChangeUsernameData,token:dict=Depends(verify_token)) -> di
 @users.post("/set/sudo",summary="Add or remove a user from sudoers")
 def sudoers(data:SudoData,token:dict=Depends(verify_token)) -> dict:
     username = token.get("username")
-    check_user_permissions(username,data)
+    check_permission(username,UserPermissions.USERS_ACCOUNT_MANAGE)
 
     cmd = UserModAddGroup(data.username,"sudo")  if (data.sudo) else GPasswdRemoveGroup(data.username,"sudo")
 
@@ -123,8 +121,8 @@ def set_permissions(data:UserPermissionsData,token:dict=Depends(verify_token)) -
 
 @users.post("/service/{service}",summary="Change the password for a specific access service")
 def change_password(service:str,credentials:AccessServiceCredentials,token:dict=Depends(verify_token)) -> dict:
-    username = token.get("username")
-    check_user_permissions(username,credentials)
+    current_username = token.get("username")
+    allow_self_change(current_username,credentials.username)
 
     services = CONFIG.access_services
 

@@ -1,13 +1,14 @@
-from nms_shared.enums import DiskStatus
 from .api.backend_proxy import NMSBACKEND, show_flash
+from .utils.exception import NotAuthenticatedError
 from flask import Blueprint, flash, session, redirect, Response ,url_for, request, render_template
 from flask_babel import get_locale
 from nms_shared import constants
+from nms_shared.enums import DiskStatus, UserPermissions
 from nms_shared.msg import ErrorMessages, WarningMessages, ERROR_MESSAGES, WARNING_MESSAGES
+from nms_shared.utils import  match_permissions
 from typing import Optional, Tuple
 from urllib.parse import urlparse,urlencode
 import time
-from .utils.exception import NotAuthenticatedError
 
 frontend:Blueprint = Blueprint('main',__name__)
 
@@ -111,10 +112,21 @@ def user_data():
             initials = initials.upper() if initials is not None else "?"
             user['initials'] = initials
 
+        if (user.get("main_pages") is None):
+            p = user.get("permissions",[])
+            user['main_pages'] = {
+                "disks": match_permissions(p,UserPermissions.CLIENT_DASHBOARD_DISKS),
+                "network": match_permissions(p, UserPermissions.CLIENT_DASHBOARD_NETWORKS),
+                "users": match_permissions(p, UserPermissions.CLIENT_DASHBOARD_USERS),
+                "access": match_permissions(p, UserPermissions.CLIENT_DASHBOARD_ACCESS),
+                "advanced": match_permissions(p,UserPermissions.CLIENT_DASHBOARD_ADVANCED),
+            }
+
 
 
     return dict(
         current_user=user
+
     )
 
 

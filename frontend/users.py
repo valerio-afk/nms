@@ -4,20 +4,11 @@ from .utils.forms import ChangePasswordForm
 from .utils.widget import get_widgets_html, get_widgets_css_files, render_widget
 from flask import session, render_template, g, flash, redirect, url_for, request, Response
 from flask_babel import _
-from flask_wtf.csrf import validate_csrf, ValidationError, generate_csrf
+from flask_wtf.csrf import validate_csrf, ValidationError
 from nms_shared.enums import UserPermissions
 from nms_shared.msg import ErrorMessages
-from typing import Dict, Tuple
-from . import frontend as bp
-from .api.backend_proxy import NMSBACKEND as BACKEND, show_flash
-from .utils.forms import ChangePasswordForm
-from .utils.widget import get_widgets_html, get_widgets_css_files, render_widget
-from flask import session, render_template, g, flash, redirect, url_for, request, Response
-from flask_babel import _
-from flask_wtf.csrf import validate_csrf, ValidationError, generate_csrf
-from nms_shared.enums import UserPermissions
-from nms_shared.msg import ErrorMessages
-from typing import Dict, Tuple
+from nms_shared.utils import match_permissions
+from typing import Dict, Tuple, Optional
 
 USER_PERMISSIONS={
     "client" : lambda : _("Web Client"),
@@ -59,22 +50,7 @@ USER_PERMISSIONS={
 
 def check_permission(user:dict,perm:UserPermissions) -> bool:
     user_permissions = user.get("permissions",[])
-
-    if "*" in user_permissions:
-        return True
-
-    parts = perm.value.split(".")
-
-    for i in range(len(parts), 0, -1):
-        candidate = ".".join(parts[:i])
-        if candidate in user_permissions:
-            return True
-
-        wildcard = candidate + ".*"
-        if wildcard in user_permissions:
-            return True
-
-    return False
+    return match_permissions(user_permissions,perm)
 
 def nest_permissions(permissions:Dict[str,bool]) -> Dict[str,bool]:
     result = {}
@@ -96,7 +72,7 @@ def nest_permissions(permissions:Dict[str,bool]) -> Dict[str,bool]:
 
     return result
 
-def widget_user_account() -> Tuple[str,str]:
+def widget_user_account() -> Optional[Tuple[str,str]]:
     user = session.get("user")
     user_permissions = {p.value:check_permission(user,p) for p in sorted([x for x in UserPermissions],key=lambda y:y.value)}
 
@@ -111,7 +87,7 @@ def widget_user_account_admin(user:dict) -> Tuple[str,str]:
 
     return render_widget("account_admin",user=user,user_permissions=user_permissions)
 
-def widget_access_services() -> Tuple[str,str]:
+def widget_access_services() -> Optional[Tuple[str,str]]:
     user = session.get("user")
 
     selected_services = ['ssh','smb']
@@ -125,6 +101,9 @@ def widget_access_services() -> Tuple[str,str]:
     for s,p in permissions.items():
         if (check_permission(user,p)):
             forms[s] = ChangePasswordForm()
+
+    if (len(forms) == 0):
+        return None
 
     return render_widget("account_services",forms=forms)
 
