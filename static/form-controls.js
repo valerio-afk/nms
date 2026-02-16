@@ -200,7 +200,39 @@ function initPermissionSwitches() {
 
 
     });
+}
 
+function initCopyToClipboard()
+{
+    const buttons = document.querySelectorAll(".copy-clipboard");
+    const toastEl = document.getElementById("copyToast");
+    const toast = new bootstrap.Toast(toastEl);
+
+    buttons.forEach(button => {
+        button.addEventListener("click", async () => {
+            const targetId = button.getAttribute("data-target");
+            const input = document.getElementById(targetId);
+
+            if (!input) return;
+
+            try {
+                await navigator.clipboard.writeText(input.value);
+                toast.show(); // show the Bootstrap toast
+            } catch (err) {
+                console.error("Failed to copy: ", err);
+            }
+
+            // fallback
+
+            input.select();
+            input.setSelectionRange(0, 99999); // For mobile devices
+            const successful = document.execCommand("copy");
+
+            if (successful) {
+                toast.show();
+            }
+        });
+    });
 }
 
 // Auto init
@@ -209,11 +241,13 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', disableOnSubmit);
     document.addEventListener('DOMContentLoaded', enablePasswordToggle);
     document.addEventListener('DOMContentLoaded', initPermissionSwitches);
+    document.addEventListener('DOMContentLoaded', initCopyToClipboard);
 } else {
     initializeToggleControls()
     disableOnSubmit()
     enablePasswordToggle()
     initPermissionSwitches()
+    initCopyToClipboard()
 }
 
 

@@ -114,6 +114,7 @@
   <script src="{{ url_for('static', filename='bootstrap-5.3.8-dist/js/bootstrap.bundle.min.js') }}"></script>
 
   {% include "modal.confirm.html" %}
+  {% include "toast.copy_clipboard.html" %}
 
   <script nonce="{{ csp_nonce }}">
     GlobalRefresher.start();

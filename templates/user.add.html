@@ -7,9 +7,9 @@
 
 <h3>{{ _("Add User") }}</h3>
 
-<form method="POST" class="disable-on-submit form-perms"  action="{{ url_for('main.change_username') }}">
+<form method="POST" class="disable-on-submit form-perms"  action="{{ url_for('main.new_user') }}">
 
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="row g-3">
           <div class="col-12 col-sm-12 col-md-6 col-lg-6">
             <div class="card h-100">
@@ -76,7 +76,7 @@
                                     {% for action, (perm,_) in actions.items() %}
                                         <dd class="col-sm-12">
                                             <div class="form-check form-switch">
-                                              <input class="form-check-input" type="checkbox" role="switch" id="switch--{{ perm }}">
+                                              <input class="form-check-input" type="checkbox" role="switch" name="switch--{{ perm }}" id="switch--{{ perm }}">
                                               <label class="form-check-label" for="switch--{{ perm }}">{{ action  }}</label>
                                             </div>
                                         </dd>

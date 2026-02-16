@@ -23,6 +23,9 @@ class ErrorMessage(StatusMessage):
     type:str = Field(default="error",frozen=True)
 
 
+class WarningMessage(StatusMessage):
+    type:str = Field(default="warning",frozen=True)
+
 class SuccessMessage(StatusMessage):
     type:str = Field(default="success",frozen=True)
 
@@ -122,13 +125,21 @@ class Quota(BaseModel):
     quota:int
     used:int
 
-class UserProfile(BaseModel):
+class NewUserProfile(BaseModel):
     username:str
-    visible_name:str
+    visible_name:Optional[str]
+    permissions:List[str]
+    quota:Optional[str]
+    sudo:bool
+
+class UserProfile(NewUserProfile):
+    username:str
+    visible_name:Optional[str]
     permissions:List[str]
     quota:Optional[Quota]
     sudo:bool
     admin:bool
+    first_login_token: Optional[str] = Field(None)
 
 class AccessServiceCredentials(BaseModel):
     username:str

@@ -93,6 +93,7 @@ class ErrorMessages(Enum):
     E_USER_QUOTA = "E_USER_QUOTA"
     E_USER_NAME = "E_USER_NAME"
     E_USER_SUDO = "E_USER_SUDO"
+    E_NEW_USER = "E_NEW_USER"
 
     @staticmethod
     def get_error_from_string(error_code:str,*args,**kwargs) -> str:
@@ -114,6 +115,7 @@ class WarningMessages(Enum):
     W_DISK_ISSUE = "W_DISK_ISSUE"
     W_DISK_FORMAT = "W_DISK_FORMAT"
     W_POOL_DISK_OFFLINE = "W_POOL_DISK_OFFLINE"
+    W_NEW_USER = "W_NEW_USER"
 
 
     @staticmethod
@@ -161,6 +163,7 @@ class SuccessMessages(Enum):
     S_USER_QUOTA = "S_USER_QUOTA"
     S_USER_NAME = "S_USER_NAME"
     S_USER_SUDO = "S_USER_SUDO"
+    S_NEW_USER = "S_NEW_USER"
 
 
     @staticmethod
@@ -271,6 +274,7 @@ ERROR_MESSAGES = {
     ErrorMessages.E_USER_QUOTA : lambda info: _("Error occurred while setting the user quota: %(info)s.") % {'info':info}, #<-----
     ErrorMessages.E_USER_NAME: lambda info: _("Error occurred while changing username: %(info)s.") % {'info':info}, #<-----
     ErrorMessages.E_USER_SUDO: lambda info : _("Unable to change user's system privileges: %(info)s") % {'info':info}, #<-----
+    ErrorMessages.E_NEW_USER: lambda info: _("Error occurred while creating a new user: %(info)s.") % {'info':info}, #<-----
 }
 
 WARNING_MESSAGES = {
@@ -280,7 +284,8 @@ WARNING_MESSAGES = {
     WarningMessages.W_DISK_ISSUE : lambda : _("One or more disks appear to experience some problems. No imminent actions are required at the moment. However, you should investigate which disk(s) is getting old and consider replacing it."),
     WarningMessages.W_DISK_FORMAT : lambda : _("Your disk array is experiencing some format issues. To solve this issue, press `Verify` in the Disk Management page."),
     WarningMessages.W_POOL_NEEDED : lambda : _("You need to configure your disk array before enabling any access services"),
-    WarningMessages.W_POOL_DISK_OFFLINE : lambda : _("One or more of your disks in the array is offline. If redundancy is active, you can still use the array. Please, reinsert or replace your disk soon.")
+    WarningMessages.W_POOL_DISK_OFFLINE : lambda : _("One or more of your disks in the array is offline. If redundancy is active, you can still use the array. Please, reinsert or replace your disk soon."),
+    WarningMessages.W_NEW_USER : lambda user, info : _("User %(user)s has been created successfully. However, there has been some issues in setting their quota: %(info)s.") % {'user':user,"info":info},
 }
 
 SUCCESS_MESSAGES = {
@@ -319,6 +324,7 @@ SUCCESS_MESSAGES = {
     SuccessMessages.S_USER_QUOTA : lambda : _("User quota set successfully."),
     SuccessMessages.S_USER_NAME : lambda : _("Username changed successfully."),
     SuccessMessages.S_USER_SUDO : lambda : _("User's system privileges changed successfully."),
+    SuccessMessages.S_NEW_USER : lambda user : _("User %(user)s created successfully.") % {'user':user} ,
 
 }
 

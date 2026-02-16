@@ -20,6 +20,67 @@ import os
 import pwd
 
 
+
+
+def collapse_permissions(user_permissions:List[str], all_permissions:List[str]) -> List[str]:
+    def build_nested(perms):
+        root = {}
+        for perm in perms:
+            node = root
+            for part in perm.split("."):
+                node = node.setdefault(part, {})
+        return root
+
+    all_tree = build_nested(all_permissions)
+    user_tree = build_nested(user_permissions)
+
+    # special case: user has everything
+    if set(user_permissions) == set(all_permissions):
+        return ["*"]
+
+    result = []
+
+    def reduce(all_node, user_node, path):
+
+        # if user does not have this branch
+        if user_node is None:
+            return False
+
+        # leaf node
+        if not all_node:
+            result.append(".".join(path))
+            return True
+
+        all_owned = True
+
+        for key, child in all_node.items():
+            owned = reduce(
+                child,
+                user_node.get(key) if user_node else None,
+                path + [key]
+            )
+            if not owned:
+                all_owned = False
+
+        if all_owned:
+            prefix = ".".join(path)
+
+            # remove children (collapse)
+            result[:] = [
+                r for r in result
+                if not r.startswith(prefix + ".")
+            ]
+
+            result.append(prefix + ".*")
+            return True
+
+        return False
+
+    for key, child in all_tree.items():
+        reduce(child, user_tree.get(key), [key])
+
+    return sorted(set(result))
+
 class NMSConfig(Logger):
     def __new__(cls):
         if not hasattr(cls, 'instance'):
@@ -497,6 +558,16 @@ class NMSConfig(Logger):
             if (output.returncode == 0):
                 sudo = "sudo" in output.stdout.strip()
 
+            activation_token = None
+
+            if (user.get("otp_secret") is None):
+                from backend_server.v1.auth import create_token
+                activation_token = create_token(
+                    username=username,
+                    purpose="first_login",
+                    duration=525600000 #about 1000 years in minutes
+                )
+
 
             return UserProfile(
                 username=username,
@@ -505,6 +576,7 @@ class NMSConfig(Logger):
                 quota = quota,
                 sudo = sudo,
                 admin=this.is_admin(username),
+                first_login_token=activation_token
             )
 
     def set_user_fullname(this,username:str,fullname:str) -> None:
@@ -534,6 +606,26 @@ class NMSConfig(Logger):
 
     def is_admin(this,username:str)->bool:
         return all([this.has_user_permission(username, p) for p in UserPermissions])
+
+    def add_user(this,username:str,fullname:Optional[str],permissions:List[str],uid:int) -> None:
+        this._cfg['users'][username] = {
+            "otp_secret": None,
+            "fullname": fullname,
+            "permissions": [],
+            "ssh_uid": uid
+        }
+
+        this.user_set_permissions(username,permissions)
+
+    def user_set_permissions(this,username:str,permissions:List[str]) -> None:
+        all_permissions = [p.name for p in UserPermissions]
+
+        collapsed_permissions = collapse_permissions(permissions,all_permissions)
+
+        this._cfg['users'][username]["permissions"] = collapsed_permissions
+
+
+
 
 
     #AUTH/OTP METHODS

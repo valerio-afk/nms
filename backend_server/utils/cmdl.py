@@ -1178,6 +1178,63 @@ class UserModChangeHomeDir(RevertibleCommandLine):
             serialisation.get('new', None),
         )
 
+class UserAdd(RevertibleCommandLine):
+    def __init__(this,username:str,groups:List[str],home_dir:str,allow_login:bool,**kwargs):
+        cmd = ['useradd', '-U', '-s']
+
+        if allow_login:
+            cmd.append('/bin/bash')
+        else:
+            cmd.append('/usr/sbin/nologin')
+
+        cmd.extend(['-m','-d',home_dir])
+
+        if (len(groups)>0):
+            cmd.extend(['-G', ','.join(groups)])
+
+        cmd.append(username)
+
+        revert_cmd = ['userdel','-r',username]
+
+        super().__init__(cmd,revert_command=revert_cmd,**kwargs)
+
+        this._username = username
+        this._groups = groups
+        this._allow_login = allow_login
+
+    def to_dict(this):
+        d = super().to_dict()
+
+        d['username'] = this._username
+        d['groups'] = this._groups
+        d['allow_login'] = this._allow_login
+
+    @staticmethod
+    def from_dict(serialisation):
+        return UserAdd(
+            serialisation.get("username", None),
+            serialisation.get('groups', []),
+            serialisation.get('allow_login', False),
+        )
+
+class GetUserUID(CommandLine):
+    def __init__(this,username:str,**kwargs):
+        cmd = ['id', '-u', username]
+        super().__init__(cmd,**kwargs)
+
+        this._username = username
+
+    def to_dict(this):
+        d = super().to_dict()
+
+        d['username'] = this._username
+
+    @staticmethod
+    def from_dict(serialisation):
+        return GetUserUID(
+            serialisation.get("username", None),
+        )
+
 class RenameFile(RevertibleCommandLine):
     def __init__(this,old,new):
         cmd = ['mv', old, new]

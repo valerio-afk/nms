@@ -1,13 +1,15 @@
 from .auth import check_permission
-from backend_server.utils.cmdl import LocalCommandLineTransaction, UserModAddGroup, GPasswdRemoveGroup
+from backend_server.utils.cmdl import LocalCommandLineTransaction, UserModAddGroup, GPasswdRemoveGroup, UserAdd, \
+    GetUserUID
 from backend_server.utils.cmdl import ZFSSetQuota, UserModChangeUsername, SMBPasswd, RenameFile, UserModChangeHomeDir
 from backend_server.utils.config import CONFIG
 from backend_server.utils.responses import ChgFullnameData, ChangeQuotaData, ChangeUsernameData, SudoData
+from backend_server.utils.responses import NewUserProfile, WarningMessage
 from backend_server.utils.responses import UserProfile, AccessServiceCredentials, ErrorMessage, SuccessMessage
 from backend_server.v1.auth import verify_token_factory
 from fastapi import APIRouter, Depends, HTTPException
 from nms_shared.enums import UserPermissions
-from nms_shared.msg import ErrorMessages, SuccessMessages
+from nms_shared.msg import ErrorMessages, SuccessMessages, WarningMessages
 from typing import Optional, Any, List
 import os.path
 
@@ -122,3 +124,45 @@ def change_password(service:str,credentials:AccessServiceCredentials,token:dict=
 
     return {"detail":SuccessMessage(code=SuccessMessages.S_USER_PASSWORD.name)}
 
+
+@users.post("/new",summary="Create a new user")
+def new_users(profile:NewUserProfile,token:dict=Depends(verify_token)) -> dict:
+    username = token.get("username")
+    check_permission(username,UserPermissions.USERS_ACCOUNT_MANAGE)
+
+    def_groups = ['plugdev','users','netdev']
+
+    if (UserPermissions.SERVICES_SMB_ACCESS.name in profile.permissions):
+        def_groups.append('sambashare')
+    if (profile.sudo):
+        def_groups.append('sudo')
+
+    allow_login = UserPermissions.SERVICES_SSH_ACCESS.name in profile.permissions
+    home_dir = os.path.join(CONFIG.mountpoint,profile.username)
+
+    cmds = [
+        UserAdd(profile.username,def_groups,home_dir,allow_login),
+        GetUserUID(profile.username),
+    ]
+
+    trans = LocalCommandLineTransaction(*cmds,privileged=True)
+    output = trans.run()
+
+    if (not trans.success):
+        error = "\n".join([o['stderr'].strip() for o in output])
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NEW_USER.name,params=[error]) )
+
+    uid = int(output[-1]['stdout'])
+
+    CONFIG.add_user(profile.username,profile.visible_name,profile.permissions,uid)
+    CONFIG.flush_config()
+
+    if ((profile.quota is not None) and (len(profile.quota) > 0)):
+        cmd_quota = ZFSSetQuota(username,profile.quota,CONFIG.pool_name,CONFIG.dataset_name)
+
+        output = cmd_quota.execute()
+
+        if (output.returncode != 0):
+            return {"detail": WarningMessage(code=WarningMessages.W_NEW_USER.name, params=[profile.username,output.stderr])}
+
+    return {"detail": SuccessMessage(code=SuccessMessages.S_NEW_USER.name,params=[profile.username])}

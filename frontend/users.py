@@ -257,3 +257,24 @@ def set_sudo() -> Response:
 
 
     return redirect(url_for("main.users",q=username))
+
+@bp.route("/users/new",methods=["POST"])
+def new_user() -> Response:
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+    else:
+        username = request.form.get("username")
+        fullname = request.form.get("fullname")
+        quota = request.form.get("quota")
+        sudo = request.form.get("sudo", False)
+
+        permissions = [p.split("--")[1] for p in request.form if p.startswith("switch--")]
+
+
+        BACKEND.new_user(username,fullname,quota,sudo,permissions)
+
+        return redirect(url_for("main.users", q=username))
+
+    return redirect(url_for("main.new_user"))

@@ -165,6 +165,7 @@ class BackEndProxy:
 
         if ((isinstance(output,dict)) and ((flash_data:=output.get("detail")) is not None)):
             make_flash(flash_data)
+            return None
         else:
             return output
 
@@ -646,6 +647,15 @@ class BackEndProxy:
 
     def set_sudo(this,username:str,sudo:bool) -> None:
         this._request("users/set/sudo",RequestMethod.POST,body_params={"username": username, "sudo": sudo})
+
+    def new_user(this,username:str,fullname:str,quota:str,sudo:bool,permissions:List[str]) -> None:
+        this._request("users/new",RequestMethod.POST,body_params={
+            "username":username,
+            "visible_name":fullname,
+            "quota":quota,
+            "sudo":sudo,
+            "permissions":permissions
+        })
 
     #Other Method
     def register_task(this,

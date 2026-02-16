@@ -68,7 +68,16 @@
     </div>
 </form>
 
+{% if user.first_login_token %}
+<div class="row mb-1">
+    <div class="col-sm-10"><input type="text" value="{{ url_for('main.login',token=user.first_login_token,_external=True) }} " id="activation-token" class="form-control" readonly /> </div>
+    <div class="col-sm-2"><button type="button" class="btn btn-secondary copy-clipboard" data-target="activation-token"><i class="bi bi-copy"></i></button></div>
+</div>
 
+<div class="row mb-3">
+    <div class="col-sm-12 form-text">{{ _("Provide the link above to the new user to activate their account.") }}</div>
+</div>
+{% endif %}
 
 <div class="accordion" id="user_permission">
   {% for perm_domain,subdomains in user_permissions.items() %}
