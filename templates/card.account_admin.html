@@ -95,7 +95,7 @@
                 {% for action, (key,enabled) in actions.items() %}
                     <dd class="col-sm-12">
                         <div class="form-check form-switch">
-                          <input class="form-check-input" type="checkbox" role="switch" id="switch--{{ key }}" {{ "checked" if enabled else ""}}>
+                          <input class="form-check-input" type="checkbox" role="switch" name="switch--{{ key }}" id="switch--{{ key }}" {{ "checked" if enabled else ""}}>
                           <label class="form-check-label" for="switch--{{ key }}">{{ action  }}</label>
                         </div>
                     </dd>
@@ -106,6 +106,9 @@
     </div>
   </div>
   {% endfor %}
+  <div class="row mt-2 mb-1">
+    <div class="col-sm-12"><button type="submit" class="btn btn-success w-100">{{ _("Change Permissions") }}</button> </div>
+  </div>
 </div>
 
 {% endblock %}

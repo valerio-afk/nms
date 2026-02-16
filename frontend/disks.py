@@ -1,16 +1,16 @@
 from . import frontend as bp, NMSBACKEND as BACKEND
-from datetime import datetime
+from .api.backend_proxy import show_flash
+from .api.tasks import PoolExpansionTask
 from flask import g, render_template, redirect, url_for, flash, Response, request
-from flask_wtf.csrf import validate_csrf
 from flask_babel import _
-from frontend.utils.forms import ImportPoolForm, CreatePoolForm, AddDisksForm
+from flask_babel import format_datetime
+from flask_wtf.csrf import validate_csrf
 from frontend.utils.decorators import wait
+from frontend.utils.forms import ImportPoolForm, CreatePoolForm, AddDisksForm
+from nms_shared.msg import ErrorMessages
 from pySMART import Device
 from typing import Union
 from wtforms import ValidationError
-from nms_shared.msg import ErrorMessages
-from .api.backend_proxy import show_flash
-from .api.tasks import PoolExpansionTask
 import time
 
 
@@ -55,7 +55,7 @@ def disk_management() -> str:
     if (verify['last'] is None):
         verify['last'] = _("Never")
     else:
-        verify['last'] = datetime.fromtimestamp(verify['last']).strftime("%c")
+        verify['last'] = format_datetime(verify['last'] , "EEEE, d MMMM yyyy HH:mm").title()
 
     parameters['verify'] = verify
 

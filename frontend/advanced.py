@@ -1,19 +1,18 @@
-import base64
-import datetime
-
-from werkzeug.datastructures import ImmutableMultiDict
-
+from .api.backend_proxy import show_flash
+from .import NMSBACKEND as BACKEND, frontend as bp
+from flask import render_template, redirect, url_for, request, flash, g, send_file, session, Response
+from flask_babel import format_datetime
+from flask_wtf.csrf import generate_csrf, validate_csrf
+from frontend.utils.widget import render_widget,get_widgets_html,get_widgets_css_files
+from io import BytesIO
 from nms_shared import ErrorMessages
 from nms_shared.constants import HTTP_REPEAT_HEADER
 from nms_shared.enums import LogFilter
-from .import NMSBACKEND as BACKEND, frontend as bp
-from .api.backend_proxy import show_flash
-from flask import render_template, redirect, url_for, request, flash, g, send_file, session, Response
-from flask_wtf.csrf import generate_csrf, validate_csrf
-from io import BytesIO
-from frontend.utils.widget import render_widget,get_widgets_html,get_widgets_css_files
-from wtforms import ValidationError
 from typing import Optional, Dict, Callable, Any
+from werkzeug.datastructures import ImmutableMultiDict
+from wtforms import ValidationError
+import base64
+import datetime
 
 
 def risky_operation_reauth(operation:str,callback:Callable[[str, ImmutableMultiDict],Any]) -> Optional[Response]:
@@ -47,7 +46,7 @@ def widget_system_updates(hedaers:Optional[Dict]=None):
     }
 
     if (apt['last_update'] is not None):
-        apt['last_update'] = apt['last_update'].strftime("%c")
+        apt['last_update'] = format_datetime(apt['last_update'], "EEEE, d MMMM yyyy HH:mm").title()
 
     tasks = BACKEND.get_tasks_by_path("/advanced/apt")
 
