@@ -1,9 +1,8 @@
-from msg import WarningMessages
 from . import frontend as bp, NMSBACKEND as BACKEND
 from importlib import import_module
 from flask import render_template, request, flash, redirect, url_for, Response, g
 from frontend.utils.widget import render_widget
-from nms_shared.msg import ErrorMessages
+from nms_shared.msg import ErrorMessages, WarningMessages
 from .api.backend_proxy import  show_flash
 
 

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Optional, List, Any
 from flask_babel import _
 
-from msg import InfoMessages
+from nms_shared.msg import InfoMessages
 
 
 @dataclass
