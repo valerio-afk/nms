@@ -1,660 +1,656 @@
 #!/usr/bin/env bash
 
-set -o errexit
-set -o pipefail
-set -o nounset
+set -o errexit      # Exit on error
+set -o pipefail     # Catch pipe errors
+set -o nounset      # Error on undefined variables
 
-# ---------- Configuration ----------
-SCRIPT_NAME="$(basename "$0")"
-TIMESTAMP() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }    # UTC ISO timestamp
-LOGFILE_DEFAULT="/var/log/system-setup.log"     # preferred location when run as root
-LOGFILE_USER="$HOME/system-setup.log"           # fallback for non-root
-# -----------------------------------
+#Globals
+PYTHON_VENV_PATH="/opt/python3"
+LOG_FILE="/var/log/nms.log"
+REPO_URL=""
+DEST_DIR="/nms"
 
-# Determine logfile based on privileges
-if [ "$(id -u)" -eq 0 ]; then
-  LOGFILE="$LOGFILE_DEFAULT"
-else
-  LOGFILE="$LOGFILE_USER"
-fi
+IFM_REPO_URL = "https://github.com/misterunknown/ifm.git"
+IFM_REPO_DIR="/opt/ifm"
 
-# Ensure logfile directory exists (if running as root) and touch file
-mkdir -p "$(dirname "$LOGFILE")" 2>/dev/null || true
-: >"$LOGFILE" 2>/dev/null || true
+PACKAGES=(
+    python3-full
+    network-manager
+    nginx
+    sudo
+    docker.io
+    smartmontools
+    "linux-headers-$(uname -r)"
+    zfs-dkms
+    zfsutils-linux
+    openssh-server
+    vsftpd
+    samba
+    nfs-kernel-server
+)
 
-# Logging function
-# Usage: log LEVEL "message"
-# LEVEL is one of: INFO, WARN, ERROR, DEBUG
-log() {
-  local level="${1:-INFO}"
-  shift
-  local msg="$*"
-  local ts
-  ts="$(TIMESTAMP)"
-  # add colors for interactive terminals (not in logfile)
-  local color_reset="\033[0m"
-  local color_info="\033[1;34m"   # bold blue
-  local color_warn="\033[1;33m"   # bold yellow
-  local color_err="\033[1;31m"    # bold red
-  local color_dbg="\033[1;35m"    # bold magenta
+SERVICES_TO_DISABLE=(
+    openssh
+    vsftpd
+    samba
+    nfs
+)
 
-  # choose color
-  local color="$color_info"
-  case "$level" in
-    INFO) color="$color_info" ;;
-    WARN) color="$color_warn" ;;
-    ERROR) color="$color_err" ;;
-    DEBUG) color="$color_dbg" ;;
-    *) color="$color_info" ;;
-  esac
+# ----- Colour codes -----
+BLUE='\033[1;34m'
+YELLOW='\033[1;33m'
+RED='\033[1;31m'
+NC='\033[0m'  # No Colour
 
-  # Compose line
-  local line="[$ts] [$SCRIPT_NAME] [$level] $msg"
 
-  # Print to stdout/stderr with color if interactive
-  if [ -t 1 ]; then
-    if [ "$level" = "ERROR" ]; then
-      printf "%b\n" "${color}${line}${color_reset}" >&2
-    else
-      printf "%b\n" "${color}${line}${color_reset}"
-    fi
-  else
-    # non-interactive: no color
-    if [ "$level" = "ERROR" ]; then
-      printf "%s\n" "$line" >&2
-    else
-      printf "%s\n" "$line"
-    fi
-  fi
+# ----- Logging functions -----
 
-  # Append plain line to logfile
-  printf "%s\n" "$line" >>"$LOGFILE" 2>/dev/null || true
+# ----- Logging functions -----
+log_info() {
+    # Terminal output in blue
+    echo -e "${BLUE}[INFO]  $(date '+%Y-%m-%d %H:%M:%S') - $1${NC}"
+    # Log file plain text
+    echo "[INFO]  $(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
 }
 
-# Run a command, log start/end and capture output to logfile
-# Usage: run_and_log "description" command [args...]
-run_and_log() {
-  local desc="$1"; shift
-  local cmd=( "$@" )
-  log INFO "START: $desc — ${cmd[*]}"
-  # run command, tee stdout+stderr to logfile while allowing user to see it
-  if "${cmd[@]}" 2>&1 | tee -a "$LOGFILE"; then
-    log INFO "OK: $desc"
-    return 0
-  else
-    local rc=$?
-    log ERROR "FAILED ($rc): $desc — see $LOGFILE for details"
-    return $rc
-  fi
+log_warn() {
+    echo -e "${YELLOW}[WARN]  $(date '+%Y-%m-%d %H:%M:%S') - $1${NC}"
+    echo "[WARN]  $(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
 }
 
-# Trap unhandled errors
-on_error() {
-  local exit_code=$?
-  log ERROR "Script exited abnormally with status $exit_code"
-  exit "$exit_code"
+log_error() {
+    echo -e "${RED}[ERROR] $(date '+%Y-%m-%d %H:%M:%S') - $1${NC}" >&2
+    echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
 }
-trap on_error ERR
 
-# ---------- Main Steps ----------
-log INFO "Script started. Logfile: $LOGFILE"
 
-# Detect apt command
-if ! command -v apt-get >/dev/null 2>&1 && ! command -v apt >/dev/null 2>&1; then
-  log ERROR "No apt/apt-get found. This script targets Debian/Ubuntu systems with apt."
-  exit 2
-fi
+# ----- Error handler -----
 
-# Ensure package lists are up to date
-DEBIAN_FRONTEND=noninteractive run_and_log "apt-get update" apt-get update
-
-#---------------------------------------------------------------------
-# python3 venv
-#---------------------------------------------------------------------
-VENV_DIR="/opt/python3"
-
-log INFO "Installing python3-full package"
-DEBIAN_FRONTEND=noninteractive run_and_log "apt-get install python3-full" \
-  apt-get install -y python3-full
-
-log INFO "Setting up Python virtual environment in $VENV_DIR"
-
-if [ ! -d "$VENV_DIR" ]; then
-  run_and_log "Creating directory $VENV_DIR" mkdir -p "$VENV_DIR"
-else
-  log INFO "Directory $VENV_DIR already exists"
-fi
-
-# Create virtual environment only if not present
-if [ ! -f "$VENV_DIR/bin/activate" ]; then
-  run_and_log "Creating virtual environment at $VENV_DIR" python3 -m venv "$VENV_DIR"
-else
-  log INFO "Virtual environment already exists at $VENV_DIR"
-fi
-#---------------------------------------------------------------------
-
-#---------------------------------------------------------------------
-# remote access services (ftp, sshd, etc...)
-#---------------------------------------------------------------------
-declare -a PKGS=(openssh-server vsftpd samba nfs-kernel-server)
-
-log INFO "Planned server packages: ${PKGS[*]}"
-
-# Map packages -> candidate systemd services to stop/disable/mask.
-# We'll attempt to operate on each candidate service; failing to find one is fine.
-declare -A SERVICES_MAP
-SERVICES_MAP[openssh-server]="ssh.service ssh.socket"
-SERVICES_MAP[vsftpd]="vsftpd.service"
-# samba provides smbd and nmbd; modern Debian may use samba.service which manages both.
-SERVICES_MAP[samba]="smbd.service nmbd.service samba-ad-dc.service samba.service winbind.service"
-# nfs: handle common names
-SERVICES_MAP[nfs-kernel-server]="nfs-server.service nfs-kernel-server.service rpcbind.service"
-
-# Create temporary policy-rc.d to prevent packages from starting services at install time.
-POLICY_RC_D="/usr/sbin/policy-rc.d"
-POLICY_BACKUP=""
-cleanup_policy() {
-  # remove the temporary policy hook if we created it (and restore backup if existed)
-  if [ -f "${POLICY_RC_D}.tmp_created" ]; then
-    rm -f "$POLICY_RC_D" || true
-    rm -f "${POLICY_RC_D}.tmp_created" || true
-    log INFO "Removed temporary $POLICY_RC_D"
-  elif [ -n "$POLICY_BACKUP" ] && [ -f "$POLICY_BACKUP" ]; then
-    mv -f "$POLICY_BACKUP" "$POLICY_RC_D" || true
-    log INFO "Restored original $POLICY_RC_D from backup"
-  fi
+error_exit() {
+    log_error "$1"
+    exit 1
 }
-trap cleanup_policy EXIT
 
-# If policy-rc.d exists, back it up; otherwise create minimal hook to block starts.
-if [ -e "$POLICY_RC_D" ]; then
-  POLICY_BACKUP="$(mktemp --tmpdir policyrcd.backup.XXXX)"
-  cp -a "$POLICY_RC_D" "$POLICY_BACKUP"
-  log INFO "Existing $POLICY_RC_D backed up to $POLICY_BACKUP"
-else
-  cat >"$POLICY_RC_D" <<'EOF'
-#!/bin/sh
-# policy-rc.d to prevent packages from starting services during apt install
-# Return 101 to indicate action is not allowed.
-exit 101
-EOF
-  chmod +x "$POLICY_RC_D"
-  # mark that we created it so cleanup removes it
-  touch "${POLICY_RC_D}.tmp_created"
-  log INFO "Temporary $POLICY_RC_D created to prevent auto-start of services"
-fi
+# ------- APT Wrapper
 
-# Update package lists
-DEBIAN_FRONTEND=noninteractive run_and_log "apt-get update" apt-get update -y
+install_packages() {
 
-# Install packages (no recommends for minimal footprint)
-DEBIAN_FRONTEND=noninteractive run_and_log "apt-get install ${PKGS[*]}" \
-  apt-get install --no-install-recommends -y "${PKGS[@]}"
+    local packages=("$@")
 
-# Now ensure we explicitly stop/disable/mask relevant services so they cannot run
-log INFO "Stopping/disabling/masking related systemd services"
+    if [[ ${#packages[@]} -eq 0 ]]; then
+        log_warn "No packages provided for installation."
+        return 0
+    fi
 
-for pkg in "${PKGS[@]}"; do
-  svc_list="${SERVICES_MAP[$pkg]:-}"
-  if [ -z "$svc_list" ]; then
-    log WARN "No service list known for package: $pkg — skipping service mask step for it"
-    continue
-  fi
+    log_info "Updating apt package index..."
+    if ! apt-get update -y >> "$LOG_FILE" 2>&1; then
+        error_exit "Failed to update package index."
+    fi
 
-  for svc in $svc_list; do
-    # check if system knows this unit; if not, still attempt to mask (mask will create symlink)
-    if systemctl list-unit-files --type=service --no-legend | grep -q -F "$svc"; then
-      log INFO "Unit $svc found; stopping, disabling and masking it"
+    log_info "Installing packages: ${packages[*]}"
+    if ! apt-get install -y "${packages[@]}" >> "$LOG_FILE" 2>&1; then
+        error_exit "Package installation failed."
+    fi
+
+    log_info "Package installation completed successfully."
+}
+
+add_contrib_nonfree() {
+    local sources_file="/etc/apt/sources.list"
+
+    log_info "Backing up current sources.list to ${sources_file}.bak"
+    if ! cp "$sources_file" "${sources_file}.bak"; then
+        error_exit "Failed to backup sources.list"
+    fi
+
+    log_info "Adding 'contrib' and 'non-free' to sources.list entries..."
+    # Loop through lines starting with deb and not already containing contrib/non-free
+    while read -r line; do
+        if [[ "$line" =~ ^deb && ! "$line" =~ contrib ]] || [[ "$line" =~ ^deb && ! "$line" =~ non-free ]]; then
+            # Add contrib and non-free only if missing
+            new_line=$(echo "$line" | sed -E 's/(main)/\1 contrib non-free/')
+            # Replace line in file safely
+            sudo sed -i "s|^${line}$|${new_line}|" "$sources_file"
+        fi
+    done < "$sources_file"
+
+    log_info "Updating apt package index after adding contrib/non-free..."
+    if ! apt-get update -y >> "$LOG_FILE" 2>&1; then
+        error_exit "apt-get update failed after modifying sources.list"
+    fi
+
+    log_info "'contrib' and 'non-free' successfully added and package index updated."
+}
+
+manage_services() {
+    local action="$1"   # "stop" or "disable"
+    shift
+    local services=("$@")
+
+    for svc in "${services[@]}"; do
+        if systemctl list-unit-files | grep -q "^${svc}.service"; then
+            if [[ "$action" == "stop" ]]; then
+                log_info "Stopping service: $svc"
+                if systemctl is-active --quiet "$svc"; then
+                    if ! systemctl stop "$svc"; then
+                        log_warn "Failed to stop $svc"
+                    else
+                        log_info "$svc stopped successfully"
+                    fi
+                else
+                    log_info "$svc is not running"
+                fi
+            elif [[ "$action" == "disable" ]]; then
+                log_info "Disabling service: $svc"
+                if ! systemctl disable "$svc" >> "$LOG_FILE" 2>&1; then
+                    log_warn "Failed to disable $svc"
+                else
+                    log_info "$svc disabled successfully"
+                fi
+            else
+                log_warn "Unknown action: $action for service $svc"
+            fi
+        else
+            log_warn "Service $svc not found on this system"
+        fi
+    done
+}
+
+# Python stuff
+setup_python_venv() {
+    local venv_path="$1"
+    local python_bin
+
+    if [[ -z "$venv_path" ]]; then
+        error_exit "No path provided for Python virtual environment"
+    fi
+
+    # Determine python binary
+    if command -v python3 &>/dev/null; then
+        python_bin=$(command -v python3)
     else
-      log INFO "Unit $svc may not exist on this system; we will still attempt to stop/disable/mask (safe no-op)"
+        error_exit "python3 is not installed, cannot create virtual environment"
     fi
 
-    # stop if active (ignore failures)
-    if systemctl is-active --quiet "$svc" 2>/dev/null; then
-      run_and_log "systemctl stop $svc" systemctl stop "$svc" || true
+    log_info "Setting up Python virtual environment at $venv_path using $python_bin"
+
+    # Create target directory if it doesn't exist
+    if [[ ! -d "$venv_path" ]]; then
+        if ! mkdir -p "$venv_path"; then
+            error_exit "Failed to create directory $venv_path"
+        fi
+        log_info "Created directory $venv_path"
     else
-      log DEBUG "$svc not active"
+        log_info "Directory $venv_path already exists"
     fi
 
-    # disable (ignore failures)
-    run_and_log "systemctl disable --now $svc" systemctl disable --now "$svc" || true
-
-    # mask to prevent any manual or indirect starts (can be undone with 'systemctl unmask')
-    run_and_log "systemctl mask $svc" systemctl mask "$svc" || true
-  done
-done
-
-# As a belt-and-braces: ensure SSH (if installed) is not set to start by default via update-rc.d
-if command -v update-rc.d >/dev/null 2>&1; then
-  for pkg in "${PKGS[@]}"; do
-    # best-effort: remove any init scripts symlinks (no-op if none)
-    run_and_log "update-rc.d -f ${pkg} remove (best-effort)" update-rc.d -f "${pkg}" remove || true
-  done
-fi
-
-# Remove the temporary policy-rc.d (or restore original). cleanup_policy will be run by trap on EXIT,
-# but call explicitly now to restore system state before script finishes.
-cleanup_policy
-#---------------------------------------------------------------------
-
-#---------------------------------------------------------------------
-# network-manager
-#--------------------------------------------------------------------
-log INFO "Installing network-manager and setting raspi-config to use it"
-
-# Install network-manager
-DEBIAN_FRONTEND=noninteractive run_and_log "apt-get install network-manager" \
-  apt-get install -y network-manager
-
-# Run raspi-config to set network configuration mode to Network Manager (option 2)
-if command -v raspi-config >/dev/null 2>&1; then
-  run_and_log "raspi-config nonint do_netconf 2" raspi-config nonint do_netconf 2
-  log INFO "raspi-config network mode set to Network Manager"
-else
-  log WARN "raspi-config not found — skipping raspi network configuration"
-fi
-
-#---------------------------------------------------------------------
-# nginx
-#--------------------------------------------------------------------
-log INFO "Installing `nginx`"
-
-# Install nginx
-DEBIAN_FRONTEND=noninteractive run_and_log "apt-get install nginx" \
-  apt-get install -y nginx
-
-
-#---------------------------------------------------------------------
-# sudi
-#--------------------------------------------------------------------
-log INFO "Installing `sudo`"
-
-# Install sudo
-DEBIAN_FRONTEND=noninteractive run_and_log "apt-get install sudo" \
-  apt-get install -y sudo
-
-
-#---------------------------------------------------------------------
-# Install Docker and pull Redis image
-#--------------------------------------------------------------------
-
-log INFO "Installing Docker engine and pulling Redis image"
-
-# Install Docker (minimal)
-DEBIAN_FRONTEND=noninteractive run_and_log "apt-get install docker.io" \
-  apt-get install -y docker.io
-
-# Pull Redis container image
-if command -v docker >/dev/null 2>&1; then
-  run_and_log "Pulling Redis Docker image" docker pull redis
-  log INFO "Redis image downloaded successfully"
-else
-  log ERROR "Docker not found after installation — cannot pull Redis image"
-fi
-
-
-# ---------- Run Redis Docker container with restart policy ----------
-CONTAINER_NAME="redis-server"
-IMAGE_NAME="redis"
-PORT_MAPPING="6379:6379"
-
-log INFO "Checking if Docker container '$CONTAINER_NAME' is already running"
-
-if command -v docker >/dev/null 2>&1; then
-  if docker ps --filter "name=^/${CONTAINER_NAME}$" --filter "status=running" --format '{{.Names}}' | grep -qw "$CONTAINER_NAME"; then
-    log INFO "Docker container '$CONTAINER_NAME' is already running, skipping start"
-  else
-    # Check if container exists but is stopped (to avoid naming conflicts)
-    if docker ps -a --filter "name=^/${CONTAINER_NAME}$" --format '{{.Names}}' | grep -qw "$CONTAINER_NAME"; then
-      log INFO "Docker container '$CONTAINER_NAME' exists but not running, removing it first"
-      run_and_log "docker rm $CONTAINER_NAME" docker rm "$CONTAINER_NAME"
+    # Check if venv already exists
+    if [[ -f "$venv_path/bin/activate" ]]; then
+        log_warn "Virtual environment already exists at $venv_path"
+    else
+        if ! "$python_bin" -m venv "$venv_path" >> "$LOG_FILE" 2>&1; then
+            error_exit "Failed to create Python virtual environment"
+        fi
+        log_info "Python virtual environment created successfully at $venv_path"
     fi
 
-    log INFO "Starting Docker container '$CONTAINER_NAME' with restart=unless-stopped"
-    run_and_log "docker run -d --name $CONTAINER_NAME -p $PORT_MAPPING --restart unless-stopped $IMAGE_NAME" \
-      docker run -d --name "$CONTAINER_NAME" -p "$PORT_MAPPING" --restart unless-stopped "$IMAGE_NAME"
-  fi
-else
-  log ERROR "Docker command not found; cannot run Redis container"
-fi
-
-#---------------------------------------------------------------------
-# Clone IFM Git repository and build Docker image
-#---------------------------------------------------------------------
-
-GIT_REPO_URL="https://github.com/misterunknown/ifm.git"
-REPO_NAME="$(basename "$GIT_REPO_URL" .git)"
-REPO_DIR="/opt/$REPO_NAME"
-DOCKER_IMAGE_NAME="ifm:latest"
-
-log INFO "Preparing to clone repository $GIT_REPO_URL into $REPO_DIR"
-
-# Ensure git is available
-if ! command -v git >/dev/null 2>&1; then
-  log INFO "git not found, installing"
-  DEBIAN_FRONTEND=noninteractive run_and_log "apt-get install git" \
-    apt-get install -y git
-fi
-
-# Clone repository if not already present
-if [ ! -d "$REPO_DIR/.git" ]; then
-  run_and_log "Cloning repository $GIT_REPO_URL" \
-    git clone "$GIT_REPO_URL" "$REPO_DIR"
-else
-  log INFO "Repository already exists at $REPO_DIR, skipping clone"
-fi
-
-# Build Docker image from repository
-if command -v docker >/dev/null 2>&1; then
-  log INFO "Building Docker image $DOCKER_IMAGE_NAME from $REPO_DIR"
-  run_and_log "docker build $DOCKER_IMAGE_NAME" \
-    docker build -t "$DOCKER_IMAGE_NAME" "$REPO_DIR"
-else
-  log ERROR "Docker not available — cannot build image"
-fi
-
-#---------------------------------------------------------------------
-# Create www-data user/group for web server with docker access
-#--------------------------------------------------------------------
-
-log INFO "Creating www-data user and group with no login and docker group access"
-
-# Create www-data group if it doesn't exist
-if ! getent group www-data >/dev/null; then
-  run_and_log "Creating group www-data" groupadd --system www-data
-else
-  log INFO "Group www-data already exists"
-fi
-
-# Create www-data user if it doesn't exist
-if ! id -u www-data >/dev/null 2>&1; then
-  run_and_log "Creating system user www-data with no login shell and no home directory" \
-    useradd --system --no-create-home --shell /usr/sbin/nologin --gid www-data www-data
-else
-  log INFO "User www-data already exists"
-fi
-
-# Add www-data user to docker group if docker group exists
-if getent group docker >/dev/null; then
-  if id -nG www-data | grep -qw docker; then
-    log INFO "User www-data is already in docker group"
-  else
-    run_and_log "Adding www-data user to docker group" usermod -aG docker www-data
-  fi
-else
-  log WARN "Docker group does not exist yet. Make sure docker package is installed first."
-fi
-
-
-#---------------------------------------------------------------------
-# Create sudodaemon user with passwordless sudo and no login
-#--------------------------------------------------------------------
-
-log INFO "Creating sudodaemon user with no login, no home, and passwordless sudo"
-
-# Create sudodaemon group if it doesn't exist (system group)
-if ! getent group sudodaemon >/dev/null; then
-  run_and_log "Creating group sudodaemon" groupadd --system sudodaemon
-else
-  log INFO "Group sudodaemon already exists"
-fi
-
-# Create sudodaemon user if it doesn't exist
-if ! id -u sudodaemon >/dev/null 2>&1; then
-  run_and_log "Creating system user sudodaemon with no login shell and no home directory" \
-    useradd --system --no-create-home --shell /usr/sbin/nologin --gid sudodaemon -G www-data sudodaemon
-else
-  log INFO "User sudodaemon already exists"
-fi
-
-# Setup passwordless sudo for sudodaemon via sudoers.d file
-SUDOERS_FILE="/etc/sudoers.d/sudodaemon"
-if [ ! -f "$SUDOERS_FILE" ]; then
-  echo "sudodaemon ALL=(ALL) NOPASSWD:ALL" > "$SUDOERS_FILE"
-  chmod 440 "$SUDOERS_FILE"
-  log INFO "Passwordless sudo configured for sudodaemon in $SUDOERS_FILE"
-else
-  log INFO "Passwordless sudo file $SUDOERS_FILE already exists"
-fi
-
-
-#---------------------------------------------------------------------
-# Create afk user for external login
-#--------------------------------------------------------------------
-
-log INFO "Ensuring afk user with UID 1000 exists"
-
-# Find username (if any) that owns UID 1000
-uid1000_user="$(getent passwd 1000 | cut -d: -f1)"
-
-if [ -n "$uid1000_user" ]; then
-  if [ "$uid1000_user" = "afk" ]; then
-    log INFO "User afk already exists with UID 1000"
-  else
-    log INFO "UID 1000 belongs to user '$uid1000_user', renaming to afk"
-
-    run_and_log "Renaming user $uid1000_user to afk" \
-      usermod -l afk "$uid1000_user"
-
-    # Optional but usually a good idea:
-    # rename primary group if it matches the old username
-    if getent group "$uid1000_user" >/dev/null; then
-      run_and_log "Renaming group $uid1000_user to afk" \
-        groupmod -n afk "$uid1000_user"
+    # Upgrade pip inside the venv
+    log_info "Upgrading pip in virtual environment..."
+    if ! "$venv_path/bin/pip" install --upgrade pip >> "$LOG_FILE" 2>&1; then
+        log_warn "Failed to upgrade pip in $venv_path"
+    else
+        log_info "pip upgraded successfully in $venv_path"
     fi
-  fi
-else
-  log INFO "UID 1000 does not exist, creating user afk"
+}
 
-  run_and_log "Creating user afk with UID 1000" \
-    useradd -u 1000 -M --shell /usr/bash -G users afk
-fi
+install_requirements() {
+    local repo_dir="$1"          # Parent directory containing requirements.txt
+    local venv_path="$2"         # Path to Python virtual environment
 
-run_and_log "Setting default password for afk" \
-  bash -c 'echo "afk:afk" | chpasswd'
+    if [[ -z "$repo_dir" || -z "$venv_path" ]]; then
+        log_error "Both repository directory and Python venv path must be provided"
+        return 1
+    fi
 
-#---------------------------------------------------------------------
-# Installing python3 requirements
-#--------------------------------------------------------------------
+    local req_file="$repo_dir/requirements.txt"
 
-REQ_FILE="/nms/requirements.txt"
-if [ -f "$REQ_FILE" ]; then
-  if [ -f "$VENV_DIR/bin/pip" ]; then
-    log INFO "Installing Python packages from $REQ_FILE inside virtualenv at $VENV_DIR"
-    run_and_log "Virtualenv pip install" "$VENV_DIR/bin/pip" install -r "$REQ_FILE"
-  else
-    log ERROR "pip not found inside virtualenv at $VENV_DIR"
-  fi
-else
-  log WARN "Requirements file $REQ_FILE not found, skipping virtualenv pip install"
-fi
+    if [[ ! -f "$req_file" ]]; then
+        log_warn "requirements.txt not found at $req_file. Skipping pip install."
+        return 0
+    fi
 
+    # Use pip from the virtual environment
+    local pip_bin="$venv_path/bin/pip"
 
-#---------------------------------------------------------------------
-# Configuring systemd
-#--------------------------------------------------------------------
+    if [[ ! -x "$pip_bin" ]]; then
+        log_error "pip executable not found in virtual environment at $pip_bin"
+        return 1
+    fi
 
-# ---------- Create systemd service for nmswebapp ----------
-SERVICE_NAME="nmswebapp"
-SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+    log_info "Installing Python packages from $req_file into venv $venv_path..."
 
-log INFO "Creating systemd service for $SERVICE_NAME"
+    if ! "$pip_bin" install -r "$req_file" >> "$LOG_FILE" 2>&1; then
+        log_error "Failed to install Python packages from $req_file"
+        return 1
+    fi
 
-# Write the service file (overwrite if exists)
-SECRET_KEY=$(openssl rand -hex 32)
-cat > "$SERVICE_FILE" <<EOF
-[Unit]
-Description=NMS Web App Service
-After=docker.service
-Requires=docker.service
+    log_info "Python packages from $req_file installed successfully"
+}
 
-[Service]
-Type=simple
-User=www-data
-Group=www-data
-WorkingDirectory=/nms
-Environment="NMS_SECRET_KEY=${SECRET_KEY}"
-ExecStart=/opt/python3/bin/python app.py
-Restart=on-failure
-RestartSec=5s
+install_editable_package() {
+    local package_dir="$1"    # Path to the Python package (e.g., /nms/nms_shared)
+    local venv_path="$2"      # Path to Python virtual environment
 
-[Install]
-WantedBy=multi-user.target
-EOF
+    if [[ -z "$package_dir" || -z "$venv_path" ]]; then
+        log_error "Both package directory and Python venv path must be provided"
+        return 1
+    fi
 
+    if [[ ! -d "$package_dir" ]]; then
+        log_warn "Package directory '$package_dir' does not exist. Skipping editable install."
+        return 0
+    fi
 
-run_and_log "systemctl daemon-reload" systemctl daemon-reload
-run_and_log "systemctl enable $SERVICE_NAME" systemctl enable "$SERVICE_NAME"
-run_and_log "systemctl start $SERVICE_NAME" systemctl start "$SERVICE_NAME"
+    local pip_bin="$venv_path/bin/pip"
 
-log INFO "Systemd service $SERVICE_NAME created and enabled "
+    if [[ ! -x "$pip_bin" ]]; then
+        log_error "pip executable not found in virtual environment at $pip_bin"
+        return 1
+    fi
 
-# ---------- Create systemd service for celeryworker ----------
-SERVICE_NAME="celeryworker"
-SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+    log_info "Installing Python package in editable mode from $package_dir..."
 
-log INFO "Creating systemd service for $SERVICE_NAME"
+    if ! "$pip_bin" install -e "$package_dir" >> "$LOG_FILE" 2>&1; then
+        log_error "Failed to install package in editable mode from $package_dir"
+        return 1
+    fi
 
-cat > "$SERVICE_FILE" <<EOF
-[Unit]
-Description=Celery Worker Service for NMS
-After=docker.service
-Requires=docker.service
+    log_info "Editable Python package installed successfully from $package_dir"
+}
 
-[Service]
-Type=simple
-User=www-data
-Group=www-data
-WorkingDirectory=/nms
-Environment="NMS_SECRET_KEY=${SECRET_KEY}"
-ExecStart=/opt/python3/bin/celery -A app.celery_app worker
-Restart=on-failure
-RestartSec=5s
+#Git stuff
+clone_git_repo() {
+    local repo_url="$1"
+    local dest_dir="$2"   # Where to clone the repo
 
-[Install]
-WantedBy=multi-user.target
-EOF
+    if [[ -z "$repo_url" ]]; then
+        log_info "No Git repository URL provided, skipping clone."
+        return 0
+    fi
 
-run_and_log "systemctl daemon-reload" systemctl daemon-reload
-run_and_log "systemctl enable $SERVICE_NAME" systemctl enable "$SERVICE_NAME"
-run_and_log "systemctl start $SERVICE_NAME" systemctl start "$SERVICE_NAME"
+    if [[ -z "$dest_dir" ]]; then
+        error_exit "No destination directory provided for git clone."
+    fi
 
-log INFO "Systemd service $SERVICE_NAME created and enabled "
+    log_info "Cloning Git repository $repo_url into $dest_dir..."
 
-# ---------- Create systemd service for sudo_daemon ----------
-SERVICE_NAME="sudodaemon"
-SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+    # If directory exists and is not empty, skip or warn
+    if [[ -d "$dest_dir" && "$(ls -A "$dest_dir")" ]]; then
+        log_warn "Destination directory $dest_dir already exists and is not empty. Skipping clone."
+        return 0
+    fi
 
-log INFO "Creating systemd service for $SERVICE_NAME"
+    # Attempt the clone
+    if ! git clone "$repo_url" "$dest_dir" >> "$LOG_FILE" 2>&1; then
+        log_error "Failed to clone repository $repo_url"
+    else
+        log_info "Repository cloned successfully into $dest_dir"
+    fi
+}
 
-cat > "$SERVICE_FILE" <<EOF
-[Unit]
-Description=Sudo Daemon Service
-After=docker.service
-Requires=docker.service
+# Raspberry Pi stuff
+enable_network_manager() {
+    log_info "Enabling NetworkManager via raspi-config..."
 
-[Service]
-Type=simple
-User=sudodaemon
-Group=sudodaemon
-WorkingDirectory=/nms
-ExecStart=/opt/python3/bin/python sudo_daemon.py
-Restart=on-failure
-RestartSec=5s
+    # Check if raspi-config is installed
+    if ! command -v raspi-config &>/dev/null; then
+        log_warn "raspi-config is not installed. Skipping NetworkManager configuration."
+        return 0
+    fi
 
-[Install]
-WantedBy=multi-user.target
-EOF
+    # Non-interactive mode to enable NetworkManager
+    if ! raspi-config nonint do_network_manager 0 >> "$LOG_FILE" 2>&1; then
+        log_error "Failed to enable NetworkManager via raspi-config"
+        return 1
+    else
+        log_info "NetworkManager enabled successfully via raspi-config"
+    fi
 
-run_and_log "systemctl daemon-reload" systemctl daemon-reload
-run_and_log "systemctl enable $SERVICE_NAME" systemctl enable "$SERVICE_NAME"
-run_and_log "systemctl start $SERVICE_NAME" systemctl start "$SERVICE_NAME"
+    # Optional: restart NetworkManager to apply changes
+    if systemctl is-active --quiet NetworkManager; then
+        log_info "Restarting NetworkManager service..."
+        if ! systemctl restart NetworkManager >> "$LOG_FILE" 2>&1; then
+            log_warn "Failed to restart NetworkManager service"
+        else
+            log_info "NetworkManager service restarted successfully"
+        fi
+    else
+        log_info "NetworkManager service is not running yet, it will start at next boot"
+    fi
+}
 
-log INFO "Systemd service $SERVICE_NAME created and enabled "
+# Docker stuff
+install_redis_docker() {
+    local container_name="redis-server"
+    local image_name="redis"
+    local port_mapping="6379:6379"
+    local restart_policy="unless-stopped"
 
-#---------------------------------------------------------------------
-# Setting the right permissions to /nms
-#--------------------------------------------------------------------
+    # Check if Docker is installed
+    if ! command -v docker &>/dev/null; then
+        log_error "Docker is not installed. Cannot run Redis container."
+        return 1
+    fi
 
+    log_info "Pulling Redis Docker image ($image_name)..."
+    if ! docker pull "$image_name" >> "$LOG_FILE" 2>&1; then
+        log_error "Failed to pull Redis image $image_name"
+        return 1
+    fi
 
-DIR="/nms"
+    # Check if container already exists
+    if docker ps -a --format '{{.Names}}' | grep -qw "$container_name"; then
+        log_warn "Container $container_name already exists. Attempting to start it..."
+        if ! docker start "$container_name" >> "$LOG_FILE" 2>&1; then
+            log_error "Failed to start existing container $container_name"
+            return 1
+        fi
+        log_info "Container $container_name started successfully"
+    else
+        log_info "Creating and starting Redis container $container_name..."
+        if ! docker run -d \
+            --name "$container_name" \
+            -p "$port_mapping" \
+            --restart "$restart_policy" \
+            "$image_name" >> "$LOG_FILE" 2>&1; then
+            log_error "Failed to create and run Redis container $container_name"
+            return 1
+        fi
+        log_info "Redis container $container_name is running on port $port_mapping with restart policy '$restart_policy'"
+    fi
+}
 
-if [ -d "$DIR" ]; then
-  log INFO "Setting ownership of $DIR to root:www-data"
-  run_and_log "chown root:www-data $DIR" chown root:www-data "$DIR"
+build_docker_image() {
+    local repo_dir="$1"     # Path to the repository to build from
+    local image_name="$2"   # Docker image name with optional tag
 
-  log INFO "Setting permissions of $DIR to 770"
-  run_and_log "chmod 770 $DIR" chmod 770 "$DIR"
-else
-  log WARN "Directory $DIR does not exist, skipping permission and ownership changes"
-fi
+    if [[ -z "$repo_dir" || -z "$image_name" ]]; then
+        log_error "Directory and image name must be provided."
+        return 1
+    fi
 
+    if [[ ! -d "$repo_dir" ]]; then
+        log_error "Directory '$repo_dir' does not exist."
+        return 1
+    fi
 
-is_virtualbox() {
-    if command -v dmidecode >/dev/null 2>&1; then
-        local product_name
-        product_name=$(dmidecode -s system-product-name 2>/dev/null || true)
-        if [[ "$product_name" == *"VirtualBox"* ]]; then
-            return 0
+    # Check if Docker is installed
+    if ! command -v docker &>/dev/null; then
+        log_error "Docker is not installed. Cannot build Docker image."
+        return 1
+    fi
+
+    log_info "Building Docker image '$image_name' from repository at $repo_dir..."
+
+    if ! docker build -t "$image_name" "$repo_dir" >> "$LOG_FILE" 2>&1; then
+        log_error "Failed to build Docker image '$image_name' from $repo_dir"
+        return 1
+    fi
+
+    log_info "Docker image '$image_name' built successfully from $repo_dir"
+}
+
+# Sysadmin stuff
+manage_users() {
+    log_info "Starting user management..."
+
+    # --- 1. www-data ---
+    if id "www-data" &>/dev/null; then
+        log_info "User 'www-data' already exists"
+    else
+        log_info "Creating user 'www-data' with no login..."
+        if ! useradd -r -s /usr/sbin/nologin www-data >> "$LOG_FILE" 2>&1; then
+            log_warn "Failed to create user 'www-data'"
+        else
+            log_info "User 'www-data' created successfully"
         fi
     fi
-    return 1
+
+    # --- 2. backend ---
+    if id "backend" &>/dev/null; then
+        log_info "User 'backend' already exists"
+    else
+        log_info "Creating user 'backend' with no login and sudo group..."
+        if ! useradd -m -s /usr/sbin/nologin -G sudo backend >> "$LOG_FILE" 2>&1; then
+            log_warn "Failed to create user 'backend'"
+        else
+            log_info "User 'backend' created successfully and added to sudo group"
+        fi
+    fi
+
+    # --- 3. Check UID 1000 ---
+    uid1000_user=$(getent passwd 1000 | cut -d: -f1 || true)
+
+    if [[ -z "$uid1000_user" ]]; then
+        log_info "No user with UID 1000 found. Creating user 'user'..."
+        if ! useradd -m -s /bin/bash user >> "$LOG_FILE" 2>&1; then
+            log_warn "Failed to create user 'user'"
+        else
+            log_info "User 'user' created successfully"
+        fi
+    else
+        log_info "User with UID 1000 found: $uid1000_user. Renaming to 'user'..."
+        if ! usermod -l user "$uid1000_user" >> "$LOG_FILE" 2>&1; then
+            log_warn "Failed to rename $uid1000_user to 'user'"
+        else
+            log_info "User $uid1000_user renamed to 'user'"
+        fi
+
+        # Add user to 'users' group (create group if missing)
+        if ! getent group users &>/dev/null; then
+            log_info "Group 'users' does not exist. Creating group..."
+            if ! groupadd users >> "$LOG_FILE" 2>&1; then
+                log_warn "Failed to create group 'users'"
+            else
+                log_info "Group 'users' created successfully"
+            fi
+        fi
+
+        log_info "Adding 'user' to group 'users'..."
+        if ! usermod -aG users user >> "$LOG_FILE" 2>&1; then
+            log_warn "Failed to add 'user' to group 'users'"
+        else
+            log_info "'user' added to group 'users' successfully"
+        fi
+    fi
+
+    log_info "User management completed."
 }
 
-if is_virtualbox; then
-    log INFO "Running inside VirtualBox - adding www-data to vboxsf group"
-    run_and_log "Add www-data to vboxsf group" usermod -aG vboxsf www-data
-    run_and_log "Add sudodaemon to vboxsf group" usermod -aG vboxsf sudodaemon
-else
-    log INFO "Not running inside VirtualBox - skipping group modification"
+set_repo_permissions_wwwdata() {
+    local repo_dir="$1"
+    local backend_user="backend"
+    local group_name="www-data"
+
+    if [[ ! -d "$repo_dir" ]]; then
+        log_warn "Repository directory '$repo_dir' does not exist. Skipping permission setup."
+        return 0
+    fi
+
+    # Add backend to www-data group
+    if id "$backend_user" &>/dev/null; then
+        log_info "Adding user '$backend_user' to group '$group_name'"
+        if ! usermod -aG "$group_name" "$backend_user" >> "$LOG_FILE" 2>&1; then
+            log_warn "Failed to add user '$backend_user' to group '$group_name'"
+        else
+            log_info "User '$backend_user' added to group '$group_name' successfully"
+        fi
+    else
+        log_warn "User '$backend_user' does not exist, skipping"
+    fi
+
+    # Set ownership and group permissions on /nms
+    log_info "Setting ownership to root:$group_name and read access for group on $repo_dir"
+    if ! chown -R root:"$group_name" "$repo_dir" >> "$LOG_FILE" 2>&1; then
+        log_warn "Failed to change ownership of $repo_dir"
+    fi
+
+    # Set permissions: owner rwx, group r-x, others ---
+    if ! chmod -R 750 "$repo_dir" >> "$LOG_FILE" 2>&1; then
+        log_warn "Failed to set permissions on $repo_dir"
+    else
+        log_info "Permissions set: owner=root, group=$group_name, mode=750"
+    fi
+}
+
+set_nms_json_permissions() {
+    local file_path="$1/nms.json"
+    local backend_user="backend"
+
+    if [[ ! -f "$file_path" ]]; then
+        log_warn "File $file_path does not exist. Skipping special permissions setup."
+        return 0
+    fi
+
+    log_info "Setting exclusive read/write access for '$backend_user' on $file_path"
+
+    # Change ownership to backend
+    if ! chown "$backend_user":"$backend_user" "$file_path" >> "$LOG_FILE" 2>&1; then
+        log_warn "Failed to set owner of $file_path to $backend_user"
+    else
+        log_info "Owner of $file_path set to $backend_user successfully"
+    fi
+
+    # Set file permissions to 600 (rw for owner only)
+    if ! chmod 600 "$file_path" >> "$LOG_FILE" 2>&1; then
+        log_warn "Failed to set permissions on $file_path"
+    else
+        log_info "Permissions set: owner=rwx, others=no access for $file_path"
+    fi
+}
+
+create_frontend_service() {
+    local venv_path="$2"   # e.g., /opt/python3
+    local app_dir="$1"
+    local service_file="/etc/systemd/system/nmswebapp.service"
+
+    log_info "Creating systemd service for frontend Flask app at $service_file"
+
+    cat <<EOF | tee "$service_file" >/dev/null
+[Unit]
+Description=NMS Web App Service
+After=nmsbackend.service
+Requires=nmsbackend.service
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=$app_dir
+Environment="PATH=$venv_path/bin:$PATH"
+ExecStart=$venv_path/bin/python $app_dir/app.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    log_info "Reloading systemd daemon..."
+    systemctl daemon-reload >> "$LOG_FILE" 2>&1
+
+    log_info "Enabling and starting nmswebapp service..."
+    systemctl enable nmswebapp >> "$LOG_FILE" 2>&1
+    systemctl restart nmswebapp >> "$LOG_FILE" 2>&1
+
+    log_info "Frontend Flask service setup complete"
+}
+
+generate_secret_key() {
+    # Generate a 32-character random alphanumeric string
+    NMS_SECRET_KEY=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9')
+    log_info "Generated random NMS_SECRET_KEY"
+}
+
+create_backend_service() {
+    local venv_path="$2"    # Path to virtualenv
+    local backend_file="$1/backend_server/backend.py"
+    local service_file="/etc/systemd/system/nmsbackend.service"
+
+    generate_secret_key  # Populate $NMS_SECRET_KEY
+
+    log_info "Creating systemd service for backend FastAPI app at $service_file"
+
+    cat <<EOF | tee "$service_file" >/dev/null
+[Unit]
+Description=NMS Backend FastAPI Service
+After=docker.service
+Requires=docker.service
+
+[Service]
+User=backend
+Group=backend
+WorkingDirectory=$(dirname "$backend_file")
+Environment="PATH=$venv_path/bin:$PATH"
+Environment="NMS_SECRET_KEY=$NMS_SECRET_KEY"
+ExecStart=$venv_path/bin/uvicorn $(basename "$backend_file" .py):app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    log_info "Reloading systemd daemon..."
+    systemctl daemon-reload >> "$LOG_FILE" 2>&1
+
+    log_info "Enabling and starting nms-backend service..."
+    systemctl enable nmsbackend >> "$LOG_FILE" 2>&1
+    systemctl restart nmsbackend >> "$LOG_FILE" 2>&1
+
+    log_info "Backend FastAPI service setup complete with NMS_SECRET_KEY"
+}
+
+
+# Check if the script is run by root
+if [[ "$EUID" -ne 0 ]]; then
+    error_exit "This script must be run as root."
 fi
 
+# Step 1 --- Update source.list
+add_contrib_nonfree
 
-#---------------------------------------------------------------------
-# smarttools
-#--------------------------------------------------------------------
+# Step 2 --- Install packages
+install_packages "${PACKAGES[@]}"
 
-log INFO "Installing SMART tools"
+# Step 3 --- Disable systemctl services
+manage_services stop "${SERVICES_TO_DISABLE[@]}"
+manage_services disable "${SERVICES_TO_DISABLE[@]}"
 
-DEBIAN_FRONTEND=noninteractive run_and_log "apt-get install smartmontools" \
-  apt-get install -y smartmontools
+# Step 4 --- Create python virtual environment
+setup_python_venv "$PYTHON_VENV_PATH"
 
-#---------------------------------------------------------------------
-# Linux headers
-#--------------------------------------------------------------------
+# Step 5 --- Cloning NMS git repository
+clone_git_repo "$REPO_URL" "$DEST_DIR"
 
-log INFO "Installing linux headers"
+# Step 6 --- Raspberry config
+enable_network_manager
 
-DEBIAN_FRONTEND=noninteractive run_and_log "apt-get install linux-headers-$(uname -r)" \
-  apt-get install -y linux-headers-$(uname -r)
+# Step 7 --- Install redis
+install_redis_docker
 
+# Step 8 --- Install & Configuring IFM (Improved File Manager)
+clone_git_repo "$IFM_REPO_URL" "$IFM_REPO_DIR"
+build_docker_image "$IFM_REPO_DIR" "ifm:latest"
 
-#---------------------------------------------------------------------
-# ZFS
-#--------------------------------------------------------------------
+#Step 9 --- Configure users
+manage_users
+set_repo_permissions_wwwdata "$DEST_DIR"
+set_nms_json_permissions "$DEST_DIR"
 
-# ---------- Enable contrib and non-free repositories if not enabled ----------
-log INFO "Adding contrib and non-free components  in apt sources"
+#Step 10 --- Python configuration
+install_requirements "$DEST_DIR" "$PYTHON_VENV_PATH"
+install_editable_package "$DEST_DIR/nms_shared" "$PYTHON_VENV_PATH"
 
-if grep -E '^[^#]*deb ' /etc/apt/sources.list | grep -vqE 'contrib'; then
-  log INFO "Adding contrib and non-free to sources.list entries"
-  sed -i -r 's/^(deb\s+[^ ]+\s+[^ ]+\s+)(main)(.*)/\1main contrib non-free\3/' /etc/apt/sources.list
-else
-  log INFO "contrib and non-free components already enabled"
-fi
-
-apt update
-
-log INFO "Installing ZFS packages"
-
-DEBIAN_FRONTEND=noninteractive run_and_log "apt-get install zfs-dkms zfsutils-linux" \
-  apt-get install -y zfs-dkms zfsutils-linux
-
-log INFO "Loading ZFS kernel module with modprobe"
-if modprobe zfs; then
-  log INFO "ZFS kernel module loaded successfully"
-else
-  log ERROR "Failed to load ZFS kernel module via modprobe"
-fi
-
-exit 0
+#Step 11 - Systemctl
+create_backend_service "$DEST_DIR" "$PYTHON_VENV_PATH"
+create_frontend_service "$DEST_DIR" "$PYTHON_VENV_PATH"
