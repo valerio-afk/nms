@@ -1,21 +1,22 @@
-from backend_server.utils.cmdl import CommandLine, ZFSLoadKey, ZFSMount, LocalCommandLineTransaction, ZFSUnmount, \
-    ZFSUnLoadKey, ZFSDestroy, ZFSCreate, ZPoolStatus, ZFSList, ZPoolExport, ZPoolScrub, ZPoolAttach, ZPoolAdd, \
-    ZPoolImport, CreateKey, ZPoolCreate, ZPoolDestroy, ZPoolClear, ZPoolReplace
+from backend_server.utils.cmdl import CommandLine, ZFSLoadKey, ZFSMount, LocalCommandLineTransaction, ZFSUnmount
+from backend_server.utils.cmdl import ZFSUnLoadKey, ZFSDestroy, ZFSCreate, ZPoolStatus, ZFSList, ZPoolExport, ZPoolScrub
+from backend_server.utils.cmdl import ZPoolAttach, ZPoolAdd, ZPoolImport, CreateKey, ZPoolCreate, ZPoolDestroy
+from backend_server.utils.cmdl import ZPoolClear, ZPoolReplace
 from backend_server.utils.config import CONFIG
 from backend_server.utils.responses import ExpasionStatus, BackendProperty, ErrorMessage, SuccessMessage, BackgroundTask
 from backend_server.utils.scheduler import SCHEDULER
-from backend_server.v1.auth import verify_token_factory, verify_token_header_factory
 from backend_server.utils.threads import ScrubStateChecker, PoolExpansionStatus, ResilverStateChecker
+from backend_server.v1.auth import verify_token_factory, verify_token_header_factory, check_permission
+from backend_server.v1.services import disable_all_access_services
 from datetime import timedelta
 from enum import Enum
 from fastapi import HTTPException, APIRouter, Depends, UploadFile, File
-from backend_server.v1.services import disable_all_access_services
 from nms_shared import ErrorMessages, SuccessMessages
 from nms_shared.constants import KEYPATH
-from nms_shared.enums import DiskStatus
 from nms_shared.disks import Disk
-from typing import  Optional, List, Callable, Dict
+from nms_shared.enums import DiskStatus, UserPermissions
 from pydantic import BaseModel
+from typing import  Optional, List, Callable, Dict
 import base64
 import datetime
 import json
@@ -24,13 +25,35 @@ import re
 import subprocess
 import traceback
 
+verify_token = verify_token_factory()
 
 pool = APIRouter(
     prefix='/pool',
     tags=['pool'],
-    dependencies=[Depends(verify_token_factory())]
+    dependencies=[Depends(verify_token)]
 )
 remove_partition:Callable[[str],str] = lambda path : re.sub(r"-part[0-9]$","",path)
+
+def mount() -> None:
+    if (not CONFIG.is_pool_configured):
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_NO_CONF.name))
+
+    if (not CONFIG.is_mounted):
+        cmds = []
+
+        if (CONFIG.has_encryption):
+            cmds.append(ZFSLoadKey(CONFIG.pool_name, CONFIG.key_filename))
+
+        cmds.append(ZFSMount(CONFIG.pool_name))
+        cmds.append(ZFSMount(CONFIG.pool_name, CONFIG.dataset_name))
+
+        trans = LocalCommandLineTransaction(*cmds)
+
+        output = trans.run()
+
+        if (not trans.success):
+            errors = "\n".join([o['stderr'] for o in output])
+            raise ErrorMessage(code=ErrorMessages.E_POOL_MOUNT.name,params=[errors])
 
 def unmount():
     if (not CONFIG.is_pool_configured):
@@ -410,7 +433,8 @@ class PoolProperties(Enum):
           responses={500: {"description": "Any internal error to retrieve pool information"}},
           summary="Get the list of disks in the array"
           )
-def pool_disks() -> List[Disk]:
+def pool_disks(token:dict=Depends(verify_token)) -> List[Disk]:
+    check_permission(token.get("username"), UserPermissions.CLIENT_DASHBOARD_DISKS)
     return get_pool_disks()
 
 @pool.get("/get/attachable-disks",
@@ -418,7 +442,8 @@ def pool_disks() -> List[Disk]:
           responses={500: {"description": "Any internal error to retrieve pool information"}},
           summary="Get the list of new disks that can be attached/added to the array"
           )
-def attachable_disks() -> List[Disk]:
+def attachable_disks(token:dict=Depends(verify_token)) -> List[Disk]:
+    check_permission(token.get("username"), UserPermissions.CLIENT_DASHBOARD_DISKS)
     return get_attachable_disks()
 
 
@@ -430,7 +455,8 @@ def attachable_disks() -> List[Disk]:
             },
           summary="Get a configuration/status pool property"
           )
-def pool_get_property(prop:PoolProperties) -> Optional[BackendProperty]:
+def pool_get_property(prop:PoolProperties,token:dict=Depends(verify_token)) -> Optional[BackendProperty]:
+    check_permission(token.get("username"), UserPermissions.POOL_CONF_GET_INFO)
     try:
         match prop:
             case PoolProperties.pool_name:
@@ -480,26 +506,9 @@ def pool_get_property(prop:PoolProperties) -> Optional[BackendProperty]:
     responses={500: {"description": "Missing configuration/Other internal errors"}},
     summary="Mount the disk array"
 )
-def pool_mount() -> Dict:
-    if (not CONFIG.is_pool_configured):
-        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_NO_CONF.name))
-
-    if (not CONFIG.is_mounted):
-        cmds = []
-
-        if (CONFIG.has_encryption):
-            cmds.append(ZFSLoadKey(CONFIG.pool_name, CONFIG.key_filename))
-
-        cmds.append(ZFSMount(CONFIG.pool_name))
-        cmds.append(ZFSMount(CONFIG.pool_name, CONFIG.dataset_name))
-
-        trans = LocalCommandLineTransaction(*cmds)
-
-        output = trans.run()
-
-        if (not trans.success):
-            errors = "\n".join([o['stderr'] for o in output])
-            raise ErrorMessage(code=ErrorMessages.E_POOL_MOUNT.name,params=[errors])
+def pool_mount(token:dict=Depends(verify_token)) -> Dict:
+    check_permission(token.get("username"), UserPermissions.POOL_TOOLS_MOUNT)
+    mount()
 
     return {"detail": SuccessMessage(code=SuccessMessages.S_POOL_MOUNTED.name)}
 
@@ -508,7 +517,8 @@ def pool_mount() -> Dict:
     responses={500: {"description": "Missing configuration/Other internal errors"}},
     summary="Unmount the disk array"
 )
-def pool_unmount() -> Dict:
+def pool_unmount(token:dict=Depends(verify_token)) -> Dict:
+    check_permission(token.get("username"), UserPermissions.POOL_TOOLS_MOUNT)
     disable_all_access_services()
     unmount()
     return {"detail": SuccessMessage(code=SuccessMessages.S_POOL_UNMOUNTED.name)}
@@ -519,6 +529,7 @@ def pool_unmount() -> Dict:
     summary="Destroy and recreate a new disk array"
 )
 def pool_format(auth:Dict=Depends(verify_token_header_factory("format"))) -> Optional[Dict]:
+    check_permission(auth.get("username"), UserPermissions.POOL_CONF_FORMAT)
     if (not CONFIG.is_pool_configured):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_NO_CONF.name))
 
@@ -550,7 +561,8 @@ def pool_format(auth:Dict=Depends(verify_token_header_factory("format"))) -> Opt
     responses={500: {"description": "Any internal errors"}},
     summary="Detach the disk array (it will not be visible anymore) without deleting it"
 )
-def pool_detach() -> None:
+def pool_detach(token:dict=Depends(verify_token)) -> None:
+    check_permission(token.get("username"), UserPermissions.POOL_CONF_IMPORT)
     if (not CONFIG.is_pool_configured):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_NO_CONF.name))
 
@@ -569,7 +581,8 @@ def pool_detach() -> None:
     responses={500: {"description": "Any internal errors"}},
     summary="Attach an existing disk array"
 )
-def pool_attach(pool_name:str,load_key:bool=False) -> None:
+def pool_attach(pool_name:str,load_key:bool=False,token:dict=Depends(verify_token)) -> None:
+    check_permission(token.get("username"), UserPermissions.POOL_CONF_IMPORT)
     if (CONFIG.is_pool_configured):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_CONFIG.name))
 
@@ -617,7 +630,9 @@ class ReplaceDevice(BaseModel):
 @pool.post("/create",
     responses={500: {"description": "Any internal errors"}},
     summary="Create a new disk array",)
-def create_disk_array(data:CreatePool) -> None:
+def create_disk_array(data:CreatePool,token:dict=Depends(verify_token)) -> dict:
+    check_permission(token.get("username"), UserPermissions.POOL_CONF_CREATE)
+
     from .disks import get_disks, format_disk
     from .fs import change_permissions
     if (CONFIG.is_pool_configured):
@@ -680,6 +695,7 @@ def create_disk_array(data:CreatePool) -> None:
     responses={500: {"description": "Any internal errors"}},
     summary="Destroy the new disk array",)
 def destroy_disk_array(auth:Dict=Depends(verify_token_header_factory("destroy"))) -> Optional[dict]:
+    check_permission(auth.get("username"), UserPermissions.POOL_CONF_DESTROY)
     from .fs import rm_mountpoint
     if (not CONFIG.is_pool_configured):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_NO_CONF.name))
@@ -722,7 +738,8 @@ def destroy_disk_array(auth:Dict=Depends(verify_token_header_factory("destroy"))
 @pool.post("/import-key",
     responses={500: {"description": "Any internal errors"}},
     summary="Import encryption key for a disk array",)
-async def import_key(key_file: UploadFile = File(...)) -> None:
+async def import_key(key_file: UploadFile = File(...),token:dict=Depends(verify_token)) -> None:
+    check_permission(token.get("username"), UserPermissions.POOL_CONF_IMPORT)
     key = await key_file.read()
 
     path = KEYPATH
@@ -745,6 +762,7 @@ async def import_key(key_file: UploadFile = File(...)) -> None:
     responses={500: {"description": "Any internal errors"}},
     summary="Attempts to recover from errors in the disk array")
 def attempt_recovery(auth:Dict=Depends(verify_token_header_factory("recover"))) -> Optional[dict]:
+    check_permission(auth.get("username"), UserPermissions.POOL_TOOLS_RECOVERY)
     if (not CONFIG.is_pool_configured):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_NO_CONF.name))
 
@@ -756,10 +774,10 @@ def attempt_recovery(auth:Dict=Depends(verify_token_header_factory("recover"))) 
     response_model=Optional[BackgroundTask],
     responses={500: {"description": "Any internal errors"}},
     summary="Replace a device with another device in the disk array")
-def replace(devices:ReplaceDevice) -> Optional[BackgroundTask]:
+def replace(devices:ReplaceDevice,token:dict=Depends(verify_token)) -> Optional[BackgroundTask]:
+    check_permission(token.get("username"), UserPermissions.POOL_DISKS_REPLACE)
+
     from backend_server.v1.disks import get_system_disks
-
-
     cmd =  ZPoolReplace(CONFIG.pool_name, devices.old_device, devices.new_device)
 
     old_disk = None
@@ -796,7 +814,8 @@ def replace(devices:ReplaceDevice) -> Optional[BackgroundTask]:
 @pool.post("/scrub",
     responses={500: {"description": "Any internal errors"}},
     summary="Start disk array scrubbing operation",)
-def pool_scrub() -> Optional[BackgroundTask]:
+def pool_scrub(token:dict=Depends(verify_token)) -> Optional[BackgroundTask]:
+    check_permission(token.get("username"), UserPermissions.POOL_TOOLS_VERIFY)
     pool_name = CONFIG.pool_name
     cmd =  ZPoolScrub(pool_name)
 
@@ -821,7 +840,8 @@ def pool_scrub() -> Optional[BackgroundTask]:
     summary="Add a new disk to the pool",
     response_model=Optional[BackgroundTask],
 )
-def pool_attach_disk(new_device:str) -> Optional[BackgroundTask]:
+def pool_expand(new_device:str,token:dict=Depends(verify_token)) -> Optional[BackgroundTask]:
+    check_permission(token.get("username"), UserPermissions.POOL_CONF_EXPAND)
     cmd = None
 
     disks = get_attachable_disks()
@@ -879,4 +899,4 @@ def pool_attach_disk(new_device:str) -> Optional[BackgroundTask]:
 
         return BackgroundTask(task_id=task_id, running=True, progress=None, eta=None, detail=None)
 
-
+    return None

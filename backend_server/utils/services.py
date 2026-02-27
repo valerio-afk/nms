@@ -1,38 +1,42 @@
+from .responses import ErrorMessage
+from abc import abstractmethod
+from backend_server.utils.cmdl import ChPasswd, SystemCtlUnmask, SystemCtlEnable, SystemCtlStart, SystemCtlDisable, \
+    Touch, Chmod, UserModAddGroup, GPasswdRemoveGroup
+from backend_server.utils.cmdl import DockerInspect, DockerRemove, LocalCommandLineTransaction
+from backend_server.utils.cmdl import SystemCtlIsActive, ApplyPatch,  GetEntShadow, UserModChangeShell, UserDel
+from backend_server.utils.cmdl import SystemCtlMask, SystemCtlStop, ExportfsRA, SMBPasswd, DockerRun, DockerStop
+from fastapi import HTTPException
+from nms_shared.enums import UserPermissions
+from nms_shared.msg import ErrorMessages
+from nms_shared.utils import make_diff, read_lines_from_file
+from pathlib import Path
+from typing import Optional, Callable, List, Any, Self
+import bcrypt
+import configparser
+import grp
 import io
 import os.path
-import tempfile
-import re
-import configparser
-import bcrypt
-from abc import abstractmethod
-from .responses import ErrorMessage
-from fastapi import HTTPException
-
-from backend_server.utils.cmdl import SystemCtlIsActive, ApplyPatch, UserModChangeUsername, GetEntShadow, \
-    ChPasswd, SystemCtlUnmask, SystemCtlEnable, SystemCtlStart, SystemCtlDisable, SystemCtlMask, SystemCtlStop, \
-    SystemCtlRestart, ExportfsRA, SMBPasswd, DockerRun, DockerStop, DockerInspect, DockerRemove, \
-    LocalCommandLineTransaction
-from nms_shared.utils import make_diff, read_lines_from_file
-from nms_shared.msg import ErrorMessages
-from pathlib import Path
 import pwd
-import grp
+import re
+import subprocess
+import tempfile
 
 class SystemService:
-    def __init__(this,service_name, config_file=None,**kwargs):
+    def __init__(this,service_name:str, config_file:Optional[str]=None,**kwargs):
         this._service_name = service_name
         this._config_file = config_file
         this._change_hooks = {}
         this._pre_start_hooks = []
+        this._permission_hook:Optional[UserPermissions] = None
 
-    def add_change_hook(this,property,callback):
+    def add_change_hook(this,property:str,callback:Callable[[Self],None]) -> None:
         hooks = this._change_hooks.get(property,[])
         if (callback not in hooks):
             hooks.append(callback)
 
         this._change_hooks[property] = hooks
 
-    def remove_change_hook(this,property,callback):
+    def remove_change_hook(this,property:str,callback:Callable[[Self],None]) -> None:
         hooks = this._change_hooks.get(property, [])
         try:
             hooks.remove(callback)
@@ -41,32 +45,32 @@ class SystemService:
 
         this._change_hooks[property] = hooks
 
-    def add_pre_start_hook(this,callback):
+    def add_pre_start_hook(this,callback:Callable[[Self],None]):
         if (callback not in this._pre_start_hooks):
             this._pre_start_hooks.append(callback)
 
 
-    def remove_pre_start_hook(this,callback):
+    def remove_pre_start_hook(this,callback:Callable[[Self],None]):
         this._pre_start_hooks.append(callback)
 
     @property
-    def service_names(this):
+    def service_names(this) -> str:
         return this._service_name
 
     @property
-    def config_file(this):
+    def config_file(this) -> str:
         return this._config_file
 
     @property
-    def properties(this):
+    def properties(this) -> List[str]:
         return [k for k in vars(this.__class__).get("__annotations__",{}).keys()]
 
     @abstractmethod
-    def get(this,property):
+    def get(this,property:str) -> Any:
         return getattr(this,f"get_{property}")()
 
     @abstractmethod
-    def set(this, property, value):
+    def set(this, property:str, value:Any) -> None:
         getattr(this,f"set_{property}")(value)
 
         hooks = this._change_hooks.get(property,[])
@@ -75,7 +79,7 @@ class SystemService:
             callback(this)
 
     @property
-    def is_active(this):
+    def is_active(this) -> bool:
         names = this.service_names
 
         if (isinstance(names,str)):
@@ -92,7 +96,7 @@ class SystemService:
         return sum([r.get("stdout","").strip() == "active" for r in results]) == n_services
 
 
-    def start(this):
+    def start(this) -> None:
         hooks = this._pre_start_hooks
 
         for callback in hooks:
@@ -119,7 +123,7 @@ class SystemService:
         if (not trans.success):
             raise Exception(f"The service(s) `{', '.join(names)}` could not be started: {[x.get('stderr', '') for x in results]}")
 
-    def stop(this):
+    def stop(this) -> None:
         names = this.service_names
         cmds = []
 
@@ -140,13 +144,27 @@ class SystemService:
         if (not trans.success):
             raise Exception(f"The service(s) `{', '.join(names)}` could not be stopped: {[x.get('stderr', '') for x in results]}")
 
+    def permission_granted(this,username:str) -> None:
+        ...
+
+    def permission_revoked(this,username:str) -> None:
+        ...
+
+    def remove_user(this,username:str,**kwargs) -> None:
+        ...
+
+    @property
+    def permission_hook(this) -> Optional[UserPermissions]:
+        return this._permission_hook
+
 class SSHService(SystemService):
     port:int
 
     def __init__(this,service_name,**kwargs):
         super().__init__(service_name,"/etc/ssh/sshd_config",**kwargs)
+        this._permission_hook = UserPermissions.SERVICES_SSH_ACCESS
 
-    def get_port(this):
+    def get_port(this) -> int:
         port = 22  # default
 
         with open(this.config_file, "r") as f:
@@ -169,7 +187,7 @@ class SSHService(SystemService):
         return port
 
 
-    def set_port(this,new_port):
+    def set_port(this,new_port) -> None:
         orig_lines = read_lines_from_file(this.config_file)
         mod_lines = orig_lines.copy()
         found = False
@@ -199,19 +217,8 @@ class SSHService(SystemService):
         trans.run()
         os.remove(patch_fname)
 
-    # def set_username(this,value):
-    #     cmd = UserModChangeUsername(this.get("username"),value)
-    #
-    #     trans = LocalCommandLineTransaction(cmd)
-    #     output = trans.run()
-    #
-    #     if (len(output) == 1):
-    #         if (not trans.success):
-    #             raise Exception(f"Unable to change username: {output[0]['stderr']}")
-    #         else:
-    #             this._username = value
-    #
-    def set_password(this,username,new_password):
+
+    def set_password(this,username:str,new_password:str) -> None:
         shadow_cmd = GetEntShadow(username)
 
         trans = LocalCommandLineTransaction(shadow_cmd)
@@ -237,30 +244,46 @@ class SSHService(SystemService):
         if (output.returncode != 0):
             raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_PASSWD.name,params=[username]))
 
-    def enable(this,port,**kwargs):
+    def enable(this,port:int,**kwargs) -> None:
         if (port != this.get("port")):
             this.set("port", port)
         this.start()
 
-    def disable(this,*args,**kwargs):
+    def disable(this,*args,**kwargs) -> None:
         this.stop()
+
+    def permission_granted(this, username: str) -> None:
+        UserModChangeShell(username,"/usr/bin/bash").execute()
+
+    def permission_revoked(this, username: str) -> None:
+        UserModChangeShell(username, "/usr/sbin/nologin").execute()
+
+    def remove_user(this, username: str, **kwargs) -> None:
+        UserDel(username,keep_home=kwargs.get("keep_home",False)).execute()
+
 
 
 
 class FTPService(SystemService):
+    USERLIST_FILE = "/etc/vsftpd.userlist"
+
     default_configuration={
         "anonymous_enable":"NO",
         "local_enable": "YES",
         "write_enable": "YES",
         "ftpd_banner": "Welcome to NMS FTP Service.",
         "chroot_local_user":"NO",
+        "userlist_enable": "YES",
+        "userlist_file": USERLIST_FILE,
+        "userlist_deny": "NO",
         "utf8_filesystem":"YES",
         "chroot_list_enable":"NO",
     }
     def __init__(this,service_name, **kwargs):
         super().__init__(service_name,config_file="/etc/vsftpd.conf",**kwargs)
+        this._permission_hook = UserPermissions.SERVICES_FTP_ACCESS
 
-    def _patch_configuration(this):
+    def _patch_configuration(this) -> None:
         cfg = FTPService.default_configuration.copy()
         orig_lines = read_lines_from_file(this.config_file)
         mod_lines = orig_lines.copy()
@@ -298,37 +321,69 @@ class FTPService(SystemService):
             trans.run()
             os.remove(patch_fname)
 
-    def enable(this,*args,**kwargs):
+    def enable(this,*args,**kwargs) -> None:
         this._patch_configuration()
         this.start()
 
-    def disable(this,*args,**kwargs):
+    def disable(this,*args,**kwargs) -> None:
         this.stop()
+
+    def _touch_userlist_file(this) -> None:
+        if (not os.path.exists(FTPService.USERLIST_FILE)):
+            #chmod relies on the file existance to make a revert command.
+            #if the file doesn't exist, it raises an exception
+            #breaking these two calls will avoid that problem
+            Touch(FTPService.USERLIST_FILE, sudo=True).execute()
+            Chmod(FTPService.USERLIST_FILE, "600", sudo=True).execute()
+
+
+
+
+    def permission_granted(this, username: str) -> None:
+        this._touch_userlist_file()
+        result = subprocess.run(
+            ["sudo", "grep", "-qxF", username, FTPService.USERLIST_FILE],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+
+        if result.returncode == 0:
+            return  # already present
+
+        # Append via sudo tee
+        subprocess.run(
+            ["sudo", "tee", "-a", FTPService.USERLIST_FILE],
+            input=username + "\n",
+            text=True,
+            stdout=subprocess.DEVNULL,
+            check=True
+        )
+
+    def permission_revoked(this, username: str) -> None:
+        this._touch_userlist_file()
+        subprocess.run(
+            ["sudo", "sed", "-i", f"/^{username}$/d", FTPService.USERLIST_FILE],
+            check=True
+        )
+
+    def remove_user(this, username: str, **kwargs) -> None:
+        this.permission_revoked(username)
 
 
 class NFSService(SystemService):
     ip:str
     default_options = ['rw','sync','no_subtree_check','all_squash']
 
-    def __init__(this,service_name,mountpoint=None,**kwargs):
+    def __init__(this,service_name:str,mountpoint:Optional[str]=None,**kwargs):
         super().__init__(service_name,"/etc/exports",**kwargs)
         this._mountpoint = mountpoint
-        # this._username = username
-        # this._group = group
+        this._permission_hook = UserPermissions.SERVICES_NFS_ACCESS
 
     @property
-    def mountpoint(this):
+    def mountpoint(this) -> Optional[str]:
         return this._mountpoint
 
-    # @property
-    # def uid(this):
-    #     return pwd.getpwnam(this._username).pw_uid
-    #
-    # @property
-    # def gid(this):
-    #     return grp.getgrnam(this._group).gr_gid
-
-    def get_ip(this):
+    def get_ip(this) -> Optional[str]:
         exports = read_lines_from_file(this.config_file)
 
         hostname = None
@@ -347,7 +402,7 @@ class NFSService(SystemService):
 
         return hostname
 
-    def set_ip(this,hostname):
+    def set_ip(this,hostname) -> None:
         if (this.mountpoint is None):
             raise Exception("You cannot activate this service if you don't set up a new disk array")
 
@@ -381,44 +436,41 @@ class NFSService(SystemService):
         trans.run()
         os.remove(patch_fname)
 
-    def enable(this,ip,**kwargs):
+    def enable(this,ip,**kwargs) -> None:
         this.set("ip",ip)
         this.start()
 
-    def start(this):
+    def start(this) -> None:
         trans = LocalCommandLineTransaction(ExportfsRA())
 
         trans.run()
         super().start()
 
-    def disable(this,*args,**kwargs):
+    def disable(this,*args,**kwargs) -> None:
         this.stop()
 
-    def update(this,ip,**kwargs):
+    def update(this,ip,**kwargs) -> None:
         this.disable()
         this.enable(ip,**kwargs)
+
+
 
 
 class SMBService(SystemService):
     username:str
     SECTION = "NMS"
 
-    def __init__(this,mountpoint,service_name,**kwargs):
+    def __init__(this,mountpoint:Optional[str],service_name:str,**kwargs):
         super().__init__(service_name,config_file="/etc/samba/smb.conf")
         # this._username = username
         this._mountpoint = mountpoint
+        this._permission_hook = UserPermissions.SERVICES_SMB_ACCESS
 
     @property
-    def mountpoint(this):
+    def mountpoint(this) -> Optional[str]:
         return this._mountpoint
 
-    # def get_username(this):
-    #     return this._username
-    #
-    # def set_username(this,uname):
-    #     this._username = uname
-
-    def _patch_configuration(this):
+    def _patch_configuration(this) -> None:
         if (this.mountpoint is None):
             raise Exception("You cannot activate this service if you don't set up a new disk array")
 
@@ -448,29 +500,29 @@ class SMBService(SystemService):
         trans.run()
         os.remove(patch_fname)
 
-    def set_password(this,username,password):
+    def set_password(this,username,password) -> None:
         cmd = SMBPasswd(username=username,password=password,flag=SMBPasswd.Flags.ADD)
         trans = LocalCommandLineTransaction(cmd)
         trans.run()
 
-    def enable_user(this,username):
+    def enable_user(this,username) -> None:
         cmd = SMBPasswd(username=username, flag=SMBPasswd.Flags.ENABLE)
         trans = LocalCommandLineTransaction(cmd)
         trans.run()
 
-    def disable_user(this,username):
+    def disable_user(this,username) -> None:
         cmd = SMBPasswd(username=username, flag=SMBPasswd.Flags.ENABLE)
         trans = LocalCommandLineTransaction(cmd)
         trans.run()
 
-    def delete_user(this,username):
+    def delete_user(this,username) -> None:
         cmd = SMBPasswd(username=username, flag=SMBPasswd.Flags.DELETE)
         trans = LocalCommandLineTransaction(cmd)
         trans.run()
 
 
 
-    def enable(this,**kwargs):
+    def enable(this,**kwargs) -> None:
         this._patch_configuration()
 
         # if (password is not None):
@@ -479,17 +531,19 @@ class SMBService(SystemService):
 
         this.start()
 
-    def disable(this,**kwargs):
+    def disable(this,**kwargs) -> None:
         # this._delete_user(username)
         this.stop()
 
-    # def update(this,username,password,**kwargs):
-    #     this._patch_configuration()
-    #     # if (password is not None):
-    #     #     this._update_password(username,password)
-    #
-    #     this.stop()
-    #     this.start()
+    def permission_granted(this, username: str) -> None:
+        UserModAddGroup(username,"sambashare").execute()
+
+    def permission_revoked(this, username: str) -> None:
+        GPasswdRemoveGroup(username,"sambashare").execute()
+
+    def remove_user(this, username: str, **kwargs) -> None:
+        this.permission_revoked(username)
+
 
 class WEBService(SystemService):
     port:int

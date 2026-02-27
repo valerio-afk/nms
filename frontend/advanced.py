@@ -7,7 +7,8 @@ from frontend.utils.widget import render_widget,get_widgets_html,get_widgets_css
 from io import BytesIO
 from nms_shared import ErrorMessages
 from nms_shared.constants import HTTP_REPEAT_HEADER
-from nms_shared.enums import LogFilter
+from nms_shared.enums import LogFilter, UserPermissions
+from nms_shared.utils import match_permissions
 from typing import Optional, Dict, Callable, Any
 from werkzeug.datastructures import ImmutableMultiDict
 from wtforms import ValidationError
@@ -34,8 +35,16 @@ def risky_operation_reauth(operation:str,callback:Callable[[str, ImmutableMultiD
                 show_flash(code=ErrorMessages.E_AUTH_INVALID.name)
 
 def widget_system_admin():
+    permissions = session.get("user").get("permissions",[])
 
-    return render_widget("sys_admin",encrypted=BACKEND.has_encryption)
+    perms = {
+        'logs': match_permissions(permissions,UserPermissions.SYS_ADMIN_LOGS),
+        'systemctl' : match_permissions(permissions,UserPermissions.SYS_ADMIN_SYSTEMCTL),
+        'pool_info': match_permissions(permissions,UserPermissions.POOL_CONF_GET_INFO)
+
+    }
+
+    return render_widget("sys_admin",permissions=perms,encrypted=BACKEND.has_encryption)
 
 def widget_system_updates(hedaers:Optional[Dict]=None):
     apt = {
@@ -63,11 +72,23 @@ def widget_system_updates(hedaers:Optional[Dict]=None):
     return render_widget("apt", **apt)
 
 def widget_danger_zone():
-    disks = BACKEND.system_disks
+    permissions = session.get("user").get("permissions", [])
 
-    choices = [(d.path, d.name) for d in disks]
+    perms = {
+        'format_pool': match_permissions(permissions, UserPermissions.POOL_CONF_FORMAT),
+        'format_disk': match_permissions(permissions, UserPermissions.POOL_DISKS_FORMAT),
+        'destroy': match_permissions(permissions, UserPermissions.POOL_CONF_DESTROY),
+        'recovery': match_permissions(permissions, UserPermissions.POOL_TOOLS_RECOVERY)
+    }
 
-    return render_widget("danger_zone",disks=choices)
+
+    choices = []
+
+    if (perms.get('format_disk',False)):
+        disks = BACKEND.system_disks
+        choices = [(d.path, d.name) for d in disks]
+
+    return render_widget("danger_zone",permissions=perms,disks=choices)
 
 
 @bp.route('/async/widgets/apt')
@@ -81,13 +102,18 @@ def async_widget_system_updates():
 
 @bp.route("/advanced")
 def advanced():
+    dashboard_widgets = []
 
-    dashboard_widgets = [
-        widget_system_admin(),
+    perms = session.get("user").get("permissions",[])
+
+    if (advanced:=match_permissions(perms,UserPermissions.CLIENT_DASHBOARD_ADVANCED)):
+        dashboard_widgets.append(widget_system_admin())
+
+    if (match_permissions(perms,UserPermissions.SYS_ADMIN_UPDATES)):
         widget_system_updates()
-    ]
 
-    if BACKEND.is_pool_configured:
+
+    if (BACKEND.is_pool_configured and advanced):
         dashboard_widgets.append(widget_danger_zone())
 
     return render_template("advanced.html",
@@ -138,12 +164,12 @@ def system_logs(log):
                            date_filter={"start":start,"end":end},
                            active_page="advanced")
 
-# ACTIONS
-@bp.route("/advanced/reset-otp",methods=['POST'])
-def reset_otp():
-    BACKEND.reset_otp_secret()
-    session.clear()
-    return redirect(url_for("main.login"))
+# # ACTIONS
+# @bp.route("/advanced/reset-otp",methods=['POST'])
+# def reset_otp():
+#     BACKEND.reset_otp_secret()
+#     session.clear()
+#     return redirect(url_for("main.login"))
 
 @bp.route("/advanced/restart-systemd",methods=['POST'])
 def restart_systemd():

@@ -19,7 +19,7 @@ import json
 import os
 import pwd
 
-
+from nms_shared.utils import match_permissions
 
 
 def collapse_permissions(user_permissions:List[str], all_permissions:List[str]) -> List[str]:
@@ -126,11 +126,14 @@ class NMSConfig(Logger):
             except AttributeError:
                 ... #service not implemented yet
 
-        # this._access_services['ssh'].add_change_hook("username", this._sys_username_changed)
-        # this._access_services['ftp'].add_pre_start_hook(this._set_pwd)
         this._access_services['web'].add_change_hook("port", this._web_port_changed)
         this._access_services['web'].add_change_hook("credential", this._web_credentials_changed)
         this._access_services['web'].add_change_hook("authentication", this._web_authentication_changed)
+
+        for admin in this.admins:
+            for service in this.access_services.values():
+                service.permission_granted(admin.username)
+
 
     def _web_port_changed(this, service) -> None:
         d = this._cfg.get("access", {}).get("services", {}).get("web", {})
@@ -404,6 +407,10 @@ class NMSConfig(Logger):
 
         return [this.get_user(u) for u in usernames]
 
+    @property
+    def admins(this) -> List[UserProfile]:
+        return [u for u in this.users if u.admin]
+
 
 
     # BASE METHODS
@@ -548,7 +555,7 @@ class NMSConfig(Logger):
                     if (uname == username):
                         quota = Quota(used=int(used),quota=int(limit))
             else:
-                CONFIG.error(f"Unable to get quota for user {username}: {output.stderr}")
+                this.error(f"Unable to get quota for user {username}: {output.stderr}")
 
             sudo = False
 
@@ -622,9 +629,14 @@ class NMSConfig(Logger):
 
         collapsed_permissions = collapse_permissions(permissions,all_permissions)
 
+        for service in this._access_services.values():
+            if (service.permission_hook is not None):
+                if (match_permissions(collapsed_permissions,service.permission_hook)):
+                    service.permission_granted(username)
+                else:
+                    service.permission_revoked(username)
+
         this._cfg['users'][username]["permissions"] = collapsed_permissions
-
-
 
 
 

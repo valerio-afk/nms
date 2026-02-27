@@ -7,7 +7,7 @@
 {% for service, form in forms.items() %}
 <form method="POST" class="disable-on-submit" action="{{ url_for('main.user_service_account',service=service) }}">
     {{ form.hidden_tag() }}
-    <div class="mb-3 row border border-info-subtle ms-1 me-1 p-2">
+    <div class="mb-3 row border border-info-subtle ms-1 me-1 p-2 rounded">
         <div class="col-sm-12">
             <h4>{{ service | upper }}</h4>
         </div>

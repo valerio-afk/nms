@@ -2,6 +2,7 @@ from . import frontend as bp, NMSBACKEND as BACKEND
 from flask import  render_template, g, flash, session
 from typing import Optional, Tuple
 from frontend.utils.widget import render_widget, get_widgets_css_files, get_widgets_html
+from nms_shared.utils import match_permissions, UserPermissions
 
 
 def widget_disk_overview() -> Tuple[str,Optional[str]]:
@@ -63,8 +64,9 @@ def dashboard() -> str:
     dashboard_widgets = []
 
     current_user = session['user']
+    perms = current_user.get("permissions", [])
 
-    if (BACKEND.is_pool_configured):
+    if ((BACKEND.is_pool_configured) and (match_permissions(perms,UserPermissions.POOL_CONF_GET_INFO))):
         dashboard_widgets.append(widget_disk_usage())
 
     if (current_user.get("main_pages",{}).get("disks",False)):

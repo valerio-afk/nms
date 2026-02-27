@@ -1,22 +1,19 @@
-import datetime
-
-import werkzeug.exceptions
-
-from backend_server.utils.responses import UserProfile
-from nms_shared.enums import RequestMethod
 from flask import flash, session, abort
 from flask_babel import _, format_datetime
-from traceback import format_exc
 from frontend.api.tasks import BackgroundTask, ResilverStatusTask
 from frontend.api.threads import TimerThread
 from frontend.utils.exception import NotAuthenticatedError
 from nms_shared import ErrorMessages, SuccessMessages, WarningMessages
 from nms_shared.disks import Disk, DiskStatus
 from nms_shared.enums import LogFilter
+from nms_shared.enums import RequestMethod
+from nms_shared.threads import NMSThread
 from requests import get, post
 from requests.exceptions import HTTPError
+from traceback import format_exc
 from typing import Optional, List, Any, Dict, Literal, Union, Tuple
-from nms_shared.threads import NMSThread
+import datetime
+import werkzeug.exceptions
 
 def parse_disks_from_request(d:Optional[List[dict]]) -> List[Disk]:
     if (d is not None):
@@ -133,7 +130,8 @@ class BackEndProxy:
             if (not ignore_exception):
                 try:
                     if (err.response.status_code == 401):
-                        abort(401)
+                        args = err.response.json()
+                        abort(401,description=args)
                     if (err.response.status_code == 422):
                         error = f"URL: {err.request.url}\n"
                         error+= f"Data: {err.request.body}\n"

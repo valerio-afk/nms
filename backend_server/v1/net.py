@@ -1,29 +1,33 @@
-from enum import Enum
-from fastapi.params import Body, Query
-from nms_shared.msg import ErrorMessages, SuccessMessages
-from nms_shared.constants import WIREGUARD_CONF, VPN_PUBLIC_KEY, VPN_PRIVATE_KEY
-from fastapi import APIRouter, HTTPException, Depends
-from backend_server.utils.cmdl import NMCLIConnection, NMCLIDevice, LocalCommandLineTransaction, SystemCtlIsActive, \
-    SystemCtlStart, SystemCtlStop, SystemCtlRestart
-from backend_server.utils.responses import NetCounter, NetworkInterface, IPv4, IPv6, ErrorMessage, InterfaceType, \
-    WifiNetwork, WifiConnect, SuccessMessage, VPNServerConf, VPNPeer, DDNSProvider, DDNSDefaultProviderConfiguration
+from backend_server.utils.cmdl import NMCLIConnection, NMCLIDevice, LocalCommandLineTransaction
+from backend_server.utils.cmdl import SystemCtlStart, SystemCtlStop, SystemCtlRestart, SystemCtlIsActive
 from backend_server.utils.config import CONFIG
+from backend_server.utils.responses import DDNSDefaultProviderConfiguration, DDNSProvider
+from backend_server.utils.responses import NetCounter, NetworkInterface, IPv4, IPv6, ErrorMessage, InterfaceType
+from backend_server.utils.responses import WifiNetwork, WifiConnect, SuccessMessage, VPNServerConf, VPNPeer
 from backend_server.utils.threads import NetIOCounter
-from backend_server.v1.auth import verify_token_factory
-from typing import Optional, List, Tuple, Dict
+from backend_server.v1.auth import verify_token_factory, check_permission
 from collections import OrderedDict
-import configparser
-import ipaddress
-import subprocess
-import re
+from enum import Enum
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.params import Body, Query
+from nms_shared.constants import WIREGUARD_CONF, VPN_PUBLIC_KEY, VPN_PRIVATE_KEY
+from nms_shared.msg import ErrorMessages, SuccessMessages
+from nms_shared.enums import UserPermissions
+from typing import Optional, List, Tuple, Dict
 import base64
+import configparser
 import io
+import ipaddress
+import re
+import subprocess
 
+
+verify_token = verify_token_factory()
 
 net = APIRouter(
     prefix='/net',
     tags=['net'],
-    dependencies=[Depends(verify_token_factory())]
+    dependencies=[Depends(verify_token)]
 )
 
 def read_wireguard_config_file() -> configparser.ConfigParser:
@@ -264,11 +268,13 @@ def get_network_interfaces() -> List[NetworkInterface]:
     return network_interfaces
 
 @net.get('/io',response_model=NetCounter,responses={500:{'description':'Error while retrieving network information'}})
-def net_io_counter() -> NetCounter:
+def net_io_counter(token:dict=Depends(verify_token)) -> NetCounter:
+    check_permission(token.get("username"), UserPermissions.CLIENT_DASHBOARD_NETWORKS)
     return net_io_counter()
 
 @net.get('/ifaces', response_model=List[NetworkInterface])
-def net_ifaces() -> List[NetworkInterface]:
+def net_ifaces(token:dict=Depends(verify_token)) -> List[NetworkInterface]:
+    check_permission(token.get("username"), UserPermissions.NETWORK_IFACE_MANAGE)
     return get_network_interfaces()
 #
 # @net.get("/vpn/status",response_model=bool)
@@ -277,7 +283,8 @@ def net_ifaces() -> List[NetworkInterface]:
 
 
 @net.get('/{iface}/list',response_model=List[WifiNetwork])
-def net_wifi_networks(iface:str) -> List[WifiNetwork]:
+def net_wifi_networks(iface:str,token:dict=Depends(verify_token)) -> List[WifiNetwork]:
+    check_permission(token.get("username"), UserPermissions.NETWORK_IFACE_MANAGE)
     cmd = NMCLIDevice("wifi","list","ifname",iface,sudo=True)
     output = cmd.execute()
 
@@ -299,7 +306,8 @@ def net_wifi_networks(iface:str) -> List[WifiNetwork]:
     return networks
 
 @net.post('/{iface}/connect')
-def net_wifi_connect(iface:str,network:WifiConnect) -> None:
+def net_wifi_connect(iface:str,network:WifiConnect,token:dict=Depends(verify_token)) -> None:
+    check_permission(token.get("username"), UserPermissions.NETWORK_IFACE_MANAGE)
     if (network.ssid is None):
         return
 
@@ -329,21 +337,25 @@ def net_wifi_connect(iface:str,network:WifiConnect) -> None:
 
 
 @net.get("/vpn/pubkey",response_model=str)
-def net_vpn_pubkey() -> str:
+def net_vpn_pubkey(token:dict=Depends(verify_token)) -> str:
+    check_permission(token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
     return get_vpn_public_key()
 
 @net.get("/vpn/public-ip",response_model=Optional[str])
-def net_vpn_endpoint() -> Optional[str]:
+def net_vpn_endpoint(token:dict=Depends(verify_token)) -> Optional[str]:
+    check_permission(token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
     return CONFIG.vpn_public_ip
 
 @net.get("/vpn/peers",response_model=List[Tuple[str,str]])
-def net_vpn_peers() -> List[Tuple[str, str]]:
+def net_vpn_peers(token:dict=Depends(verify_token)) -> List[Tuple[str, str]]:
+    check_permission(token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
     return get_peers()
 
 
 
 @net.post("/vpn/peers/remove")
-def net_vpn_peer_remove(name:str=Query(...)) -> dict:
+def net_vpn_peer_remove(name:str=Query(...),token:dict=Depends(verify_token)) -> dict:
+    check_permission(token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
     peers = CONFIG.vpn_peer_names
 
     try:
@@ -373,7 +385,8 @@ def net_vpn_peer_remove(name:str=Query(...)) -> dict:
     return {"detail":SuccessMessage(code=SuccessMessages.S_NET_VPN_PEER_DELETED.name,params=[name])}
 
 @net.post("/vpn/peers/add")
-def net_vpn_peer_add(peer:VPNPeer) -> dict:
+def net_vpn_peer_add(peer:VPNPeer,token:dict=Depends(verify_token)) -> dict:
+    check_permission(token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
     name = peer.name.strip()
 
     if (len(name)==0):
@@ -413,7 +426,8 @@ def net_vpn_peer_add(peer:VPNPeer) -> dict:
 
 
 @net.post("/vpn/gen-keys")
-def net_vpn_genkey() -> dict:
+def net_vpn_genkey(token:dict=Depends(verify_token)) -> dict:
+    check_permission(token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
     result = subprocess.run(
         ["wg", "genkey"],
         capture_output=True,
@@ -467,7 +481,8 @@ def net_vpn_genkey() -> dict:
 
 
 @net.post("/vpn/config")
-def net_vpn_config(config:VPNServerConf) -> dict:
+def net_vpn_config(config:VPNServerConf,token:dict=Depends(verify_token)) -> dict:
+    check_permission(token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
     netmask = config.netmask
     try:
         netmask = ipaddress.IPv4Address(netmask)
@@ -499,7 +514,8 @@ def net_vpn_config(config:VPNServerConf) -> dict:
     return {"detail": SuccessMessage(code=SuccessMessages.S_NET_VPN_CONFIG.name)}
 
 @net.post('/vpn/{action}')
-def net_iface_action(action:IFaceAction) -> None:
+def net_iface_action(action:IFaceAction,token:dict=Depends(verify_token)) -> None:
+    check_permission(token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
     cmd = None
     vpn_service = CONFIG.vpn_service
 
@@ -515,7 +531,8 @@ def net_iface_action(action:IFaceAction) -> None:
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_CHANGE_STATE.name,params=["VPN",output.stderr]))
 
 @net.get('/vpn',response_model=NetworkInterface)
-def net_get_vpn_config() -> NetworkInterface:
+def net_get_vpn_config(token:dict=Depends(verify_token)) -> NetworkInterface:
+    check_permission(token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
     wg = read_wireguard_config_file()
 
     ip = ipaddress.IPv4Interface(wg['interface']['Address'])
@@ -534,7 +551,8 @@ def net_get_vpn_config() -> NetworkInterface:
 
 
 @net.post('/{iface}/{action}')
-def net_iface_action(iface:str,action:IFaceAction) -> None:
+def net_iface_action(iface:str,action:IFaceAction,token:dict=Depends(verify_token)) -> None:
+    check_permission(token.get("username"), UserPermissions.NETWORK_IFACE_MANAGE)
     match(action):
         case IFaceAction.UP:
             perform="connect"
@@ -568,8 +586,10 @@ def net_iface_action(iface:str,action:IFaceAction) -> None:
 def net_iface_settings(iface:str,
                        ip_version:str,
                        settings:dict=Body(...),
-                       profile:str=Query(...)) -> dict:
+                       profile:str=Query(...),
+                       token:dict=Depends(verify_token)) -> dict:
 
+    check_permission(token.get("username"), UserPermissions.NETWORK_IFACE_MANAGE)
     cmds = []
 
     ip_version = ip_version.lower()
@@ -636,7 +656,8 @@ def net_iface_settings(iface:str,
     return {"detail": SuccessMessage(code=SuccessMessages.S_NET_CONFIG.name,params=[iface])}
 
 @net.get('/ddns/providers',response_model=Dict[str,DDNSProvider])
-def ddns_provider_list() -> Dict[str,DDNSProvider]:
+def ddns_provider_list(token:dict=Depends(verify_token)) -> Dict[str,DDNSProvider]:
+    check_permission(token.get("username"), UserPermissions.NETWORK_DDNS_MANAGE)
     providers = {name:DDNSProvider(
         enabled=props["enabled"],
         username=props["username"],
@@ -666,7 +687,13 @@ def ddns_provider_list() -> Dict[str,DDNSProvider]:
     return providers
 
 @net.post('/ddns/{provider}/start')
-def ddns_provider_start(provider:str,config:Optional[DDNSDefaultProviderConfiguration]=None) -> dict:
+def ddns_provider_start(
+        provider:str,
+        config:Optional[DDNSDefaultProviderConfiguration]=None,
+        token:dict=Depends(verify_token)) -> dict:
+
+    check_permission(token.get("username"), UserPermissions.NETWORK_DDNS_MANAGE)
+
     match (provider):
         case "noip":
             if (config is not None):
@@ -705,7 +732,8 @@ def ddns_provider_start(provider:str,config:Optional[DDNSDefaultProviderConfigur
     return {"details":SuccessMessage(code=SuccessMessages.S_NET_DDNS_ENABLED.name,params=[provider])}
 
 @net.post('/ddns/{provider}/stop')
-def ddns_provider_stop(provider:str) -> dict:
+def ddns_provider_stop(provider:str,token:dict=Depends(verify_token)) -> dict:
+    check_permission(token.get("username"), UserPermissions.NETWORK_DDNS_MANAGE)
     CONFIG.ddns_stop(provider.lower())
     CONFIG.flush_config()
     return {"details":SuccessMessage(code=SuccessMessages.S_NET_DDNS_DISABLED.name,params=[provider])}

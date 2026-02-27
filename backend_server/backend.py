@@ -8,10 +8,10 @@ from contextlib import asynccontextmanager
 @asynccontextmanager
 async def automount(app:FastAPI):
     from backend_server.utils.config import CONFIG
-    from backend_server.v1.pool import pool_mount
+    from backend_server.v1.pool import mount
     if ((CONFIG.is_pool_configured) and (not CONFIG.is_mounted)):
         CONFIG.info("Start up automount")
-        pool_mount()
+        mount()
 
     yield
 

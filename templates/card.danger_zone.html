@@ -6,30 +6,38 @@
 
 <div class="container">
     <div class="row g-3">
-        {% set btn_icon = "<i class=\"bi bi-database-fill-x\"></i>" | safe %}
-        {% set btn_title = _("Format Disk Array") %}
-        {% set btn_method = "POST" %}
-        {% set btn_link = url_for('main.format') %}
-        {% include "element.square_btn.html" %}
+        {% if permissions.get('format_pool') %}
+            {% set btn_icon = "<i class=\"bi bi-database-fill-x\"></i>" | safe %}
+            {% set btn_title = _("Format Disk Array") %}
+            {% set btn_method = "POST" %}
+            {% set btn_link = url_for('main.format') %}
+            {% include "element.square_btn.html" %}
+        {% endif %}
 
-        {% set btn_icon = "<i class=\"bi bi-radioactive\"></i>" | safe %}
-        {% set btn_title = _("Delete Disk Array") %}
-        {% set btn_method = "POST" %}
-        {% set btn_link = url_for('main.zpool_destroy') %}
-        {% include "element.square_btn.html" %}
+        {% if permissions.get('destroy') %}
+            {% set btn_icon = "<i class=\"bi bi-radioactive\"></i>" | safe %}
+            {% set btn_title = _("Delete Disk Array") %}
+            {% set btn_method = "POST" %}
+            {% set btn_link = url_for('main.zpool_destroy') %}
+            {% include "element.square_btn.html" %}
+        {% endif %}
 
-        {% set btn_icon = "<i class=\"bi bi-bandaid-fill\"></i>" | safe %}
-        {% set btn_title = _("Attempt Recovery") %}
-        {% set btn_method = "POST" %}
-        {% set btn_link = url_for('main.zpool_recover') %}
-        {% include "element.square_btn.html" %}
+        {% if permissions.get('recovery') %}
+            {% set btn_icon = "<i class=\"bi bi-bandaid-fill\"></i>" | safe %}
+            {% set btn_title = _("Attempt Recovery") %}
+            {% set btn_method = "POST" %}
+            {% set btn_link = url_for('main.zpool_recover') %}
+            {% include "element.square_btn.html" %}
+        {% endif %}
 
-        {% set btn_icon = "<i class=\"bi bi-stars\"></i>" | safe %}
-        {% set btn_title = _("Format Disk") %}
-        {% set btn_choices = disks %}
-        {% set btn_method = "POST" %}
-        {% set btn_link = url_for('main.zpool_format_disk') %}
-        {% include "element.square_btn_select.html" %}
+        {% if permissions.get('format_disk') %}
+            {% set btn_icon = "<i class=\"bi bi-stars\"></i>" | safe %}
+            {% set btn_title = _("Format Disk") %}
+            {% set btn_choices = disks %}
+            {% set btn_method = "POST" %}
+            {% set btn_link = url_for('main.zpool_format_disk') %}
+            {% include "element.square_btn_select.html" %}
+        {% endif %}
 
 
 </div>

@@ -1,17 +1,16 @@
 from .auth import check_permission
-from backend_server.utils.cmdl import LocalCommandLineTransaction, UserModAddGroup, GPasswdRemoveGroup, UserAdd, \
-    GetUserUID
+from backend_server.utils.cmdl import GetUserUID
+from backend_server.utils.cmdl import LocalCommandLineTransaction, UserModAddGroup, GPasswdRemoveGroup, UserAdd
 from backend_server.utils.cmdl import ZFSSetQuota, UserModChangeUsername, SMBPasswd, RenameFile, UserModChangeHomeDir
 from backend_server.utils.config import CONFIG
-from backend_server.utils.responses import ChgFullnameData, ChangeQuotaData, ChangeUsernameData, SudoData, \
-    UserPermissionsData
-from backend_server.utils.responses import NewUserProfile, WarningMessage
+from backend_server.utils.responses import ChgFullnameData, ChangeQuotaData, ChangeUsernameData, SudoData
+from backend_server.utils.responses import NewUserProfile, WarningMessage, UserPermissionsData
 from backend_server.utils.responses import UserProfile, AccessServiceCredentials, ErrorMessage, SuccessMessage
 from backend_server.v1.auth import verify_token_factory
 from fastapi import APIRouter, Depends, HTTPException
 from nms_shared.enums import UserPermissions
 from nms_shared.msg import ErrorMessages, SuccessMessages, WarningMessages
-from typing import Optional, Any, List
+from typing import Optional, List
 import os.path
 
 verify_token = verify_token_factory()

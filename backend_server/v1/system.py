@@ -3,10 +3,8 @@ from backend_server.utils.config import CONFIG
 from backend_server.utils.responses import BackendProperty, BackgroundTask
 from backend_server.utils.scheduler import SCHEDULER
 from backend_server.utils.threads import AptGetUpdateThread, AptGetUpgradeThread
-
-from backend_server.v1.auth import verify_token_factory
+from backend_server.v1.auth import verify_token_factory, UserPermissions, check_permission
 from backend_server.v1.net import net_counter
-
 from collections import OrderedDict
 from enum import Enum
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,12 +16,12 @@ import os
 import platform
 import psutil
 
-
+verify_token = verify_token_factory()
 
 system = APIRouter(
     prefix='/system',
     tags=['system'],
-    dependencies=[Depends(verify_token_factory())]
+    dependencies=[Depends(verify_token)]
 )
 
 
@@ -99,7 +97,8 @@ class AptGetActions(Enum):
             },
           summary="Get a configuration/status system property"
           )
-def system_get_property(prop:SystemProperties) -> Optional[BackendProperty]:
+def system_get_property(prop:SystemProperties,token:dict=Depends(verify_token)) -> Optional[BackendProperty]:
+    check_permission(token.get("username"), UserPermissions.CLIENT_DASHBOARD_ADVANCED)
     match(prop):
         case SystemProperties.system_information:
             return BackendProperty(property=prop.name, value=system_information())
@@ -113,16 +112,19 @@ def system_get_property(prop:SystemProperties) -> Optional[BackendProperty]:
 
 
 @system.post('/shutdown',summary="Power off the NAS")
-def shutdown():
+def shutdown(token:dict=Depends(verify_token)):
+    check_permission(token.get("username"), UserPermissions.SYS_ADMIN_ACPI)
     Shutdown().execute()
 
 
 @system.post('/restart',summary="Reboot the NAS")
-def restart():
+def restart(token:dict=Depends(verify_token)):
+    check_permission(token.get("username"), UserPermissions.SYS_ADMIN_ACPI)
     Reboot().execute()
 
 @system.post('/restart-systemd-services',summary="Restart main system services")
-def restart_systemd_services() -> None:
+def restart_systemd_services(token:dict=Depends(verify_token)) -> None:
+    check_permission(token.get("username"), UserPermissions.SYS_ADMIN_SYSTEMCTL)
     cmds = [SystemCtlRestart(service) for service in CONFIG.systemd_services]
 
     if (len(cmds) > 0):
@@ -136,7 +138,8 @@ def restart_systemd_services() -> None:
             summary="Perform apt-get update/upgrade commands",
             response_model=BackgroundTask
             )
-def apt_get(action:AptGetActions) -> BackgroundTask:
+def apt_get(action:AptGetActions,token:dict=Depends(verify_token)) -> BackgroundTask:
+    check_permission(token.get("username"), UserPermissions.SYS_ADMIN_UPDATES)
     match (action):
         case AptGetActions.update:
             task = AptGetUpdateThread()
@@ -154,7 +157,8 @@ def apt_get(action:AptGetActions) -> BackgroundTask:
               summary="Get the information of a background task",
               response_model=Optional[Union[BackgroundTask,Dict]]
 )
-def get_task_info(task_id: str) ->Optional[Union[BackgroundTask,Dict]]:
+def get_task_info(task_id: str,token:dict=Depends(verify_token)) ->Optional[Union[BackgroundTask,Dict]]:
+    check_permission(token.get("username"), UserPermissions.CLIENT_DASHBOARD_ADVANCED)
     task = SCHEDULER.get_task_by_id(task_id)
 
     if (task is None):
@@ -179,7 +183,11 @@ def get_task_info(task_id: str) ->Optional[Union[BackgroundTask,Dict]]:
               response_model=Optional[str],
               summary="Retrieve system logs",
 )
-def journalctl(filter:LogFilter,date_from:Optional[int]=None,date_to:Optional[int]=None) -> Optional[str]:
+def journalctl(filter:LogFilter,
+               date_from:Optional[int]=None,
+               date_to:Optional[int]=None,
+               token:dict=Depends(verify_token)) -> Optional[str]:
+    check_permission(token.get("username"), UserPermissions.SYS_ADMIN_LOGS)
     service = None
 
     if (date_to is None):
@@ -206,5 +214,5 @@ def journalctl(filter:LogFilter,date_from:Optional[int]=None,date_to:Optional[in
         return process.stderr
 
 @system.get("/test",summary="Test checking if the client/server connection works properly")
-def test() -> None:
-    ...
+def test(token:dict=Depends(verify_token)) -> None:
+    check_permission(token.get("username"), UserPermissions.CLIENT_DASHBOARD_ACCESS)

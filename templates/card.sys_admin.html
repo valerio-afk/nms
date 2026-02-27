@@ -6,26 +6,32 @@
 
 <div class="container">
     <div class="row g-3">
-        {% set btn_icon = "<i class='bi bi-list-columns-reverse'></i>" | safe %}
-        {% set btn_title = _("System Logs") %}
-        {% set btn_method = "GET" %}
-        {% set btn_link = url_for('main.system_logs') %}
-        {% include "element.square_btn.html" %}
+        {% if permissions.get("logs") %}
+            {% set btn_icon = "<i class='bi bi-list-columns-reverse'></i>" | safe %}
+            {% set btn_title = _("System Logs") %}
+            {% set btn_method = "GET" %}
+            {% set btn_link = url_for('main.system_logs') %}
+            {% include "element.square_btn.html" %}
+        {% endif %}
 
-        {% set btn_icon = "<i class=\"bi bi-bootstrap-reboot\"></i>" | safe %}
-        {% set btn_title = _("Restart System Services") %}
-        {% set btn_method = "POST" %}
-        {% set btn_link = url_for('main.restart_systemd') %}
-        {% include "element.square_btn.html" %}
+        {% if permissions.get("systemctl") %}
+            {% set btn_icon = "<i class=\"bi bi-bootstrap-reboot\"></i>" | safe %}
+            {% set btn_title = _("Restart System Services") %}
+            {% set btn_method = "POST" %}
+            {% set btn_link = url_for('main.restart_systemd') %}
+            {% include "element.square_btn.html" %}
+        {% endif %}
 
+        {#
         {% set btn_icon = "<i class=\"bi  bi-shield-fill-x\"></i>" | safe %}
         {% set btn_title = _("Reset Admin Login") %}
         {% set btn_method = "POST" %}
         {% set btn_link = url_for('main.reset_otp') %}
         {% set btn_message = _("Are you sure you want to reset the adminstrator login credentials?") %}
         {% include "element.square_btn.modal.html" %}
+        #}
 
-        {% if encrypted %}
+        {% if encrypted and permissions.get("pool_info") %}
             {% set btn_icon = "<i class=\"bi bi-key-fill\"></i>" | safe %}
             {% set btn_title = _("Download Encryption Key") %}
             {% set btn_method = "POST" %}

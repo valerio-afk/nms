@@ -31,6 +31,9 @@ USER_PERMISSIONS={
     "import":lambda : _("Import"),
     "expand":lambda : _("Expand"),
     "destroy":lambda : _("Destroy"),
+    "recovery": lambda : _("Recover"),
+    "replace": lambda : _("Replace"),
+    "get_info": lambda : _("Get Information"),
 
     "network":lambda : _("Network"),
     "interface" :lambda : _("Interface"),

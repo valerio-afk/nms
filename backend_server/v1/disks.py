@@ -1,20 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException
-from backend_server.v1.auth import verify_token_factory, verify_token_header_factory
-from backend_server.utils.responses import  ErrorMessage, SuccessMessage
+from .auth import check_permission
 from backend_server.utils.cmdl import LSBLK, ZPoolLabelClear, WipeFS
+from backend_server.utils.responses import  ErrorMessage, SuccessMessage
+from backend_server.v1.auth import verify_token_factory, verify_token_header_factory
+from fastapi import APIRouter, Depends, HTTPException
+from nms_shared import ErrorMessages
 from nms_shared.disks import Disk
 from nms_shared.msg import SuccessMessages
+from nms_shared.enums import UserPermissions, DiskStatus
 from typing import List, Optional, Dict
-
 import json
 
-from nms_shared import ErrorMessages
-from nms_shared.enums import DiskStatus
+
+verify_token = verify_token_factory()
 
 disks = APIRouter(
     prefix='/disks',
     tags=['disks'],
-    dependencies=[Depends(verify_token_factory())]
+    dependencies=[Depends(verify_token)]
 )
 
 
@@ -85,7 +87,8 @@ def format_disk(dev:str) -> None:
             },
           summary="Provides all the disks installed in the system",
           )
-def sys_disks() -> List[Disk]:
+def sys_disks(token:dict=Depends(verify_token)) -> List[Disk]:
+    check_permission(token.get("username"), UserPermissions.CLIENT_DASHBOARD_DISKS)
     return get_system_disks()
 
 @disks.get("/get/disks",
@@ -95,7 +98,8 @@ def sys_disks() -> List[Disk]:
             },
           summary="Provides all the disks in the array, attachable, and detached",
           )
-def get_all_disks() -> List[Disk]:
+def get_all_disks(token:dict=Depends(verify_token)) -> List[Disk]:
+    check_permission(token.get("username"), UserPermissions.CLIENT_DASHBOARD_DISKS)
     return get_disks()
 
 @disks.post("/format",
@@ -105,5 +109,6 @@ def get_all_disks() -> List[Disk]:
           summary="Format a specific disk"
            )
 def perform_format_disk(dev:str,auth:Dict=Depends(verify_token_header_factory("format-disk"))) -> Optional[Dict]:
+    check_permission(auth.get("username"), UserPermissions.POOL_DISKS_FORMAT)
     format_disk(dev)
     return {"detail": SuccessMessage(code=SuccessMessages.S_DISK_FORMATTED.name,params=[dev])}

@@ -1,18 +1,20 @@
 from backend_server.utils.cmdl import Chown, Chmod, LocalCommandLineTransaction
 from backend_server.utils.config import CONFIG
 from backend_server.utils.responses import ErrorMessage
-from backend_server.v1.auth import verify_token_factory
+from backend_server.v1.auth import verify_token_factory, check_permission
 from fastapi import HTTPException, APIRouter, Depends
 from nms_shared import ErrorMessages
+from nms_shared.enums import UserPermissions
 import grp
 import pwd
 import subprocess
 
+verify_token = verify_token_factory()
 
 fs = APIRouter(
     prefix='/fs',
     tags=['fs'],
-    dependencies=[Depends(verify_token_factory())]
+    dependencies=[Depends(verify_token)]
 )
 
 
@@ -57,7 +59,9 @@ def change_ownership(path:str) -> None:
     responses={500: {"description": "Any internal errors"}},
     summary="Delete the directory of the mount point"
 )
-def rm_mountpoint(mountpoint:str) -> None:
+def rm_mountpoint(mountpoint:str,token:dict=Depends(verify_token)) -> None:
+    check_permission(token.get("username"), UserPermissions.POOL_CONF_DESTROY)
+
     if (CONFIG.is_pool_configured):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_CONFIG.name))
 

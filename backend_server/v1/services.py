@@ -1,15 +1,19 @@
 from backend_server.utils.config import CONFIG
 from backend_server.utils.responses import AccessService, ErrorMessage, SuccessMessage
 from nms_shared import SuccessMessages
+from nms_shared.enums import UserPermissions
 from nms_shared.msg import ErrorMessages
 from fastapi import APIRouter, Depends, HTTPException, Request
-from .auth import verify_token_factory
+from .auth import verify_token_factory, check_permission
 from typing import Dict, Optional
+
+
+verify_token = verify_token_factory()
 
 services = APIRouter(
     prefix='/services',
     tags=['services'],
-    dependencies=[Depends(verify_token_factory())]
+    dependencies=[Depends(verify_token)]
 )
 
 
@@ -28,7 +32,8 @@ def disable_all_access_services() -> None:
             },
           summary="Get the list of access services"
           )
-def get_system_services() -> Dict[str,AccessService]:
+def get_system_services(token:dict=Depends(verify_token)) -> Dict[str,AccessService]:
+    check_permission(token.get("username"), UserPermissions.CLIENT_DASHBOARD_SERVICES)
     try:
         return {
             k:AccessService(
@@ -46,7 +51,8 @@ def get_system_services() -> Dict[str,AccessService]:
     responses = {500: {"description": "Any internal error while enabling an access services"}},
     summary = "Enable an access service"
 )
-async def enable_access_service(service_id: str, request: Request) -> Optional[Dict]:
+async def enable_access_service(service_id: str, request: Request,token:dict=Depends(verify_token)) -> Optional[Dict]:
+    check_permission(token.get("username"), UserPermissions[f"SERVICES_{service_id.upper()}_MANAGE"])
     try:
         data = await request.json()
         service = CONFIG.access_services[service_id]
@@ -64,7 +70,8 @@ async def enable_access_service(service_id: str, request: Request) -> Optional[D
     responses = {500: {"description": "Any internal error while disabling an access services"}},
     summary = "Update the settings in an access service"
 )
-async def update_access_service(service_id: str, request: Request) -> Optional[Dict]:
+async def update_access_service(service_id: str, request: Request, token:dict=Depends(verify_token)) -> Optional[Dict]:
+    check_permission(token.get("username"), UserPermissions[f"SERVICES_{service_id.upper()}_MANAGE"])
     try:
         data = await request.json()
         service = CONFIG.access_services[service_id]
@@ -79,7 +86,8 @@ async def update_access_service(service_id: str, request: Request) -> Optional[D
     responses = {500: {"description": "Any internal error while disabling an access services"}},
     summary = "Disable an access service"
 )
-async def disable_access_service(service_id: str, request: Request) -> Optional[Dict]:
+async def disable_access_service(service_id: str, request: Request,token:dict=Depends(verify_token)) -> Optional[Dict]:
+    check_permission(token.get("username"), UserPermissions[f"SERVICES_{service_id.upper()}_MANAGE"])
     try:
         data = await request.json()
         service = CONFIG.access_services[service_id]

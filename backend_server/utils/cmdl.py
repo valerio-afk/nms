@@ -42,6 +42,17 @@ class CommandLine(ABC):
 
         output = subprocess.run(raw_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
+        if (isinstance(this,Touch)):
+            import logging
+
+            l = logging.getLogger(__name__)
+            l.error(type(this))
+            l.error(" ".join(raw_cmd))
+            l.error(output.stdout)
+            l.error(output.stderr)
+            l.error(output.returncode)
+
+
         return output
 
     def execute(this,**kwargs):
@@ -642,7 +653,7 @@ class CreateKey(RevertibleCommandLine):
         return CreateKey(serialisation.get('key_path',None),serialisation.get('bytes',0))
 
 class Chmod(RevertibleCommandLine):
-    def __init__(this,path:str,perm:str,flags:Optional[List[str]],sudo=False):
+    def __init__(this,path:str,perm:str,flags:Optional[List[str]]=None,sudo=False):
         this._perm = perm
         this._path = path
         this._flags = flags
@@ -1126,6 +1137,28 @@ class UserModAddGroup(RevertibleCommandLine):
             serialisation.get('group', None),
         )
 
+class UserModChangeShell(RevertibleCommandLine):
+    def __init__(this, username: str, shell: str):
+        cmd = ['usermod', '-s', shell, username]
+        super().__init__(cmd, sudo=True)
+
+        this._username = username
+        this._shell = shell
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['username'] = this._username
+        d['shell'] = this._shell
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return UserModChangeShell(
+            serialisation.get('username', None),
+            serialisation.get('shell', None),
+        )
+
 class GPasswdRemoveGroup(RevertibleCommandLine):
     def __init__(this,username:str,group:str):
         cmd = ['gpasswd', '-d', username, group]
@@ -1215,6 +1248,35 @@ class UserAdd(RevertibleCommandLine):
             serialisation.get("username", None),
             serialisation.get('groups', []),
             serialisation.get('allow_login', False),
+        )
+
+class UserDel(CommandLine):
+    def __init__(this,username:str, keep_home:bool=True,**kwargs):
+        cmd = ['userdel']
+
+        if (not keep_home):
+            cmd.append('-r')
+
+        cmd.append(username)
+
+        kwargs.setdefault('sudo',True)
+
+        super().__init__(cmd,**kwargs)
+
+        this._username = username
+        this._keep_home = keep_home
+
+    def to_dict(this):
+        d = super().to_dict()
+
+        d['username'] = this._username
+        d['keep_home'] = this._keep_home
+
+    @staticmethod
+    def from_dict(serialisation):
+        return UserDel(
+            serialisation.get("username", None),
+            serialisation.get("keep_home", None),
         )
 
 class GetUserUID(CommandLine):
@@ -1692,4 +1754,25 @@ class Groups(CommandLine):
     def from_dict(serialisation):
         return Groups(
             serialisation.get("username", None),
+        )
+
+class Touch(RevertibleCommandLine):
+    def __init__(this,filename:str,**kwargs):
+        cmd = ['touch',filename]
+        revert_cmd = ['rm',filename]
+
+        super().__init__(cmd,revert_command=revert_cmd,**kwargs)
+
+        this._filename = filename
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['filename'] = this._filename
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return Touch(
+            serialisation.get("filename", None),
         )

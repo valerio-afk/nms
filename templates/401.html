@@ -18,6 +18,11 @@
             {{ _("Please log in with appropriate credentials or contact the administrator.") }}
         </p>
 
+         <!-- Required Permission -->
+        <p class="text-muted mb-4">
+            {{ perm }}<br/>
+        </p>
+
         <!-- Actions -->
         <div class="d-flex gap-2 justify-content-center">
             <a href="{{ url_for('main.login') }}" class="btn btn-primary">

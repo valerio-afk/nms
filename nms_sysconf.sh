@@ -27,6 +27,7 @@ PACKAGES=(
     vsftpd
     samba
     nfs-kernel-server
+    wireguard
 )
 
 SERVICES_TO_DISABLE=(
@@ -400,7 +401,33 @@ build_docker_image() {
     log_info "Docker image '$image_name' built successfully from $repo_dir"
 }
 
+
 # Sysadmin stuff
+
+create_group() {
+    local GROUP_NAME="$1"
+
+    if [[ -z "$GROUP_NAME" ]]; then
+        log_error "No group name provided to create_group"
+        return 1
+    fi
+
+    if getent group "$GROUP_NAME" >/dev/null 2>&1; then
+        log_info "Group '$GROUP_NAME' already exists. Skipping creation."
+        return 0
+    fi
+
+    log_info "Creating group '$GROUP_NAME'..."
+
+    if groupadd "$GROUP_NAME" >> "$LOG_FILE" 2>&1; then
+        log_info "Group '$GROUP_NAME' created successfully."
+    else
+        log_error "Failed to create group '$GROUP_NAME'."
+        return 1
+    fi
+}
+
+
 manage_users() {
     log_info "Starting user management..."
 
@@ -428,6 +455,10 @@ manage_users() {
         fi
     fi
 
+    # --- 2.5 create users and sambashare groups
+    create_group "users"
+    create_group "sambashare"
+
     # --- 3. Check UID 1000 ---
     uid1000_user=$(getent passwd 1000 | cut -d: -f1 || true)
 
@@ -446,16 +477,6 @@ manage_users() {
             log_info "User $uid1000_user renamed to 'user'"
         fi
 
-        # Add user to 'users' group (create group if missing)
-        if ! getent group users &>/dev/null; then
-            log_info "Group 'users' does not exist. Creating group..."
-            if ! groupadd users >> "$LOG_FILE" 2>&1; then
-                log_warn "Failed to create group 'users'"
-            else
-                log_info "Group 'users' created successfully"
-            fi
-        fi
-
         log_info "Adding 'user' to group 'users'..."
         if ! usermod -aG users user >> "$LOG_FILE" 2>&1; then
             log_warn "Failed to add 'user' to group 'users'"
@@ -463,6 +484,7 @@ manage_users() {
             log_info "'user' added to group 'users' successfully"
         fi
     fi
+
 
     log_info "User management completed."
 }
@@ -610,6 +632,114 @@ EOF
     log_info "Backend FastAPI service setup complete with NMS_SECRET_KEY"
 }
 
+# Network Stuff
+
+configure_wireguard() {
+    local WG_DIR="/etc/wireguard"
+    local WG_CONF="$WG_DIR/wg0.conf"
+    local SERVER_PRIVATE_KEY_FILE="/root/vpn_private.key"
+    local SERVER_PUBLIC_KEY_FILE="/root/vpn_public.key"
+    local CLIENT_PUBLIC_KEY="$1"
+
+    if [[ -z "$CLIENT_PUBLIC_KEY" ]]; then
+        log_error "Client public key must be provided"
+        return 1
+    fi
+
+    log_info "Generating WireGuard server keys..."
+
+    umask 077
+
+    if ! wg genkey | tee "$SERVER_PRIVATE_KEY_FILE" | wg pubkey > "$SERVER_PUBLIC_KEY_FILE" 2>>"$LOG_FILE"; then
+        log_error "Failed to generate WireGuard keys"
+        return 1
+    fi
+
+    chmod 600 "$SERVER_PRIVATE_KEY_FILE" "$SERVER_PUBLIC_KEY_FILE"
+
+    local SERVER_PRIVATE_KEY
+    SERVER_PRIVATE_KEY=$(cat "$SERVER_PRIVATE_KEY_FILE")
+
+    log_info "Creating WireGuard configuration at $WG_CONF"
+
+    mkdir -p "$WG_DIR"
+    chmod 700 "$WG_DIR"
+
+    cat <<EOF | tee "$WG_CONF" >/dev/null
+[Interface]
+Address = 10.0.0.1/24
+PrivateKey = $SERVER_PRIVATE_KEY
+ListenPort = 51820
+
+[Peer]
+PublicKey = $CLIENT_PUBLIC_KEY
+AllowedIPs = 10.0.0.2/32
+EOF
+
+    chmod 600 "$WG_CONF"
+
+    systemctl daemon-reload >> "$LOG_FILE" 2>&1
+
+    log_info "WireGuard configuration created."
+}
+
+install_noip_duc() {
+    local DOWNLOAD_URL="https://www.noip.com/download/linux/latest"
+    local TMP_DIR="/tmp/noip-install"
+
+    log_info "Installing No-IP Dynamic Update Client..."
+
+    mkdir -p "$TMP_DIR"
+
+    cd "$TMP_DIR" || {
+        log_error "Failed to enter temporary directory $TMP_DIR"
+        return 1
+    }
+
+    log_info "Downloading latest No-IP package..."
+    if ! wget --content-disposition "$DOWNLOAD_URL" >> "$LOG_FILE" 2>&1; then
+        log_error "Failed to download No-IP DUC"
+        return 1
+    fi
+
+    # Detect extracted tar file
+    local TAR_FILE
+    TAR_FILE=$(ls noip-duc_*.tar.gz 2>/dev/null | head -n1)
+
+    if [[ -z "$TAR_FILE" ]]; then
+        log_error "Downloaded archive not found"
+        return 1
+    fi
+
+    log_info "Extracting $TAR_FILE..."
+    if ! tar xf "$TAR_FILE" >> "$LOG_FILE" 2>&1; then
+        log_error "Failed to extract No-IP archive"
+        return 1
+    fi
+
+    local EXTRACTED_DIR
+    EXTRACTED_DIR=$(basename "$TAR_FILE" .tar.gz)
+
+    local DEB_FILE="$TMP_DIR/$EXTRACTED_DIR/binaries/${EXTRACTED_DIR}_amd64.deb"
+
+    if [[ ! -f "$DEB_FILE" ]]; then
+        log_error "No-IP .deb package not found at $DEB_FILE"
+        return 1
+    fi
+
+    log_info "Installing No-IP DUC package..."
+    if ! apt-get install -y "$DEB_FILE" >> "$LOG_FILE" 2>&1; then
+        log_error "Failed to install No-IP DUC"
+        return 1
+    fi
+
+    log_info "Cleaning up temporary installation files..."
+    rm -rf "$TMP_DIR"
+
+    log_info "No-IP Dynamic Update Client installed successfully"
+}
+
+
 
 # Check if the script is run by root
 if [[ "$EUID" -ne 0 ]]; then
@@ -651,6 +781,12 @@ set_nms_json_permissions "$DEST_DIR"
 install_requirements "$DEST_DIR" "$PYTHON_VENV_PATH"
 install_editable_package "$DEST_DIR/nms_shared" "$PYTHON_VENV_PATH"
 
-#Step 11 - Systemctl
+#Step 11 --- Systemctl
 create_backend_service "$DEST_DIR" "$PYTHON_VENV_PATH"
 create_frontend_service "$DEST_DIR" "$PYTHON_VENV_PATH"
+
+#Step 12 --- Wireguard configuration
+configure_wireguard
+
+#Step 13 --- Noip dynamic updater script
+install_noip_duc

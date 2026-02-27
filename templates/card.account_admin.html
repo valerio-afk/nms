@@ -115,6 +115,45 @@
     </div>
 </form>
 
+ <div class="row border border-info-subtle ms-1 me-1 p-2 rounded mt-3">
+     <div class="row mb-3">
+        <div class="col-sm-12">
+            <h4>{{ _("Delete User") }}</h4>
+        </div>
+     </div>
+
+  <form method="POST">
+      <div class="row mb-3 ms-1">
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="user_file" id="retain" value="1">
+            <label class="form-check-label" for="retain">{{ _("Retain") }}</label>
+          </div>
+      </div>
+      <div class="row mb-3 ms-1">
+        <div class="form-check">
+            <input class="form-check-input" type="radio" name="user_file" id="delete" value="2">
+            <label class="form-check-label" for="delete">{{ _("Delete permanently") }}</label>
+          </div>
+      </div>
+      <div class="row mb-3">
+      <div class="d-flex gap-2 align-items-center">
+        <div class="form-check mb-0 ms-1 flex-shrink-0 ">
+          <input class="form-check-input" type="radio" name="user_file" id="move_to" value="3">
+          <label class="form-check-label" for="move_to">{{ _("Move to") }}:</label>
+        </div>
+        <select class="form-select flex-grow-1" id="move_to_user">
+          <option value="folder1">Folder 1</option>
+          <option value="folder2">Folder 2</option>
+          <option value="folder3">Folder 3</option>
+        </select>
+      </div>
+    </div>
+      <div class="row">
+        <button type="submit" class="btn btn-danger w-100">{{ _("Delete User") }}</button>
+      </div>
+  </form>
+</div>
+
 {% endblock %}
 
 

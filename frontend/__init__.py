@@ -23,6 +23,11 @@ def check_pool_warnings() -> None:
     if (not NMSBACKEND.is_authenticated):
         return
 
+    p = session.get("user").get("permissions", [])
+
+    if (not match_permissions(p,UserPermissions.CLIENT_DASHBOARD_DISKS)):
+        return
+
     msgid = NMSBACKEND.pool_status_id
     if (msgid is not None):
         code = constants.MSGID.get(msgid,None)
@@ -118,7 +123,7 @@ def user_data():
                 "disks": match_permissions(p,UserPermissions.CLIENT_DASHBOARD_DISKS),
                 "network": match_permissions(p, UserPermissions.CLIENT_DASHBOARD_NETWORKS),
                 "users": match_permissions(p, UserPermissions.CLIENT_DASHBOARD_USERS),
-                "access": match_permissions(p, UserPermissions.CLIENT_DASHBOARD_ACCESS),
+                "access": match_permissions(p, UserPermissions.CLIENT_DASHBOARD_SERVICES),
                 "advanced": match_permissions(p,UserPermissions.CLIENT_DASHBOARD_ADVANCED),
             }
 
@@ -174,7 +179,7 @@ def handle_token_expired(_) -> Response:
 
 
 @frontend.errorhandler(401)
-def unauthorized(_) -> Tuple[str,int]:
-    return render_template("401.html"), 401
+def unauthorized(e:dict) -> Tuple[str,int]:
+    return render_template("401.html",perm=e.description.get("detail")), 401
 
 from . import dashboard, services, disks, utilities, auth, advanced, network, users
