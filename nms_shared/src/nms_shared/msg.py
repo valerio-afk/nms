@@ -95,6 +95,10 @@ class ErrorMessages(Enum):
     E_USER_SUDO = "E_USER_SUDO"
     E_NEW_USER = "E_NEW_USER"
     E_PERM_ADMIN = "E_PERM_ADMIN"
+    E_DEL_ADMIN = "E_DEL_ADMIN"
+    E_USER_COPY_FILES = "E_USER_COPY_FILES"
+    E_USER_DELETE = "E_USER_DELETE"
+    E_USER_LOGIN_RESET = "E_USER_LOGIN_RESET"
 
     @staticmethod
     def get_error_from_string(error_code:str,*args,**kwargs) -> str:
@@ -166,6 +170,8 @@ class SuccessMessages(Enum):
     S_USER_SUDO = "S_USER_SUDO"
     S_NEW_USER = "S_NEW_USER"
     S_USER_PERM = "S_USER_PERM"
+    S_DEL_USER = "S_DEL_USER"
+    S_USER_LOGIN_RESET = "E_USER_LOGIN_RESET"
 
 
     @staticmethod
@@ -279,7 +285,13 @@ ERROR_MESSAGES = {
     ErrorMessages.E_NEW_USER: lambda info: _("Error occurred while creating a new user: %(info)s.") % {'info':info}, #<-----
     ErrorMessages.E_PERM_ADMIN : lambda : _("Permission changes are disabled because this is the only administrator account. "
                                             "At least one additional administrator must exist to prevent lockout. "
-                                            "Users with all permissions are treated as administrators.")
+                                            "Users with all permissions are treated as administrators."),
+    ErrorMessages.E_DEL_ADMIN : lambda : _("You cannot delete this account because this is the only administrator account. "
+                                            "At least one additional administrator must exist to prevent lockout. "
+                                            "Users with all permissions are treated as administrators."),
+    ErrorMessages.E_USER_COPY_FILES: lambda user,info: _("Error occurred while moving files of the user %(user)s: %(info)s.") % {'info':info,'user':user}, #<-----
+    ErrorMessages.E_USER_DELETE: lambda user,info: _("Error occurred while deleting the user %(user)s: %(info)s.") % {'info':info,'user':user}, #<-----
+    ErrorMessages.E_USER_LOGIN_RESET : lambda user,info: _("Error occurred while resetting the login credentials for %(user)s: %(info)s.") % {'info':info,'user':user}, #<-----
 }
 
 WARNING_MESSAGES = {
@@ -330,7 +342,9 @@ SUCCESS_MESSAGES = {
     SuccessMessages.S_USER_NAME : lambda : _("Username changed successfully."),
     SuccessMessages.S_USER_SUDO : lambda : _("User's system privileges changed successfully."),
     SuccessMessages.S_NEW_USER : lambda user : _("User %(user)s created successfully.") % {'user':user} ,
+    SuccessMessages.S_DEL_USER: lambda user: _("User %(user)s deleted successfully.") % {'user': user},
     SuccessMessages.S_USER_PERM : lambda : _("Permissions changed successfully."),
+    SuccessMessages.S_USER_LOGIN_RESET: lambda user : _("User login reset successfully. Provide to the user %(user)s the new first-time login link to set new credentials.") % {'user':user},
 
 }
 

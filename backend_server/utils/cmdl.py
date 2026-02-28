@@ -692,18 +692,23 @@ class Chown(RevertibleCommandLine):
         this._path = path
         this._flags = flags
 
-        current_uid = os.stat(path).st_uid
-        current_gid = os.stat(path).st_gid
-
-        revert_cmd = ["chown"]
-        if (flags is not None):
-            revert_cmd.extend(flags)
-        revert_cmd += [f"{current_uid}:{current_gid}",path]
-
         cmd = ["chown"]
         if (flags is not None):
             cmd.extend(flags)
         cmd+=[f"{uid or ''}:{gid or ''}",path]
+
+        revert_cmd = None
+
+        try:
+            current_uid = os.stat(path).st_uid
+            current_gid = os.stat(path).st_gid
+
+            revert_cmd = ["chown"]
+            if (flags is not None):
+                revert_cmd.extend(flags)
+            revert_cmd += [f"{current_uid}:{current_gid}",path]
+        except PermissionError:
+            ...
 
         super().__init__(cmd,revert_command=revert_cmd,sudo=sudo)
 
@@ -1321,9 +1326,28 @@ class RenameFile(RevertibleCommandLine):
             serialisation.get('new', None),
         )
 
-class GetEntShadow(RevertibleCommandLine):
+class GetEntShadow(CommandLine):
     def __init__(this,username):
         cmd = ['getent','shadow',username]
+        this._username = username
+
+        super().__init__(cmd,sudo=True,mask_output=True)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['username'] = this._username
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return GetEntShadow(
+            serialisation.get('username',None),
+        )
+
+class GetEntPasswd(CommandLine):
+    def __init__(this,username):
+        cmd = ['getent','passwd',username]
         this._username = username
 
         super().__init__(cmd,sudo=True,mask_output=True)
@@ -1775,4 +1799,64 @@ class Touch(RevertibleCommandLine):
     def from_dict(serialisation):
         return Touch(
             serialisation.get("filename", None),
+        )
+
+class RSync(CommandLine):
+    def __init__(this,src:str,dest:str,flags:Optional[List[str]]=None,**kwargs):
+        cmd = ['rsync']
+
+        if (flags is not None):
+            cmd.extend(flags)
+
+        cmd.extend([src,dest])
+
+        super().__init__(cmd,**kwargs)
+
+        this._src = src
+        this._dest = dest
+        this._flags = flags
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['src'] = this._src
+        d['dest'] = this._dest
+        d['flags'] = this._flags
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return RSync(
+            serialisation.get("src", None),
+            serialisation.get("dest", None),
+            serialisation.get("flags", None),
+        )
+
+
+class Mkdir(RevertibleCommandLine):
+    def __init__(this,path:str,parents:bool=False,**kwargs):
+        cmd = ['mkdir']
+        if parents:
+            cmd.append("-p")
+        cmd.append(path)
+
+        revert_cmd = ['rmdir',path]
+
+        super().__init__(cmd,revert_cmd,**kwargs)
+
+        this._path = path
+        this._parents = parents
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['path'] = this._path
+        d['parents'] = this._parents
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return Mkdir(
+            serialisation.get("path", None),
+            serialisation.get("parents", None),
         )

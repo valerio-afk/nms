@@ -10,7 +10,7 @@ def render_widget(id:str,**kwargs)->Tuple[str,Optional[str]]:
     css_fname = f"card.{id}.css"
 
     if ("csrf_token" not in kwargs):
-        kwargs["csrf_token"] = generate_csrf()
+        kwargs["csrf_token"] = generate_csrf
 
     return render_template(template_fname,
                            card_id=id,

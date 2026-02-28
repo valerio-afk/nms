@@ -53,7 +53,7 @@ def mount() -> None:
 
         if (not trans.success):
             errors = "\n".join([o['stderr'] for o in output])
-            raise ErrorMessage(code=ErrorMessages.E_POOL_MOUNT.name,params=[errors])
+            raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_MOUNT.name,params=[errors]))
 
 def unmount():
     if (not CONFIG.is_pool_configured):
@@ -79,7 +79,7 @@ def unmount():
 
     if (not trans.success):
         errors = "\n".join([o['stderr'] for o in output])
-        raise ErrorMessage(code=ErrorMessages.E_POOL_UNMOUNT.name,params=[errors])
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_UNMOUNT.name,params=[errors]))
 
 def get_array_expansion_status() -> ExpasionStatus:
     if (not CONFIG.is_pool_configured):
@@ -94,7 +94,7 @@ def get_array_expansion_status() -> ExpasionStatus:
 
     if (output.returncode != 0):
         error = output.stderr
-        raise ErrorMessage(code=ErrorMessages.E_POOL_EXPAND_STATUS.name,params=[error])
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_EXPAND_STATUS.name,params=[error]))
 
     zpool_output = output.stdout
 

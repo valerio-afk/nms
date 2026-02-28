@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-02-16 09:33+0000\n"
+"POT-Creation-Date: 2026-02-27 22:10+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -21,160 +21,173 @@ msgstr ""
 msgid "Never"
 msgstr ""
 
-#: frontend/users.py:13
+#: frontend/users.py:14
 msgid "Web Client"
 msgstr ""
 
-#: frontend/users.py:14 templates/dashboard.html:3 templates/index.html:6
+#: frontend/users.py:15 templates/dashboard.html:3 templates/index.html:6
 #: templates/index.html:27
 msgid "Dashboard"
 msgstr ""
 
-#: frontend/users.py:15
+#: frontend/users.py:16
 msgid "Access"
 msgstr ""
 
-#: frontend/users.py:16 frontend/users.py:34 templates/card.network_list.html:3
-#: templates/card.network_list.html:26 templates/index.html:33
+#: frontend/users.py:17 frontend/users.py:38 templates/card.network_list.html:3
+#: templates/card.network_list.html:26 templates/index.html:36
 #: templates/network.html:3
 msgid "Network"
 msgstr ""
 
-#: frontend/users.py:17 templates/card.access_list.html:3
+#: frontend/users.py:18 templates/card.access_list.html:3
 #: templates/card.account_services.html:3
+#: templates/card.user_admin_services.html:3
 msgid "Access Services"
 msgstr ""
 
-#: frontend/users.py:18 templates/index.html:36 templates/users.html:3
+#: frontend/users.py:19 templates/index.html:41 templates/users.html:3
 msgid "Users"
 msgstr ""
 
-#: frontend/users.py:19 templates/advanced.html:3 templates/index.html:42
+#: frontend/users.py:20 templates/advanced.html:3 templates/index.html:51
 msgid "Advanced"
 msgstr ""
 
-#: frontend/users.py:21
+#: frontend/users.py:22 templates/card.disk_usage.html:9
 msgid "Disk Array"
 msgstr ""
 
-#: frontend/users.py:22 frontend/utils/forms.py:88
+#: frontend/users.py:23 frontend/utils/forms.py:88
 msgid "Disks"
 msgstr ""
 
-#: frontend/users.py:23
+#: frontend/users.py:24
 msgid "Health"
 msgstr ""
 
-#: frontend/users.py:24
+#: frontend/users.py:25
 msgid "Format"
 msgstr ""
 
-#: frontend/users.py:25
+#: frontend/users.py:26
 msgid "Tools"
 msgstr ""
 
-#: frontend/users.py:26 templates/card.disk_tools.html:10
+#: frontend/users.py:27 templates/card.disk_tools.html:10
 msgid "Verify"
 msgstr ""
 
-#: frontend/users.py:27 templates/card.disk_tools.html:47
+#: frontend/users.py:28 templates/card.disk_tools.html:47
 msgid "Mount"
 msgstr ""
 
-#: frontend/users.py:28
+#: frontend/users.py:29
 msgid "Configuration"
 msgstr ""
 
-#: frontend/users.py:29
+#: frontend/users.py:30
 msgid "Create"
 msgstr ""
 
-#: frontend/users.py:30
+#: frontend/users.py:31
 msgid "Import"
 msgstr ""
 
-#: frontend/users.py:31
+#: frontend/users.py:32
 msgid "Expand"
 msgstr ""
 
-#: frontend/users.py:32
+#: frontend/users.py:33
 msgid "Destroy"
 msgstr ""
 
-#: frontend/users.py:35 frontend/utils/filters.py:61
-msgid "Interface"
+#: frontend/users.py:34
+msgid "Recover"
+msgstr ""
+
+#: frontend/users.py:35 templates/card.disk.html:17
+msgid "Replace"
 msgstr ""
 
 #: frontend/users.py:36
-msgid "Manage"
+msgid "Get Information"
 msgstr ""
 
-#: frontend/users.py:37 templates/card.ddns.html:3
-msgid "Dynamic DNS"
-msgstr ""
-
-#: frontend/users.py:38 templates/card.vpn.html:4
-msgid "VPN"
+#: frontend/users.py:39 frontend/utils/filters.py:61
+msgid "Interface"
 msgstr ""
 
 #: frontend/users.py:40
-msgid "System"
+msgid "Manage"
 msgstr ""
 
-#: frontend/users.py:41
-msgid "Administration"
+#: frontend/users.py:41 templates/card.ddns.html:3
+msgid "Dynamic DNS"
 msgstr ""
 
-#: frontend/users.py:42
-msgid "Power Control"
-msgstr ""
-
-#: frontend/users.py:43
-msgid "Updates"
+#: frontend/users.py:42 templates/card.vpn.html:4
+msgid "VPN"
 msgstr ""
 
 #: frontend/users.py:44
-msgid "System Services"
+msgid "System"
 msgstr ""
 
 #: frontend/users.py:45
+msgid "Administration"
+msgstr ""
+
+#: frontend/users.py:46
+msgid "Power Control"
+msgstr ""
+
+#: frontend/users.py:47
+msgid "Updates"
+msgstr ""
+
+#: frontend/users.py:48
+msgid "System Services"
+msgstr ""
+
+#: frontend/users.py:49
 msgid "Logs"
 msgstr ""
 
-#: frontend/users.py:47 templates/account.html:3 templates/card.account.html:3
+#: frontend/users.py:51 templates/account.html:3 templates/card.account.html:3
 #: templates/card.account_admin.html:9
 msgid "Account"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:272
+#: frontend/api/backend_proxy.py:270
 msgid "Uptime"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:272
+#: frontend/api/backend_proxy.py:270
 msgid "Since"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:273
+#: frontend/api/backend_proxy.py:271
 msgid "NMS Version"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:274
+#: frontend/api/backend_proxy.py:272
 msgid "CPU"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:275
+#: frontend/api/backend_proxy.py:273
 msgid "OS"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:331 frontend/utils/forms.py:84
+#: frontend/api/backend_proxy.py:329 frontend/utils/forms.py:84
 msgid "Encryption"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:332 frontend/utils/forms.py:83
+#: frontend/api/backend_proxy.py:330 frontend/utils/forms.py:83
 msgid "Redundancy"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:333 frontend/utils/forms.py:85
+#: frontend/api/backend_proxy.py:331 frontend/utils/forms.py:85
 msgid "Compression"
 msgstr ""
 
@@ -317,165 +330,165 @@ msgstr ""
 msgid "Public IP"
 msgstr ""
 
-#: nms_shared/msg.py:189
+#: nms_shared/src/nms_shared/msg.py:193
 msgid "Unknown Error"
 msgstr ""
 
-#: nms_shared/msg.py:190
+#: nms_shared/src/nms_shared/msg.py:194
 msgid "Unknown response from server"
 msgstr ""
 
-#: nms_shared/msg.py:191
+#: nms_shared/src/nms_shared/msg.py:195
 #, python-format
 msgid "Error while getting %(prop)s: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:192
+#: nms_shared/src/nms_shared/msg.py:196
 msgid "Form validation failed"
 msgstr ""
 
-#: nms_shared/msg.py:193
+#: nms_shared/src/nms_shared/msg.py:197
 msgid "Unknown operation."
 msgstr ""
 
-#: nms_shared/msg.py:195
+#: nms_shared/src/nms_shared/msg.py:199
 msgid "The disk array is already configured."
 msgstr ""
 
-#: nms_shared/msg.py:196
+#: nms_shared/src/nms_shared/msg.py:200
 msgid "Disk array not configured yet."
 msgstr ""
 
-#: nms_shared/msg.py:197
+#: nms_shared/src/nms_shared/msg.py:201
 msgid "Disk array is configured."
 msgstr ""
 
-#: nms_shared/msg.py:198
+#: nms_shared/src/nms_shared/msg.py:202
 #, python-format
 msgid "Disk %(dev)s is not available to be in the new disk array."
 msgstr ""
 
-#: nms_shared/msg.py:199
+#: nms_shared/src/nms_shared/msg.py:203
 #, python-format
 msgid "Unable to create a new disk array: %(info)s)"
 msgstr ""
 
-#: nms_shared/msg.py:200
+#: nms_shared/src/nms_shared/msg.py:204
 #, python-format
 msgid "Unable to destroy the disk array: %(info)s)"
 msgstr ""
 
-#: nms_shared/msg.py:201
+#: nms_shared/src/nms_shared/msg.py:205
 msgid "You must have at least 3 disks connected to opt in redundancy."
 msgstr ""
 
-#: nms_shared/msg.py:202
+#: nms_shared/src/nms_shared/msg.py:206
 #, python-format
 msgid "Error while adding %(dev)s: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:203
+#: nms_shared/src/nms_shared/msg.py:207
 #, python-format
 msgid "Could not retrieve information for the disk: %(dev)s"
 msgstr ""
 
-#: nms_shared/msg.py:204
+#: nms_shared/src/nms_shared/msg.py:208
 #, python-format
 msgid "Unable to get array expansion status: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:205
+#: nms_shared/src/nms_shared/msg.py:209
 #, python-format
 msgid "Error while retrieving the encryption key: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:206
+#: nms_shared/src/nms_shared/msg.py:210
 #, python-format
 msgid "Error while importing the encryption key: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:207
+#: nms_shared/src/nms_shared/msg.py:211
 #, python-format
 msgid "Error while attaching an existing pool: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:208
+#: nms_shared/src/nms_shared/msg.py:212
 msgid "Unable to retrieve the list of pools."
 msgstr ""
 
-#: nms_shared/msg.py:209
+#: nms_shared/src/nms_shared/msg.py:213
 #, python-format
 msgid "Error while recovering the disk array: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:210
+#: nms_shared/src/nms_shared/msg.py:214
 #, python-format
 msgid "Error while retrieving the disks in the array: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:211
+#: nms_shared/src/nms_shared/msg.py:215
 #, python-format
 msgid "Unable to replace %(dev1)s with %(dev2)s: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:212
+#: nms_shared/src/nms_shared/msg.py:216
 #, python-format
 msgid "Error while detaching the disk array: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:213
+#: nms_shared/src/nms_shared/msg.py:217
 #, python-format
 msgid "Error while mounting the disk array: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:214
+#: nms_shared/src/nms_shared/msg.py:218
 #, python-format
 msgid "Error while unmounting the disk array: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:215
+#: nms_shared/src/nms_shared/msg.py:219
 msgid "Disk array is mounted."
 msgstr ""
 
-#: nms_shared/msg.py:216
+#: nms_shared/src/nms_shared/msg.py:220
 msgid "Disk array is unmounted."
 msgstr ""
 
-#: nms_shared/msg.py:217
+#: nms_shared/src/nms_shared/msg.py:221
 #, python-format
 msgid "Error while verifying the disk array: %(info)s."
 msgstr ""
 
-#: nms_shared/msg.py:218
+#: nms_shared/src/nms_shared/msg.py:222
 msgid "The provided mount point is not valid."
 msgstr ""
 
-#: nms_shared/msg.py:219
+#: nms_shared/src/nms_shared/msg.py:223
 #, python-format
 msgid "Error while retrieving the mount information the disk array: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:222
+#: nms_shared/src/nms_shared/msg.py:226
 #, python-format
 msgid "Error while retrieving the mount point: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:223
+#: nms_shared/src/nms_shared/msg.py:227
 #, python-format
 msgid "Error while removing the mount point: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:224
+#: nms_shared/src/nms_shared/msg.py:228
 #, python-format
 msgid "Error while formatting the disk array: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:225
+#: nms_shared/src/nms_shared/msg.py:229
 #, python-format
 msgid "Unable to read disk array capacity information: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:228
+#: nms_shared/src/nms_shared/msg.py:232
 msgid ""
 "One or more disks cannot be opened. Your disk array CANNOT be used in "
 "this state. Run a diagnostic to see if the disk is getting faulted and "
@@ -483,7 +496,7 @@ msgid ""
 "page (this can likely cause data loss)."
 msgstr ""
 
-#: nms_shared/msg.py:229
+#: nms_shared/src/nms_shared/msg.py:233
 msgid ""
 "One or more disks seems missing. Your disk array CANNOT be used in this "
 "state. Insert back the missing disk. If the disk is inserted and still "
@@ -491,7 +504,7 @@ msgid ""
 "cause data loss)."
 msgstr ""
 
-#: nms_shared/msg.py:230
+#: nms_shared/src/nms_shared/msg.py:234
 msgid ""
 "The information related your disk array are corrupted. Recovery may be "
 "possible (but not guaranteed) and some data loss can occur. Use the "
@@ -500,209 +513,226 @@ msgid ""
 " disks if their diagnostics suggest so."
 msgstr ""
 
-#: nms_shared/msg.py:231
+#: nms_shared/src/nms_shared/msg.py:235
 msgid "Your disk array seems to be outdated and cannot be used anymore."
 msgstr ""
 
-#: nms_shared/msg.py:234
+#: nms_shared/src/nms_shared/msg.py:238
 msgid "Invalid authorisation."
 msgstr ""
 
-#: nms_shared/msg.py:235
+#: nms_shared/src/nms_shared/msg.py:239
 msgid "Authorisation token expired."
 msgstr ""
 
-#: nms_shared/msg.py:236
+#: nms_shared/src/nms_shared/msg.py:240
 msgid "Authorisation token revoked."
 msgstr ""
 
-#: nms_shared/msg.py:237
+#: nms_shared/src/nms_shared/msg.py:241
 msgid "Authorisation token malformed."
 msgstr ""
 
-#: nms_shared/msg.py:238
+#: nms_shared/src/nms_shared/msg.py:242
 msgid "OTP secret not configured yet."
 msgstr ""
 
-#: nms_shared/msg.py:239
+#: nms_shared/src/nms_shared/msg.py:243
 msgid "Invalid OTP."
 msgstr ""
 
-#: nms_shared/msg.py:241
+#: nms_shared/src/nms_shared/msg.py:245
 #, python-format
 msgid "Unable to attach new device to disk array: %(details)s"
 msgstr ""
 
-#: nms_shared/msg.py:242
+#: nms_shared/src/nms_shared/msg.py:246
 #, python-format
 msgid "Error while formatting %(dev)s: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:244
+#: nms_shared/src/nms_shared/msg.py:248
 #, python-format
 msgid "Unable to change permissions for %(path)s: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:246
+#: nms_shared/src/nms_shared/msg.py:250
 #, python-format
 msgid "Unable to get system updates: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:248
+#: nms_shared/src/nms_shared/msg.py:252
 #, python-format
 msgid "Error while enabling %(service)s: %(info)s)"
 msgstr ""
 
-#: nms_shared/msg.py:249
+#: nms_shared/src/nms_shared/msg.py:253
 #, python-format
 msgid "Error while disabling %(service)s: %(info)s)"
 msgstr ""
 
-#: nms_shared/msg.py:250
+#: nms_shared/src/nms_shared/msg.py:254
 #, python-format
 msgid "Unable to disable %(service)s. Please, disable it manually."
 msgstr ""
 
-#: nms_shared/msg.py:251
+#: nms_shared/src/nms_shared/msg.py:255
 #, python-format
 msgid "Access service %(service)s not recognised."
 msgstr ""
 
-#: nms_shared/msg.py:253
+#: nms_shared/src/nms_shared/msg.py:257
 #, python-format
 msgid ""
 "Error while changing the state of the network interface %(iface)s: "
 "%(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:254
+#: nms_shared/src/nms_shared/msg.py:258
 #, python-format
 msgid "Error while retrieving the connection status for %(iface)s: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:255
+#: nms_shared/src/nms_shared/msg.py:259
 msgid "Invalid subnet mask"
 msgstr ""
 
-#: nms_shared/msg.py:256
+#: nms_shared/src/nms_shared/msg.py:260
 msgid "Invalid IP address "
 msgstr ""
 
-#: nms_shared/msg.py:257
+#: nms_shared/src/nms_shared/msg.py:261
 msgid "Invalid gateway"
 msgstr ""
 
-#: nms_shared/msg.py:258
+#: nms_shared/src/nms_shared/msg.py:262
 msgid "Invalid DNS address(es)"
 msgstr ""
 
-#: nms_shared/msg.py:259
+#: nms_shared/src/nms_shared/msg.py:263
 #, python-format
 msgid "Error while retrieving the list of WiFi networks for %(iface)s: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:260
+#: nms_shared/src/nms_shared/msg.py:264
 #, python-format
 msgid "Unable to connect to `%(ssid)s`: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:261
+#: nms_shared/src/nms_shared/msg.py:265
 msgid "VPN service not configured."
 msgstr ""
 
-#: nms_shared/msg.py:262
+#: nms_shared/src/nms_shared/msg.py:266
 #, python-format
 msgid "Unable to get the state of the VPN service: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:263
+#: nms_shared/src/nms_shared/msg.py:267
 #, python-format
 msgid "Error while retrieving the VPN key: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:264
+#: nms_shared/src/nms_shared/msg.py:268
 #, python-format
 msgid "Error occurred while generating the private key: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:265
+#: nms_shared/src/nms_shared/msg.py:269
 #, python-format
 msgid "Error occurred while generating the public key: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:266
+#: nms_shared/src/nms_shared/msg.py:270
 #, python-format
 msgid "Error occurred while reading the VPN configuration file: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:267
+#: nms_shared/src/nms_shared/msg.py:271
 #, python-format
 msgid "VPN device `%(user)s` not found."
 msgstr ""
 
-#: nms_shared/msg.py:268
+#: nms_shared/src/nms_shared/msg.py:272
 msgid "VPN device not valid."
 msgstr ""
 
-#: nms_shared/msg.py:269
+#: nms_shared/src/nms_shared/msg.py:273
 msgid "You have reached the maximum number of devices."
 msgstr ""
 
-#: nms_shared/msg.py:270
+#: nms_shared/src/nms_shared/msg.py:274
 msgid "Invalid dynamic DNS provider `%(provider)`."
 msgstr ""
 
-#: nms_shared/msg.py:271
+#: nms_shared/src/nms_shared/msg.py:275
 #, python-format
 msgid ""
 "Error occurred during the execution of the dynamic DNS provider "
 "`%(provider)s`: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:272
+#: nms_shared/src/nms_shared/msg.py:276
 msgid ""
 "Missing Dynamic DNS configuration. Check if username/domain and "
 "password/token are properly set for the chosen provider."
 msgstr ""
 
-#: nms_shared/msg.py:274
+#: nms_shared/src/nms_shared/msg.py:278
 #, python-format
 msgid "User %(user)s not found."
 msgstr ""
 
-#: nms_shared/msg.py:275
+#: nms_shared/src/nms_shared/msg.py:279
 #, python-format
 msgid "Unable to change the password for %(user)s."
 msgstr ""
 
-#: nms_shared/msg.py:276
+#: nms_shared/src/nms_shared/msg.py:280
 #, python-format
 msgid "Error occurred while setting the user quota: %(info)s."
 msgstr ""
 
-#: nms_shared/msg.py:277
+#: nms_shared/src/nms_shared/msg.py:281
 #, python-format
 msgid "Error occurred while changing username: %(info)s."
 msgstr ""
 
-#: nms_shared/msg.py:278
+#: nms_shared/src/nms_shared/msg.py:282
 #, python-format
 msgid "Unable to change user's system privileges: %(info)s"
 msgstr ""
 
-#: nms_shared/msg.py:279
+#: nms_shared/src/nms_shared/msg.py:283
 #, python-format
 msgid "Error occurred while creating a new user: %(info)s."
 msgstr ""
 
-#: nms_shared/msg.py:280
+#: nms_shared/src/nms_shared/msg.py:284
 msgid ""
 "Permission changes are disabled because this is the only administrator "
 "account. At least one additional administrator must exist to prevent "
 "lockout. Users with all permissions are treated as administrators."
 msgstr ""
 
-#: nms_shared/msg.py:286
+#: nms_shared/src/nms_shared/msg.py:287
+msgid ""
+"You cannot delete this account because this is the only administrator "
+"account. At least one additional administrator must exist to prevent "
+"lockout. Users with all permissions are treated as administrators."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:290
+#, python-format
+msgid "Error occurred while moving files of the user %(user)s: %(info)s."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:291
+#, python-format
+msgid "Error occurred while deleting the user %(user)s: %(info)s."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:295
 msgid ""
 "One or more disks cannot be opened. As you have redundancy activated, you"
 " can still use your disk array. Run a diagnostic to see if the disk is "
@@ -710,7 +740,7 @@ msgid ""
 "it in the Advanced page."
 msgstr ""
 
-#: nms_shared/msg.py:287
+#: nms_shared/src/nms_shared/msg.py:296
 msgid ""
 "One or more disks seems missing. As you have redundancy activated, you "
 "can still use your disk array. Insert back the missing disk. If the disk "
@@ -718,7 +748,7 @@ msgid ""
 "Management page."
 msgstr ""
 
-#: nms_shared/msg.py:288
+#: nms_shared/src/nms_shared/msg.py:297
 msgid ""
 "Some files and/or directories are corrupted and data cannot be recovered."
 " If the problem persists, back up your data, destroy and create a new "
@@ -726,179 +756,184 @@ msgid ""
 "so."
 msgstr ""
 
-#: nms_shared/msg.py:289
+#: nms_shared/src/nms_shared/msg.py:298
 msgid ""
 "One or more disks appear to experience some problems. No imminent actions"
 " are required at the moment. However, you should investigate which "
 "disk(s) is getting old and consider replacing it."
 msgstr ""
 
-#: nms_shared/msg.py:290
+#: nms_shared/src/nms_shared/msg.py:299
 msgid ""
 "Your disk array is experiencing some format issues. To solve this issue, "
 "press `Verify` in the Disk Management page."
 msgstr ""
 
-#: nms_shared/msg.py:291
+#: nms_shared/src/nms_shared/msg.py:300
 msgid "You need to configure your disk array before enabling any access services"
 msgstr ""
 
-#: nms_shared/msg.py:292
+#: nms_shared/src/nms_shared/msg.py:301
 msgid ""
 "One or more of your disks in the array is offline. If redundancy is "
 "active, you can still use the array. Please, reinsert or replace your "
 "disk soon."
 msgstr ""
 
-#: nms_shared/msg.py:293
+#: nms_shared/src/nms_shared/msg.py:302
 #, python-format
 msgid ""
 "User %(user)s has been created successfully. However, there has been some"
 " issues in setting their quota: %(info)s."
 msgstr ""
 
-#: nms_shared/msg.py:297
+#: nms_shared/src/nms_shared/msg.py:306
 msgid "Disk array created successfully."
 msgstr ""
 
-#: nms_shared/msg.py:298
+#: nms_shared/src/nms_shared/msg.py:307
 msgid "Disk array expanded successfully."
 msgstr ""
 
-#: nms_shared/msg.py:299
+#: nms_shared/src/nms_shared/msg.py:308
 msgid "Disk array formatted successfully."
 msgstr ""
 
-#: nms_shared/msg.py:300
+#: nms_shared/src/nms_shared/msg.py:309
 msgid "Disk array destroyed successfully."
 msgstr ""
 
-#: nms_shared/msg.py:301
+#: nms_shared/src/nms_shared/msg.py:310
 msgid "Disk array mounted successfully."
 msgstr ""
 
-#: nms_shared/msg.py:302
+#: nms_shared/src/nms_shared/msg.py:311
 msgid "Disk array unmounted successfully."
 msgstr ""
 
-#: nms_shared/msg.py:303
+#: nms_shared/src/nms_shared/msg.py:312
 msgid "Disk array verification performed successfully."
 msgstr ""
 
-#: nms_shared/msg.py:304
+#: nms_shared/src/nms_shared/msg.py:313
 msgid "Disk replaced successfully."
 msgstr ""
 
-#: nms_shared/msg.py:306
+#: nms_shared/src/nms_shared/msg.py:315
 msgid "System updates retrieved successfully."
 msgstr ""
 
-#: nms_shared/msg.py:307
+#: nms_shared/src/nms_shared/msg.py:316
 msgid "System updates installed successfully."
 msgstr ""
 
-#: nms_shared/msg.py:309
+#: nms_shared/src/nms_shared/msg.py:318
 msgid ""
 "OTP Accepted. Please press again the button of the desired dangerous "
 "operation to continue."
 msgstr ""
 
-#: nms_shared/msg.py:311
+#: nms_shared/src/nms_shared/msg.py:320
 msgid "Disk array recovery attempted."
 msgstr ""
 
-#: nms_shared/msg.py:313
+#: nms_shared/src/nms_shared/msg.py:322
 #, python-format
 msgid "Service %(service)s enabled successfully."
 msgstr ""
 
-#: nms_shared/msg.py:314
+#: nms_shared/src/nms_shared/msg.py:323
 #, python-format
 msgid "Service %(service)s settings updated successfully."
 msgstr ""
 
-#: nms_shared/msg.py:315
+#: nms_shared/src/nms_shared/msg.py:324
 #, python-format
 msgid "Service %(service)s disabled successfully."
 msgstr ""
 
-#: nms_shared/msg.py:317
+#: nms_shared/src/nms_shared/msg.py:326
 #, python-format
 msgid "Disk %(dev)s formatted successfully."
 msgstr ""
 
-#: nms_shared/msg.py:319
+#: nms_shared/src/nms_shared/msg.py:328
 msgid "VPN private and public keys generated successfully."
 msgstr ""
 
-#: nms_shared/msg.py:320
+#: nms_shared/src/nms_shared/msg.py:329
 msgid "VPN configuration changes applied successfully."
 msgstr ""
 
-#: nms_shared/msg.py:321
+#: nms_shared/src/nms_shared/msg.py:330
 #, python-format
 msgid "Network configuration changes for %(iface)s applied successfully."
 msgstr ""
 
-#: nms_shared/msg.py:322
+#: nms_shared/src/nms_shared/msg.py:331
 #, python-format
 msgid "Device `%(peer)s` deleted successfully."
 msgstr ""
 
-#: nms_shared/msg.py:323
+#: nms_shared/src/nms_shared/msg.py:332
 #, python-format
 msgid "Device `%(peer)s` added successfully."
 msgstr ""
 
-#: nms_shared/msg.py:324
+#: nms_shared/src/nms_shared/msg.py:333
 #, python-format
 msgid "Dynamic DNS provider `%(provider)s` enabled successfully."
 msgstr ""
 
-#: nms_shared/msg.py:325
+#: nms_shared/src/nms_shared/msg.py:334
 #, python-format
 msgid "Dynamic DNS provider `%(provider)s` disabled successfully."
 msgstr ""
 
-#: nms_shared/msg.py:327
+#: nms_shared/src/nms_shared/msg.py:336
 msgid "Password changed successfully."
 msgstr ""
 
-#: nms_shared/msg.py:328
+#: nms_shared/src/nms_shared/msg.py:337
 msgid "Visible name changed successfully."
 msgstr ""
 
-#: nms_shared/msg.py:329
+#: nms_shared/src/nms_shared/msg.py:338
 msgid "User quota set successfully."
 msgstr ""
 
-#: nms_shared/msg.py:330
+#: nms_shared/src/nms_shared/msg.py:339
 msgid "Username changed successfully."
 msgstr ""
 
-#: nms_shared/msg.py:331
+#: nms_shared/src/nms_shared/msg.py:340
 msgid "User's system privileges changed successfully."
 msgstr ""
 
-#: nms_shared/msg.py:332
+#: nms_shared/src/nms_shared/msg.py:341
 #, python-format
 msgid "User %(user)s created successfully."
 msgstr ""
 
-#: nms_shared/msg.py:333
+#: nms_shared/src/nms_shared/msg.py:342
+#, python-format
+msgid "User %(user)s deleted successfully."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:343
 msgid "Permissions changed successfully."
 msgstr ""
 
-#: nms_shared/msg.py:338
+#: nms_shared/src/nms_shared/msg.py:348
 #, python-format
 msgid "Disk expansion is expected to take %(eta)s."
 msgstr ""
 
-#: nms_shared/msg.py:339
+#: nms_shared/src/nms_shared/msg.py:349
 msgid "Disk expansion in progress."
 msgstr ""
 
-#: nms_shared/msg.py:340
+#: nms_shared/src/nms_shared/msg.py:350
 msgid "Disk replacement in progress. This operation may take a while."
 msgstr ""
 
@@ -914,15 +949,15 @@ msgstr ""
 msgid "Please log in with appropriate credentials or contact the administrator."
 msgstr ""
 
-#: templates/401.html:24
+#: templates/401.html:29
 msgid "Go to Login"
 msgstr ""
 
-#: templates/access.html:3 templates/index.html:39
+#: templates/access.html:3 templates/index.html:46
 msgid "Remote Access"
 msgstr ""
 
-#: templates/advanced.logs.html:3 templates/card.sys_admin.html:10
+#: templates/advanced.logs.html:3 templates/card.sys_admin.html:11
 msgid "System Logs"
 msgstr ""
 
@@ -1266,7 +1301,28 @@ msgstr ""
 msgid "Change Permissions"
 msgstr ""
 
+#: templates/card.account_admin.html:121 templates/card.account_admin.html:155
+msgid "Delete User"
+msgstr ""
+
+#: templates/card.account_admin.html:131
+msgid "Retain"
+msgstr ""
+
+#: templates/card.account_admin.html:137
+msgid "Delete permanently"
+msgstr ""
+
+#: templates/card.account_admin.html:144
+msgid "Move to"
+msgstr ""
+
+#: templates/card.account_admin.html:159
+msgid "User deletion is a permanent action and cannot be restored."
+msgstr ""
+
 #: templates/card.account_services.html:20
+#: templates/card.user_admin_services.html:21
 msgid "Change Password"
 msgstr ""
 
@@ -1336,19 +1392,19 @@ msgstr ""
 msgid "Danger Zone"
 msgstr ""
 
-#: templates/card.danger_zone.html:10
+#: templates/card.danger_zone.html:11
 msgid "Format Disk Array"
 msgstr ""
 
-#: templates/card.danger_zone.html:16
+#: templates/card.danger_zone.html:19
 msgid "Delete Disk Array"
 msgstr ""
 
-#: templates/card.danger_zone.html:22
+#: templates/card.danger_zone.html:27
 msgid "Attempt Recovery"
 msgstr ""
 
-#: templates/card.danger_zone.html:28
+#: templates/card.danger_zone.html:35
 msgid "Format Disk"
 msgstr ""
 
@@ -1362,10 +1418,6 @@ msgstr ""
 
 #: templates/card.disk.html:3
 msgid "Disk"
-msgstr ""
-
-#: templates/card.disk.html:17
-msgid "Replace"
 msgstr ""
 
 #: templates/card.disk.html:27
@@ -1397,8 +1449,8 @@ msgstr ""
 msgid "Go to %(disk_mngt)s to configure your disk array."
 msgstr ""
 
-#: templates/card.disk_list.html:39 templates/card.disk_usage.html:31
-#: templates/disk_mngt.html:3 templates/index.html:30
+#: templates/card.disk_list.html:39 templates/card.disk_usage.html:58
+#: templates/disk_mngt.html:3 templates/index.html:31
 msgid "Disk Management"
 msgstr ""
 
@@ -1439,10 +1491,14 @@ msgid "Storage Usage"
 msgstr ""
 
 #: templates/card.disk_usage.html:31
+msgid "Personal"
+msgstr ""
+
+#: templates/card.disk_usage.html:58
 msgid "The disk array is not mounted. You will not be able to access your data."
 msgstr ""
 
-#: templates/card.disk_usage.html:31
+#: templates/card.disk_usage.html:58
 #, python-format
 msgid "Go to %(disk_mngt)s and mount it."
 msgstr ""
@@ -1537,23 +1593,15 @@ msgstr ""
 msgid "System Administration"
 msgstr ""
 
-#: templates/card.sys_admin.html:16
+#: templates/card.sys_admin.html:19
 msgid "Restart System Services"
 msgstr ""
 
-#: templates/card.sys_admin.html:22
-msgid "Reset Admin Login"
-msgstr ""
-
-#: templates/card.sys_admin.html:25
-msgid "Are you sure you want to reset the adminstrator login credentials?"
-msgstr ""
-
-#: templates/card.sys_admin.html:30
+#: templates/card.sys_admin.html:36
 msgid "Download Encryption Key"
 msgstr ""
 
-#: templates/card.sys_admin.html:33
+#: templates/card.sys_admin.html:39
 msgid ""
 "The encryption key is what keeps your data safe.\n"
 "You may need it if you perform a factory reset and want to keep accessing"
@@ -1634,27 +1682,27 @@ msgstr ""
 msgid "Token"
 msgstr ""
 
-#: templates/index.html:95
+#: templates/index.html:105
 msgid "Are you sure you want to log out?"
 msgstr ""
 
-#: templates/index.html:95
+#: templates/index.html:105
 msgid "Logout"
 msgstr ""
 
-#: templates/index.html:97
+#: templates/index.html:107
 msgid "Are you sure you want to reboot the system?"
 msgstr ""
 
-#: templates/index.html:97
+#: templates/index.html:107
 msgid "Reboot"
 msgstr ""
 
-#: templates/index.html:98
+#: templates/index.html:108
 msgid "Are you sure you want to power off the system?"
 msgstr ""
 
-#: templates/index.html:98
+#: templates/index.html:108
 msgid "Shutdown"
 msgstr ""
 

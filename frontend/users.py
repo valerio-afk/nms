@@ -8,7 +8,7 @@ from flask_wtf.csrf import validate_csrf, ValidationError
 from nms_shared.enums import UserPermissions
 from nms_shared.msg import ErrorMessages
 from nms_shared.utils import match_permissions
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, List
 
 USER_PERMISSIONS={
     "client" : lambda : _("Web Client"),
@@ -83,12 +83,15 @@ def widget_user_account() -> Optional[Tuple[str,str]]:
 
     return render_widget("account",user=user,user_permissions=user_permissions)
 
-def widget_user_account_admin(user:dict) -> Tuple[str,str]:
+def widget_user_account_admin(user:dict,move_to_users:List[dict]) -> Tuple[str,str]:
     user_permissions = {p.value:check_permission(user,p) for p in sorted([x for x in UserPermissions],key=lambda y:y.value)}
 
     user_permissions = nest_permissions(user_permissions)
 
-    return render_widget("account_admin",user=user,user_permissions=user_permissions)
+    return render_widget("account_admin",
+                         user=user,
+                         user_permissions=user_permissions,
+                         move_to_users=move_to_users)
 
 def widget_access_services() -> Optional[Tuple[str,str]]:
     user = session.get("user")
@@ -109,6 +112,24 @@ def widget_access_services() -> Optional[Tuple[str,str]]:
         return None
 
     return render_widget("account_services",forms=forms)
+
+def widget_access_services_admin(user:dict) -> Optional[Tuple[str,str]]:
+    selected_services = ['ssh','smb']
+
+    permissions = {
+        service: UserPermissions[f'SERVICES_{service.upper()}_ACCESS'] for service in selected_services
+    }
+
+    forms = {}
+
+    for s,p in permissions.items():
+        if (check_permission(user,p)):
+            forms[s] = ChangePasswordForm()
+
+    if (len(forms) == 0):
+        return None
+
+    return render_widget("user_admin_services",forms=forms,user=user)
 
 @bp.route("/account")
 def user_account() -> str:
@@ -174,9 +195,10 @@ def users() -> str:
                 break
 
         if (user is not None):
+            move_to_users = [u for u in all_users if u.get("username") != user.get("username")]
             widgets = [
-                widget_user_account_admin(user),
-                widget_access_services(),
+                widget_user_account_admin(user,move_to_users),
+                widget_access_services_admin(user),
             ]
         else:
             show_flash(code=ErrorMessages.E_USER_NOT_FOUND.name, params=[query])
@@ -283,6 +305,54 @@ def new_user() -> Response:
 
         BACKEND.new_user(username,fullname,quota,sudo,permissions)
 
+        return redirect(url_for("main.users", q=username))
+
+    return redirect(url_for("main.users"))
+
+@bp.route("/users/delete",methods=["POST"])
+def del_user() -> Response:
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+    else:
+        username = request.form.get("username")
+        home_files = request.form.get("user_file")
+        move_to = request.form.get("move_to_user",None)
+
+
+        BACKEND.delete_user(username,home_files,move_to)
+
+    return redirect(url_for("main.users"))
+
+@bp.route("/users/service/<string:service>",methods=["POST"])
+def user_service_account_admin(service:str):
+    form_data = request.form
+    user = form_data.get("username")
+
+    form = ChangePasswordForm()
+
+    if (form.validate_on_submit()):
+        BACKEND.change_password_to_service(service,user,form.password.data)
+        return redirect(url_for("main.users", q=user))
+    else:
+        for errors in form.errors.values():
+            for error in errors:
+                flash(error,"error")
+
+    return redirect(url_for("main.users"))
+
+@bp.route("/users/reset",methods=["POST"])
+def reset_otp():
+    form_data = request.form
+    username = form_data.get("username")
+
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+    else:
+        BACKEND.reset_otp(username)
         return redirect(url_for("main.users", q=username))
 
     return redirect(url_for("main.users"))

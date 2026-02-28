@@ -661,6 +661,17 @@ class BackEndProxy:
             "permissions":permissions
         })
 
+    def reset_otp(this,username:str) -> None:
+        this._request(f"users/reset/{username}",RequestMethod.POST)
+
+    def delete_user(this,username:str,home_dir:str,move_to:str) -> None:
+        this._request("users/delete",RequestMethod.POST,body_params={
+            "username":username,
+            "home_files":home_dir,
+            "move_to":move_to
+        })
+
+
     def verify_first_login_token(this,token:str) -> bool:
         r = this._request(f"auth/token/first_login",RequestMethod.GET,qstring_params={"token":token})
 

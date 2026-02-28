@@ -28,7 +28,7 @@ def widget_access_overview() -> Tuple[str,Optional[str]]:
 
     return render_widget("access_list",services=services)
 
-def widget_disk_usage() -> Tuple[str,Optional[str]]:
+def widget_disk_usage(user:dict) -> Tuple[str,Optional[str]]:
     try:
         pool_capacity = BACKEND.pool_capacity
         used = pool_capacity['used']
@@ -40,7 +40,7 @@ def widget_disk_usage() -> Tuple[str,Optional[str]]:
         total = 0
         capacity = 0
 
-    return render_widget("disk_usage",used=used, total=total, capacity=capacity,mounted=BACKEND.is_mounted)
+    return render_widget("disk_usage",global_usage={"used":used, "total":total},user_usage=user.get("quota"), capacity=capacity,mounted=BACKEND.is_mounted)
 
 @bp.route('/async/widgets/network_overview')
 def async_widget_network_overview() -> str:
@@ -56,7 +56,8 @@ def async_widget_sys_info() -> str:
 
 @bp.route('/async/widgets/disk_usage')
 def async_widget_disk_usage() -> str:
-    return widget_disk_usage()[0]
+    u = BACKEND.current_user
+    return widget_disk_usage(u)[0]
 
 
 @bp.route('/')
@@ -67,7 +68,8 @@ def dashboard() -> str:
     perms = current_user.get("permissions", [])
 
     if ((BACKEND.is_pool_configured) and (match_permissions(perms,UserPermissions.POOL_CONF_GET_INFO))):
-        dashboard_widgets.append(widget_disk_usage())
+        u = BACKEND.current_user
+        dashboard_widgets.append(widget_disk_usage(u))
 
     if (current_user.get("main_pages",{}).get("disks",False)):
         dashboard_widgets.append(widget_disk_overview())

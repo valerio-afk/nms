@@ -2,7 +2,7 @@ from enum import Enum
 
 from pydantic import BaseModel, Field, conint
 from pydantic.networks import IPv4Address, IPv6Address
-from typing import Optional, Any, List, Dict, Union
+from typing import Optional, Any, List, Dict, Union, Literal
 
 
 class InterfaceType(Enum):
@@ -140,6 +140,7 @@ class UserProfile(NewUserProfile):
     sudo:bool
     admin:bool
     first_login_token: Optional[str] = Field(None)
+    home_dir: Optional[str] = Field(None)
 
 class AccessServiceCredentials(BaseModel):
     username:str
@@ -172,3 +173,8 @@ class AuthToken(Token):
 class UserPermissionsData(BaseModel):
     username:str
     permissions:List[str]
+
+class UserDelete(BaseModel):
+    username:str
+    home_files: Literal["k","d","m"]
+    move_to: Optional[str] = Field(None)

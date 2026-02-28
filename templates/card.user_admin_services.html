@@ -1,0 +1,31 @@
+{% extends "card.html" %}
+
+{% block card_title %}<i class="bi bi-terminal-fill"></i> {{ _("Access Services") }}{% endblock %}
+
+{% block card_content %}
+
+{% for service, form in forms.items() %}
+<form method="POST" class="disable-on-submit" action="{{ url_for('main.user_service_account_admin',service=service) }}">
+    {{ form.hidden_tag() }}
+    <input type="hidden" name="username" value="{{ user.username }}">
+    <div class="mb-3 row border border-info-subtle ms-1 me-1 p-2 rounded">
+        <div class="col-sm-12">
+            <h4>{{ service | upper }}</h4>
+        </div>
+
+        {% for field in form  if (field.type not in ['CSRFTokenField']) %}
+            <div class="col-sm-7 col-form-label">{{ field.label }}</div>
+            <div class="col-sm-5">{{ field(class="form-control") }}</div>
+        {% endfor %}
+        <div class="col-sm-12 mt-2">
+            <button class="btn btn-success w-100 mt-1" type="submit">{{ _("Change Password") }}</button>
+        </div>
+    </div>
+</form>
+
+{% endfor %}
+
+
+{% endblock %}
+
+

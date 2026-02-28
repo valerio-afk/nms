@@ -2,22 +2,18 @@ from enum import Enum
 import jwt
 import pyotp
 import pytz
-import os
-from datetime import datetime,timedelta
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.params import Depends, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Any, Dict, Optional
-from backend_server.utils.config import CONFIG
-from backend_server.utils.responses import OTPVerification, ErrorMessage, AuthToken, Token
+from backend_server.utils.config import CONFIG, SECRET_KEY, _create_token
+from backend_server.utils.responses import OTPVerification, ErrorMessage, AuthToken
 from nms_shared import ErrorMessages
 from nms_shared.enums import UserPermissions
 
 auth = APIRouter(prefix='/auth',tags=['auth'])
-SECRET_KEY = os.environ.get("NMS_SECRET_KEY")
-
-
 
 bearer = HTTPBearer()
 
@@ -26,14 +22,10 @@ def check_permission(username:str, perm:UserPermissions) -> None:
     if (not CONFIG.has_user_permission(username,perm)):
         raise HTTPException(status_code=401,detail=perm.value)
 
+
+
 def create_token(username:str,purpose:str, duration:int) -> str:
-    released = datetime.now(pytz.timezone("UTC"))
-    expire =  released + timedelta(minutes=duration)
-    exp_timestamp = expire.timestamp()
-
-    payload = {"username":username,"purpose":purpose,"released": released.timestamp(), "exp":exp_timestamp}
-
-    encoded_jwt = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+    encoded_jwt, exp_timestamp = _create_token(username,purpose,duration)
     CONFIG.add_issued_token(encoded_jwt, exp_timestamp)
     return encoded_jwt
 
@@ -141,7 +133,7 @@ def auth_new_secret(token:Optional[str]=Query(default=None)) -> AuthUri:
     totp = pyotp.TOTP(secret)
 
     uri = totp.provisioning_uri(
-        name="OTP",
+        name=username,
         issuer_name="NMS"
     )
 
@@ -193,11 +185,6 @@ def auth_otp_verify(data:OTPVerification) -> AuthToken:
 
     return AuthToken(token=token,username=username)
 
-# @auth.post("/otp/reset",responses={403: {"description": "Invalid token"}},summary="Reset the OTP secret")
-# def auth_token_refresh(token:Dict[str,Any] = Depends(verify_token_factory())) -> None:
-#     CONFIG.revoke_token(token['token'])
-#     CONFIG.otp_secret = None
-#     CONFIG.warning("OTP secret reset")
 
 
 @auth.get("/refresh",response_model=AuthToken,responses={403: {"description": "Invalid token"}},summary="Refresh access token")

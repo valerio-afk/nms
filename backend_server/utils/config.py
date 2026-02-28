@@ -1,4 +1,4 @@
-from backend_server.utils.cmdl import Chown, LocalCommandLineTransaction, Groups, ZPoolList
+from backend_server.utils.cmdl import Chown, LocalCommandLineTransaction, Groups, ZPoolList, GetEntPasswd
 from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet, UserModChangeHomeDir, ZFSGetQuota, Chmod
 from backend_server.utils.logger import Logger
 from backend_server.utils.responses import ErrorMessage, UserProfile, Quota
@@ -6,20 +6,34 @@ from backend_server.utils.services import SystemService
 from backend_server.utils.threads import FreeDNS, DNSExit, Dynv6, ClouDNS
 from backend_server.utils.threads import NetIOCounter, DDNSNoIP, LongWaitThread, DDNSServiceThread, DuckDNS, DynuDDNS
 from cryptography.fernet import Fernet
+from datetime import datetime, timedelta
 from fastapi import HTTPException
 from importlib import import_module
 from nms_shared import ErrorMessages
 from nms_shared.disks import Disk
 from nms_shared.enums import DiskStatus, UserPermissions
-from typing import Optional, Dict, List, Any, Type
+from nms_shared.utils import match_permissions
+from typing import Optional, Dict, List, Any, Type, Tuple
 import base64
-import datetime
 import hashlib
 import json
+import jwt
 import os
 import pwd
+import pytz
 
-from nms_shared.utils import match_permissions
+SECRET_KEY = os.environ.get("NMS_SECRET_KEY")
+
+def _create_token(username: str, purpose: str, duration: int) -> Tuple[str, float]:
+    released = datetime.now(pytz.timezone("UTC"))
+    expire = released + timedelta(minutes=duration)
+    expire_timestamp = expire.timestamp()
+
+    payload = {"username": username, "purpose": purpose, "released": released.timestamp(), "exp": expire_timestamp}
+
+    encoded_jwt = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
+    return encoded_jwt, expire_timestamp
 
 
 def collapse_permissions(user_permissions:List[str], all_permissions:List[str]) -> List[str]:
@@ -105,9 +119,9 @@ class NMSConfig(Logger):
             this.create_default_config_file()
 
         this._access_services = {}
-        this._setup_access_services()
         this._issued_tokens = {}
 
+        this._setup_access_services()
         this._ddns_init()
 
 
@@ -123,38 +137,38 @@ class NMSConfig(Logger):
                 # arguments.update(account)
                 arguments['mountpoint'] = this.mountpoint
                 this._access_services[service] = cls(**arguments)
-            except AttributeError:
+            except AttributeError as e:
                 ... #service not implemented yet
 
-        this._access_services['web'].add_change_hook("port", this._web_port_changed)
-        this._access_services['web'].add_change_hook("credential", this._web_credentials_changed)
-        this._access_services['web'].add_change_hook("authentication", this._web_authentication_changed)
+        # this._access_services['web'].add_change_hook("port", this._web_port_changed)
+        # this._access_services['web'].add_change_hook("credential", this._web_credentials_changed)
+        # this._access_services['web'].add_change_hook("authentication", this._web_authentication_changed)
 
         for admin in this.admins:
             for service in this.access_services.values():
                 service.permission_granted(admin.username)
 
 
-    def _web_port_changed(this, service) -> None:
-        d = this._cfg.get("access", {}).get("services", {}).get("web", {})
-        d['port'] = service.get("port")
-        this._cfg['access']['services']['web'] = d
-
-        this.flush_config()
-
-    def _web_credentials_changed(this, service) -> None:
-        d = this._cfg.get("access", {}).get("services", {}).get("web", {})
-        d['credential'] = service.get("credential")
-        this._cfg['access']['services']['web'] = d
-
-        this.flush_config()
-
-    def _web_authentication_changed(this, service) -> None:
-        d = this._cfg.get("access", {}).get("services", {}).get("web", {})
-        d['authentication'] = service.get("authentication")
-        this._cfg['access']['services']['web'] = d
-
-        this.flush_config()
+    # def _web_port_changed(this, service) -> None:
+    #     d = this._cfg.get("access", {}).get("services", {}).get("web", {})
+    #     d['port'] = service.get("port")
+    #     this._cfg['access']['services']['web'] = d
+    #
+    #     this.flush_config()
+    #
+    # def _web_credentials_changed(this, service) -> None:
+    #     d = this._cfg.get("access", {}).get("services", {}).get("web", {})
+    #     d['credential'] = service.get("credential")
+    #     this._cfg['access']['services']['web'] = d
+    #
+    #     this.flush_config()
+    #
+    # def _web_authentication_changed(this, service) -> None:
+    #     d = this._cfg.get("access", {}).get("services", {}).get("web", {})
+    #     d['authentication'] = service.get("authentication")
+    #     this._cfg['access']['services']['web'] = d
+    #
+    #     this.flush_config()
 
 
     def _sys_username_changed(this,service) -> None:
@@ -202,13 +216,15 @@ class NMSConfig(Logger):
 
     @property
     def otp_secrets(this) -> Dict[str,str]:
-        users = this._cfg.get("users",{})
 
-        return {uname:secret for uname,props in users.items() if (secret:=props.get("otp_secret")) is not None }
+        return {u.username:secret
+                for u in this.admins
+                if (secret:=this._cfg.get("users",{}).get(u.username).get("otp_secret")) is not None
+                }
 
     @property
     def issued_tokens(this) -> List[str]:
-        now = datetime.datetime.now().timestamp()
+        now = datetime.now().timestamp()
         this._issued_tokens = {t:exp for t,exp in this._issued_tokens.items() if exp>now}
 
         return list(this._issued_tokens.keys())
@@ -389,11 +405,19 @@ class NMSConfig(Logger):
     # SYSTEM PROPERTIES
     @property
     def system_updates(this) -> List[str]:
-        return [pkg for pkg in this._cfg.get("updates", {}).get("apt", [])]
+        return [pkg for pkg in this._cfg.get("updates", {}).get("apt", {}).get("packages",[])]
 
     @system_updates.setter
     def system_updates(this,updates:List[str]) -> None:
-        this._cfg['updates']['apt'] = updates
+        this._cfg['updates']['apt']['packages'] = updates
+
+    @property
+    def last_apt(this) -> int:
+        return this._cfg.get("updates", {}).get("apt", {}).get("last")
+
+    @last_apt.setter
+    def last_apt(this,last:int) -> None:
+        this._cfg['updates']['apt']['last'] = last
 
     @property
     def systemd_services(this) -> List[str]:
@@ -483,16 +507,17 @@ class NMSConfig(Logger):
                         },
                         "nfs": {"service_name":["rpcbind.service","nfs-server.service"]},
                         "smb": {"service_name":["smbd.service","nmbd.service"]},
-                        "web": {
-                            "service_name": "ifm-server",
-                            "port":8080,
-                            "authentication": False,
-                            "credential": "afk:$2y$10$WSpWpteVT3wt6oDPSZlmnOTT9g3/tcKmpWED26IFlHNx/27B/I.Wq"
-                        },
+                        # "web": {
+                        #     "service_name": "ifm-server",
+                        #     "port":8080,
+                        #     "authentication": False,
+                        #     "credential": "afk:$2y$10$WSpWpteVT3wt6oDPSZlmnOTT9g3/tcKmpWED26IFlHNx/27B/I.Wq"
+                        # },
                     }
             },
-            "updates":{
-                "apt" : []
+            "apt": {
+                "last": None,
+                "packages": []
             },
             "vpn": {
                 "peers": [],
@@ -536,6 +561,16 @@ class NMSConfig(Logger):
 
     # USERS METHODS
 
+    def reset_otp(this,username:str) -> None:
+        tokens = [x for x in this._issued_tokens.keys()]
+
+        for token in tokens:
+            payload = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+            if payload["username"] == username:
+                this.revoke_token(token)
+
+        this._cfg['users'][username]['otp_secret'] = None
+
     def user_permissions(this,username:str)->List[str]:
         return [p for p in this._cfg.get("users", {}).get(username, {}).get('permissions', [])]
 
@@ -568,12 +603,19 @@ class NMSConfig(Logger):
             activation_token = None
 
             if (user.get("otp_secret") is None):
-                from backend_server.v1.auth import create_token
-                activation_token = create_token(
+                activation_token,exp_time = _create_token(
                     username=username,
                     purpose="first_login",
                     duration=525600000 #about 1000 years in minutes
                 )
+                this.add_issued_token(activation_token,exp_time)
+
+            getend_cmd = GetEntPasswd(username).execute()
+            home_dir = None
+
+            if (getend_cmd.returncode == 0):
+                tokens =getend_cmd.stdout.strip().split(":")
+                home_dir = tokens[5]
 
 
             return UserProfile(
@@ -583,7 +625,8 @@ class NMSConfig(Logger):
                 quota = quota,
                 sudo = sudo,
                 admin=this.is_admin(username),
-                first_login_token=activation_token
+                first_login_token=activation_token,
+                home_dir=home_dir
             )
 
     def set_user_fullname(this,username:str,fullname:str) -> None:
@@ -624,6 +667,12 @@ class NMSConfig(Logger):
 
         this.user_set_permissions(username,permissions)
 
+    def delete_user(this,username:str)->None:
+        del this._cfg['users'][username]
+
+        for service in this._access_services.values():
+            service.remove_user(username)
+
     def user_set_permissions(this,username:str,permissions:List[str]) -> None:
         all_permissions = [p.value for p in UserPermissions]
 
@@ -638,11 +687,9 @@ class NMSConfig(Logger):
 
         this._cfg['users'][username]["permissions"] = collapsed_permissions
 
-
-
     #AUTH/OTP METHODS
 
-    def add_issued_token(this,token:str,expire_date:datetime.datetime) -> None:
+    def add_issued_token(this,token:str,expire_date:float) -> None:
         this._issued_tokens[token] = expire_date
 
     def revoke_token(this,token:str) -> None:
@@ -824,7 +871,7 @@ class NMSConfig(Logger):
 
     def scrub_started(this) -> None:
         this._cfg['pool']['tools']['scrub']['ongoing'] = True
-        this._cfg['pool']['tools']['scrub']['last'] = datetime.datetime.now().timestamp()
+        this._cfg['pool']['tools']['scrub']['last'] = datetime.now().timestamp()
 
     def scrub_stopped(this):
         this._cfg['pool']['tools']['scrub']['ongoing'] = False

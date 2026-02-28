@@ -1,9 +1,9 @@
 from .auth import check_permission
-from backend_server.utils.cmdl import GetUserUID
+from backend_server.utils.cmdl import GetUserUID, RSync, Chown, Mkdir, UserDel
 from backend_server.utils.cmdl import LocalCommandLineTransaction, UserModAddGroup, GPasswdRemoveGroup, UserAdd
 from backend_server.utils.cmdl import ZFSSetQuota, UserModChangeUsername, SMBPasswd, RenameFile, UserModChangeHomeDir
 from backend_server.utils.config import CONFIG
-from backend_server.utils.responses import ChgFullnameData, ChangeQuotaData, ChangeUsernameData, SudoData
+from backend_server.utils.responses import ChgFullnameData, ChangeQuotaData, ChangeUsernameData, SudoData, UserDelete
 from backend_server.utils.responses import NewUserProfile, WarningMessage, UserPermissionsData
 from backend_server.utils.responses import UserProfile, AccessServiceCredentials, ErrorMessage, SuccessMessage
 from backend_server.v1.auth import verify_token_factory
@@ -108,7 +108,7 @@ def set_permissions(data:UserPermissionsData,token:dict=Depends(verify_token)) -
     check_permission(username,UserPermissions.USERS_ACCOUNT_MANAGE)
 
     # if the user is the only admin, don't do anything
-    admins = [u for u in CONFIG.users if u.admin]
+    admins = CONFIG.admins
 
     if ((len(admins)==1) and (admins[0].username==data.username)):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_PERM_ADMIN.name))
@@ -140,7 +140,7 @@ def change_password(service:str,credentials:AccessServiceCredentials,token:dict=
 
 
 @users.post("/new",summary="Create a new user")
-def new_users(profile:NewUserProfile,token:dict=Depends(verify_token)) -> dict:
+def new_user(profile:NewUserProfile,token:dict=Depends(verify_token)) -> dict:
     username = token.get("username")
     check_permission(username,UserPermissions.USERS_ACCOUNT_MANAGE)
 
@@ -172,7 +172,7 @@ def new_users(profile:NewUserProfile,token:dict=Depends(verify_token)) -> dict:
     CONFIG.flush_config()
 
     if ((profile.quota is not None) and (len(profile.quota) > 0)):
-        cmd_quota = ZFSSetQuota(username,profile.quota,CONFIG.pool_name,CONFIG.dataset_name)
+        cmd_quota = ZFSSetQuota(profile.username,profile.quota,CONFIG.pool_name,CONFIG.dataset_name,sudo=True)
 
         output = cmd_quota.execute()
 
@@ -181,3 +181,74 @@ def new_users(profile:NewUserProfile,token:dict=Depends(verify_token)) -> dict:
 
     return {"detail": SuccessMessage(code=SuccessMessages.S_NEW_USER.name,params=[profile.username])}
 
+@users.post("/delete",summary="Delete a user")
+def user_delete(data:UserDelete,token:dict=Depends(verify_token)) -> dict:
+    username = token.get("username")
+    check_permission(username, UserPermissions.USERS_ACCOUNT_MANAGE)
+
+    user_to_delete = CONFIG.get_user(data.username)
+
+    # if the user is the only admin, don't do anything
+    admins = CONFIG.admins
+
+    if ((len(admins) == 1) and (admins[0].username == data.username)):
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_PERM_ADMIN.name))
+
+    keep_home = False
+
+    if (data.home_files == "m"):
+        host_username = CONFIG.get_user(data.move_to)
+        if ((host_username is not None) and (host_username.home_dir is not None)):
+            src = user_to_delete.home_dir
+            dest = str(os.path.join(host_username.home_dir,user_to_delete.username))
+
+            cmds = [
+                Mkdir(dest,parents=True),
+                RSync(src, dest, ["-a"]),
+                Chown(host_username.username, host_username.username, dest, ["-R"])
+            ]
+
+            trans = LocalCommandLineTransaction(*cmds,privileged=True)
+            output = trans.run()
+
+
+            if (not trans.success):
+                error = "\n".join([o['stderr'].strip() for o in output])
+                raise HTTPException(status_code=500,
+                                    detail=ErrorMessage(code=ErrorMessages.E_USER_COPY_FILES.name,
+                                                        params=[user_to_delete.username,error])
+                                    )
+
+    elif (data.home_files == "k"):
+        keep_home = True
+
+    output = UserDel(user_to_delete.username,keep_home).execute()
+
+    if (output.returncode != 0):
+        raise HTTPException(status_code=500,
+                            detail=ErrorMessage(code=ErrorMessages.E_USER_DELETE.name,
+                                                params=[user_to_delete.username, output.stderr])
+                            )
+
+    CONFIG.delete_user(user_to_delete.username)
+    CONFIG.flush_config()
+
+    return {"detail": SuccessMessage(code=SuccessMessages.S_DEL_USER.name, params=[user_to_delete.username])}
+
+
+@users.post("/reset/{username}",summary="Delete a user")
+def user_delete(username:str,token:dict=Depends(verify_token)) -> dict:
+    admin_user = token.get("username")
+    check_permission(admin_user, UserPermissions.USERS_ACCOUNT_MANAGE)
+
+    try:
+        CONFIG.reset_otp(username)
+    except Exception as e:
+        raise HTTPException(status_code=500,
+                            detail=ErrorMessage(code=ErrorMessages.E_USER_LOGIN_RESET.name,
+                                                params=[username, str(e)])
+                        )
+
+    CONFIG.flush_config()
+
+    return {"detail": SuccessMessage(code=SuccessMessages.S_USER_LOGIN_RESET.name, params=[username])}

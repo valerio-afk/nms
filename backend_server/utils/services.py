@@ -1,22 +1,17 @@
 from .responses import ErrorMessage
-from abc import abstractmethod
-from backend_server.utils.cmdl import ChPasswd, SystemCtlUnmask, SystemCtlEnable, SystemCtlStart, SystemCtlDisable, \
-    Touch, Chmod, UserModAddGroup, GPasswdRemoveGroup
-from backend_server.utils.cmdl import DockerInspect, DockerRemove, LocalCommandLineTransaction
+from backend_server.utils.cmdl import ChPasswd, SystemCtlUnmask, SystemCtlEnable, SystemCtlStart, SystemCtlDisable
+from backend_server.utils.cmdl import  Touch, Chmod, UserModAddGroup, GPasswdRemoveGroup, LocalCommandLineTransaction
 from backend_server.utils.cmdl import SystemCtlIsActive, ApplyPatch,  GetEntShadow, UserModChangeShell, UserDel
-from backend_server.utils.cmdl import SystemCtlMask, SystemCtlStop, ExportfsRA, SMBPasswd, DockerRun, DockerStop
+from backend_server.utils.cmdl import SystemCtlMask, SystemCtlStop, ExportfsRA, SMBPasswd
 from fastapi import HTTPException
 from nms_shared.enums import UserPermissions
 from nms_shared.msg import ErrorMessages
 from nms_shared.utils import make_diff, read_lines_from_file
 from pathlib import Path
 from typing import Optional, Callable, List, Any, Self
-import bcrypt
 import configparser
-import grp
 import io
 import os.path
-import pwd
 import re
 import subprocess
 import tempfile
@@ -65,11 +60,9 @@ class SystemService:
     def properties(this) -> List[str]:
         return [k for k in vars(this.__class__).get("__annotations__",{}).keys()]
 
-    @abstractmethod
     def get(this,property:str) -> Any:
         return getattr(this,f"get_{property}")()
 
-    @abstractmethod
     def set(this, property:str, value:Any) -> None:
         getattr(this,f"set_{property}")(value)
 
@@ -377,7 +370,6 @@ class NFSService(SystemService):
     def __init__(this,service_name:str,mountpoint:Optional[str]=None,**kwargs):
         super().__init__(service_name,"/etc/exports",**kwargs)
         this._mountpoint = mountpoint
-        this._permission_hook = UserPermissions.SERVICES_NFS_ACCESS
 
     @property
     def mountpoint(this) -> Optional[str]:
@@ -454,8 +446,6 @@ class NFSService(SystemService):
         this.enable(ip,**kwargs)
 
 
-
-
 class SMBService(SystemService):
     username:str
     SECTION = "NMS"
@@ -524,15 +514,9 @@ class SMBService(SystemService):
 
     def enable(this,**kwargs) -> None:
         this._patch_configuration()
-
-        # if (password is not None):
-        #     this._add_user(username,password)
-
-
         this.start()
 
     def disable(this,**kwargs) -> None:
-        # this._delete_user(username)
         this.stop()
 
     def permission_granted(this, username: str) -> None:
@@ -544,159 +528,159 @@ class SMBService(SystemService):
     def remove_user(this, username: str, **kwargs) -> None:
         this.permission_revoked(username)
 
-
-class WEBService(SystemService):
-    port:int
-    username:str
-    authentication:bool
-
-    CONTAINER_NAME = "ifm:latest"
-    ENV = {
-        "IFM_DOWNLOAD": "1",
-        "IFM_EXTRACT": "1",
-        "IFM_UPLOAD": "1",
-        "IFM_REMOTEUPLOAD": "0",
-        "IFM_ZIPNLOAD": "1",
-        "IFM_SHOWLASTMODIFIED":"1",
-        "IFM_SHOWOWNER":"0",
-        "IFM_SHOWGROUP": "0",
-        "IFM_SHOWPERMISSIONS": "0",
-        "IFM_AJAXREQUEST": "0"
-    }
-
-    def __init__(this,service_name,mountpoint,port,username=None,group=None,authentication=None,credential=None,*args,**kwargs):
-        this._mountpoint = mountpoint
-        this._port = port
-        this._username = username
-        this._group = group
-        this._authentication = authentication
-        this._credential = credential
-        super().__init__(service_name)
-
-
-    def get_port(this):
-        return this._port
-
-    def set_port(this,value):
-        this._port = value
-
-    def set_credential(this,value):
-        this._credential = value
-
-    def get_credential(this):
-        return this._credential
-
-    def get_username(this):
-        return this._credential.split(":")[0]
-
-    def set_authentication(this,value):
-        this._authentication = value
-
-    def get_authentication(this):
-        return this._authentication
-
-    def start(this):
-
-        docker_remove = DockerRemove(container_name=this.service_names)
-
-        trans = LocalCommandLineTransaction(docker_remove)
-        trans.run()
-
-        volumes = {
-            this._mountpoint:"/var/www",
-        }
-
-        port = [(this.get_port(),80)]
-
-        user_info = pwd.getpwnam(this._username)
-        group_info = grp.getgrnam(this._group)
-
-        uid = user_info.pw_uid
-        gid = group_info.gr_gid
-
-        env = WEBService.ENV.copy()
-        env['IFM_DOCKER_UID'] = uid
-        env['IFM_DOCKER_GID'] = gid
-
-        env['IFM_AUTH'] = "1" if this._authentication else "0"
-
-        if (this._authentication):
-            env['IFM_AUTH_SOURCE'] = f"inline;{this._credential}"
-
-        docker_run = DockerRun(
-            container_name=WEBService.CONTAINER_NAME,
-            image_name = this.service_names,
-            port_forwarding=port,
-            envvars=env,
-            mount = volumes,
-            remove=False,
-            restart="unless-stopped"
-        )
-
-        trans = LocalCommandLineTransaction(docker_run)
-
-        trans.run()
-
-    def stop(this):
-
-        cmds = [
-            DockerStop(container_name=this.service_names),
-            DockerRemove(container_name=this.service_names)
-        ]
-
-        trans = LocalCommandLineTransaction(*cmds)
-
-        trans.run()
-
-    def enable(this,port,**kwargs):
-        this.set("port",int(port))
-        this._update_credential(**kwargs)
-        this.start()
-
-    def disable(this,**kwargs):
-        this.stop()
-    #
-    # def update(this,**kwargs):
-    #     this._update_credential(**kwargs)
-
-    def _update_credential(this,**kwargs):
-        username = kwargs.get("username")
-        password = kwargs.get("password")
-        authentication = kwargs.get("authentication",False)
-
-        curr_username,curr_password = this.get("credential").split(":")
-
-        changed = False
-
-        if (username is not None):
-            curr_username = username
-            changed = True
-
-        if (password is not None) and (len(password)>0):
-            hashed_password = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(12))
-            curr_password = hashed_password.decode("utf-8")
-            changed = True
-
-        if (changed):
-            credential = f"{curr_username}:{curr_password}"
-            this.set("credential",credential)
-
-        this.set("authentication",True if authentication else False)
-
-
-
-    @property
-    def is_active(this):
-        docker_inspect = DockerInspect(
-            container_name=this.service_names,
-            flags=['-f','{{.State.Status}}']
-        )
-
-        trans = LocalCommandLineTransaction(docker_inspect)
-
-        output = trans.run()
-
-        if (trans.success):
-            return True if output[0].get("stdout","").strip() == "running" else False
-        else:
-            return False
+#
+# class WEBService(SystemService):
+#     port:int
+#     username:str
+#     authentication:bool
+#
+#     CONTAINER_NAME = "ifm:latest"
+#     ENV = {
+#         "IFM_DOWNLOAD": "1",
+#         "IFM_EXTRACT": "1",
+#         "IFM_UPLOAD": "1",
+#         "IFM_REMOTEUPLOAD": "0",
+#         "IFM_ZIPNLOAD": "1",
+#         "IFM_SHOWLASTMODIFIED":"1",
+#         "IFM_SHOWOWNER":"0",
+#         "IFM_SHOWGROUP": "0",
+#         "IFM_SHOWPERMISSIONS": "0",
+#         "IFM_AJAXREQUEST": "0"
+#     }
+#
+#     def __init__(this,service_name,mountpoint,port,username=None,group=None,authentication=None,credential=None,*args,**kwargs):
+#         this._mountpoint = mountpoint
+#         this._port = port
+#         this._username = username
+#         this._group = group
+#         this._authentication = authentication
+#         this._credential = credential
+#         super().__init__(service_name)
+#
+#
+#     def get_port(this):
+#         return this._port
+#
+#     def set_port(this,value):
+#         this._port = value
+#
+#     def set_credential(this,value):
+#         this._credential = value
+#
+#     def get_credential(this):
+#         return this._credential
+#
+#     def get_username(this):
+#         return this._credential.split(":")[0]
+#
+#     def set_authentication(this,value):
+#         this._authentication = value
+#
+#     def get_authentication(this):
+#         return this._authentication
+#
+#     def start(this):
+#
+#         docker_remove = DockerRemove(container_name=this.service_names)
+#
+#         trans = LocalCommandLineTransaction(docker_remove)
+#         trans.run()
+#
+#         volumes = {
+#             this._mountpoint:"/var/www",
+#         }
+#
+#         port = [(this.get_port(),80)]
+#
+#         user_info = pwd.getpwnam(this._username)
+#         group_info = grp.getgrnam(this._group)
+#
+#         uid = user_info.pw_uid
+#         gid = group_info.gr_gid
+#
+#         env = WEBService.ENV.copy()
+#         env['IFM_DOCKER_UID'] = uid
+#         env['IFM_DOCKER_GID'] = gid
+#
+#         env['IFM_AUTH'] = "1" if this._authentication else "0"
+#
+#         if (this._authentication):
+#             env['IFM_AUTH_SOURCE'] = f"inline;{this._credential}"
+#
+#         docker_run = DockerRun(
+#             container_name=WEBService.CONTAINER_NAME,
+#             image_name = this.service_names,
+#             port_forwarding=port,
+#             envvars=env,
+#             mount = volumes,
+#             remove=False,
+#             restart="unless-stopped"
+#         )
+#
+#         trans = LocalCommandLineTransaction(docker_run)
+#
+#         trans.run()
+#
+#     def stop(this):
+#
+#         cmds = [
+#             DockerStop(container_name=this.service_names),
+#             DockerRemove(container_name=this.service_names)
+#         ]
+#
+#         trans = LocalCommandLineTransaction(*cmds)
+#
+#         trans.run()
+#
+#     def enable(this,port,**kwargs):
+#         this.set("port",int(port))
+#         this._update_credential(**kwargs)
+#         this.start()
+#
+#     def disable(this,**kwargs):
+#         this.stop()
+#     #
+#     # def update(this,**kwargs):
+#     #     this._update_credential(**kwargs)
+#
+#     def _update_credential(this,**kwargs):
+#         username = kwargs.get("username")
+#         password = kwargs.get("password")
+#         authentication = kwargs.get("authentication",False)
+#
+#         curr_username,curr_password = this.get("credential").split(":")
+#
+#         changed = False
+#
+#         if (username is not None):
+#             curr_username = username
+#             changed = True
+#
+#         if (password is not None) and (len(password)>0):
+#             hashed_password = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(12))
+#             curr_password = hashed_password.decode("utf-8")
+#             changed = True
+#
+#         if (changed):
+#             credential = f"{curr_username}:{curr_password}"
+#             this.set("credential",credential)
+#
+#         this.set("authentication",True if authentication else False)
+#
+#
+#
+#     @property
+#     def is_active(this):
+#         docker_inspect = DockerInspect(
+#             container_name=this.service_names,
+#             flags=['-f','{{.State.Status}}']
+#         )
+#
+#         trans = LocalCommandLineTransaction(docker_inspect)
+#
+#         output = trans.run()
+#
+#         if (trans.success):
+#             return True if output[0].get("stdout","").strip() == "running" else False
+#         else:
+#             return False

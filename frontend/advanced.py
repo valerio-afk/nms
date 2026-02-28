@@ -1,8 +1,8 @@
 from .api.backend_proxy import show_flash
 from .import NMSBACKEND as BACKEND, frontend as bp
 from flask import render_template, redirect, url_for, request, flash, g, send_file, session, Response
-from flask_babel import format_datetime
-from flask_wtf.csrf import generate_csrf, validate_csrf
+from flask_babel import format_datetime, _
+from flask_wtf.csrf import  validate_csrf
 from frontend.utils.widget import render_widget,get_widgets_html,get_widgets_css_files
 from io import BytesIO
 from nms_shared import ErrorMessages
@@ -48,7 +48,6 @@ def widget_system_admin():
 
 def widget_system_updates(hedaers:Optional[Dict]=None):
     apt = {
-        'csrf_token': generate_csrf(),
         'last_update' : BACKEND.last_apt_time,
         'updates': BACKEND.system_updates,
         'state': None
@@ -56,6 +55,8 @@ def widget_system_updates(hedaers:Optional[Dict]=None):
 
     if (apt['last_update'] is not None):
         apt['last_update'] = format_datetime(apt['last_update'], "EEEE, d MMMM yyyy HH:mm").title()
+    else:
+        apt['last_update'] = _("Never")
 
     tasks = BACKEND.get_tasks_by_path("/advanced/apt")
 
@@ -102,24 +103,24 @@ def async_widget_system_updates():
 
 @bp.route("/advanced")
 def advanced():
-    dashboard_widgets = []
+    advanced_widgets = []
 
     perms = session.get("user").get("permissions",[])
 
     if (advanced:=match_permissions(perms,UserPermissions.CLIENT_DASHBOARD_ADVANCED)):
-        dashboard_widgets.append(widget_system_admin())
+        advanced_widgets.append(widget_system_admin())
 
     if (match_permissions(perms,UserPermissions.SYS_ADMIN_UPDATES)):
-        widget_system_updates()
+        advanced_widgets.append(widget_system_updates())
 
 
     if (BACKEND.is_pool_configured and advanced):
-        dashboard_widgets.append(widget_danger_zone())
+        advanced_widgets.append(widget_danger_zone())
 
     return render_template("advanced.html",
                            csp_nonce=g.csp_nonce,
-                           widgets=get_widgets_html(dashboard_widgets),
-                           extra_css=get_widgets_css_files(dashboard_widgets),
+                           widgets=get_widgets_html(advanced_widgets),
+                           extra_css=get_widgets_css_files(advanced_widgets),
                            active_page="advanced"
                            )
 

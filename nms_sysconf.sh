@@ -28,6 +28,7 @@ PACKAGES=(
     samba
     nfs-kernel-server
     wireguard
+    rsync
 )
 
 SERVICES_TO_DISABLE=(

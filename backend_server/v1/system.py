@@ -105,7 +105,7 @@ def system_get_property(prop:SystemProperties,token:dict=Depends(verify_token)) 
         case SystemProperties.system_updates:
             return BackendProperty(property=prop.name, value=CONFIG.system_updates)
         case SystemProperties.last_apt_time:
-            return BackendProperty(property=prop.name, value=last_apt_time())
+            return BackendProperty(property=prop.name, value=CONFIG.last_apt)
         case _:
             CONFIG.error(f"Requested invalid system property {prop}")
             raise HTTPException(status_code=404, detail=f"Property {prop} not valid for system")
@@ -144,6 +144,7 @@ def apt_get(action:AptGetActions,token:dict=Depends(verify_token)) -> Background
         case AptGetActions.update:
             task = AptGetUpdateThread()
             task_id = SCHEDULER.schedule(task)
+            CONFIG.last_apt = int(datetime.datetime.now().timestamp())
         case AptGetActions.upgrade:
             task = AptGetUpgradeThread()
             task_id = SCHEDULER.schedule(task)
