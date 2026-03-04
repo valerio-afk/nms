@@ -74,7 +74,7 @@ unknown_response = lambda : show_flash(code=ErrorMessages.E_UNKNOWN_RESPONSE.nam
 
 class BackEndProxy:
     TOKEN_LONGEVITY:int = 30 # 30 mins
-    API = "http://localhost:8000"
+    API = "http://localhost:8081/api"
     VERSION = "v1"
     TASK_LIFETIME = 60
 

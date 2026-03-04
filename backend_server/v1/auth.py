@@ -143,15 +143,6 @@ def auth_new_secret(token:Optional[str]=Query(default=None)) -> AuthUri:
 
 @auth.post("/otp/verify",response_model=AuthToken,responses={403: {"description": "Invalid token/OTP not configured"}})
 def auth_otp_verify(data:OTPVerification) -> AuthToken:
-    # if (not CONFIG.is_otp_configured):
-    #     if (CONFIG.temporary_otp_secret is not None):
-    #         CONFIG.info("OPT Secret saved")
-    #         CONFIG.save_otp_secret()
-    #     else:
-    #         CONFIG.error("OTP not configured yet")
-    #         raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_NOT_CONF.name))
-
-    # check first if there are any temporary secrets, ie someone is attempting their first login
     temp_secrets = CONFIG.temporary_otp_secrets
 
     username = None

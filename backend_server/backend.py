@@ -1,5 +1,6 @@
 from .v1.api import v1
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from nms_shared.utils import setup_logger
 from .utils.responses import ErrorMessage
@@ -15,7 +16,15 @@ async def automount(app:FastAPI):
 
     yield
 
-app = FastAPI(lifespan=automount)
+app = FastAPI(lifespan=automount,root_path="/api")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(v1)
 

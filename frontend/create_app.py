@@ -33,21 +33,6 @@ def create_flask_app():
     app.config['BABEL_DEFAULT_LOCALE'] = 'en'
     app.config['BABEL_SUPPORTED_LOCALES'] = ['en', 'it']
 
-    # app.config.from_mapping(
-    #     CELERY=dict(
-    #         broker_url="redis://localhost:6379/0",
-    #         result_backend="redis://localhost:6379/1",
-    #         broker_transport_options={
-    #             "global_keyprefix": "celery:broker:"
-    #         },
-    #
-    #         result_backend_transport_options={
-    #             "global_keyprefix": "celery:result:"
-    #         },
-    #
-    #     ),
-    # )
-
     app.add_template_filter(human_readable_bytes,"human_readable_bytes")
     app.add_template_filter(enabled_fmt, "enabled_fmt")
     app.add_template_filter(boolean_fmt, "boolean_fmt")

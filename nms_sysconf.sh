@@ -570,7 +570,7 @@ User=www-data
 Group=www-data
 WorkingDirectory=$app_dir
 Environment="PATH=$venv_path/bin:$PATH"
-ExecStart=$venv_path/bin/python $app_dir/app.py
+ExecStart=$venv_path/bin/uvicorn $app_dir.frontend.app:frontend_app --host 127.0.0.1 --port 8081 --reload
 Restart=always
 RestartSec=5
 
@@ -596,7 +596,7 @@ generate_secret_key() {
 
 create_backend_service() {
     local venv_path="$2"    # Path to virtualenv
-    local backend_file="$1/backend_server/backend.py"
+    local app_dir="$1"
     local service_file="/etc/systemd/system/nmsbackend.service"
 
     generate_secret_key  # Populate $NMS_SECRET_KEY
@@ -612,10 +612,10 @@ Requires=docker.service
 [Service]
 User=backend
 Group=backend
-WorkingDirectory=$(dirname "$backend_file")
+WorkingDirectory=$app_dir
 Environment="PATH=$venv_path/bin:$PATH"
 Environment="NMS_SECRET_KEY=$NMS_SECRET_KEY"
-ExecStart=$venv_path/bin/uvicorn $(basename "$backend_file" .py):app --host 127.0.0.1 --port 8000
+ExecStart=$venv_path/bin/uvicorn $app_dir.backend_server.backend:app --host 127.0.0.1 --port 8081 --reload
 Restart=always
 RestartSec=5
 
@@ -740,6 +740,75 @@ install_noip_duc() {
     log_info "No-IP Dynamic Update Client installed successfully"
 }
 
+configure_nginx_nms() {
+    local NGINX_CONF="/etc/nginx/sites-available/nms"
+    local NGINX_ENABLED="/etc/nginx/sites-enabled/nms"
+
+    log_info "Configuring nginx for NMS..."
+
+    log_info "Writing nginx configuration to $NGINX_CONF"
+    cat <<'EOF' | tee "$NGINX_CONF" >/dev/null
+server
+{
+    listen 80;
+    server_name _;
+
+    location /
+    {
+        proxy_pass http://127.0.0.1:8080;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-ForwardedProto $scheme;
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    location /api/
+    {
+        proxy_pass http://127.0.0.1:8081;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-ForwardedProto $scheme;
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+EOF
+
+    log_info "Removing default site from sites-enabled if it exists..."
+    if [[ -f /etc/nginx/sites-enabled/default ]]; then
+        rm -f /etc/nginx/sites-enabled/default >> "$LOG_FILE" 2>&1
+        log_info "Default site removed"
+    fi
+
+    log_info "Enabling NMS site..."
+    ln -sf "$NGINX_CONF" "$NGINX_ENABLED"
+
+    log_info "Testing nginx configuration..."
+    if nginx -t >> "$LOG_FILE" 2>&1; then
+        log_info "Nginx configuration test passed"
+    else
+        log_error "Nginx configuration test failed. Check $LOG_FILE"
+        return 1
+    fi
+
+    log_info "Restarting nginx..."
+    if systemctl restart nginx >> "$LOG_FILE" 2>&1; then
+        log_info "Nginx restarted successfully"
+    else
+        log_error "Failed to restart nginx"
+        return 1
+    fi
+}
+
 
 
 # Check if the script is run by root
@@ -791,3 +860,6 @@ configure_wireguard
 
 #Step 13 --- Noip dynamic updater script
 install_noip_duc
+
+#Step 14 --- Configure nginx as a reverse proxy
+configure_nginx_nms
