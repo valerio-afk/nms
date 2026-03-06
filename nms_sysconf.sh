@@ -29,6 +29,7 @@ PACKAGES=(
     nfs-kernel-server
     wireguard
     rsync
+    unp
 )
 
 SERVICES_TO_DISABLE=(
@@ -90,7 +91,7 @@ install_packages() {
     fi
 
     log_info "Installing packages: ${packages[*]}"
-    if ! apt-get install -y "${packages[@]}" >> "$LOG_FILE" 2>&1; then
+    if ! apt-get install --install-suggests -y "${packages[@]}" >> "$LOG_FILE" 2>&1; then
         error_exit "Package installation failed."
     fi
 

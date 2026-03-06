@@ -178,3 +178,23 @@ class UserDelete(BaseModel):
     username:str
     home_files: Literal["k","d","m"]
     move_to: Optional[str] = Field(None)
+
+
+class FileInfo(BaseModel):
+    type:Literal["dir","image","video","audio","text","zip","bin","pdf","unk"]
+    name:str
+    size:Optional[int]
+    creation_time:int
+    real:bool
+
+class FSBrowse(BaseModel):
+    path:str
+    files:List[FileInfo]
+
+class MkDirModel(BaseModel):
+    path:str
+    new_dir:str
+
+class MvModel(BaseModel):
+    old_path:str
+    new_path:str

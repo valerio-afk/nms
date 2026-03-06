@@ -658,12 +658,17 @@ class Chmod(RevertibleCommandLine):
         this._path = path
         this._flags = flags
 
-        current_mode = os.stat(path).st_mode
+        revert_cmd = None
 
-        revert_cmd = ["chmod"]
-        if (flags is not None):
-            revert_cmd.extend(flags)
-        revert_cmd += [str(oct(current_mode)),path]
+        try:
+            current_mode = os.stat(path).st_mode
+
+            revert_cmd = ["chmod"]
+            if (flags is not None):
+                revert_cmd.extend(flags)
+            revert_cmd += [str(oct(current_mode)),path]
+        except PermissionError:
+            ...
 
         cmd = ["chmod"]
         if (flags is not None):
@@ -1859,4 +1864,120 @@ class Mkdir(RevertibleCommandLine):
         return Mkdir(
             serialisation.get("path", None),
             serialisation.get("parents", None),
+        )
+
+class LS(CommandLine):
+    def __init__(this,path:str,**kwargs):
+        cmd = ['ls', path]
+        this._path = path
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['path'] = this._path
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return LS(
+            serialisation.get("path", None),
+        )
+
+class Stat(CommandLine):
+    def __init__(this,filename:str,format:Optional[str]=None,**kwargs):
+        cmd = ['stat',filename]
+        if (format is not None):
+            cmd.extend(["--format",format])
+
+        this._filename = filename
+        this._format = format
+
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['filename'] = this._filename
+        d['format'] = this._format
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return Stat(
+            serialisation.get("filename", None),
+            serialisation.get("format", None),
+        )
+
+class MimeType(CommandLine):
+    def __init__(this,filename:str,**kwargs):
+        cmd = ['file','--mime-type',filename]
+        this._filename = filename
+
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['filename'] = this._filename
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return MimeType(
+            serialisation.get("filename", None),
+        )
+
+class Move(RevertibleCommandLine):
+    def __init__(this,src:str,dest:str,**kwargs):
+        cmd = ['mv',src,dest]
+        revert_cmd = ['mv',dest,src]
+
+        this._src = src
+        this._dest = dest
+
+        super().__init__(cmd,revert_cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['src'] = this._src
+        d['dest'] = this._dest
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return Move(
+            serialisation.get("src", None),
+            serialisation.get("dest", None),
+        )
+
+
+
+class RemoveFile(CommandLine):
+    def __init__(this,path:str,is_dir:bool=False,**kwargs):
+        this._path = path
+        this._is_dir = is_dir
+
+        cmd = ['rm']
+
+        if (is_dir):
+            cmd.append('-rf')
+
+        cmd.append(path)
+
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['path'] = this._path
+        d['is_dir'] = this._is_dir
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return RemoveFile(
+            serialisation.get("path", None),
+            serialisation.get("is_dir", None),
         )
