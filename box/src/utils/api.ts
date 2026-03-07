@@ -111,8 +111,8 @@ export interface FSBrowse {
 }
 
 export interface UserQuota {
-    used:int;
-    quota:int;
+    used:number;
+    quota:number;
 }
 
 export async function browseFs(path: string = ""): Promise<FSBrowse> {

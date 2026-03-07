@@ -127,75 +127,23 @@ class NMSConfig(Logger):
 
     def _setup_access_services(this) -> None:
         module = import_module("backend_server.utils.services")
-        # account = this._cfg.get("access",{}).get("account",{})
 
 
         for service,args in this._cfg.get("access",{}).get("services",{}).items():
             try:
                 cls = getattr(module,f"{service.upper()}Service")
                 arguments = args.copy()
-                # arguments.update(account)
                 arguments['mountpoint'] = this.mountpoint
                 this._access_services[service] = cls(**arguments)
             except AttributeError as e:
                 ... #service not implemented yet
 
-        # this._access_services['web'].add_change_hook("port", this._web_port_changed)
-        # this._access_services['web'].add_change_hook("credential", this._web_credentials_changed)
-        # this._access_services['web'].add_change_hook("authentication", this._web_authentication_changed)
 
         for admin in this.admins:
             for service in this.access_services.values():
                 service.permission_granted(admin.username)
 
 
-    # def _web_port_changed(this, service) -> None:
-    #     d = this._cfg.get("access", {}).get("services", {}).get("web", {})
-    #     d['port'] = service.get("port")
-    #     this._cfg['access']['services']['web'] = d
-    #
-    #     this.flush_config()
-    #
-    # def _web_credentials_changed(this, service) -> None:
-    #     d = this._cfg.get("access", {}).get("services", {}).get("web", {})
-    #     d['credential'] = service.get("credential")
-    #     this._cfg['access']['services']['web'] = d
-    #
-    #     this.flush_config()
-    #
-    # def _web_authentication_changed(this, service) -> None:
-    #     d = this._cfg.get("access", {}).get("services", {}).get("web", {})
-    #     d['authentication'] = service.get("authentication")
-    #     this._cfg['access']['services']['web'] = d
-    #
-    #     this.flush_config()
-
-
-    def _sys_username_changed(this,service) -> None:
-        old_username = this._cfg['access']['account']['username']
-        new_username = service.get("username")
-        this._cfg['access']['account']['username'] = new_username
-        this.flush_config()
-
-        smb = this._access_services.get("smb",None)
-        smb.set("username",new_username)
-
-
-        if ((smb is not None) and (smb.is_active)):
-            smb.disable(old_username)
-
-    def _set_pwd(this, *args, **kwargs) -> None:
-        if (this.is_pool_configured):
-            mp = this.mountpoint
-            username = this._cfg.get("access",{}).get("services").get("account",{}).get("username",None)
-
-            if (username is not None):
-                current_pwd = pwd.getpwnam(username).pw_dir
-
-                if (current_pwd!=mp):
-                    cmd = UserModChangeHomeDir(username,current_pwd,mp)
-
-                    cmd.execute()
 
     #BASE PROPERTIES
 
@@ -507,12 +455,9 @@ class NMSConfig(Logger):
                         },
                         "nfs": {"service_name":["rpcbind.service","nfs-server.service"]},
                         "smb": {"service_name":["smbd.service","nmbd.service"]},
-                        # "web": {
-                        #     "service_name": "ifm-server",
-                        #     "port":8080,
-                        #     "authentication": False,
-                        #     "credential": "afk:$2y$10$WSpWpteVT3wt6oDPSZlmnOTT9g3/tcKmpWED26IFlHNx/27B/I.Wq"
-                        # },
+                        'web': {
+                            "service_name": "nginx.service"
+                        }
                     }
             },
             "apt": {

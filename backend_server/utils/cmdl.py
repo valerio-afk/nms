@@ -988,6 +988,7 @@ class SystemCtlMask(SystemCtl):
         return SystemCtlMask(serialisation.get('service',None))
 
 
+
 class SystemCtlEnable(SystemCtl):
     def __init__(this, service):
         super().__init__(service, "enable", revert_command=["systemctl", "disable", service])
@@ -1981,3 +1982,24 @@ class RemoveFile(CommandLine):
             serialisation.get("path", None),
             serialisation.get("is_dir", None),
         )
+
+
+class Cat(CommandLine):
+    def __init__(this,filename:str,**kwargs):
+        this._filename = filename
+        cmd = ['cat',filename]
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['filename'] = this._filename
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return Cat(
+            serialisation.get("filename", None),
+        )
+
+

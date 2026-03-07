@@ -84,7 +84,7 @@ class OTPVerification(BaseModel):
     otp:str
 
 class AccessService(BaseModel):
-    service_name: Union[str, List[str]]
+    service_name: Optional[Union[str, List[str]]]
     properties:Dict[str, Any]
     active:bool
 

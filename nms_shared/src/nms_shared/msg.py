@@ -12,6 +12,7 @@ class ErrorMessages(Enum):
     E_PROPERTY = "E_PROPERTY"
     E_CSRF = "E_CSRF"
     E_UNKNOWN_METHOD = "E_UNKNOWN_METHOD"
+    E_READ_FILE = "E_READ_FILE"
 
     E_POOL_ALREADY_CONF = "E_POOL_ALREADY_CONF"
     E_POOL_NO_CONF = "E_POOL_NO_CONF"
@@ -197,6 +198,7 @@ ERROR_MESSAGES = {
     ErrorMessages.E_PROPERTY : lambda prop, info: _("Error while getting %(prop)s: %(info)s") % {'prop': prop, 'info': info},
     ErrorMessages.E_CSRF : lambda : _("Form validation failed"),
     ErrorMessages.E_UNKNOWN_METHOD : lambda : _("Unknown operation."),
+    ErrorMessages.E_READ_FILE : lambda f,info : _("Unable to read the file %(file)s: %(info)s") % {"file":f,'info':info},
 
     ErrorMessages.E_POOL_ALREADY_CONF : lambda: _("The disk array is already configured."),
     ErrorMessages.E_POOL_NO_CONF : lambda: _("Disk array not configured yet."),

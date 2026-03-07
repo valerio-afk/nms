@@ -1,8 +1,11 @@
+import threading
+import time
+
 from .responses import ErrorMessage
 from backend_server.utils.cmdl import ChPasswd, SystemCtlUnmask, SystemCtlEnable, SystemCtlStart, SystemCtlDisable
 from backend_server.utils.cmdl import  Touch, Chmod, UserModAddGroup, GPasswdRemoveGroup, LocalCommandLineTransaction
 from backend_server.utils.cmdl import SystemCtlIsActive, ApplyPatch,  GetEntShadow, UserModChangeShell, UserDel
-from backend_server.utils.cmdl import SystemCtlMask, SystemCtlStop, ExportfsRA, SMBPasswd
+from backend_server.utils.cmdl import SystemCtlMask, SystemCtlStop, ExportfsRA, SMBPasswd, Cat, SystemCtlRestart
 from fastapi import HTTPException
 from nms_shared.enums import UserPermissions
 from nms_shared.msg import ErrorMessages
@@ -17,7 +20,7 @@ import subprocess
 import tempfile
 
 class SystemService:
-    def __init__(this,service_name:str, config_file:Optional[str]=None,**kwargs):
+    def __init__(this,service_name:Optional[str]=None, config_file:Optional[str]=None,**kwargs):
         this._service_name = service_name
         this._config_file = config_file
         this._change_hooks = {}
@@ -529,158 +532,96 @@ class SMBService(SystemService):
         this.permission_revoked(username)
 
 #
-# class WEBService(SystemService):
-#     port:int
-#     username:str
-#     authentication:bool
-#
-#     CONTAINER_NAME = "ifm:latest"
-#     ENV = {
-#         "IFM_DOWNLOAD": "1",
-#         "IFM_EXTRACT": "1",
-#         "IFM_UPLOAD": "1",
-#         "IFM_REMOTEUPLOAD": "0",
-#         "IFM_ZIPNLOAD": "1",
-#         "IFM_SHOWLASTMODIFIED":"1",
-#         "IFM_SHOWOWNER":"0",
-#         "IFM_SHOWGROUP": "0",
-#         "IFM_SHOWPERMISSIONS": "0",
-#         "IFM_AJAXREQUEST": "0"
-#     }
-#
-#     def __init__(this,service_name,mountpoint,port,username=None,group=None,authentication=None,credential=None,*args,**kwargs):
-#         this._mountpoint = mountpoint
-#         this._port = port
-#         this._username = username
-#         this._group = group
-#         this._authentication = authentication
-#         this._credential = credential
-#         super().__init__(service_name)
-#
-#
-#     def get_port(this):
-#         return this._port
-#
-#     def set_port(this,value):
-#         this._port = value
-#
-#     def set_credential(this,value):
-#         this._credential = value
-#
-#     def get_credential(this):
-#         return this._credential
-#
-#     def get_username(this):
-#         return this._credential.split(":")[0]
-#
-#     def set_authentication(this,value):
-#         this._authentication = value
-#
-#     def get_authentication(this):
-#         return this._authentication
-#
-#     def start(this):
-#
-#         docker_remove = DockerRemove(container_name=this.service_names)
-#
-#         trans = LocalCommandLineTransaction(docker_remove)
-#         trans.run()
-#
-#         volumes = {
-#             this._mountpoint:"/var/www",
-#         }
-#
-#         port = [(this.get_port(),80)]
-#
-#         user_info = pwd.getpwnam(this._username)
-#         group_info = grp.getgrnam(this._group)
-#
-#         uid = user_info.pw_uid
-#         gid = group_info.gr_gid
-#
-#         env = WEBService.ENV.copy()
-#         env['IFM_DOCKER_UID'] = uid
-#         env['IFM_DOCKER_GID'] = gid
-#
-#         env['IFM_AUTH'] = "1" if this._authentication else "0"
-#
-#         if (this._authentication):
-#             env['IFM_AUTH_SOURCE'] = f"inline;{this._credential}"
-#
-#         docker_run = DockerRun(
-#             container_name=WEBService.CONTAINER_NAME,
-#             image_name = this.service_names,
-#             port_forwarding=port,
-#             envvars=env,
-#             mount = volumes,
-#             remove=False,
-#             restart="unless-stopped"
-#         )
-#
-#         trans = LocalCommandLineTransaction(docker_run)
-#
-#         trans.run()
-#
-#     def stop(this):
-#
-#         cmds = [
-#             DockerStop(container_name=this.service_names),
-#             DockerRemove(container_name=this.service_names)
-#         ]
-#
-#         trans = LocalCommandLineTransaction(*cmds)
-#
-#         trans.run()
-#
-#     def enable(this,port,**kwargs):
-#         this.set("port",int(port))
-#         this._update_credential(**kwargs)
-#         this.start()
-#
-#     def disable(this,**kwargs):
-#         this.stop()
-#     #
-#     # def update(this,**kwargs):
-#     #     this._update_credential(**kwargs)
-#
-#     def _update_credential(this,**kwargs):
-#         username = kwargs.get("username")
-#         password = kwargs.get("password")
-#         authentication = kwargs.get("authentication",False)
-#
-#         curr_username,curr_password = this.get("credential").split(":")
-#
-#         changed = False
-#
-#         if (username is not None):
-#             curr_username = username
-#             changed = True
-#
-#         if (password is not None) and (len(password)>0):
-#             hashed_password = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(12))
-#             curr_password = hashed_password.decode("utf-8")
-#             changed = True
-#
-#         if (changed):
-#             credential = f"{curr_username}:{curr_password}"
-#             this.set("credential",credential)
-#
-#         this.set("authentication",True if authentication else False)
-#
-#
-#
-#     @property
-#     def is_active(this):
-#         docker_inspect = DockerInspect(
-#             container_name=this.service_names,
-#             flags=['-f','{{.State.Status}}']
-#         )
-#
-#         trans = LocalCommandLineTransaction(docker_inspect)
-#
-#         output = trans.run()
-#
-#         if (trans.success):
-#             return True if output[0].get("stdout","").strip() == "running" else False
-#         else:
-#             return False
+class WEBService(SystemService):
+    NGINX_BLOCKS = ['/box','/api/']
+
+    def __init__(this,*args,**kwargs):
+        super().__init__(*args,config_file='/etc/nginx/sites-available/nms',**kwargs)
+
+    def _read_config_file(this) -> List[str]:
+        c = Cat(this.config_file,sudo=True).execute()
+
+        if (c.returncode != 0):
+            raise HTTPException(status_code=500,
+                                detail=ErrorMessage(code=ErrorMessages.E_READ_FILE.name,
+                                                  params=[this.config_file,c.stderr]
+                                    )
+                                )
+
+        return c.stdout.splitlines(keepends=True)
+
+    def _apply_patch(this, new_config:List[str]) -> None:
+        patch_text = make_diff(this.config_file, new_config)
+
+        patch_fname = os.path.join(tempfile.gettempdir(), f"nms_nginx.patch")
+        Path(patch_fname).write_text(patch_text, encoding="utf-8", errors="surrogateescape")
+
+        cmd = ApplyPatch(patch_fname, this.config_file, sudo=True)
+        trans = LocalCommandLineTransaction(cmd)
+
+        trans.run()
+        os.remove(patch_fname)
+
+    def _restart_service(this) -> None:
+        def _worker():
+            time.sleep(1)
+            SystemCtlRestart(this.service_names).execute()
+
+        t = threading.Thread(target=_worker)
+        t.start()
+
+
+
+    def enable(this,**kwargs):
+        start_decommenting = False
+        new_config_file = []
+
+        for l in this._read_config_file():
+            if (not start_decommenting):
+                if (any([((p in l) and ("location" in l)) for p in this.NGINX_BLOCKS])):
+                    start_decommenting = True
+
+            if (start_decommenting):
+                if (l.strip().startswith("#")):
+                    l = l.lstrip().lstrip("#")
+                if ("}" in l):
+                    start_decommenting = False
+
+            new_config_file.append(l)
+
+        this._apply_patch(new_config_file)
+        this._restart_service()
+
+    def disable(this,**kwargs):
+        start_commenting = False
+        new_config_file = []
+
+        for l in this._read_config_file():
+            if (not start_commenting):
+                if (any([((p in l) and ("location" in l)) for p in this.NGINX_BLOCKS])):
+                    start_commenting = True
+
+            if (start_commenting):
+                if (not l.strip().startswith("#")):
+                    l = f"#{l}"
+                if ("}" in l):
+                    start_commenting = False
+
+            new_config_file.append(l)
+
+
+
+        this._apply_patch(new_config_file)
+        this._restart_service()
+
+
+    @property
+    def is_active(this) -> bool:
+        found = []
+
+        for l in this._read_config_file():
+            if (any([((p in l) and ("location" in l)) for p in this.NGINX_BLOCKS])):
+                if (l.strip().startswith("#")):
+                    found.append(l)
+
+        return len(found) == 0
