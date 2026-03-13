@@ -1,0 +1,45 @@
+{% extends "index.html" %}
+
+{% block title %}{{ _("Disk Management") }}{% endblock %}
+
+{% block content %}
+
+{% if disks %}
+    <div class="row g-3">
+        {% for disk in disks %}
+            {% set idx = loop.index %}
+            {% include "card.disk.html" %}
+        {% endfor %}
+    </div>
+
+    <div class="row g-3 mt-1">
+        {% if pool %}
+                {% include "card.disk_tools.html" %}
+
+                {% if scrub %}
+                    {% include "card.scrub_report.html" %}
+                {% endif %}
+        {% else %}
+                {% include "card.new_array.html" %}
+        {% endif %}
+
+        {% if imported_pools %}
+            {% for pool, disks, warning, import_pool_form in imported_pools %}
+                {% include "card.import_array.html" %}
+            {% endfor %}
+        {% endif %}
+
+        {% if attachable_disks %}
+            {% include "card.add_disks.html" %}
+        {% endif %}
+
+        {% if snapshots %}
+            {% include "card.snapshot_list.html" %}
+        {% endif %}
+    </div>
+
+{% else %}
+    {% include "warning.no_hdd.html" %}
+{% endif %}
+
+{% endblock %}

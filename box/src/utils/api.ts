@@ -1,5 +1,5 @@
 // Use environment variable for API URL in the future, for now hardcode based on requirement
-export const API_BASE_URL = 'http://192.168.1.180/api/v1';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 let authToken = localStorage.getItem('authToken') || '';
 
@@ -111,8 +111,8 @@ export interface FSBrowse {
 }
 
 export interface UserQuota {
-    used:number;
-    quota:number;
+    used: number;
+    quota: number;
 }
 
 export async function browseFs(path: string = ""): Promise<FSBrowse> {
@@ -141,8 +141,8 @@ export async function mvFs(oldPath: string, newPath: string): Promise<void> {
 }
 
 export async function rmFs(path: string): Promise<void> {
-    await apiRequest(`/fs/delete/${path}`, {
-        method: 'GET'
+    await apiRequest(`/fs/item/${path}`, {
+        method: 'DELETE'
     });
 }
 

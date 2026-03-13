@@ -13,6 +13,8 @@ class LogFilter(Enum):
 class RequestMethod(Enum):
     GET = "GET"
     POST = "POST"
+    DELETE = "DELETE"
+    PATCH = "PATCH"
 
 class UserPermissions(Enum):
     CLIENT_DASHBOARD_ACCESS = "client.dashboard.access"
@@ -28,6 +30,7 @@ class UserPermissions(Enum):
     POOL_TOOLS_VERIFY = "pool.tools.verify"
     POOL_TOOLS_MOUNT = "pool.tools.mount"
     POOL_TOOLS_RECOVERY = "pool.tools.recovery"
+    POOL_TOOLS_SNAPSHOT = "pool.tools.snapshot"
     POOL_CONF_CREATE = "pool.conf.create"
     POOL_CONF_IMPORT = "pool.conf.import"
     POOL_CONF_EXPAND = "pool.conf.expand"

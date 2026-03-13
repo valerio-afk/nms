@@ -52,13 +52,14 @@ def get_system_services(token:dict=Depends(verify_token)) -> Dict[str,AccessServ
     summary = "Enable an access service"
 )
 async def enable_access_service(service_id: str, request: Request,token:dict=Depends(verify_token)) -> Optional[Dict]:
-    check_permission(token.get("username"), UserPermissions[f"SERVICES_{service_id.upper()}_MANAGE"])
+    check_permission(username:=token.get("username"), UserPermissions[f"SERVICES_{service_id.upper()}_MANAGE"])
     try:
         data = await request.json()
         service = CONFIG.access_services[service_id]
         service.enable(**data)
 
         if (service.is_active):
+            CONFIG.info(f"Access service {service_id} enabled by {username}")
             return {"detail":SuccessMessage(code=SuccessMessages.S_ACCESS_ENABLED.name,params=[service_id.upper()])}
         else:
             raise Exception()
@@ -71,11 +72,13 @@ async def enable_access_service(service_id: str, request: Request,token:dict=Dep
     summary = "Update the settings in an access service"
 )
 async def update_access_service(service_id: str, request: Request, token:dict=Depends(verify_token)) -> Optional[Dict]:
-    check_permission(token.get("username"), UserPermissions[f"SERVICES_{service_id.upper()}_MANAGE"])
+    check_permission(username:=token.get("username"), UserPermissions[f"SERVICES_{service_id.upper()}_MANAGE"])
     try:
         data = await request.json()
         service = CONFIG.access_services[service_id]
         service.update(**data)
+
+        CONFIG.info(f"Access service configuration for {service_id} changed: {data}")
 
         return {"detail": SuccessMessage(code=SuccessMessages.S_ACCESS_UPDATED.name, params=[service_id.upper()])}
 
@@ -87,12 +90,13 @@ async def update_access_service(service_id: str, request: Request, token:dict=De
     summary = "Disable an access service"
 )
 async def disable_access_service(service_id: str, request: Request,token:dict=Depends(verify_token)) -> Optional[Dict]:
-    check_permission(token.get("username"), UserPermissions[f"SERVICES_{service_id.upper()}_MANAGE"])
+    check_permission(username:=token.get("username"), UserPermissions[f"SERVICES_{service_id.upper()}_MANAGE"])
     try:
         data = await request.json()
         service = CONFIG.access_services[service_id]
         service.disable(**data)
         if (not service.is_active):
+            CONFIG.warning(f"Access service {service_id} disabled by {username}")
             return {"detail":SuccessMessage(code=SuccessMessages.S_ACCESS_DISABLED.name,params=[service_id.upper()])}
         else:
             raise Exception()

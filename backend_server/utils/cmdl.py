@@ -2,7 +2,7 @@ from abc import abstractmethod, ABC
 from enum import Enum
 from subprocess import CompletedProcess
 from tempfile import gettempdir
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Union, Literal
 import json
 import os
 import socket
@@ -464,13 +464,18 @@ class ZFSSetQuota(ZFSCommand):
 
 
 class ZFSList(ZFSCommand):
-    def __init__(this,properties=None):
+    def __init__(this,
+                 properties:List[str]=None,
+                 type:Optional[Literal["filesystem","snapshot","volume","bookmark","all"]]=None):
         super().__init__("list", sudo=False)
         this.append(['-p','-j'])
 
         if (properties is not None):
             this.append("-o")
             this.append([",".join(properties)])
+
+        if (type is not None):
+            this.append(["-t",type])
 
         this._properties = properties
 
@@ -555,13 +560,69 @@ class ZFSCreate(ZFSCommand):
 
 class ZFSDestroy(ZFSCommand):
 
-    def __init__(this, pool="tank", dataset="data"):
+    def __init__(this, pool:str="tank", dataset:str="data",snapshot_name:Optional[str]=None):
         this._pool = pool
         this._dataset = dataset
+        this._snapshot_name = snapshot_name
 
         fs = f"{pool}/{dataset}"
 
+        if (snapshot_name is not None):
+            fs += f"@{snapshot_name}"
+
         super().__init__("destroy", sudo=True)
+
+        this.append(fs)
+
+    def to_dict(this):
+        d = super().to_dict()
+
+        d['pool'] = this._pool
+        d['dataset'] = this._dataset
+        d['snapshot_name'] = this._snapshot_name
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ZFSDestroy(serialisation.get('pool',None),serialisation.get('dataset',None),serialisation.get('snapshot_name',None))
+
+class ZFSRollback(ZFSCommand):
+
+    def __init__(this, pool:str, dataset:str,snapshot_name:str):
+        this._pool = pool
+        this._dataset = dataset
+        this._snapshot_name = snapshot_name
+
+        fs = f"{pool}/{dataset}@{snapshot_name}"
+
+        super().__init__("rollback", sudo=True)
+
+        this.append(['-r',fs])
+
+    def to_dict(this):
+        d = super().to_dict()
+
+        d['pool'] = this._pool
+        d['dataset'] = this._dataset
+        d['snapshot_name'] = this._snapshot_name
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ZFSDestroy(serialisation.get('pool',None),serialisation.get('dataset',None),serialisation.get('snapshot_name',None))
+
+
+class ZFSSnapshot(ZFSCommand):
+
+    def __init__(this, pool:str, dataset:str,snapshot_name:str):
+        this._pool = pool
+        this._dataset = dataset
+
+        fs = f"{pool}/{dataset}@{snapshot_name}"
+
+        super().__init__("snapshot", sudo=True)
 
         this.append(fs)
 
@@ -575,8 +636,7 @@ class ZFSDestroy(ZFSCommand):
 
     @staticmethod
     def from_dict(serialisation):
-        return ZFSDestroy(serialisation.get('pool',None),serialisation.get('dataset',None))
-
+        return ZFSSnapshot(serialisation.get('pool',None),serialisation.get('dataset',None))
 
 class ZFSMount(ZFSCommand):
 

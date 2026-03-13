@@ -57,6 +57,7 @@ def set_quota(data:ChangeQuotaData,token:dict=Depends(verify_token)) -> dict:
     if (output.returncode != 0):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_USER_QUOTA.name,params=[output.stderr.strip()]))
 
+    CONFIG.info(f"New quota set by {username} for {data.username}: {data.quota}")
 
     return {"detail": SuccessMessage(code=SuccessMessages.S_USER_QUOTA.name)}
 
@@ -86,6 +87,8 @@ def set_username(data:ChangeUsernameData,token:dict=Depends(verify_token)) -> di
     CONFIG.change_username(data.old_username,data.new_username)
     CONFIG.flush_config()
 
+    CONFIG.warning(f"Username change requested by {username}: {data.old_username} -> {data.new_username}")
+
     return {"detail": SuccessMessage(code=SuccessMessages.S_USER_NAME.name)}
 
 @users.post("/set/sudo",summary="Add or remove a user from sudoers")
@@ -99,6 +102,8 @@ def sudoers(data:SudoData,token:dict=Depends(verify_token)) -> dict:
 
     if (output.returncode != 0):
         HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_USER_SUDO.name,params=[output.stderr]))
+
+    CONFIG.warning(f"Superuser status changed for {data.username} by {username}: {'Yes' if data.sudo else 'No'}")
 
     return {"detail":SuccessMessage(code=SuccessMessages.S_USER_SUDO.name)}
 
@@ -116,6 +121,8 @@ def set_permissions(data:UserPermissionsData,token:dict=Depends(verify_token)) -
     CONFIG.user_set_permissions(data.username,data.permissions)
     CONFIG.flush_config()
 
+    CONFIG.warning(f"Permission changes for {data.username} by {username}: {data.permissions}")
+
     return {"detail": SuccessMessage(code=SuccessMessages.S_USER_PERM.name)}
 
 @users.post("/service/{service}",summary="Change the password for a specific access service")
@@ -124,7 +131,6 @@ def change_password(service:str,credentials:AccessServiceCredentials,token:dict=
     allow_self_change(current_username,credentials.username)
 
     services = CONFIG.access_services
-
 
     if (service in services):
         s = services[service]
@@ -178,6 +184,8 @@ def new_user(profile:NewUserProfile,token:dict=Depends(verify_token)) -> dict:
 
         if (output.returncode != 0):
             return {"detail": WarningMessage(code=WarningMessages.W_NEW_USER.name, params=[profile.username,output.stderr])}
+
+    CONFIG.info(f"New user created by {username}: {profile.username}")
 
     return {"detail": SuccessMessage(code=SuccessMessages.S_NEW_USER.name,params=[profile.username])}
 
@@ -233,6 +241,8 @@ def user_delete(data:UserDelete,token:dict=Depends(verify_token)) -> dict:
     CONFIG.delete_user(user_to_delete.username)
     CONFIG.flush_config()
 
+    CONFIG.info(f"User {data.username} deleted by {username}")
+
     return {"detail": SuccessMessage(code=SuccessMessages.S_DEL_USER.name, params=[user_to_delete.username])}
 
 
@@ -250,5 +260,7 @@ def user_delete(username:str,token:dict=Depends(verify_token)) -> dict:
                         )
 
     CONFIG.flush_config()
+
+    CONFIG.warning(f"OTP reset for {username} by {admin_user}")
 
     return {"detail": SuccessMessage(code=SuccessMessages.S_USER_LOGIN_RESET.name, params=[username])}

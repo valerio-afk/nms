@@ -267,22 +267,21 @@ def get_network_interfaces() -> List[NetworkInterface]:
 
     return network_interfaces
 
-@net.get('/io',response_model=NetCounter,responses={500:{'description':'Error while retrieving network information'}})
+@net.get('/io',
+         response_model=NetCounter,responses={500:{'description':'Error while retrieving network information'}},
+         summary="Returns the network statistics of Input/Output"
+         )
 def net_io_counter(token:dict=Depends(verify_token)) -> NetCounter:
     check_permission(token.get("username"), UserPermissions.CLIENT_DASHBOARD_NETWORKS)
     return net_io_counter()
 
-@net.get('/ifaces', response_model=List[NetworkInterface])
+@net.get('/ifaces', response_model=List[NetworkInterface],summary="Returns the network interfaces")
 def net_ifaces(token:dict=Depends(verify_token)) -> List[NetworkInterface]:
     check_permission(token.get("username"), UserPermissions.NETWORK_IFACE_MANAGE)
     return get_network_interfaces()
-#
-# @net.get("/vpn/status",response_model=bool)
-# def get_vpn_status() -> bool:
-#     return vpn_status()
 
 
-@net.get('/{iface}/list',response_model=List[WifiNetwork])
+@net.get('/{iface}/list',response_model=List[WifiNetwork],summary="Returns the list of wifi networks")
 def net_wifi_networks(iface:str,token:dict=Depends(verify_token)) -> List[WifiNetwork]:
     check_permission(token.get("username"), UserPermissions.NETWORK_IFACE_MANAGE)
     cmd = NMCLIDevice("wifi","list","ifname",iface,sudo=True)
@@ -305,7 +304,7 @@ def net_wifi_networks(iface:str,token:dict=Depends(verify_token)) -> List[WifiNe
 
     return networks
 
-@net.post('/{iface}/connect')
+@net.post('/{iface}/connect',summary="Connect to a wifi network")
 def net_wifi_connect(iface:str,network:WifiConnect,token:dict=Depends(verify_token)) -> None:
     check_permission(token.get("username"), UserPermissions.NETWORK_IFACE_MANAGE)
     if (network.ssid is None):
@@ -335,27 +334,27 @@ def net_wifi_connect(iface:str,network:WifiConnect,token:dict=Depends(verify_tok
         error = "\n".join([x['stderr'] for x in output])
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_WIFI_CONNECT.name,params=[network.ssid, error]))
 
+    CONFIG.info(f"{iface} connected to {network.ssid}")
 
-@net.get("/vpn/pubkey",response_model=str)
+
+@net.get("/vpn/pubkey",response_model=str,summary="Provides the VPN public key")
 def net_vpn_pubkey(token:dict=Depends(verify_token)) -> str:
     check_permission(token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
     return get_vpn_public_key()
 
-@net.get("/vpn/public-ip",response_model=Optional[str])
+@net.get("/vpn/public-ip",response_model=Optional[str],summary="Provides the VPN public ip")
 def net_vpn_endpoint(token:dict=Depends(verify_token)) -> Optional[str]:
     check_permission(token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
     return CONFIG.vpn_public_ip
 
-@net.get("/vpn/peers",response_model=List[Tuple[str,str]])
+@net.get("/vpn/peers",response_model=List[Tuple[str,str]],summary="Returns the list of VPN peers")
 def net_vpn_peers(token:dict=Depends(verify_token)) -> List[Tuple[str, str]]:
     check_permission(token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
     return get_peers()
 
-
-
-@net.post("/vpn/peers/remove")
+@net.delete("/vpn/peers", summary="Deletes a VPN peer")
 def net_vpn_peer_remove(name:str=Query(...),token:dict=Depends(verify_token)) -> dict:
-    check_permission(token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
+    check_permission(username:=token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
     peers = CONFIG.vpn_peer_names
 
     try:
@@ -382,11 +381,13 @@ def net_vpn_peer_remove(name:str=Query(...),token:dict=Depends(verify_token)) ->
 
     SystemCtlRestart(CONFIG.vpn_service).execute()
 
+    CONFIG.warning(f"VPN peer {name} removed by {username}")
+
     return {"detail":SuccessMessage(code=SuccessMessages.S_NET_VPN_PEER_DELETED.name,params=[name])}
 
-@net.post("/vpn/peers/add")
+@net.post("/vpn/peers",summary="Adds a VPN peer")
 def net_vpn_peer_add(peer:VPNPeer,token:dict=Depends(verify_token)) -> dict:
-    check_permission(token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
+    check_permission(username:=token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
     name = peer.name.strip()
 
     if (len(name)==0):
@@ -422,12 +423,14 @@ def net_vpn_peer_add(peer:VPNPeer,token:dict=Depends(verify_token)) -> dict:
 
     SystemCtlRestart(CONFIG.vpn_service).execute()
 
+    CONFIG.info(f"VPN peer {name} added by {username}")
+
     return {"detail":SuccessMessage(code=SuccessMessages.S_NET_VPN_PEER_ADDED.name,params=[name])}
 
 
-@net.post("/vpn/gen-keys")
+@net.post("/vpn/gen-keys",summary="Generates private and public key for the VPN service")
 def net_vpn_genkey(token:dict=Depends(verify_token)) -> dict:
-    check_permission(token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
+    check_permission(username:=token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
     result = subprocess.run(
         ["wg", "genkey"],
         capture_output=True,
@@ -477,12 +480,14 @@ def net_vpn_genkey(token:dict=Depends(verify_token)) -> dict:
     if (result.returncode != 0):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_VPN_GEN_PUBLIC.name,params=[result.stdout]))
 
+    CONFIG.warning(f"VPN private and public keys generated by {username}")
+
     return {"detail": SuccessMessage(code=SuccessMessages.S_NET_VPN_KEYSGEN.name)}
 
 
-@net.post("/vpn/config")
+@net.patch("/vpn", summary="Changes VPN configuration")
 def net_vpn_config(config:VPNServerConf,token:dict=Depends(verify_token)) -> dict:
-    check_permission(token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
+    check_permission(username:=token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
     netmask = config.netmask
     try:
         netmask = ipaddress.IPv4Address(netmask)
@@ -511,26 +516,35 @@ def net_vpn_config(config:VPNServerConf,token:dict=Depends(verify_token)) -> dic
 
     SystemCtlRestart(CONFIG.vpn_service).execute()
 
+    CONFIG.info(f"""VPN configuration changed by {username}:
+\tIP: {config.address}
+\tNetmask: {config.netmask}
+\tEndpoint: {config.endpoint}""")
+
     return {"detail": SuccessMessage(code=SuccessMessages.S_NET_VPN_CONFIG.name)}
 
-@net.post('/vpn/{action}')
+@net.post('/vpn/{action}',summary="Enable or disable the VPN service")
 def net_iface_action(action:IFaceAction,token:dict=Depends(verify_token)) -> None:
-    check_permission(token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
+    check_permission(username:=token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
     cmd = None
     vpn_service = CONFIG.vpn_service
 
     match(action):
         case IFaceAction.UP:
             cmd = SystemCtlStart(vpn_service)
+            log_action="enabled"
         case IFaceAction.DOWN:
             cmd = SystemCtlStop(vpn_service)
+            log_action="disabled"
 
     output = cmd.execute()
 
     if (output.returncode != 0):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_CHANGE_STATE.name,params=["VPN",output.stderr]))
 
-@net.get('/vpn',response_model=NetworkInterface)
+    CONFIG.warning(f"VPN service {log_action} by {username}")
+
+@net.get('/vpn',response_model=NetworkInterface,summary="Returns the VPN configuration")
 def net_get_vpn_config(token:dict=Depends(verify_token)) -> NetworkInterface:
     check_permission(token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
     wg = read_wireguard_config_file()
@@ -550,9 +564,9 @@ def net_get_vpn_config(token:dict=Depends(verify_token)) -> NetworkInterface:
     return network
 
 
-@net.post('/{iface}/{action}')
+@net.post('/{iface}/{action}',summary="Enable or disable a network interface")
 def net_iface_action(iface:str,action:IFaceAction,token:dict=Depends(verify_token)) -> None:
-    check_permission(token.get("username"), UserPermissions.NETWORK_IFACE_MANAGE)
+    check_permission(username:=token.get("username"), UserPermissions.NETWORK_IFACE_MANAGE)
     match(action):
         case IFaceAction.UP:
             perform="connect"
@@ -579,17 +593,19 @@ def net_iface_action(iface:str,action:IFaceAction,token:dict=Depends(verify_toke
         error = "\n".join([x['stderr'] for x in output])
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_CHANGE_STATE.name,params=[iface,error]))
 
+    CONFIG.warning(f"Network interface {iface} {perform}ed by {username}")
 
 
 
-@net.post('/{iface}/{ip_version}/config')
+
+@net.patch('/{iface}/{ip_version}', summary="Changes the configuration of a network interface")
 def net_iface_settings(iface:str,
                        ip_version:str,
                        settings:dict=Body(...),
                        profile:str=Query(...),
                        token:dict=Depends(verify_token)) -> dict:
 
-    check_permission(token.get("username"), UserPermissions.NETWORK_IFACE_MANAGE)
+    check_permission(username:=token.get("username"), UserPermissions.NETWORK_IFACE_MANAGE)
     cmds = []
 
     ip_version = ip_version.lower()
@@ -653,9 +669,15 @@ def net_iface_settings(iface:str,
         error = "\n".join([t['stderr'] for t in output])
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_CHANGE_STATE.name,params=[iface,error]))
 
+    CONFIG.warning(f"""Configuration for the network interfca {iface} changed by {username}:
+\tIP version: {ip_version}
+\tProfile: {profile}
+\tSettings: {settings}
+""")
+
     return {"detail": SuccessMessage(code=SuccessMessages.S_NET_CONFIG.name,params=[iface])}
 
-@net.get('/ddns/providers',response_model=Dict[str,DDNSProvider])
+@net.get('/ddns',response_model=Dict[str,DDNSProvider],summary="Returns the list of Dynamic DNS providers")
 def ddns_provider_list(token:dict=Depends(verify_token)) -> Dict[str,DDNSProvider]:
     check_permission(token.get("username"), UserPermissions.NETWORK_DDNS_MANAGE)
     providers = {name:DDNSProvider(
@@ -686,13 +708,13 @@ def ddns_provider_list(token:dict=Depends(verify_token)) -> Dict[str,DDNSProvide
 
     return providers
 
-@net.post('/ddns/{provider}/start')
+@net.post('/ddns/{provider}/start', summary="Starts the given Dynamic DNS provider")
 def ddns_provider_start(
         provider:str,
         config:Optional[DDNSDefaultProviderConfiguration]=None,
         token:dict=Depends(verify_token)) -> dict:
 
-    check_permission(token.get("username"), UserPermissions.NETWORK_DDNS_MANAGE)
+    check_permission(username:=token.get("username"), UserPermissions.NETWORK_DDNS_MANAGE)
 
     match (provider):
         case "noip":
@@ -728,12 +750,15 @@ def ddns_provider_start(
 
     CONFIG.flush_config()
 
+    CONFIG.info(f"DDNS provider {provider} started by {username}")
+
 
     return {"details":SuccessMessage(code=SuccessMessages.S_NET_DDNS_ENABLED.name,params=[provider])}
 
-@net.post('/ddns/{provider}/stop')
+@net.post('/ddns/{provider}/stop', summary="Starts the given Dynamic DNS provider")
 def ddns_provider_stop(provider:str,token:dict=Depends(verify_token)) -> dict:
-    check_permission(token.get("username"), UserPermissions.NETWORK_DDNS_MANAGE)
+    check_permission(username:=token.get("username"), UserPermissions.NETWORK_DDNS_MANAGE)
     CONFIG.ddns_stop(provider.lower())
     CONFIG.flush_config()
+    CONFIG.warning(f"DDNS provider {provider} stopped by {username}")
     return {"details":SuccessMessage(code=SuccessMessages.S_NET_DDNS_DISABLED.name,params=[provider])}

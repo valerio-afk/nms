@@ -1,0 +1,40 @@
+{% extends "card.html" %}
+
+{% block card_title %}<i class="bi bi-camera"></i> {{ _("Snapshots") }}{% endblock %}
+
+{% block card_content %}
+
+{% if snapshots %}
+<form method="POST" action="{{ url_for('main.snapshot_mngt') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <table class="table table-striped" id="snapshot-list">
+        <thead>
+            <tr>
+                <th>{{ _("Name") }}</th>
+                <th>{{ _("Ref. Size") }}</th>
+                <th></th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+        {% for s in snapshots %}
+        <tr>
+
+            <td>{{ s[0] }}</td>
+            <td>{{ s[1] | human_readable_bytes }}</td>
+            <td>
+                <button type="submit" name="rollback" value="{{ s[0] }}" class="btn btn-warning"  data-bs-toggle="tooltip" title="{{ _('Rollback') }}" ><i class="bi bi-skip-backward-fill"></i></button>
+                <button type="submit" name="delete" value="{{ s[0] }}" class="btn btn-danger" data-bs-toggle="tooltip" title="{{ _('Delete') }}"><i class="bi bi-trash-fill"></i></button>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+</form>
+{% endif %}
+
+{% endblock %}
+
+

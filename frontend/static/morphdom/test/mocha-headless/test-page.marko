@@ -1,0 +1,34 @@
+<lasso-page package-path="./browser.json"/>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Morphdom Tests</title>
+    <lasso-head/>
+</head>
+<body>
+    <div id="status">
+    </div>
+
+    <div id="mocha">
+    </div>
+
+    <div id="test-results">
+    </div>
+
+    <if(data.runBenchmarks)>
+      <div>
+        <button type="button" onclick="window.startBenchmarks()">Start Benchmarks</button>
+        <div id="benchmark-results">
+        </div>
+      </div>
+    </if>
+
+    <lasso-body/>
+
+    <script>
+      window.mocha.run();
+    </script>
+</body>
+</html>

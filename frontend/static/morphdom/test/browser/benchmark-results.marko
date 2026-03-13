@@ -1,0 +1,47 @@
+<macro|{moduleName, testName}| name="times">
+    ${data.getAverageTimeForTest(moduleName, testName)}
+</macro>
+
+<div class="results">
+    <ul>
+      <for|moduleName| of=data.moduleNames>
+          <li>
+              Total time for ${moduleName}: ${data.getTotalTime(moduleName)}
+              <if(data.isWinner(moduleName))>
+                  (winner)
+              </if>
+          </li>
+      </for>
+    </ul>
+    <table>
+        <thead>
+            <tr>
+                <td></td>
+                <for|moduleName| of=data.moduleNames>
+                    <td>
+                        ${moduleName}
+                    </td>
+                </for>
+            </tr>
+        </thead>
+        <tbody>
+          <for|testName| of=data.testNames>
+              <tr>
+                  <td class="test-name">
+                      ${testName}
+                  </td>
+                  <for|moduleName| of=data.moduleNames>
+                      <td>
+                          <if(data.isWinnerForTest(moduleName, testName))>
+                              <b><times moduleName=moduleName testName=testName/></b>
+                          </if>
+                          <else>
+                              <times moduleName=moduleName testName=testName/>
+                          </else>
+                      </td>
+                  </for>
+              </tr>
+          </for>
+        </tbody>
+    </table>
+</div>

@@ -28,7 +28,11 @@ def generate_nonce(length=16):
     return base64.b64encode(os.urandom(length)).decode('ascii').rstrip('=')
 
 def create_flask_app():
-    app = Flask("NMS")
+    app = Flask(
+        "NMS",
+        template_folder="frontend/templates",
+        static_folder="frontend/static",
+    )
     app.register_blueprint(bp)
     app.config['BABEL_DEFAULT_LOCALE'] = 'en'
     app.config['BABEL_SUPPORTED_LOCALES'] = ['en', 'it']

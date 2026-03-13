@@ -86,9 +86,6 @@ class AptGetActions(Enum):
 
 
 
-
-
-
 @system.get("/get/{prop}",
           response_model=BackendProperty,
           responses={
@@ -106,26 +103,30 @@ def system_get_property(prop:SystemProperties,token:dict=Depends(verify_token)) 
             return BackendProperty(property=prop.name, value=CONFIG.system_updates)
         case SystemProperties.last_apt_time:
             return BackendProperty(property=prop.name, value=CONFIG.last_apt)
-        case _:
-            CONFIG.error(f"Requested invalid system property {prop}")
-            raise HTTPException(status_code=404, detail=f"Property {prop} not valid for system")
+        # case _:
+        #     CONFIG.error(f"Requested invalid system property {prop}")
+        #     raise HTTPException(status_code=404, detail=f"Property {prop} not valid for system")
 
 
 @system.post('/shutdown',summary="Power off the NAS")
 def shutdown(token:dict=Depends(verify_token)):
-    check_permission(token.get("username"), UserPermissions.SYS_ADMIN_ACPI)
+    check_permission(username:=token.get("username"), UserPermissions.SYS_ADMIN_ACPI)
+    CONFIG.warning(f"System shutdown requested by {username}. Goodbye")
     Shutdown().execute()
 
 
 @system.post('/restart',summary="Reboot the NAS")
 def restart(token:dict=Depends(verify_token)):
-    check_permission(token.get("username"), UserPermissions.SYS_ADMIN_ACPI)
+    check_permission(username:=token.get("username"), UserPermissions.SYS_ADMIN_ACPI)
+    CONFIG.warning(f"System reboot requested by {username}. See you later")
     Reboot().execute()
 
 @system.post('/restart-systemd-services',summary="Restart main system services")
 def restart_systemd_services(token:dict=Depends(verify_token)) -> None:
-    check_permission(token.get("username"), UserPermissions.SYS_ADMIN_SYSTEMCTL)
+    check_permission(username:=token.get("username"), UserPermissions.SYS_ADMIN_SYSTEMCTL)
     cmds = [SystemCtlRestart(service) for service in CONFIG.systemd_services]
+
+    CONFIG.warning(f"systemd services restart requested by {username}. Be right back.")
 
     if (len(cmds) > 0):
         trans = LocalCommandLineTransaction(*cmds)
@@ -139,15 +140,19 @@ def restart_systemd_services(token:dict=Depends(verify_token)) -> None:
             response_model=BackgroundTask
             )
 def apt_get(action:AptGetActions,token:dict=Depends(verify_token)) -> BackgroundTask:
-    check_permission(token.get("username"), UserPermissions.SYS_ADMIN_UPDATES)
+    check_permission(username:=token.get("username"), UserPermissions.SYS_ADMIN_UPDATES)
     match (action):
         case AptGetActions.update:
             task = AptGetUpdateThread()
             task_id = SCHEDULER.schedule(task)
             CONFIG.last_apt = int(datetime.datetime.now().timestamp())
+            log_action="update"
         case AptGetActions.upgrade:
             task = AptGetUpgradeThread()
             task_id = SCHEDULER.schedule(task)
+            log_action = "upgrade"
+
+    CONFIG.info(f"apt {log_action} requested by {username} with task id {task_id}")
 
     return BackgroundTask(task_id=task_id,running=True,progress=None,eta=None,detail=None)
 

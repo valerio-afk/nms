@@ -8,7 +8,7 @@ from nms_shared.disks import Disk, DiskStatus
 from nms_shared.enums import LogFilter
 from nms_shared.enums import RequestMethod
 from nms_shared.threads import NMSThread
-from requests import get, post
+from requests import get, post, delete, patch
 from requests.exceptions import HTTPError
 from traceback import format_exc
 from typing import Optional, List, Any, Dict, Literal, Union, Tuple
@@ -111,6 +111,10 @@ class BackEndProxy:
                 fn = get
             case RequestMethod.POST:
                 fn = post
+            case RequestMethod.DELETE:
+                fn = delete
+            case RequestMethod.PATCH:
+                fn = patch
 
         req_params = {}
 
@@ -354,6 +358,12 @@ class BackEndProxy:
         disks = this._request("pool/get/disks", RequestMethod.GET)
         return parse_disks_from_request(disks)
 
+    @property
+    def snapshots(this) -> List[Tuple[str,int]]:
+        snapshots = this._request("pool/snapshot", RequestMethod.GET)
+
+        return [ (s.get("name"),s.get("ref_size") )for s in snapshots ]
+
     #DISK PROPERTIES
     @property
     def disks(this) -> List[Disk]:
@@ -391,7 +401,7 @@ class BackEndProxy:
 
     @property
     def ddns_providers(this) -> Dict[str,dict]:
-        return this._request("net/ddns/providers", RequestMethod.GET)
+        return this._request("net/ddns", RequestMethod.GET)
 
     #ACCESS SERVICES PROPERTIES
     @property
@@ -418,7 +428,7 @@ class BackEndProxy:
             "duration": duration
         }
 
-        r = this._request("auth/otp/verify", RequestMethod.POST, body_params=data)
+        r = this._request("auth/otp", RequestMethod.POST, body_params=data)
 
         if (r is None):
             return None
@@ -459,7 +469,7 @@ class BackEndProxy:
         session.clear()
 
     def refresh_token(this) -> None:
-       r = this._request("auth/refresh",RequestMethod.GET)
+       r = this._request("auth/otp/refresh",RequestMethod.POST)
 
        if (r is not None) and ((new_token := r.get("token")) is not None):
            this.set_session_token("login",new_token)
@@ -468,7 +478,7 @@ class BackEndProxy:
     #     this._request("auth/otp/reset",RequestMethod.POST)
 
     def get_new_otp(this,token) -> Optional[str]:
-        r = this._request("auth/otp/new",RequestMethod.GET,qstring_params={"token":token})
+        r = this._request("auth/otp",RequestMethod.PATCH,qstring_params={"token":token})
 
         if (isinstance(r, dict)):
             return r.get("provisioning_uri")
@@ -530,6 +540,15 @@ class BackEndProxy:
             if (r.get("task_id") is not None):
                 return r
 
+    def create_snapshot(this, snapshot_name: str):
+        this._request(f"pool/snapshot/{snapshot_name}",RequestMethod.POST)
+
+    def delete_snapshot(this, snapshot_name: str):
+        this._request(f"pool/snapshot/{snapshot_name}",RequestMethod.DELETE)
+
+    def rollback_snapshot(this, snapshot_name: str):
+        this._request(f"pool/snapshot/{snapshot_name}",RequestMethod.PATCH)
+
     #DISK METHODS
     def format_disk(this,dev:str, auth_token:str) -> None:
         this._request(
@@ -548,6 +567,8 @@ class BackEndProxy:
 
     def update_service(this,service:str,**kwargs) -> None:
         this._request(f"services/update/{service}",RequestMethod.POST,body_params=kwargs)
+
+
 
 
     #SYSTEM METHODS
@@ -585,8 +606,8 @@ class BackEndProxy:
 
     def iface_setup(this, iface:str, ip_version:str, profile:str, settings:dict) -> None:
         this._request(
-            f"net/{iface}/{ip_version}/config",
-            RequestMethod.POST,
+            f"net/{iface}/{ip_version}",
+            RequestMethod.PATCH,
             qstring_params={"profile":profile},
             body_params=settings
         )
@@ -605,20 +626,20 @@ class BackEndProxy:
         this._request("net/vpn/gen-keys",RequestMethod.POST)
 
     def vpn_change_config(this,address:str, netmask:str,endpoint:str) -> None:
-        this._request(f"net/vpn/config",RequestMethod.POST,body_params={
+        this._request(f"net/vpn",RequestMethod.PATCH,body_params={
             "address":address,
             "netmask":netmask,
             "endpoint":endpoint
         })
 
     def vpn_add_peer(this,name:str,public_key:str) -> None:
-        this._request(f"net/vpn/peers/add",RequestMethod.POST,body_params={
+        this._request(f"net/vpn/peers",RequestMethod.POST,body_params={
             "name":name,
             "public_key":public_key
         })
 
     def vpn_remove_peer(this,peer:str) -> None :
-        this._request(f"net/vpn/peers/remove",RequestMethod.POST,qstring_params={"name":peer})
+        this._request(f"net/vpn/peers",RequestMethod.DELETE,qstring_params={"name":peer})
 
     def ddns_enable(this,provider:str,config:Dict[str,str]) -> None:
         if ((config.get("username") is None) and (config.get("password") is None)):

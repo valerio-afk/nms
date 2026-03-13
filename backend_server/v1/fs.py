@@ -3,17 +3,21 @@ from backend_server.utils.cmdl import Chown, Chmod, LocalCommandLineTransaction,
 from backend_server.utils.config import CONFIG
 from backend_server.utils.responses import ErrorMessage, UserProfile, FileInfo, FSBrowse, MkDirModel, MvModel, Quota
 from backend_server.v1.auth import verify_token_factory, check_permission
-from fastapi import HTTPException, APIRouter, Depends, UploadFile, Form
+from datetime import datetime,timedelta, UTC
+from email.utils import format_datetime
+from fastapi import HTTPException, APIRouter, Depends, Request, Response
 from fastapi.responses import StreamingResponse
 from nms_shared import ErrorMessages
 from nms_shared.enums import UserPermissions
 from pathlib import Path
 from typing import Optional, List, Generator
+import base64
 import grp
-import os
 import pwd
-import shutil
+import os
+import re
 import subprocess
+import uuid
 
 verify_token = verify_token_factory()
 
@@ -22,6 +26,22 @@ fs = APIRouter(
     tags=['fs'],
     dependencies=[Depends(verify_token)]
 )
+
+TUS_VERSION = "1.0.0"
+
+def get_upload_chunks(path:Path, upload_id:str)->List[str]:
+    ls_cmd = LS(str(path)).execute()
+
+    r = re.compile(r"^."+ upload_id +r"_([a-zA-Z0-9\-]{4,12}){4}\.nms\.chunk$")
+
+    return [f for f in ls_cmd.stdout.splitlines() if r.match(f) is not None]
+
+def delete_chunks(p:Path, upload_id:str)->None:
+    chunks = get_upload_chunks(p, upload_id)
+
+    for f in chunks:
+        RemoveFile(f, sudo=True).execute()
+
 
 def check_path_jail(user:UserProfile,path:str,stat_last:bool=True) -> Path:
     home = Path(user.home_dir)
@@ -94,13 +114,13 @@ def change_ownership(path:str) -> None:
     except Exception as e:
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_FS_CH_PERM.name, params=[path, str(e)]))
 
-@fs.post(
-    "/rm-mountpoint",
+@fs.delete(
+    "/mountpoint",
     responses={500: {"description": "Any internal errors"}},
     summary="Delete the directory of the mount point"
 )
 def rm_mountpoint(mountpoint:str,token:dict=Depends(verify_token)) -> None:
-    check_permission(token.get("username"), UserPermissions.POOL_CONF_DESTROY)
+    check_permission(username:=token.get("username"), UserPermissions.POOL_CONF_DESTROY)
 
     if (CONFIG.is_pool_configured):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_CONFIG.name))
@@ -117,12 +137,13 @@ def rm_mountpoint(mountpoint:str,token:dict=Depends(verify_token)) -> None:
     for i in range(len(parts),0,-1):
         path = "/".join(parts[:i])
         path = path.strip()
-        CONFIG.error(f"\t\t{path}")
 
         if (path!="/") and (len(path)>0):
             process = subprocess.run(["sudo", "rmdir", path],capture_output=True)
             if (process.returncode != 0):
                 raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_INVALID_MOUNTPOINT.name,params=[process.stderr.decode()]))
+
+    CONFIG.warning(f"Mountpoint {mountpoint} has been removed by {username}.")
 
 
 @fs.get("/browse",response_model=FSBrowse,summary="Get the list of files of the logged user.")
@@ -246,6 +267,8 @@ def fs_mkdir(data:MkDirModel,token:dict=Depends(verify_token)) -> None:
     if (not trans.success):
         raise HTTPException(status_code=400)
 
+    CONFIG.info(f"New directory {p} created by {user.username}")
+
 
 @fs.post("/mv",summary="Rename or move a file/directory within the user space.")
 def fs_mv(data:MvModel,token:dict=Depends(verify_token)) -> None:
@@ -263,54 +286,139 @@ def fs_mv(data:MvModel,token:dict=Depends(verify_token)) -> None:
     if (out.returncode != 0):
         raise HTTPException(status_code=400)
 
-@fs.post("/upload",summary="Upload a file/directory within the user space.")
-def fs_upload(file:UploadFile,
-              directory:str=Form(...),
-              upload_id: str = Form(...),
-              chunk_index: int = Form(...),
-              total_chunks: int = Form(...),
-              token:dict=Depends(verify_token)) -> dict:
+    CONFIG.info(f"File moved {old} -> {new} by {user.username}")
+
+
+@fs.post("/upload",summary="Initiate an upload session via TUS protocol")
+def fs_upload(request:Request, token:dict=Depends(verify_token)) -> Response:
     check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
     user = CONFIG.get_user(token.get("username", None))
 
     if (not user):
         raise HTTPException(status_code=401)
 
-    p = check_path_jail(user, directory)
+    upload_length = request.headers.get("Upload-Length")
+    metadata = request.headers.get("Upload-Metadata", "")
 
-    chunk_filename = f".chunk_{upload_id}_{chunk_index}"
-    chunk_tmp_path = os.path.join("/tmp",chunk_filename)
-    chunk_file_path = str(p.joinpath(chunk_filename))
+    if not upload_length:
+        raise HTTPException(400, "Upload-Length required")
 
-    with (open(chunk_tmp_path,"wb")) as h:
-        shutil.copyfileobj(file.file, h)
+    def parse_metadata(header: str):
+        metadata = {}
 
-    mv_out = Move(chunk_tmp_path,chunk_file_path,sudo=True).execute()
+        if not header:
+            return metadata
+
+        pairs = header.split(",")
+
+        for pair in pairs:
+            key, value = pair.strip().split(" ", 1)
+            decoded = base64.b64decode(value).decode("utf-8")
+            metadata[key] = decoded
+
+        return metadata
+
+    upload_id = CONFIG.initiate_upload_session(int(upload_length),parse_metadata(metadata))
+
+    location = request.url_for("chunk_upload", upload_id=upload_id)
+
+    CONFIG.info(f"Upload session {upload_id} initiated by {user.username}")
+
+    return Response(
+        status_code=201,
+        headers={
+            "Location": location,
+            "Tus-Resumable": TUS_VERSION,
+        },
+    )
+
+@fs.options("/uploads")
+def options_upload():
+    return Response(
+        status_code=204,
+        headers={
+            "Tus-Resumable": TUS_VERSION,
+            "Tus-Version": "1.0.0",
+            "Tus-Extension": "creation,expiration,termination",
+        },
+    )
+
+@fs.head("/uploads/{upload_id}", summary="Retrieve information regarding an upload session")
+def head_upload(upload_id: str,token:dict=Depends(verify_token)) -> Response:
+    check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
+    user = CONFIG.get_user(token.get("username", None))
+
+    if (not user):
+        raise HTTPException(status_code=401)
+
+    meta = CONFIG.get_upload_session(upload_id)
+
+    return Response(
+        status_code=200,
+        headers={
+            "Upload-Offset": str(meta.get("offset",0)),
+            "Upload-Length": str(meta.get("length",0)),
+            "Tus-Resumable": TUS_VERSION,
+        },
+    )
+
+@fs.patch("/uploads/{upload_id}", summary="Upload a chunk of a file upload session")
+async def chunk_upload(upload_id: str, request: Request, token:dict=Depends(verify_token)) -> Response:
+    check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
+    user = CONFIG.get_user(token.get("username", None))
+
+    if (not user):
+        raise HTTPException(status_code=401)
+
+    meta = CONFIG.get_upload_session(upload_id)
+    rel_path = meta.get("metadata",{}).get("path",".")
+
+    p = check_path_jail(user, rel_path)
+    id = uuid.uuid4()
+
+    chunk_fname = f".{upload_id}_{id}.nms.chunk"
+    chunk_tmp_path = os.path.join("/tmp", chunk_fname)
+    chunk_file_path = os.path.join(p, chunk_fname)
+
+    chunk = await request.body()
+
+    with (open(chunk_tmp_path,"wb")) as f:
+        f.write(chunk)
+
+    mv_out = Move(chunk_tmp_path, chunk_file_path, sudo=True).execute()
+
+    expires = datetime.now(UTC) + timedelta(hours=24)
+    formated_expire_date = format_datetime(expires, usegmt=True)
+
+    CONFIG.info(f"New chunk for {upload_id} of size {len(chunk)} received from {user.username}")
+
 
     if (mv_out.returncode != 0):
-        raise HTTPException(status_code=500)
+        return Response(
+            status_code=204,
+            headers={
+                "Upload-Offset": "0",
+                "Tus-Resumable": TUS_VERSION,
+                "Upload-Expires": formated_expire_date,
+            }
+        )
 
+    offset = CONFIG.increment_upload_offset(upload_id,len(chunk))
 
-    ls_out = LS(f".chunk_{upload_id}_*",sudo=True).execute()
+    if (CONFIG.is_upload_complete(upload_id)):
+        fname = meta.get("metadata",{}).get("filename",upload_id)
 
-    if (ls_out.returncode != 0):
-        raise HTTPException(status_code=500)
+        complete_file_path = str(p.joinpath(fname))
 
-    current_count = len(ls_out.stdout.splitlines())
+        chunks  = get_upload_chunks(p,upload_id)
 
-    if (current_count == total_chunks):
-        complete_file_path = str(p.joinpath(file.filename))
-
-        filenames = [f".chunk_{upload_id}_{i}" for i in range(1,total_chunks+1)]
-
-        for f in filenames:
+        for f in chunks:
             tee_cmd = ['sudo','tee',complete_file_path]
-            with subprocess.Popen(["cat", f], stdout=subprocess.PIPE) as proc:
+            with subprocess.Popen(["cat", p.joinpath(f)], stdout=subprocess.PIPE) as proc:
                 subprocess.run(tee_cmd,stdin=proc.stdout)
                 proc.wait()
 
-        for f in filenames:
-            RemoveFile(f,sudo=True).execute()
+        delete_chunks(p,upload_id)
 
         cmds = [
             Chown(user.username, user.username, complete_file_path, sudo=True),
@@ -318,18 +426,46 @@ def fs_upload(file:UploadFile,
         ]
 
         LocalCommandLineTransaction(*cmds).run()
+        CONFIG.info(f"Upload {upload_id} finished successfully: {complete_file_path}")
 
-        return {
-            "status": "complete",
-            "filename": file.filename,
+    return Response(
+        status_code=204,
+        headers={
+            "Upload-Offset": str(offset),
+            "Tus-Resumable": TUS_VERSION,
+            "Upload-Expires": formated_expire_date,
+        })
+
+
+@fs.delete("/uploads/{upload_id}")
+async def terminate_upload(upload_id: str, token:dict=Depends(verify_token)) -> Response:
+    check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
+    user = CONFIG.get_user(token.get("username", None))
+
+    if (not user):
+        raise HTTPException(status_code=401)
+
+    meta = CONFIG.get_upload_session(upload_id)
+
+    if meta is None:
+        raise HTTPException(status_code=404, detail="Upload not found")
+
+    rel_path = meta.get("metadata", {}).get("path", ".")
+
+    p = check_path_jail(user, rel_path)
+
+    delete_chunks(p,upload_id)
+
+    CONFIG.warning(f"Upload {upload_id} terminated by {user.username}")
+
+    return Response(
+        status_code=204,
+        headers={
+            "Tus-Resumable": TUS_VERSION
         }
+    )
 
-    return {
-        "status": "chuck received",
-        "chunk_index": chunk_index,
-    }
-
-@fs.get("/download/{filename:path}")
+@fs.get("/item/{filename:path}")
 def download_file(filename: str, token:dict=Depends(verify_token)) -> StreamingResponse:
     check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
     user = CONFIG.get_user(token.get("username", None))
@@ -358,6 +494,7 @@ def download_file(filename: str, token:dict=Depends(verify_token)) -> StreamingR
         while chuck:= proc.stdout.read(chunk_size):
             yield chuck
 
+    CONFIG.info(f"File {filename} downloaded by {user.username}")
 
     return StreamingResponse(
         _file_generator(filename),
@@ -365,7 +502,7 @@ def download_file(filename: str, token:dict=Depends(verify_token)) -> StreamingR
         headers={"Content-Disposition": f'attachment; filename="{fname}"'}
     )
 
-@fs.get("/delete/{filename:path}",summary="Delete a file/directory within the user space.")
+@fs.delete("/item/{filename:path}",summary="Delete a file/directory within the user space.")
 def fs_rm(filename: str, token:dict=Depends(verify_token)) -> None:
     check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
     user = CONFIG.get_user(token.get("username", None))
@@ -383,6 +520,8 @@ def fs_rm(filename: str, token:dict=Depends(verify_token)) -> None:
     is_dir = "directory" in stat.stdout
 
     out = RemoveFile(p, is_dir=is_dir,sudo=True).execute()
+
+    CONFIG.warning(f"File {filename} deleted by {user.username}")
 
     if (out.returncode != 0):
         raise HTTPException(status_code=500)

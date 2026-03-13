@@ -111,7 +111,10 @@ def auth_get_property(prop:AuthProperties) -> AuthProperty:
 class AuthUri(BaseModel):
     provisioning_uri: str
 
-@auth.get("/otp/new",response_model=AuthUri,responses={403: {"description": "OPT Secret already configured"}})
+@auth.patch("/otp",
+            response_model=AuthUri,responses={403: {"description": "OPT Secret already configured"}},
+            summary="Set a new OTP for the admin user (or with the use with a valid token)"
+            )
 def auth_new_secret(token:Optional[str]=Query(default=None)) -> AuthUri:
     if ((token is None) and CONFIG.is_otp_configured):
         CONFIG.error("OTP is already configured")
@@ -128,7 +131,7 @@ def auth_new_secret(token:Optional[str]=Query(default=None)) -> AuthUri:
     secret = pyotp.random_base32()
     CONFIG.set_temporary_otp_secret(username,secret)
 
-    CONFIG.info("New OTP secret generated")
+    CONFIG.info(f"New OTP secret generated: Username: {username}")
 
     totp = pyotp.TOTP(secret)
 
@@ -141,7 +144,11 @@ def auth_new_secret(token:Optional[str]=Query(default=None)) -> AuthUri:
 
 
 
-@auth.post("/otp/verify",response_model=AuthToken,responses={403: {"description": "Invalid token/OTP not configured"}})
+@auth.post("/otp",
+           response_model=AuthToken,
+           responses={403: {"description": "Invalid token/OTP not configured"}},
+           summary="Verify OTP"
+           )
 def auth_otp_verify(data:OTPVerification) -> AuthToken:
     temp_secrets = CONFIG.temporary_otp_secrets
 
@@ -178,7 +185,7 @@ def auth_otp_verify(data:OTPVerification) -> AuthToken:
 
 
 
-@auth.get("/refresh",response_model=AuthToken,responses={403: {"description": "Invalid token"}},summary="Refresh access token")
+@auth.post("/otp/refresh",response_model=AuthToken,responses={403: {"description": "Invalid token"}},summary="Refresh access token")
 def auth_token_refresh(token:Dict[str,Any] = Depends(verify_token_factory())) -> AuthToken:
     duration = (token['exp'] - token['released']) // 60
     CONFIG.revoke_token(token['token'])
@@ -188,12 +195,12 @@ def auth_token_refresh(token:Dict[str,Any] = Depends(verify_token_factory())) ->
 
     return AuthToken(token=token,username=username)
 
-@auth.post("/logout")
+@auth.post("/logout", summary="Log out from NMS")
 def auth_logout(token:dict = Depends(verify_token_factory())) -> None:
     CONFIG.revoke_token(token['token'])
     CONFIG.info(f"`{token['username']}` has logged out")
 
-@auth.get("/token/first_login")
+@auth.get("/token/first_login",summary="Generates a login token to allow the user to set a new OTP")
 def auth_first_login(token:Optional[str]=Query(default=None)) -> bool:
     try:
         payload = token_verification(token,"first_login")

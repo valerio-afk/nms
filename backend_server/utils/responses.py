@@ -198,3 +198,19 @@ class MkDirModel(BaseModel):
 class MvModel(BaseModel):
     old_path:str
     new_path:str
+
+class PoolSnapshot(BaseModel):
+    name:str
+    ref_size:int
+
+class CreatePool(BaseModel):
+    pool_name: str
+    dataset_name: str
+    redundancy: bool
+    encryption: bool
+    compression: bool
+    disks: List[str]
+
+class ReplaceDevice(BaseModel):
+    old_device: str
+    new_device: str

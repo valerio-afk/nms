@@ -4,6 +4,7 @@ from backend_server.utils.cmdl import ZPoolAttach, ZPoolAdd, ZPoolImport, Create
 from backend_server.utils.cmdl import ZPoolClear, ZPoolReplace
 from backend_server.utils.config import CONFIG
 from backend_server.utils.responses import ExpasionStatus, BackendProperty, ErrorMessage, SuccessMessage, BackgroundTask
+from backend_server.utils.responses import PoolSnapshot, CreatePool, ReplaceDevice
 from backend_server.utils.scheduler import SCHEDULER
 from backend_server.utils.threads import ScrubStateChecker, PoolExpansionStatus, ResilverStateChecker
 from backend_server.v1.auth import verify_token_factory, verify_token_header_factory, check_permission
@@ -15,7 +16,6 @@ from nms_shared import ErrorMessages, SuccessMessages
 from nms_shared.constants import KEYPATH
 from nms_shared.disks import Disk
 from nms_shared.enums import DiskStatus, UserPermissions
-from pydantic import BaseModel
 from typing import  Optional, List, Callable, Dict
 import base64
 import datetime
@@ -507,8 +507,10 @@ def pool_get_property(prop:PoolProperties,token:dict=Depends(verify_token)) -> O
     summary="Mount the disk array"
 )
 def pool_mount(token:dict=Depends(verify_token)) -> Dict:
-    check_permission(token.get("username"), UserPermissions.POOL_TOOLS_MOUNT)
+    check_permission(username:=token.get("username"), UserPermissions.POOL_TOOLS_MOUNT)
     mount()
+
+    CONFIG.info(f"Pool mounted by {username}")
 
     return {"detail": SuccessMessage(code=SuccessMessages.S_POOL_MOUNTED.name)}
 
@@ -518,9 +520,12 @@ def pool_mount(token:dict=Depends(verify_token)) -> Dict:
     summary="Unmount the disk array"
 )
 def pool_unmount(token:dict=Depends(verify_token)) -> Dict:
-    check_permission(token.get("username"), UserPermissions.POOL_TOOLS_MOUNT)
+    check_permission(username:=token.get("username"), UserPermissions.POOL_TOOLS_MOUNT)
     disable_all_access_services()
     unmount()
+
+    CONFIG.warning(f"Pool unmounted by {username}")
+
     return {"detail": SuccessMessage(code=SuccessMessages.S_POOL_UNMOUNTED.name)}
 
 @pool.post(
@@ -529,7 +534,7 @@ def pool_unmount(token:dict=Depends(verify_token)) -> Dict:
     summary="Destroy and recreate a new disk array"
 )
 def pool_format(auth:Dict=Depends(verify_token_header_factory("format"))) -> Optional[Dict]:
-    check_permission(auth.get("username"), UserPermissions.POOL_CONF_FORMAT)
+    check_permission(username:=auth.get("username"), UserPermissions.POOL_CONF_FORMAT)
     if (not CONFIG.is_pool_configured):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_NO_CONF.name))
 
@@ -553,6 +558,8 @@ def pool_format(auth:Dict=Depends(verify_token_header_factory("format"))) -> Opt
         errors = "\n ".join([x["stderr"] for x in output])
         raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_FORMAT.name,params=[errors]))
 
+    CONFIG.warning(f"Pool formatted by {username}")
+
     return {"detail": SuccessMessage(code=SuccessMessages.S_POOL_FORMATTED.name)}
 
 
@@ -562,7 +569,7 @@ def pool_format(auth:Dict=Depends(verify_token_header_factory("format"))) -> Opt
     summary="Detach the disk array (it will not be visible anymore) without deleting it"
 )
 def pool_detach(token:dict=Depends(verify_token)) -> None:
-    check_permission(token.get("username"), UserPermissions.POOL_CONF_IMPORT)
+    check_permission(username:=token.get("username"), UserPermissions.POOL_CONF_IMPORT)
     if (not CONFIG.is_pool_configured):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_NO_CONF.name))
 
@@ -575,6 +582,7 @@ def pool_detach(token:dict=Depends(verify_token)) -> None:
 
     CONFIG.deinit_pool()
     CONFIG.flush_config()
+    CONFIG.warning(f"Pool detached by {username}")
 
 @pool.post(
     "/attach/{pool_name}",
@@ -582,7 +590,7 @@ def pool_detach(token:dict=Depends(verify_token)) -> None:
     summary="Attach an existing disk array"
 )
 def pool_attach(pool_name:str,load_key:bool=False,token:dict=Depends(verify_token)) -> None:
-    check_permission(token.get("username"), UserPermissions.POOL_CONF_IMPORT)
+    check_permission(username:=token.get("username"), UserPermissions.POOL_CONF_IMPORT)
     if (CONFIG.is_pool_configured):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_CONFIG.name))
 
@@ -614,24 +622,14 @@ def pool_attach(pool_name:str,load_key:bool=False,token:dict=Depends(verify_toke
         CONFIG.load_configuration_file()
         raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_ATTACH.name, params=[str(e)]))
 
+    CONFIG.info(f"Pool {pool_name} attached by {username}")
 
-class CreatePool(BaseModel):
-    pool_name: str
-    dataset_name: str
-    redundancy: bool
-    encryption: bool
-    compression: bool
-    disks: List[str]
-
-class ReplaceDevice(BaseModel):
-    old_device: str
-    new_device: str
 
 @pool.post("/create",
     responses={500: {"description": "Any internal errors"}},
     summary="Create a new disk array",)
 def create_disk_array(data:CreatePool,token:dict=Depends(verify_token)) -> dict:
-    check_permission(token.get("username"), UserPermissions.POOL_CONF_CREATE)
+    check_permission(username:=token.get("username"), UserPermissions.POOL_CONF_CREATE)
 
     from .disks import get_disks, format_disk
     from .fs import change_permissions
@@ -689,13 +687,22 @@ def create_disk_array(data:CreatePool,token:dict=Depends(verify_token)) -> dict:
 
     change_permissions(CONFIG.mountpoint)
 
+    CONFIG.info(f"""Pool created by {username}:
+\tPool name: {data.pool_name}
+\tDataset name: {data.dataset_name}
+\tRedundancy: {'Yes' if data.redundancy else 'No'}
+\tEncryption: {'Yes' if data.encryption else 'No'}
+\tCompression: {'Yes' if data.compression else 'No'}
+\tDevices: {data.disks}
+""")
+
     return {"detail": SuccessMessage(code=SuccessMessages.S_POOL_CREATED.name)}
 
 @pool.post("/destroy",
     responses={500: {"description": "Any internal errors"}},
     summary="Destroy the new disk array",)
 def destroy_disk_array(auth:Dict=Depends(verify_token_header_factory("destroy"))) -> Optional[dict]:
-    check_permission(auth.get("username"), UserPermissions.POOL_CONF_DESTROY)
+    check_permission(username:=auth.get("username"), UserPermissions.POOL_CONF_DESTROY)
     from .fs import rm_mountpoint
     if (not CONFIG.is_pool_configured):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_NO_CONF.name))
@@ -733,13 +740,15 @@ def destroy_disk_array(auth:Dict=Depends(verify_token_header_factory("destroy"))
     except:
         ... # it means that zpool already removed it
 
+    CONFIG.warning(f"Pool destroyed by {username}")
+
     return {"detail": SuccessMessage(code=SuccessMessages.S_POOL_DESTROYED.name)}
 
 @pool.post("/import-key",
     responses={500: {"description": "Any internal errors"}},
     summary="Import encryption key for a disk array",)
 async def import_key(key_file: UploadFile = File(...),token:dict=Depends(verify_token)) -> None:
-    check_permission(token.get("username"), UserPermissions.POOL_CONF_IMPORT)
+    check_permission(username:=token.get("username"), UserPermissions.POOL_CONF_IMPORT)
     key = await key_file.read()
 
     path = KEYPATH
@@ -758,15 +767,19 @@ async def import_key(key_file: UploadFile = File(...),token:dict=Depends(verify_
     CONFIG.key_filename = path
     CONFIG.flush_config()
 
+    CONFIG.info(f"New encryption key imported by {username}")
+
 @pool.post("/recover",
     responses={500: {"description": "Any internal errors"}},
     summary="Attempts to recover from errors in the disk array")
 def attempt_recovery(auth:Dict=Depends(verify_token_header_factory("recover"))) -> Optional[dict]:
-    check_permission(auth.get("username"), UserPermissions.POOL_TOOLS_RECOVERY)
+    check_permission(username:=auth.get("username"), UserPermissions.POOL_TOOLS_RECOVERY)
     if (not CONFIG.is_pool_configured):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_NO_CONF.name))
 
     recover()
+
+    CONFIG.warning(f"Pool recovery attempted by {username}")
 
     return {"detail": SuccessMessage(code=SuccessMessages.S_RECOVERY.name)}
 
@@ -809,13 +822,15 @@ def replace(devices:ReplaceDevice,token:dict=Depends(verify_token)) -> Optional[
 
     task.success_message = SuccessMessage(code=SuccessMessages.S_POOL_REPLACE_DISK.name)
 
+    CONFIG.warning(f"Pool replacement task {task_id} initiated: {old_disk} -> {new_disk}")
+
     return BackgroundTask(task_id=task_id,running=True,progress=None,eta=None,detail=None)
 
 @pool.post("/scrub",
     responses={500: {"description": "Any internal errors"}},
     summary="Start disk array scrubbing operation",)
 def pool_scrub(token:dict=Depends(verify_token)) -> Optional[BackgroundTask]:
-    check_permission(token.get("username"), UserPermissions.POOL_TOOLS_VERIFY)
+    check_permission(username:=token.get("username"), UserPermissions.POOL_TOOLS_VERIFY)
     pool_name = CONFIG.pool_name
     cmd =  ZPoolScrub(pool_name)
 
@@ -831,7 +846,7 @@ def pool_scrub(token:dict=Depends(verify_token)) -> Optional[BackgroundTask]:
     CONFIG.scrub_started()
     CONFIG.flush_config()
 
-    CONFIG.info(f"Scrub initiated for pool {pool_name} - task id {task_id}")
+    CONFIG.info(f"Scrub initiated for pool {pool_name} with task id {task_id} by {username}")
 
     return BackgroundTask(task_id=task_id,running=True,progress=None,eta=None,detail=None)
 
@@ -841,7 +856,7 @@ def pool_scrub(token:dict=Depends(verify_token)) -> Optional[BackgroundTask]:
     response_model=Optional[BackgroundTask],
 )
 def pool_expand(new_device:str,token:dict=Depends(verify_token)) -> Optional[BackgroundTask]:
-    check_permission(token.get("username"), UserPermissions.POOL_CONF_EXPAND)
+    check_permission(username:=token.get("username"), UserPermissions.POOL_CONF_EXPAND)
     cmd = None
 
     disks = get_attachable_disks()
@@ -897,6 +912,73 @@ def pool_expand(new_device:str,token:dict=Depends(verify_token)) -> Optional[Bac
         task = PoolExpansionStatus(new_device)
         task_id = SCHEDULER.schedule(task)
 
+        CONFIG.info(f"Disk expansion started for pool {pool_name} with task id {task_id} by {username}: {new_device}")
+
         return BackgroundTask(task_id=task_id, running=True, progress=None, eta=None, detail=None)
 
+    CONFIG.info(f"Disk expansion performed for pool {pool_name} by {username}: {new_device}")
+
     return None
+
+
+@pool.get("/snapshot",
+    responses={500: {"description": "Any internal errors"}},
+    summary="Get the list of snapshots",
+    response_model=List[PoolSnapshot])
+
+def get_snapshots(token:dict=Depends(verify_token)) -> List[PoolSnapshot]:
+    check_permission(token.get("username"), UserPermissions.POOL_TOOLS_SNAPSHOT)
+
+    cmd = ZFSList(type="snapshot").execute()
+
+    if (cmd.returncode != 0):
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_SNAPSHOTS.name, params=[cmd.stderr]))
+
+    d = json.loads(cmd.stdout)
+
+    datasets = d.get("datasets", [])
+
+    return [ PoolSnapshot(name=dataset.get("snapshot_name"),ref_size=dataset.get("properties",{}).get("referenced",{}).get("value"))
+             for dataset in list(sorted(datasets.values(),key=lambda x : x.get("createtxg",0)))
+             if (dataset.get("type") == "SNAPSHOT")
+           ]
+
+
+
+
+
+@pool.post("/snapshot/{snapshot_name}",
+    responses={500: {"description": "Any internal errors"}},
+    summary="Create a new snapshot",
+)
+def new_snapshot(snapshot_name:str,token:dict=Depends(verify_token)) -> Optional[dict]:
+    check_permission(username:=token.get("username"), UserPermissions.POOL_TOOLS_SNAPSHOT)
+    CONFIG.create_snapshot(snapshot_name)
+
+    CONFIG.info(f"Created new snapshot {snapshot_name} by {username}")
+
+    return {"detail": SuccessMessage(code=SuccessMessages.S_POOL_SNAPSHOT_CREATE.name)}
+
+@pool.delete("/snapshot/{snapshot_name}",
+    responses={500: {"description": "Any internal errors"}},
+    summary="Delete the given snapshot snapshot",
+)
+def destroy_snapshot(snapshot_name:str,token:dict=Depends(verify_token)) -> Optional[dict]:
+    check_permission(username:=token.get("username"), UserPermissions.POOL_TOOLS_SNAPSHOT)
+    CONFIG.delete_snapshot(snapshot_name)
+
+    CONFIG.warning(f"Snapshot {snapshot_name} deleted by {username}")
+
+    return {"detail": SuccessMessage(code=SuccessMessages.S_POOL_SNAPSHOT_DELETE.name)}
+
+@pool.patch("/snapshot/{snapshot_name}",
+    responses={500: {"description": "Any internal errors"}},
+    summary="Delete the given snapshot snapshot",
+)
+def rollback_snapshot(snapshot_name:str,token:dict=Depends(verify_token)) -> Optional[dict]:
+    check_permission(username:=token.get("username"), UserPermissions.POOL_TOOLS_SNAPSHOT)
+    CONFIG.rollback_snapshot(snapshot_name)
+
+    CONFIG.warning(f"Pool rolled back to {snapshot_name} {username}")
+
+    return {"detail": SuccessMessage(code=SuccessMessages.S_POOL_SNAPSHOT_ROLLBACK.name,params=[snapshot_name])}

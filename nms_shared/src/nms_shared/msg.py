@@ -47,6 +47,11 @@ class ErrorMessages(Enum):
     E_POOL_DISK_MISSING = "E_POOL_DISK_MISSING"
     E_POOL_CORRUPTED = "E_POOL_CORRUPTED"
     E_POOL_OUTDATED = "E_POOL_OUTDATED"
+    E_POOL_SNAPSHOT_NAME = "E_POOL_SNAPSHOT_NAME"
+    E_POOL_SNAPSHOT_CREATE = "E_POOL_SNAPSHOT_CREATE"
+    E_POOL_SNAPSHOT_DELETE = "E_POOL_SNAPSHOT_DELETE"
+    E_POOL_SNAPSHOTS = "E_POOL_SNAPSHOTS"
+    E_POOL_SNAPSHOT_ROLLBACK = "E_POOL_SNAPSHOT_ROLLBACK"
 
     E_AUTH_ALREADY_CONFIG = "E_AUTH_ALREADY_CONFIG"
     E_AUTH_INVALID = "E_AUTH_INVALID"
@@ -140,6 +145,9 @@ class SuccessMessages(Enum):
     S_POOL_MOUNTED = "S_POOL_MOUNTED"
     S_POOL_UNMOUNTED = "S_POOL_UNMOUNTED"
     S_POOL_SCRUB = "S_POOL_SCRUB"
+    S_POOL_SNAPSHOT_CREATE = "S_POOL_SNAPSHOT_CREATE"
+    S_POOL_SNAPSHOT_DELETE = "S_POOL_SNAPSHOT_DELETE"
+    S_POOL_SNAPSHOT_ROLLBACK = "S_POOL_SNAPSHOT_ROLLBACK"
 
     S_APT_UPDATE = "S_APT_UPDATE"
     S_APT_UPGRADE = "S_APT_UPGRADE"
@@ -237,6 +245,11 @@ ERROR_MESSAGES = {
     ErrorMessages.E_POOL_DISK_MISSING: lambda : _("One or more disks seems missing. Your disk array CANNOT be used in this state. Insert back the missing disk. If the disk is inserted and still see this error, you can format it in the Advanced page (this can likely cause data loss)."),
     ErrorMessages.E_POOL_CORRUPTED: lambda : _("The information related your disk array are corrupted. Recovery may be possible (but not guaranteed) and some data loss can occur. Use the `Attempt Recovery` button in Advanced. If the problem persists, back up your data, destroy and create a new array. Consider replacing one or more disks if their diagnostics suggest so."),
     ErrorMessages.E_POOL_OUTDATED: lambda : _("Your disk array seems to be outdated and cannot be used anymore."),
+    ErrorMessages.E_POOL_SNAPSHOT_NAME: lambda name: _("Snapshot name `%(name)s` is invalid.") % {"name":name},
+    ErrorMessages.E_POOL_SNAPSHOT_CREATE: lambda info: _("Error while creating a new snapshot of your disk array: %(info)s") % {'info':info},
+    ErrorMessages.E_POOL_SNAPSHOT_DELETE: lambda name,info: _("Error while deleting the snapshot `%(name)s` from your disk array: %(info)s") % {'info':info,'name':name},
+    ErrorMessages.E_POOL_SNAPSHOTS: lambda info: _("Error while retrieving the list of snapshots: %(info)s") % {'info':info},
+    ErrorMessages.E_POOL_SNAPSHOT_ROLLBACK: lambda name,info: _("Error while rolling back to `%(name)s`: %(info)s") % {'info':info, 'name':name},
 
     ErrorMessages.E_AUTH_ALREADY_CONFIG : lambda _: ("You have already an OTP credentials configured."),
     ErrorMessages.E_AUTH_INVALID : lambda: _("Invalid authorisation."),
@@ -316,6 +329,9 @@ SUCCESS_MESSAGES = {
     SuccessMessages.S_POOL_UNMOUNTED : lambda: _("Disk array unmounted successfully."),
     SuccessMessages.S_POOL_SCRUB : lambda: _("Disk array verification performed successfully."),
     SuccessMessages.S_POOL_REPLACE_DISK : lambda: _("Disk replaced successfully."),
+    SuccessMessages.S_POOL_SNAPSHOT_CREATE: lambda : _("Snapshot created successfully"),
+    SuccessMessages.S_POOL_SNAPSHOT_DELETE: lambda : _("Snapshot deleted successfully"),
+    SuccessMessages.S_POOL_SNAPSHOT_ROLLBACK: lambda name : _("Disk array rolled back to `%(name)s`.") % {'name':name},
 
     SuccessMessages.S_APT_UPDATE : lambda: _("System updates retrieved successfully."),
     SuccessMessages.S_APT_UPGRADE : lambda: _("System updates installed successfully."),

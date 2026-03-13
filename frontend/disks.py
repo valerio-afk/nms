@@ -1,7 +1,10 @@
+from nms_shared.enums import UserPermissions
+from nms_shared.utils import match_permissions
 from . import frontend as bp, NMSBACKEND as BACKEND
 from .api.backend_proxy import show_flash
 from .api.tasks import PoolExpansionTask
-from flask import g, render_template, redirect, url_for, flash, Response, request
+from datetime import datetime
+from flask import g, render_template, redirect, url_for, flash, Response, request, session
 from flask_babel import _
 from flask_babel import format_datetime
 from flask_wtf.csrf import validate_csrf
@@ -33,6 +36,15 @@ def disk_management() -> str:
         else:
             flash(f"Disk array {p['name']} unrecoverable error: {p['message']}","error")
 
+    current_user = session['user']
+    perms = current_user.get("permissions", [])
+
+
+    snapshots = []
+
+    if (match_permissions(perms,UserPermissions.POOL_TOOLS_SNAPSHOT)):
+        snapshots = BACKEND.snapshots
+
 
     parameters = {
         "active_page": "disk",
@@ -40,6 +52,7 @@ def disk_management() -> str:
         "pool": BACKEND.is_pool_configured,
         "imported_pools": imports,
         "csp_nonce": g.csp_nonce,
+        "snapshots": snapshots
     }
 
 
@@ -190,19 +203,32 @@ def replace_disk():
 
     return redirect(url_for("main.disk_management"))
 
+@bp.route('/disks/snapshot',methods=['POST'])
+def snapshot_disk() -> Response:
+    timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    BACKEND.create_snapshot(timestamp)
 
+    return redirect(url_for("main.disk_management"))
+
+@bp.route('/disks/snapshot/mngt',methods=['POST'])
+def snapshot_mngt() -> Response:
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+
+    snapshot_to_delete = request.form.get("delete")
+    snapsht_to_rollback = request.form.get("rollback")
+
+    if (snapshot_to_delete is not None):
+        BACKEND.delete_snapshot(snapshot_to_delete)
+    elif (snapsht_to_rollback is not None):
+        BACKEND.rollback_snapshot(snapsht_to_rollback)
+
+
+    return redirect(url_for("main.disk_management"))
 
 # WAIT PAGES
-
-# @bp.route('/disks/new/wait')
-# def new_pool_wait() -> str:
-#     return render_template("wait.indeterminate.html",
-#                            active_page="disk",
-#                            refresh_to=url_for("main.disk_management"),
-#                            extra_css=["pacman.css"],
-#                            csp_nonce=g.csp_nonce,
-#                            hide_flash=True,
-#                            waiting_message=_("The creation of a new disk array may take some time. Please wait..."))
 
 @bp.route('/disks/add/wait')
 def add_disk_wait() -> Union[str,Response]:
@@ -233,4 +259,5 @@ def replace_disk_wait() -> Union[str,Response]:
                            refresh_to=url_for("main.disk_management"),
                            task_id=resilver_task.task_id,
                            csp_nonce=g.csp_nonce)
+
 

@@ -1,0 +1,10 @@
+{
+    "dependencies": [
+        "mocha/mocha.js",
+        "mocha/mocha.css",
+        "require-run: ./mocha-browser-setup",
+        "require-run: ../browser/test.js",
+        "require-run: ../browser/benchmark.js",
+        "./style.css"
+    ]
+}

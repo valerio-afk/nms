@@ -1,5 +1,6 @@
 from .auth import check_permission
 from backend_server.utils.cmdl import LSBLK, ZPoolLabelClear, WipeFS
+from backend_server.utils.config import CONFIG
 from backend_server.utils.responses import  ErrorMessage, SuccessMessage
 from backend_server.v1.auth import verify_token_factory, verify_token_header_factory
 from fastapi import APIRouter, Depends, HTTPException
@@ -111,4 +112,6 @@ def get_all_disks(token:dict=Depends(verify_token)) -> List[Disk]:
 def perform_format_disk(dev:str,auth:Dict=Depends(verify_token_header_factory("format-disk"))) -> Optional[Dict]:
     check_permission(auth.get("username"), UserPermissions.POOL_DISKS_FORMAT)
     format_disk(dev)
+    CONFIG.warning(f"`{dev}` has been formatted")
+
     return {"detail": SuccessMessage(code=SuccessMessages.S_DISK_FORMATTED.name,params=[dev])}

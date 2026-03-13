@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useContext } from 'react';
 import { browseFs, mkdirFs, mvFs, rmFs, type FSBrowse, type FileInfo, ApiError } from './utils/api';
 import { formatBytes, formatDate } from './utils/formats'
 import {
@@ -8,6 +8,7 @@ import {
     FolderPlus, Upload, Edit2, Download, Trash2,
     MoveRight, CornerLeftUp
 } from 'lucide-react';
+import { ContextMenuContext } from './App';
 
 const humanReadableType = (type: FileInfo['type']): string => {
     switch (type) {
@@ -47,6 +48,7 @@ export interface FileBrowserProps {
 }
 
 export default function FileBrowser({ onAuthError }: FileBrowserProps) {
+    const { ctxMenuPosition, setCtxMenuPosition, handleContextMenuClick } = useContext(ContextMenuContext);
     const [currentPath, setCurrentPath] = useState<string>('');
     const [browseData, setBrowseData] = useState<FSBrowse | null>(null);
     const [loading, setLoading] = useState(false);
@@ -87,6 +89,13 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     type SortDirection = 'asc' | 'desc';
     const [sortField, setSortField] = useState<SortField>('type');
     const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+    const handleContextMenu = (event: React.MouseEvent) => {
+        event.preventDefault(); // prevent default browser menu
+        setCtxMenuPosition({ x: event.pageX, y: event.pageY });
+    };
+
+
 
     const handleSort = (field: SortField) => {
         if (sortField === field) {
@@ -245,7 +254,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                 const itemPath = currentPath ? `${currentPath}/${item}` : item;
                 return rmFs(itemPath);
             }));
-            
+
             setIsDeleteModalOpen(false);
             setSelectedItems(new Set());
             setLastSelectedAnchor(null);
@@ -267,17 +276,17 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
         setError(null);
         try {
             const itemsToMove = Array.from(selectedItems);
-            
+
             await Promise.all(itemsToMove.map(item => {
                 const oldPath = currentPath ? `${currentPath}/${item}` : item;
                 const newPath = pickerPath ? `${pickerPath}/${item}` : item;
-                
+
                 // Need to avoid moving to same directory
                 if (oldPath === newPath) return Promise.resolve();
-                
+
                 return mvFs(oldPath, newPath);
             }));
-            
+
             setIsMoveModalOpen(false);
             setSelectedItems(new Set());
             setLastSelectedAnchor(null);
@@ -316,7 +325,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
 
     const handleDrop = async (e: React.DragEvent, targetFile: FileInfo) => {
         e.preventDefault();
-        
+
         if (!draggedItem) {
             return;
         }
@@ -327,7 +336,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
         }
 
         const itemsToMove = selectedItems.has(draggedItem) ? Array.from(selectedItems) : [draggedItem];
-        
+
         if (itemsToMove.includes(targetFile.name)) {
             setDraggedItem(null);
             return;
@@ -357,17 +366,17 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
             if (documentSelection) {
                 documentSelection.removeAllRanges();
             }
-            
+
             const anchorIndex = sortedFiles.findIndex(f => f.name === lastSelectedAnchor);
             if (anchorIndex !== -1) {
                 const start = Math.min(index, anchorIndex);
                 const end = Math.max(index, anchorIndex);
-                
+
                 const newSelection = new Set<string>();
                 for (let i = start; i <= end; i++) {
                     newSelection.add(sortedFiles[i].name);
                 }
-                
+
                 if (e.ctrlKey || e.metaKey) {
                     setSelectedItems(prev => {
                         const newSet = new Set(prev);
@@ -462,62 +471,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
         );
     };
 
-    const renderActions = () => {
-        const multiSelected = selectedItems.size > 1;
-        const noneSelected = selectedItems.size === 0;
-        const singleSelected = selectedItems.size === 1;
 
-        return (
-            <div className="flex flex-wrap items-center gap-3 mb-6 pb-6 border-b border-gray-200 dark:border-zinc-800">
-                <button
-                    onClick={() => setIsCreateFolderModalOpen(true)}
-                    disabled={multiSelected}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
-                >
-                    <FolderPlus className="w-4 h-4" />
-                    Create Folder
-                </button>
-                <button
-                    disabled={multiSelected}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
-                >
-                    <Upload className="w-4 h-4" />
-                    Upload file
-                </button>
-                <button
-                    disabled={!singleSelected}
-                    onClick={openRenameModal}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
-                >
-                    <Edit2 className="w-4 h-4" />
-                    Rename
-                </button>
-                <button
-                    disabled={noneSelected}
-                    onClick={() => setIsMoveModalOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
-                >
-                    <MoveRight className="w-4 h-4" />
-                    Move
-                </button>
-                <button
-                    disabled={noneSelected}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
-                >
-                    <Download className="w-4 h-4" />
-                    Download
-                </button>
-                <button
-                    disabled={noneSelected}
-                    onClick={() => setIsDeleteModalOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors"
-                >
-                    <Trash2 className="w-4 h-4" />
-                    Delete
-                </button>
-            </div>
-        );
-    };
 
     const SortHeader = ({ field, label, align = 'left' }: { field: SortField, label: string, align?: 'left' | 'right' }) => (
         <th
@@ -557,8 +511,12 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
         );
     }
 
+    const multiSelected = selectedItems.size > 1;
+    const noneSelected = selectedItems.size === 0;
+    const singleSelected = selectedItems.size === 1;
+
     return (
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm ring-1 ring-gray-900/5 dark:ring-white/10 p-6 md:p-8 min-h-[500px]">
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm ring-1 ring-gray-900/5 dark:ring-white/10 p-6 md:p-8 min-h-[500px]" onContextMenu={handleContextMenu} onClick={handleContextMenuClick}>
             {isCreateFolderModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 dark:bg-black/50 backdrop-blur-sm">
                     <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl ring-1 ring-gray-900/5 dark:ring-white/10 w-full max-w-md p-6 animate-in fade-in zoom-in-95 duration-200">
@@ -684,15 +642,15 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             </div>
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Confirm Deletion</h3>
                         </div>
-                        
+
                         <div className="mb-6">
                             <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
-                                Are you sure you want to delete the following item{selectedItems.size > 1 ? 's' : ''}? 
+                                Are you sure you want to delete the following item{selectedItems.size > 1 ? 's' : ''}?
                                 <strong className="block mt-2 text-red-600 dark:text-red-400">
                                     This action is permanent and there is no way to recover these files.
                                 </strong>
                             </p>
-                            
+
                             <div className="max-h-40 overflow-y-auto bg-gray-50 dark:bg-zinc-800 rounded-lg border border-gray-200 dark:border-zinc-700 p-2">
                                 <ul className="text-sm text-gray-600 dark:text-gray-400 list-inside list-disc">
                                     {Array.from(selectedItems).map((item, idx) => (
@@ -739,19 +697,19 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             </div>
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Select Destination</h3>
                         </div>
-                        
+
                         <div className="mb-6">
                             <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 truncate">
                                 Current selection: {pickerPath || '/ (Root)'}
                             </p>
-                            
+
                             <div className="h-64 overflow-y-auto bg-gray-50 dark:bg-zinc-800/50 rounded-lg border border-gray-200 dark:border-zinc-700">
                                 {pickerLoading && !pickerData ? (
                                     <div className="flex items-center justify-center h-full text-sm text-gray-500">Loading...</div>
                                 ) : (
                                     <ul className="text-sm font-medium">
                                         {/* Parent directory navigation item */}
-                                        <li 
+                                        <li
                                             onClick={() => {
                                                 if (!pickerPath) return; // At root
                                                 const parts = pickerPath.split('/');
@@ -763,13 +721,13 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                             <CornerLeftUp className="w-4 h-4" />
                                             .. (Parent Directory)
                                         </li>
-                                        
+
                                         {/* Available directories */}
                                         {pickerData?.files.length === 0 ? (
                                             <li className="px-4 py-4 text-center text-gray-500 dark:text-gray-400">No directories found.</li>
                                         ) : (
                                             pickerData?.files.map((dir, idx) => (
-                                                <li 
+                                                <li
                                                     key={idx}
                                                     onClick={() => {
                                                         const nextPath = pickerPath ? `${pickerPath}/${dir.name}` : dir.name;
@@ -815,16 +773,97 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                 </div>
             )}
 
-            {renderActions()}
+
+            {
+                <>
+                    <div className="flex flex-wrap items-center gap-3 mb-6 pb-6 border-b border-gray-200 dark:border-zinc-800">
+                        <button
+                            onClick={() => setIsCreateFolderModalOpen(true)}
+                            disabled={multiSelected}
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                        >
+                            <FolderPlus className="w-4 h-4" />
+                            Create Folder
+                        </button>
+                        <button
+                            disabled={multiSelected}
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                        >
+                            <Upload className="w-4 h-4" />
+                            Upload file
+                        </button>
+                        <button
+                            disabled={!singleSelected}
+                            onClick={openRenameModal}
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                        >
+                            <Edit2 className="w-4 h-4" />
+                            Rename
+                        </button>
+                        <button
+                            disabled={noneSelected}
+                            onClick={() => setIsMoveModalOpen(true)}
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                        >
+                            <MoveRight className="w-4 h-4" />
+                            Move
+                        </button>
+                        <button
+                            disabled={noneSelected}
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                        >
+                            <Download className="w-4 h-4" />
+                            Download
+                        </button>
+                        <button
+                            disabled={noneSelected}
+                            onClick={() => setIsDeleteModalOpen(true)}
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            Delete
+                        </button>
+                    </div>
+                </>
+            }
             {renderBreadcrumbs()}
 
             {error && (
                 <div className="p-4 mb-6 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm border border-red-100 dark:border-red-900/30">
                     {error}
                 </div>
+
             )}
 
+
             <div className="overflow-x-auto">
+                {ctxMenuPosition && (
+                    <div data-role="menu" className="absolute bg-white shadow-lg rounded-md border border-gray-200 w-40 py-1 z-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" style={{ top: ctxMenuPosition.y, left: ctxMenuPosition.x }}>
+                        <a
+                            onClick={singleSelected ? openRenameModal : undefined}
+                            className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${singleSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                        >
+                            <Edit2 className="w-4 h-4" /> Rename
+                        </a>
+                        <a
+                            onClick={noneSelected ? undefined : () => setIsMoveModalOpen(true)}
+                            className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${!noneSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                        >
+                            <MoveRight className="w-4 h-4" />Move
+                        </a>
+                        <a
+                            className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${!noneSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                        >
+                            <Download className="w-4 h-4" /> Download
+                        </a>
+                        <div className="h-px bg-slate-200 my-1"></div>
+                        <a
+                            onClick={noneSelected ? undefined : () => setIsDeleteModalOpen(true)}
+                            className={`flex items-center gap-2 px-4 py-2 text-sm rounded-md text-red-500 hover:bg-red-100 ${!noneSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
+                            <Trash2 className="w-4 h-4" /> Delete
+                        </a>
+                    </div>
+                )}
                 <table className="w-full text-left text-sm whitespace-nowrap">
                     <thead className="text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-zinc-800">
                         <tr>

@@ -1,5 +1,5 @@
-from backend_server.utils.cmdl import Chown, LocalCommandLineTransaction, Groups, ZPoolList, GetEntPasswd
-from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet, UserModChangeHomeDir, ZFSGetQuota, Chmod
+from backend_server.utils.cmdl import Chown, LocalCommandLineTransaction, Groups, ZPoolList, GetEntPasswd, ZFSSnapshot
+from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet,  ZFSGetQuota, Chmod, ZFSRollback, ZFSDestroy
 from backend_server.utils.logger import Logger
 from backend_server.utils.responses import ErrorMessage, UserProfile, Quota
 from backend_server.utils.services import SystemService
@@ -19,8 +19,9 @@ import hashlib
 import json
 import jwt
 import os
-import pwd
 import pytz
+import re
+import uuid
 
 SECRET_KEY = os.environ.get("NMS_SECRET_KEY")
 
@@ -106,6 +107,7 @@ class NMSConfig(Logger):
         this._config_file = config_file
         this._cfg = {}
         this._tmp_secret = {}
+        this._uploads={}
         this._daemons = {
             'netcounter': NetIOCounter()
         }
@@ -123,6 +125,7 @@ class NMSConfig(Logger):
 
         this._setup_access_services()
         this._ddns_init()
+
 
 
     def _setup_access_services(this) -> None:
@@ -382,8 +385,6 @@ class NMSConfig(Logger):
     @property
     def admins(this) -> List[UserProfile]:
         return [u for u in this.users if u.admin]
-
-
 
     # BASE METHODS
 
@@ -656,8 +657,6 @@ class NMSConfig(Logger):
     def save_temporary_otp(this,username:Optional[str]) -> str:
         secret = this._tmp_secret[username]
 
-        CONFIG.warning(f"I am here - temp secret: {secret}")
-
         if (username is not None):
             u = this._cfg.get("users",{}).get(username)
             if (u is None):
@@ -665,12 +664,10 @@ class NMSConfig(Logger):
 
             this._cfg["users"][username]["otp_secret"] = secret
         else:
-            CONFIG.warning("right path")
             if (this.is_otp_configured):
                 raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_AUTH_ALREADY_CONFIG.name))
 
             username = list(this._cfg.get("users",{}).keys())[0]
-            CONFIG.warning(f"first username: {username}")
             this._cfg["users"][username]["otp_secret"] = secret
 
         this.flush_config()
@@ -813,6 +810,45 @@ class NMSConfig(Logger):
         }
 
         this._cfg["dataset"] = dataset_name
+
+    def create_snapshot(this,snapshot_name:str) -> None:
+        regex = re.compile("^[A-Za-z0-9_.:-]+$")
+        snapshot_name = snapshot_name.strip()
+
+        if (regex.match(snapshot_name) is None):
+            raise HTTPException(status_code=400,
+                                detail=ErrorMessage(code=ErrorMessages.E_POOL_SNAPSHOT_NAME.name,params=[snapshot_name])
+                                )
+
+        zfs = ZFSSnapshot(pool=this.pool_name,dataset=this.dataset_name,snapshot_name=snapshot_name).execute()
+
+        if (zfs.returncode != 0):
+            raise HTTPException(status_code=400,
+                                detail=ErrorMessage(code=ErrorMessages.E_POOL_SNAPSHOT_CREATE.name,
+                                                    params=[zfs.stderr])
+                                )
+
+    def delete_snapshot(this,snapshot_name:str) -> None:
+        snapshot_name = snapshot_name.strip()
+        zfs = ZFSDestroy(pool=this.pool_name,dataset=this.dataset_name,snapshot_name=snapshot_name).execute()
+
+        if (zfs.returncode != 0):
+            raise HTTPException(status_code=400,
+                                detail=ErrorMessage(code=ErrorMessages.E_POOL_SNAPSHOT_DELETE.name,
+                                                    params=[zfs.stderr])
+                                )
+
+    def rollback_snapshot(this,snapshot_name:str) -> None:
+        snapshot_name = snapshot_name.strip()
+
+        zfs = ZFSRollback(pool=this.pool_name,dataset=this.dataset_name,snapshot_name=snapshot_name).execute()
+
+        if (zfs.returncode != 0):
+            raise HTTPException(status_code=400,
+                                detail=ErrorMessage(code=ErrorMessages.E_POOL_SNAPSHOT_ROLLBACK.name,
+                                                    params=[zfs.stderr])
+                                )
+
 
     def scrub_started(this) -> None:
         this._cfg['pool']['tools']['scrub']['ongoing'] = True
@@ -964,6 +1000,35 @@ class NMSConfig(Logger):
                 if (hasattr(this,method)):
                     mtd = getattr(this,method)
                     mtd()
+
+    #FS METHODS
+    def init_upload(this,length:int,metadata:Any) -> str:
+        upload_id = str(uuid.uuid4())
+        this._uploads[upload_id] = {
+            "length":length,
+            "offset":0,
+            "metadata": metadata
+        }
+
+        return upload_id
+
+    # find . -type f -name ".*.nms.chunk" -mtime +1 -delete
+
+    def get_upload_session(this, id:str) -> dict:
+        return this._uploads.get(id)
+
+    def increment_upload_offset(this, id: str, length:int) -> int:
+        this._uploads[id]["offset"] += length
+
+        return this._uploads[id]["offset"]
+
+    def delete_upload_session(this, id:str) -> None:
+        del this._uploads[id]
+
+    def is_upload_complete(this,id:str) -> bool:
+        return this._uploads[id]['offset'] == this._uploads[id]['length']
+
+
 
 
 
