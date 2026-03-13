@@ -23,7 +23,7 @@ fs = APIRouter(
     dependencies=[Depends(verify_token)]
 )
 
-def check_path_jail(user:UserProfile,path:str) -> Path:
+def check_path_jail(user:UserProfile,path:str,stat_last:bool=True) -> Path:
     home = Path(user.home_dir)
     requested_path = home.joinpath(path).resolve()
 
@@ -32,13 +32,18 @@ def check_path_jail(user:UserProfile,path:str) -> Path:
 
     current = Path(user.home_dir)
 
-    for part in requested_path.relative_to(home).parts:
+    parts = requested_path.relative_to(home).parts
+
+    for i,part in enumerate(parts):
         current = current.joinpath(part)
 
         stat = Stat(str(current),"%N\n%F",sudo=True).execute()
 
         if (stat.returncode!=0):
-            raise HTTPException(status_code=401)
+            if (i<(len(parts)-1) or ((i==(len(parts)-1)) and stat_last)):
+                raise HTTPException(status_code=401,detail=f"Cannot stat `{current}`")
+            else:
+                continue
 
         fname,type = stat.stdout.splitlines()
 
@@ -251,7 +256,7 @@ def fs_mv(data:MvModel,token:dict=Depends(verify_token)) -> None:
         raise HTTPException(status_code=401)
 
     old = check_path_jail(user, data.old_path)
-    new = check_path_jail(user, data.new_path)
+    new = check_path_jail(user, data.new_path,stat_last=False)
 
     out = Move(str(old),str(new),sudo=True).execute()
 
@@ -377,7 +382,7 @@ def fs_rm(filename: str, token:dict=Depends(verify_token)) -> None:
 
     is_dir = "directory" in stat.stdout
 
-    out = RemoveFile(filename, is_dir=is_dir,sudo=True).execute()
+    out = RemoveFile(p, is_dir=is_dir,sudo=True).execute()
 
     if (out.returncode != 0):
         raise HTTPException(status_code=500)

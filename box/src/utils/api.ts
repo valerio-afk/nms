@@ -130,6 +130,22 @@ export async function mkdirFs(currentPath: string, newDir: string): Promise<void
     });
 }
 
+export async function mvFs(oldPath: string, newPath: string): Promise<void> {
+    await apiRequest('/fs/mv', {
+        method: 'POST',
+        body: JSON.stringify({
+            old_path: oldPath,
+            new_path: newPath
+        })
+    });
+}
+
+export async function rmFs(path: string): Promise<void> {
+    await apiRequest(`/fs/delete/${path}`, {
+        method: 'GET'
+    });
+}
+
 export async function getQuota(): Promise<UserQuota> {
     return await apiRequest<UserQuota>('/fs/quota', { method: 'GET' });
 }

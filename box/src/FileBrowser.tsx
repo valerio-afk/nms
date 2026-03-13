@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { browseFs, mkdirFs, type FSBrowse, type FileInfo, ApiError } from './utils/api';
+import { browseFs, mkdirFs, mvFs, rmFs, type FSBrowse, type FileInfo, ApiError } from './utils/api';
 import { formatBytes, formatDate } from './utils/formats'
 import {
     Folder, Image, Film, Music, FileText,
     FileArchive, Binary, FileOutput, FileQuestion,
     ChevronRight, ArrowUp, ArrowDown, ShieldAlert,
-    FolderPlus, Upload, Edit2, Download, Trash2
+    FolderPlus, Upload, Edit2, Download, Trash2,
+    MoveRight, CornerLeftUp
 } from 'lucide-react';
 
 const humanReadableType = (type: FileInfo['type']): string => {
@@ -53,12 +54,34 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     const [accessRestricted, setAccessRestricted] = useState(false);
     const [attemptedPath, setAttemptedPath] = useState<string>('');
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+    const [lastSelectedAnchor, setLastSelectedAnchor] = useState<string | null>(null);
 
     // Create Folder Modal State
     const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
     const [isCreatingFolder, setIsCreatingFolder] = useState(false);
     const folderInputRef = useRef<HTMLInputElement>(null);
+
+    // Rename Modal State
+    const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
+    const [newFileName, setNewFileName] = useState('');
+    const [isRenaming, setIsRenaming] = useState(false);
+    const [itemToRename, setItemToRename] = useState<string | null>(null);
+    const renameInputRef = useRef<HTMLInputElement>(null);
+
+    // Delete Modal State
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    // Move Modal (Directory Picker) State
+    const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
+    const [isMoving, setIsMoving] = useState(false);
+    const [pickerPath, setPickerPath] = useState('');
+    const [pickerData, setPickerData] = useState<FSBrowse | null>(null);
+    const [pickerLoading, setPickerLoading] = useState(false);
+
+    // Drag and Drop State
+    const [draggedItem, setDraggedItem] = useState<string | null>(null);
 
     type SortField = 'name' | 'size' | 'type' | 'date';
     type SortDirection = 'asc' | 'desc';
@@ -102,6 +125,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
         setAccessRestricted(false);
         setAttemptedPath(path);
         setSelectedItems(new Set());
+        setLastSelectedAnchor(null);
         try {
             const data = await browseFs(path);
             setBrowseData(data);
@@ -125,9 +149,34 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
         }
     };
 
+    const loadPickerPath = async (path: string) => {
+        setPickerLoading(true);
+        try {
+            const data = await browseFs(path);
+            // Only keep directories and sort them alphabetically
+            const directoriesOnly = data.files
+                .filter(f => f.type === 'dir')
+                .sort((a, b) => a.name.localeCompare(b.name));
+            setPickerData({ ...data, files: directoriesOnly });
+            setPickerPath(path);
+        } catch (err) {
+            // Silently fail or log error in picker
+            console.error(err);
+        } finally {
+            setPickerLoading(false);
+        }
+    };
+
     useEffect(() => {
         loadPath('');
     }, []);
+
+    // Load picker root when modal opens
+    useEffect(() => {
+        if (isMoveModalOpen) {
+            loadPickerPath(currentPath);
+        }
+    }, [isMoveModalOpen, currentPath]);
 
     // Focus input when modal opens
     useEffect(() => {
@@ -135,6 +184,13 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
             folderInputRef.current.focus();
         }
     }, [isCreateFolderModalOpen]);
+
+    // Focus input when rename modal opens
+    useEffect(() => {
+        if (isRenameModalOpen && renameInputRef.current) {
+            renameInputRef.current.focus();
+        }
+    }, [isRenameModalOpen]);
 
     const handleCreateFolder = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -155,7 +211,176 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
         }
     };
 
-    const handleRowClick = (e: React.MouseEvent, file: FileInfo) => {
+    const handleRename = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newFileName.trim() || !itemToRename || newFileName.trim() === itemToRename) return;
+
+        setIsRenaming(true);
+        setError(null);
+        try {
+            const oldPath = currentPath ? `${currentPath}/${itemToRename}` : itemToRename;
+            const newPath = currentPath ? `${currentPath}/${newFileName.trim()}` : newFileName.trim();
+            await mvFs(oldPath, newPath);
+            setIsRenameModalOpen(false);
+            setNewFileName('');
+            setItemToRename(null);
+            setSelectedItems(new Set());
+            await loadPath(currentPath);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error renaming file');
+            setIsRenameModalOpen(false);
+        } finally {
+            setIsRenaming(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (selectedItems.size === 0) return;
+
+        setIsDeleting(true);
+        setError(null);
+        try {
+            const itemsToDelete = Array.from(selectedItems);
+            await Promise.all(itemsToDelete.map(item => {
+                const itemPath = currentPath ? `${currentPath}/${item}` : item;
+                return rmFs(itemPath);
+            }));
+            
+            setIsDeleteModalOpen(false);
+            setSelectedItems(new Set());
+            setLastSelectedAnchor(null);
+            await loadPath(currentPath);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error deleting files');
+            // Reload the view anyway in case some items were deleted successfully
+            await loadPath(currentPath);
+            setIsDeleteModalOpen(false);
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    const handleMoveSubmit = async () => {
+        if (selectedItems.size === 0) return;
+
+        setIsMoving(true);
+        setError(null);
+        try {
+            const itemsToMove = Array.from(selectedItems);
+            
+            await Promise.all(itemsToMove.map(item => {
+                const oldPath = currentPath ? `${currentPath}/${item}` : item;
+                const newPath = pickerPath ? `${pickerPath}/${item}` : item;
+                
+                // Need to avoid moving to same directory
+                if (oldPath === newPath) return Promise.resolve();
+                
+                return mvFs(oldPath, newPath);
+            }));
+            
+            setIsMoveModalOpen(false);
+            setSelectedItems(new Set());
+            setLastSelectedAnchor(null);
+            await loadPath(currentPath);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error moving files');
+            await loadPath(currentPath); // Reload in case some moved successfully
+            setIsMoveModalOpen(false);
+        } finally {
+            setIsMoving(false);
+        }
+    };
+
+    const openRenameModal = () => {
+        if (selectedItems.size !== 1) return;
+        const item = Array.from(selectedItems)[0];
+        setItemToRename(item);
+        setNewFileName(item);
+        setIsRenameModalOpen(true);
+    };
+
+    const handleDragStart = (e: React.DragEvent, fileName: string) => {
+        setDraggedItem(fileName);
+        let itemsToDrag = Array.from(selectedItems.has(fileName) ? selectedItems : [fileName]);
+        if (!selectedItems.has(fileName)) {
+            setSelectedItems(new Set([fileName]));
+            setLastSelectedAnchor(fileName);
+        }
+        e.dataTransfer.setData('text/plain', JSON.stringify(itemsToDrag));
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    };
+
+    const handleDrop = async (e: React.DragEvent, targetFile: FileInfo) => {
+        e.preventDefault();
+        
+        if (!draggedItem) {
+            return;
+        }
+
+        if (targetFile.type !== 'dir') {
+            setDraggedItem(null);
+            return;
+        }
+
+        const itemsToMove = selectedItems.has(draggedItem) ? Array.from(selectedItems) : [draggedItem];
+        
+        if (itemsToMove.includes(targetFile.name)) {
+            setDraggedItem(null);
+            return;
+        }
+
+        setError(null);
+        try {
+            await Promise.all(itemsToMove.map(item => {
+                const oldPath = currentPath ? `${currentPath}/${item}` : item;
+                const newPath = currentPath ? `${currentPath}/${targetFile.name}/${item}` : `${targetFile.name}/${item}`;
+                return mvFs(oldPath, newPath);
+            }));
+            setSelectedItems(new Set());
+            setLastSelectedAnchor(null);
+            await loadPath(currentPath);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error moving files');
+            await loadPath(currentPath); // Reload in case some moved successfully
+        } finally {
+            setDraggedItem(null);
+        }
+    };
+
+    const handleRowClick = (e: React.MouseEvent, file: FileInfo, index: number) => {
+        if (e.shiftKey && lastSelectedAnchor !== null) {
+            const documentSelection = window.getSelection();
+            if (documentSelection) {
+                documentSelection.removeAllRanges();
+            }
+            
+            const anchorIndex = sortedFiles.findIndex(f => f.name === lastSelectedAnchor);
+            if (anchorIndex !== -1) {
+                const start = Math.min(index, anchorIndex);
+                const end = Math.max(index, anchorIndex);
+                
+                const newSelection = new Set<string>();
+                for (let i = start; i <= end; i++) {
+                    newSelection.add(sortedFiles[i].name);
+                }
+                
+                if (e.ctrlKey || e.metaKey) {
+                    setSelectedItems(prev => {
+                        const newSet = new Set(prev);
+                        newSelection.forEach(val => newSet.add(val));
+                        return newSet;
+                    });
+                } else {
+                    setSelectedItems(newSelection);
+                }
+                return;
+            }
+        }
+
         if (e.ctrlKey || e.metaKey) {
             setSelectedItems(prev => {
                 const newSet = new Set(prev);
@@ -166,11 +391,14 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                 }
                 return newSet;
             });
+            setLastSelectedAnchor(file.name);
         } else {
             setSelectedItems(prev => {
                 if (prev.has(file.name) && prev.size === 1) {
+                    setLastSelectedAnchor(null);
                     return new Set();
                 }
+                setLastSelectedAnchor(file.name);
                 return new Set([file.name]);
             });
         }
@@ -258,10 +486,19 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                 </button>
                 <button
                     disabled={!singleSelected}
+                    onClick={openRenameModal}
                     className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
                 >
                     <Edit2 className="w-4 h-4" />
                     Rename
+                </button>
+                <button
+                    disabled={noneSelected}
+                    onClick={() => setIsMoveModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                >
+                    <MoveRight className="w-4 h-4" />
+                    Move
                 </button>
                 <button
                     disabled={noneSelected}
@@ -272,6 +509,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                 </button>
                 <button
                     disabled={noneSelected}
+                    onClick={() => setIsDeleteModalOpen(true)}
                     className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors"
                 >
                     <Trash2 className="w-4 h-4" />
@@ -379,6 +617,204 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                 </div>
             )}
 
+            {isRenameModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 dark:bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl ring-1 ring-gray-900/5 dark:ring-white/10 w-full max-w-md p-6 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                                <Edit2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Rename Item</h3>
+                        </div>
+                        <form onSubmit={handleRename}>
+                            <div className="mb-6">
+                                <label htmlFor="fileName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    New Name
+                                </label>
+                                <input
+                                    ref={renameInputRef}
+                                    type="text"
+                                    id="fileName"
+                                    value={newFileName}
+                                    onChange={(e) => setNewFileName(e.target.value)}
+                                    className="w-full px-4 py-2 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block dark:bg-zinc-800 dark:border-zinc-700 dark:placeholder-gray-400 dark:text-white dark:focus:ring-indigo-500 dark:focus:border-indigo-500"
+                                    disabled={isRenaming}
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsRenameModalOpen(false);
+                                        setNewFileName('');
+                                        setItemToRename(null);
+                                    }}
+                                    disabled={isRenaming}
+                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-700 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isRenaming || !newFileName.trim() || newFileName.trim() === itemToRename}
+                                    className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 dark:focus:ring-offset-zinc-900 transition-colors flex items-center gap-2"
+                                >
+                                    {isRenaming ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            Renaming...
+                                        </>
+                                    ) : (
+                                        'Rename'
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {isDeleteModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 dark:bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl ring-1 ring-gray-900/5 dark:ring-white/10 w-full max-w-md p-6 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                                <Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Confirm Deletion</h3>
+                        </div>
+                        
+                        <div className="mb-6">
+                            <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+                                Are you sure you want to delete the following item{selectedItems.size > 1 ? 's' : ''}? 
+                                <strong className="block mt-2 text-red-600 dark:text-red-400">
+                                    This action is permanent and there is no way to recover these files.
+                                </strong>
+                            </p>
+                            
+                            <div className="max-h-40 overflow-y-auto bg-gray-50 dark:bg-zinc-800 rounded-lg border border-gray-200 dark:border-zinc-700 p-2">
+                                <ul className="text-sm text-gray-600 dark:text-gray-400 list-inside list-disc">
+                                    {Array.from(selectedItems).map((item, idx) => (
+                                        <li key={idx} className="truncate px-2 py-1">{item}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setIsDeleteModalOpen(false)}
+                                disabled={isDeleting}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-700 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleDelete}
+                                disabled={isDeleting}
+                                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 dark:focus:ring-offset-zinc-900 transition-colors flex items-center gap-2"
+                            >
+                                {isDeleting ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        Deleting...
+                                    </>
+                                ) : (
+                                    'Delete'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isMoveModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 dark:bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl ring-1 ring-gray-900/5 dark:ring-white/10 w-full max-w-lg p-6 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                                <MoveRight className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Select Destination</h3>
+                        </div>
+                        
+                        <div className="mb-6">
+                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 truncate">
+                                Current selection: {pickerPath || '/ (Root)'}
+                            </p>
+                            
+                            <div className="h-64 overflow-y-auto bg-gray-50 dark:bg-zinc-800/50 rounded-lg border border-gray-200 dark:border-zinc-700">
+                                {pickerLoading && !pickerData ? (
+                                    <div className="flex items-center justify-center h-full text-sm text-gray-500">Loading...</div>
+                                ) : (
+                                    <ul className="text-sm font-medium">
+                                        {/* Parent directory navigation item */}
+                                        <li 
+                                            onClick={() => {
+                                                if (!pickerPath) return; // At root
+                                                const parts = pickerPath.split('/');
+                                                parts.pop();
+                                                loadPickerPath(parts.join('/'));
+                                            }}
+                                            className={`flex items-center gap-2 px-4 py-2 hover:bg-gray-100 dark:hover:bg-zinc-700 cursor-pointer text-gray-600 dark:text-gray-300 ${!pickerPath ? 'opacity-50 cursor-not-allowed hidden' : ''}`}
+                                        >
+                                            <CornerLeftUp className="w-4 h-4" />
+                                            .. (Parent Directory)
+                                        </li>
+                                        
+                                        {/* Available directories */}
+                                        {pickerData?.files.length === 0 ? (
+                                            <li className="px-4 py-4 text-center text-gray-500 dark:text-gray-400">No directories found.</li>
+                                        ) : (
+                                            pickerData?.files.map((dir, idx) => (
+                                                <li 
+                                                    key={idx}
+                                                    onClick={() => {
+                                                        const nextPath = pickerPath ? `${pickerPath}/${dir.name}` : dir.name;
+                                                        loadPickerPath(nextPath);
+                                                    }}
+                                                    className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 dark:hover:bg-zinc-700 cursor-pointer text-gray-700 dark:text-gray-200"
+                                                >
+                                                    <Folder className="w-4 h-4 text-blue-500 fill-blue-500/20" />
+                                                    {dir.name}
+                                                </li>
+                                            ))
+                                        )}
+                                    </ul>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setIsMoveModalOpen(false)}
+                                disabled={isMoving}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-700 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleMoveSubmit}
+                                disabled={isMoving}
+                                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 dark:focus:ring-offset-zinc-900 transition-colors flex items-center gap-2"
+                            >
+                                {isMoving ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        Moving...
+                                    </>
+                                ) : (
+                                    'Move Here'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {renderActions()}
             {renderBreadcrumbs()}
 
@@ -415,7 +851,11 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             sortedFiles.map((file, idx) => (
                                 <tr
                                     key={idx}
-                                    onClick={(e) => handleRowClick(e, file)}
+                                    draggable
+                                    onDragStart={(e) => handleDragStart(e, file.name)}
+                                    onDragOver={handleDragOver}
+                                    onDrop={(e) => handleDrop(e, file)}
+                                    onClick={(e) => handleRowClick(e, file, idx)}
                                     onDoubleClick={() => handleDoubleClick(file)}
                                     className={`group transition-colors cursor-pointer ${selectedItems.has(file.name)
                                         ? 'bg-indigo-50 dark:bg-indigo-900/20'
