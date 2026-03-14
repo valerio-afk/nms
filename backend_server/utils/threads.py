@@ -57,6 +57,24 @@ class NetIOCounter (NMSThread):
 
             time.sleep(1)
 
+class FreeOldChunkFiles(LongWaitThread):
+    INTERVAL = 60*60*24 # one day
+
+    def __init__(this,mountpoint:str):
+        this._mountpoint = mountpoint
+
+
+    def run(this) -> None:
+        while (this.is_running):
+            subprocess.run(
+                ["find", this._mountpoint, "-type", "f", "-name", ".*.nms.chunk", "-mtime", "+1", "-delete"],
+                stdout = subprocess.PIPE, stderr = subprocess.PIPE, text = True
+            )
+            if this._stop_event.wait(timeout=FreeOldChunkFiles.INTERVAL):
+                break
+
+    #
+
 class ScrubStateChecker(NMSThread):
     def __init__(this, pool_name: str):
         super().__init__()

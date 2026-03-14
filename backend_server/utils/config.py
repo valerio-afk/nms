@@ -3,7 +3,7 @@ from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet,  ZFSG
 from backend_server.utils.logger import Logger
 from backend_server.utils.responses import ErrorMessage, UserProfile, Quota
 from backend_server.utils.services import SystemService
-from backend_server.utils.threads import FreeDNS, DNSExit, Dynv6, ClouDNS
+from backend_server.utils.threads import FreeDNS, DNSExit, Dynv6, ClouDNS, FreeOldChunkFiles
 from backend_server.utils.threads import NetIOCounter, DDNSNoIP, LongWaitThread, DDNSServiceThread, DuckDNS, DynuDDNS
 from cryptography.fernet import Fernet
 from datetime import datetime, timedelta
@@ -108,17 +108,19 @@ class NMSConfig(Logger):
         this._cfg = {}
         this._tmp_secret = {}
         this._uploads={}
-        this._daemons = {
-            'netcounter': NetIOCounter()
-        }
-
-        for d in this._daemons.values():
-            d.start()
 
         try:
             this.load_configuration_file()
         except FileNotFoundError:
             this.create_default_config_file()
+
+        this._daemons = {
+            'netcounter': NetIOCounter(),
+            'chunk_delete': FreeOldChunkFiles(this.mountpoint)
+        }
+
+        for d in this._daemons.values():
+            d.start()
 
         this._access_services = {}
         this._issued_tokens = {}
@@ -1012,7 +1014,6 @@ class NMSConfig(Logger):
 
         return upload_id
 
-    # find . -type f -name ".*.nms.chunk" -mtime +1 -delete
 
     def get_upload_session(this, id:str) -> dict:
         return this._uploads.get(id)
