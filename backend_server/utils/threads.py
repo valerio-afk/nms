@@ -61,6 +61,7 @@ class FreeOldChunkFiles(LongWaitThread):
     INTERVAL = 60*60*24 # one day
 
     def __init__(this,mountpoint:str):
+        super().__init__(interval=FreeOldChunkFiles.INTERVAL)
         this._mountpoint = mountpoint
 
 
@@ -70,7 +71,7 @@ class FreeOldChunkFiles(LongWaitThread):
                 ["find", this._mountpoint, "-type", "f", "-name", ".*.nms.chunk", "-mtime", "+1", "-delete"],
                 stdout = subprocess.PIPE, stderr = subprocess.PIPE, text = True
             )
-            if this._stop_event.wait(timeout=FreeOldChunkFiles.INTERVAL):
+            if this._stop_event.wait(timeout=this.interval):
                 break
 
     #
