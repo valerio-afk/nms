@@ -32,8 +32,8 @@ class NetIOCounter (NMSThread):
     def __init__(this):
         super().__init__()
         this._current_counter = None
-        this._bytes_received:int = None
-        this._bytes_sent:int = None
+        this._bytes_received:Optional[int] = None
+        this._bytes_sent:Optional[int] = None
 
 
     @property
