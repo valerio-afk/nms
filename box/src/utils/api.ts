@@ -75,7 +75,7 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
 // --- Auth Endpoints ---
 
 export async function verifyOtpLogin(otp: string): Promise<{ token: string, username: string }> {
-    const response = await apiRequest<{ token: string, username: string }>('/auth/otp/verify', {
+    const response = await apiRequest<{ token: string, username: string }>('/auth/otp', {
         method: 'POST',
         body: JSON.stringify({
             purpose: 'login',
