@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 set -o errexit      # Exit on error
-set -o pipefail     # Catch pipe errors
 set -o nounset      # Error on undefined variables
 
 #Globals
@@ -35,10 +34,11 @@ PACKAGES=(
 )
 
 SERVICES_TO_DISABLE=(
-    openssh
     vsftpd
-    samba
-    nfs
+    smbd
+    nmbd
+    rpcbind
+    nfs-server
 )
 
 # ----- Colour codes -----
@@ -527,8 +527,8 @@ set_repo_permissions_wwwdata() {
         log_warn "Failed to change ownership of $repo_dir"
     fi
 
-    # Set permissions: owner rwx, group r-x, others ---
-    if ! chmod -R 750 "$repo_dir" >> "$LOG_FILE" 2>&1; then
+    # Set permissions: owner rwx, group rwx, others ---
+    if ! chmod -R 770 "$repo_dir" >> "$LOG_FILE" 2>&1; then
         log_warn "Failed to set permissions on $repo_dir"
     else
         log_info "Permissions set: owner=root, group=$group_name, mode=750"
@@ -564,7 +564,7 @@ set_nms_json_permissions() {
 create_frontend_service() {
     local venv_path="$2"   # e.g., /opt/python3
     local app_dir="$1"
-    local service_file="/etc/systemd/system/nmswebapp.service"
+    local service_file="/usr/lib/systemd/system/nmswebapp.service"
 
     log_info "Creating systemd service for frontend Flask app at $service_file"
 
@@ -579,7 +579,7 @@ User=www-data
 Group=www-data
 WorkingDirectory=$app_dir
 Environment="PATH=$venv_path/bin:$PATH"
-ExecStart=$venv_path/bin/uvicorn $app_dir.frontend.app:frontend_app --host 127.0.0.1 --port 8081 --reload
+ExecStart=$venv_path/bin/uvicorn frontend.app:frontend_app --host 127.0.0.1 --port 8081 --reload
 Restart=always
 RestartSec=5
 
@@ -606,7 +606,7 @@ generate_secret_key() {
 create_backend_service() {
     local venv_path="$2"    # Path to virtualenv
     local app_dir="$1"
-    local service_file="/etc/systemd/system/nmsbackend.service"
+    local service_file="/usr/lib/systemd/system/nmsbackend.service"
 
     generate_secret_key  # Populate $NMS_SECRET_KEY
 
@@ -624,7 +624,7 @@ Group=backend
 WorkingDirectory=$app_dir
 Environment="PATH=$venv_path/bin:$PATH"
 Environment="NMS_SECRET_KEY=$NMS_SECRET_KEY"
-ExecStart=$venv_path/bin/uvicorn $app_dir.backend_server.backend:app --host 127.0.0.1 --port 8081 --reload
+ExecStart=$venv_path/bin/uvicorn backend_server.backend:app --host 127.0.0.1 --port 8081 --reload
 Restart=always
 RestartSec=5
 
@@ -649,12 +649,6 @@ configure_wireguard() {
     local WG_CONF="$WG_DIR/wg0.conf"
     local SERVER_PRIVATE_KEY_FILE="/root/vpn_private.key"
     local SERVER_PUBLIC_KEY_FILE="/root/vpn_public.key"
-    local CLIENT_PUBLIC_KEY="$1"
-
-    if [[ -z "$CLIENT_PUBLIC_KEY" ]]; then
-        log_error "Client public key must be provided"
-        return 1
-    fi
 
     log_info "Generating WireGuard server keys..."
 
@@ -680,10 +674,6 @@ configure_wireguard() {
 Address = 10.0.0.1/24
 PrivateKey = $SERVER_PRIVATE_KEY
 ListenPort = 51820
-
-[Peer]
-PublicKey = $CLIENT_PUBLIC_KEY
-AllowedIPs = 10.0.0.2/32
 EOF
 
     chmod 600 "$WG_CONF"
@@ -842,7 +832,7 @@ add_contrib_nonfree
 
 # Step 2 --- Install packages
 install_packages "${PACKAGES[@]}"
-
+modproble zfs
 # Step 3 --- Disable systemctl services
 manage_services stop "${SERVICES_TO_DISABLE[@]}"
 manage_services disable "${SERVICES_TO_DISABLE[@]}"
