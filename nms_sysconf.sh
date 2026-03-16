@@ -572,7 +572,7 @@ create_frontend_service() {
     local app_dir="$1"
     local service_file="/usr/lib/systemd/system/nmswebapp.service"
 
-    enerate_secret_key  # Populate $NMS_SECRET_KEY
+    generate_secret_key  # Populate $NMS_SECRET_KEY
 
     log_info "Creating systemd service for frontend Flask app at $service_file"
 
@@ -588,7 +588,7 @@ Group=www-data
 WorkingDirectory=$app_dir
 Environment="PATH=$venv_path/bin:$PATH"
 Environment="NMS_SECRET_KEY=$NMS_SECRET_KEY"
-ExecStart=$venv_path/bin/uvicorn frontend.app:frontend_app --host 127.0.0.1 --port 8081 --reload
+ExecStart=$venv_path/bin/uvicorn frontend.app:frontend_app --host 127.0.0.1 --port 8080 --reload
 Restart=always
 RestartSec=5
 
@@ -723,7 +723,8 @@ install_noip_duc() {
     local EXTRACTED_DIR
     EXTRACTED_DIR=$(basename "$TAR_FILE" .tar.gz)
 
-    local DEB_FILE="$TMP_DIR/$EXTRACTED_DIR/binaries/${EXTRACTED_DIR}_amd64.deb"
+    local ARCH=$(dpkg --print-architecture)
+    local DEB_FILE="$TMP_DIR/$EXTRACTED_DIR/binaries/${EXTRACTED_DIR}_${ARCH}.deb"
 
     if [[ ! -f "$DEB_FILE" ]]; then
         log_error "No-IP .deb package not found at $DEB_FILE"
