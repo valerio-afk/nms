@@ -439,7 +439,7 @@ class NMSConfig(Logger):
                 }
             },
             "dataset": None,
-            "root": {
+            "users": {
                 "user": {
                     "otp_secret": None,
                     "fullname": "admin",

@@ -454,7 +454,7 @@ def net_vpn_genkey(token:dict=Depends(verify_token)) -> dict:
 
     wg = read_wireguard_config_file()
 
-    wg['interface']['PrivateKey']= private_key
+    wg['Interface']['PrivateKey']= private_key
 
     write_wireguard_config_file(wg)
 
@@ -503,7 +503,7 @@ def net_vpn_config(config:VPNServerConf,token:dict=Depends(verify_token)) -> dic
         raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_NET_INVALID_IP_ADDRESS.name))
 
     wg = read_wireguard_config_file()
-    wg['interface']['Address'] = f"{str(ip_address)}/{prefix}"
+    wg['Interface']['Address'] = f"{str(ip_address)}/{prefix}"
 
     for section in wg.sections():
         if section.lower().startswith("peer"):
@@ -549,7 +549,7 @@ def net_get_vpn_config(token:dict=Depends(verify_token)) -> NetworkInterface:
     check_permission(token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
     wg = read_wireguard_config_file()
 
-    ip = ipaddress.IPv4Interface(wg['interface']['Address'])
+    ip = ipaddress.IPv4Interface(wg['Interface']['Address'])
     ipv4 = {
         "address": str(ip.ip) ,
         "netmask": str(ip.netmask),

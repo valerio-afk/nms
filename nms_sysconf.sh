@@ -31,6 +31,7 @@ PACKAGES=(
     unp
     nodejs
     npm
+    git
 )
 
 SERVICES_TO_DISABLE=(
@@ -499,6 +500,21 @@ manage_users() {
     log_info "User management completed."
 }
 
+add_nopasswd_sudo() {
+    local user="$1"
+    local file="/etc/sudoers.d/$user"
+
+    log_info "Adding backend to sudoers"
+
+    # Create the sudoers file safely
+    echo "$user ALL=(ALL) NOPASSWD: ALL" | tee "$file" > /dev/null
+
+    # Set the correct permissions
+    chmod 440 "$file"
+
+    log_info "Passwordless sudo enabled for user '$user'."
+}
+
 set_repo_permissions_wwwdata() {
     local repo_dir="$1"
     local backend_user="backend"
@@ -563,7 +579,7 @@ set_nms_json_permissions() {
 
 generate_secret_key() {
     # Generate a 32-character random alphanumeric string
-    NMS_SECRET_KEY=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9')
+    NMS_SECRET_KEY=$(openssl rand -base64 45 | tr -dc 'A-Za-z0-9')
     log_info "Generated random NMS_SECRET_KEY"
 }
 
@@ -860,6 +876,7 @@ install_redis_docker
 #Step 9 --- Configure users
 manage_users
 set_repo_permissions_wwwdata "$DEST_DIR"
+add_nopasswd_sudo "backend"
 #set_nms_json_permissions "$DEST_DIR"
 
 #Step 10 --- Python configuration

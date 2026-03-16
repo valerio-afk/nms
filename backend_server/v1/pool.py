@@ -1,7 +1,8 @@
-from backend_server.utils.cmdl import CommandLine, ZFSLoadKey, ZFSMount, LocalCommandLineTransaction, ZFSUnmount
+from backend_server.utils.cmdl import CommandLine, ZFSLoadKey, ZFSMount, LocalCommandLineTransaction, ZFSUnmount, \
+    UserModChangeHomeDir, Mkdir
 from backend_server.utils.cmdl import ZFSUnLoadKey, ZFSDestroy, ZFSCreate, ZPoolStatus, ZFSList, ZPoolExport, ZPoolScrub
 from backend_server.utils.cmdl import ZPoolAttach, ZPoolAdd, ZPoolImport, CreateKey, ZPoolCreate, ZPoolDestroy
-from backend_server.utils.cmdl import ZPoolClear, ZPoolReplace
+from backend_server.utils.cmdl import ZPoolClear, ZPoolReplace, Stat
 from backend_server.utils.config import CONFIG
 from backend_server.utils.responses import ExpasionStatus, BackendProperty, ErrorMessage, SuccessMessage, BackgroundTask
 from backend_server.utils.responses import PoolSnapshot, CreatePool, ReplaceDevice
@@ -33,6 +34,28 @@ pool = APIRouter(
     dependencies=[Depends(verify_token)]
 )
 remove_partition:Callable[[str],str] = lambda path : re.sub(r"-part[0-9]$","",path)
+
+def align_home_directories() -> None:
+    users = CONFIG.users
+    mountpoint = CONFIG.mountpoint
+
+    for u in users:
+        home_dir = str(os.path.join(mountpoint, u))
+
+        cmd = Stat(home_dir,sudo=True).execute()
+
+        if (cmd.returncode != 0):
+            cmds = [
+                Mkdir(home_dir,sudo=True),
+                UserModChangeHomeDir(u.username,u.home_dir,home_dir)
+            ]
+
+            trans = LocalCommandLineTransaction(*cmds)
+            output = trans.run()
+
+            if (not trans.success):
+                errors = "\n".join([o['stderr'] for o in output])
+                raise Exception(errors)
 
 def mount() -> None:
     if (not CONFIG.is_pool_configured):
@@ -558,6 +581,11 @@ def pool_format(auth:Dict=Depends(verify_token_header_factory("format"))) -> Opt
         errors = "\n ".join([x["stderr"] for x in output])
         raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_FORMAT.name,params=[errors]))
 
+    try:
+        align_home_directories()
+    except Exception as err:
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_FORMAT.name, params=[str(err)]))
+
     CONFIG.warning(f"Pool formatted by {username}")
 
     return {"detail": SuccessMessage(code=SuccessMessages.S_POOL_FORMATTED.name)}
@@ -687,6 +715,11 @@ def create_disk_array(data:CreatePool,token:dict=Depends(verify_token)) -> dict:
 
     change_permissions(CONFIG.mountpoint)
 
+    try:
+        align_home_directories()
+    except Exception as err:
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_NEW.name, params=[str(err)]))
+
     CONFIG.info(f"""Pool created by {username}:
 \tPool name: {data.pool_name}
 \tDataset name: {data.dataset_name}
@@ -766,6 +799,7 @@ async def import_key(key_file: UploadFile = File(...),token:dict=Depends(verify_
 
     CONFIG.key_filename = path
     CONFIG.flush_config()
+
 
     CONFIG.info(f"New encryption key imported by {username}")
 
