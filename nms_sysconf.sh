@@ -10,9 +10,8 @@ LOG_FILE="/var/log/nms.log"
 REPO_URL="https://github.com/valerio-afk/nms"
 DEST_DIR="/nms"
 
-
-IFM_REPO_URL = "https://github.com/misterunknown/ifm.git"
-IFM_REPO_DIR="/opt/ifm"
+#IFM_REPO_URL = "https://github.com/misterunknown/ifm.git"
+#IFM_REPO_DIR="/opt/ifm"
 
 PACKAGES=(
     python3-full
@@ -116,7 +115,7 @@ add_contrib_nonfree() {
             # Add contrib and non-free only if missing
             new_line=$(echo "$line" | sed -E 's/(main)/\1 contrib non-free/')
             # Replace line in file safely
-            sudo sed -i "s|^${line}$|${new_line}|" "$sources_file"
+            sed -i "s|^${line}$|${new_line}|" "$sources_file"
         fi
     done < "$sources_file"
 
