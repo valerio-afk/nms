@@ -92,7 +92,7 @@ install_packages() {
         error_exit "Failed to update package index."
     fi
 
-    echo "zfs-dkms zfs-dkms/note-incompatible-licenses note" | sudo debconf-set-selections
+    echo "zfs-dkms zfs-dkms/note-incompatible-licenses note" | debconf-set-selections
 
     log_warn "By installing this software, you are accepting the terms of CDDL license of ZFS and related tools."
     DEBIAN_FRONTEND=noninteractive
@@ -561,10 +561,18 @@ set_nms_json_permissions() {
     fi
 }
 
+generate_secret_key() {
+    # Generate a 32-character random alphanumeric string
+    NMS_SECRET_KEY=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9')
+    log_info "Generated random NMS_SECRET_KEY"
+}
+
 create_frontend_service() {
     local venv_path="$2"   # e.g., /opt/python3
     local app_dir="$1"
     local service_file="/usr/lib/systemd/system/nmswebapp.service"
+
+    enerate_secret_key  # Populate $NMS_SECRET_KEY
 
     log_info "Creating systemd service for frontend Flask app at $service_file"
 
@@ -579,6 +587,7 @@ User=www-data
 Group=www-data
 WorkingDirectory=$app_dir
 Environment="PATH=$venv_path/bin:$PATH"
+Environment="NMS_SECRET_KEY=$NMS_SECRET_KEY"
 ExecStart=$venv_path/bin/uvicorn frontend.app:frontend_app --host 127.0.0.1 --port 8081 --reload
 Restart=always
 RestartSec=5
@@ -595,12 +604,6 @@ EOF
     systemctl restart nmswebapp >> "$LOG_FILE" 2>&1
 
     log_info "Frontend Flask service setup complete"
-}
-
-generate_secret_key() {
-    # Generate a 32-character random alphanumeric string
-    NMS_SECRET_KEY=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9')
-    log_info "Generated random NMS_SECRET_KEY"
 }
 
 create_backend_service() {
@@ -832,7 +835,7 @@ add_contrib_nonfree
 
 # Step 2 --- Install packages
 install_packages "${PACKAGES[@]}"
-modproble zfs
+modprobe zfs
 # Step 3 --- Disable systemctl services
 manage_services stop "${SERVICES_TO_DISABLE[@]}"
 manage_services disable "${SERVICES_TO_DISABLE[@]}"
