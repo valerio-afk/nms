@@ -10,7 +10,7 @@ LOG_FILE="/var/log/nms.log"
 REPO_URL="https://github.com/valerio-afk/nms"
 DEST_DIR="/nms"
 
-#IFM_REPO_URL = "https://github.com/misterunknown/ifm.git"
+#IFM_REPO_URL="https://github.com/misterunknown/ifm.git"
 #IFM_REPO_DIR="/opt/ifm"
 
 PACKAGES=(
@@ -93,7 +93,7 @@ install_packages() {
     fi
 
     log_info "Installing packages: ${packages[*]}"
-    if ! apt-get install --install-suggests -y "${packages[@]}" >> "$LOG_FILE" 2>&1; then
+    if ! apt-get install -y "${packages[@]}" >> "$LOG_FILE" 2>&1; then
         error_exit "Package installation failed."
     fi
 
