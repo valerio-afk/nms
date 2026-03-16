@@ -92,6 +92,12 @@ install_packages() {
         error_exit "Failed to update package index."
     fi
 
+    echo "zfs-dkms zfs-dkms/note-incompatible-licenses note" | sudo debconf-set-selections
+
+    log_warn "By installing this software, you are accepting the terms of CDDL license of ZFS and related tools."
+    DEBIAN_FRONTEND=noninteractive
+    export DEBIAN_FRONTEND
+
     log_info "Installing packages: ${packages[*]}"
     if ! apt-get install -y "${packages[@]}" >> "$LOG_FILE" 2>&1; then
         error_exit "Package installation failed."
