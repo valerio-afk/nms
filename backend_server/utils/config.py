@@ -493,7 +493,7 @@ class NMSConfig(Logger):
 
         cmds = [
             Chmod(this.config_filename,"600",sudo=True),
-            Chown("root","root",this.config_filename,sudo=True),
+            Chown("backend","backend",this.config_filename,sudo=True),
         ]
 
         LocalCommandLineTransaction(*cmds).run()

@@ -840,13 +840,13 @@ enable_network_manager
 install_redis_docker
 
 # Step 8 --- Install & Configuring IFM (Improved File Manager)
-clone_git_repo "$IFM_REPO_URL" "$IFM_REPO_DIR"
-build_docker_image "$IFM_REPO_DIR" "ifm:latest"
+#clone_git_repo "$IFM_REPO_URL" "$IFM_REPO_DIR"
+#build_docker_image "$IFM_REPO_DIR" "ifm:latest"
 
 #Step 9 --- Configure users
 manage_users
 set_repo_permissions_wwwdata "$DEST_DIR"
-set_nms_json_permissions "$DEST_DIR"
+#set_nms_json_permissions "$DEST_DIR"
 
 #Step 10 --- Python configuration
 install_requirements "$DEST_DIR" "$PYTHON_VENV_PATH"
