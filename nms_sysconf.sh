@@ -7,8 +7,9 @@ set -o nounset      # Error on undefined variables
 #Globals
 PYTHON_VENV_PATH="/opt/python3"
 LOG_FILE="/var/log/nms.log"
-REPO_URL=""
+REPO_URL="https://github.com/valerio-afk/nms"
 DEST_DIR="/nms"
+
 
 IFM_REPO_URL = "https://github.com/misterunknown/ifm.git"
 IFM_REPO_DIR="/opt/ifm"
@@ -30,6 +31,8 @@ PACKAGES=(
     wireguard
     rsync
     unp
+    nodejs
+    npm
 )
 
 SERVICES_TO_DISABLE=(
@@ -781,6 +784,18 @@ server
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
     }
+
+    location /box
+    {
+      return 301 /box/;
+    }
+
+    location /box/
+    {
+      alias /nms/box/dist/;
+      try_files $uri $uri/ /index.html;
+    }
+
 }
 EOF
 
