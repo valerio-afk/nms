@@ -1,5 +1,6 @@
 from backend_server.utils.cmdl import Chown, LocalCommandLineTransaction, Groups, ZPoolList, GetEntPasswd, ZFSSnapshot
 from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet,  ZFSGetQuota, Chmod, ZFSRollback, ZFSDestroy
+from backend_server.utils.cmdl import UserAdd, GetUserUID
 from backend_server.utils.logger import Logger
 from backend_server.utils.responses import ErrorMessage, UserProfile, Quota
 from backend_server.utils.services import SystemService
@@ -95,6 +96,42 @@ def collapse_permissions(user_permissions:List[str], all_permissions:List[str]) 
         reduce(child, user_tree.get(key), [key])
 
     return sorted(set(result))
+
+def create_system_user(username: str, permissions: List[str], sudo: bool = False) -> int:
+    def_groups = ['plugdev', 'users', 'netdev']
+
+    if (UserPermissions.SERVICES_SMB_ACCESS.name in permissions):
+        def_groups.append('sambashare')
+    if (sudo):
+        def_groups.append('sudo')
+
+    allow_login = UserPermissions.SERVICES_SSH_ACCESS.name in permissions
+    home_dir = os.path.join(CONFIG.mountpoint, username) if CONFIG.mountpoint is not None else None
+
+    cmd = UserAdd(username, def_groups, home_dir, allow_login,sudo=True).execute()
+
+    if (cmd.returncode != 0):
+        raise Exception(cmd.stderr)
+
+    if (home_dir is not None):
+        cmds = [
+            Chown(username, username, home_dir, ['-R']),
+            Chmod(home_dir, "0700", ['-R'])
+        ]
+
+        trans = LocalCommandLineTransaction(*cmds, privileged=True)
+        output = trans.run()
+
+        if (not trans.success):
+            errors = "\n".join([o['stderr'].strip() for o in output])
+            raise Exception(errors)
+
+    uid = GetUserUID(username).execute()
+
+    if (uid.returncode != 0):
+        raise Exception(uid.stderr)
+
+    return int(uid.stdout)
 
 class NMSConfig(Logger):
     def __new__(cls):
@@ -307,7 +344,17 @@ class NMSConfig(Logger):
 
     @property
     def is_pool_configured(this) -> bool:
-        return this._cfg.get('pool',{}).get("name", None) is not None
+        if ((pool_name:= this._cfg.get('pool',{}).get("name", None)) is None):
+            return False
+        cmd = ZPoolStatus().execute()
+
+        if (cmd.returncode != 0):
+            return False
+
+        d = json.loads(cmd.stdout)
+
+        return len(d.get("pools",{})) > 0
+
 
     @property
     def is_pool_present(this) -> bool:
@@ -375,6 +422,10 @@ class NMSConfig(Logger):
     @property
     def systemd_services(this) -> List[str]:
         return [service for service in this._cfg.get('systemd',{}).get('services',[])]
+
+    @property
+    def nms_updates(this) -> Optional[Dict[str, str]]:
+        return this._cfg.get("updates", {}).get("releases")
 
     # USER PROPERTIES
 
@@ -463,10 +514,6 @@ class NMSConfig(Logger):
                         }
                     }
             },
-            "apt": {
-                "last": None,
-                "packages": []
-            },
             "vpn": {
                 "peers": [],
                 "endpoint": None
@@ -487,7 +534,8 @@ class NMSConfig(Logger):
                 "apt": {
                     "last": None,
                     "packages": []
-                }
+                },
+                "releases": None
             },
         }
 
@@ -571,6 +619,12 @@ class NMSConfig(Logger):
                 tokens =getend_cmd.stdout.strip().split(":")
                 home_dir = tokens[5]
 
+            uid = None
+
+            cmd = GetEntPasswd(username).execute()
+            if (cmd.returncode == 0):
+                token = cmd.stdout.strip().split(":")
+                uid = int(token[2])
 
             return UserProfile(
                 username=username,
@@ -580,7 +634,8 @@ class NMSConfig(Logger):
                 sudo = sudo,
                 admin=this.is_admin(username),
                 first_login_token=activation_token,
-                home_dir=home_dir
+                home_dir=home_dir,
+                uid=uid
             )
 
     def set_user_fullname(this,username:str,fullname:str) -> None:
@@ -1035,6 +1090,26 @@ class NMSConfig(Logger):
     def is_upload_complete(this,id:str) -> bool:
         return this._uploads[id]['offset'] == this._uploads[id]['length']
 
+    #SYSTEM METHODS
+    def new_nms_update(this,version:str,tarball_url:str) -> None:
+        from backend_server import __version__ as ver
+
+        nms = this._cfg['updates'].get('releases')
+        new_update = False
+
+        if (nms is None):
+            if (version != ver):
+                new_update = True
+        else:
+            if (nms.get('version') != ver):
+                new_update = True
+
+
+        if (new_update):
+            this._cfg['updates']['releases'] = {
+                "version": version,
+                "tarball_url": tarball_url
+            }
 
 
 

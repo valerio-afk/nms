@@ -88,8 +88,13 @@ def widget_user_account_admin(user:dict,move_to_users:List[dict]) -> Tuple[str,s
 
     user_permissions = nest_permissions(user_permissions)
 
+    sys_users = None
+    if (user.get("uid") is None):
+        sys_users = BACKEND.system_users
+
     return render_widget("account_admin",
                          user=user,
+                         sys_users=sys_users,
                          user_permissions=user_permissions,
                          move_to_users=move_to_users)
 
@@ -219,6 +224,25 @@ def add_user() -> str:
                            csp_nonce=g.csp_nonce
     )
 
+@bp.route("/users/assign",methods=["POST"])
+def assign_sys_user() -> Response:
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+    else:
+        nms_username = request.form.get("username")
+        sys_user = request.form.get("sys_user")
+
+        if (sys_user == "-"):
+            BACKEND.change_username(nms_username, nms_username)
+            return redirect(url_for("main.users", q=nms_username))
+        else:
+            BACKEND.assign_system_user(nms_username,sys_user)
+
+            return redirect(url_for("main.users", q=sys_user))
+
+    return redirect(url_for("main.users"))
 
 @bp.route("/users/quota",methods=["POST"])
 def user_quota() -> Response:

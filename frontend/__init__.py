@@ -6,11 +6,21 @@ from nms_shared import constants
 from nms_shared.enums import DiskStatus, UserPermissions
 from nms_shared.msg import ErrorMessages, WarningMessages, ERROR_MESSAGES, WARNING_MESSAGES
 from nms_shared.utils import  match_permissions
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from urllib.parse import urlparse,urlencode
 import time
 
 frontend:Blueprint = Blueprint('main',__name__)
+
+def set_user_main_pages_visibility():
+    user = session.get("user")
+    user['main_pages'] = {
+        "disks": match_permissions(user['permissions'], UserPermissions.CLIENT_DASHBOARD_DISKS),
+        "network": match_permissions(user['permissions'], UserPermissions.CLIENT_DASHBOARD_NETWORKS),
+        "users": match_permissions(user['permissions'], UserPermissions.CLIENT_DASHBOARD_USERS),
+        "access": match_permissions(user['permissions'], UserPermissions.CLIENT_DASHBOARD_SERVICES),
+        "advanced": match_permissions(user['permissions'], UserPermissions.CLIENT_DASHBOARD_ADVANCED),
+    }
 
 @frontend.before_request
 def check_scrub_status() -> None:
@@ -118,14 +128,10 @@ def user_data():
             user['initials'] = initials
 
         if (user.get("main_pages") is None):
-            p = user.get("permissions",[])
-            user['main_pages'] = {
-                "disks": match_permissions(p,UserPermissions.CLIENT_DASHBOARD_DISKS),
-                "network": match_permissions(p, UserPermissions.CLIENT_DASHBOARD_NETWORKS),
-                "users": match_permissions(p, UserPermissions.CLIENT_DASHBOARD_USERS),
-                "access": match_permissions(p, UserPermissions.CLIENT_DASHBOARD_SERVICES),
-                "advanced": match_permissions(p,UserPermissions.CLIENT_DASHBOARD_ADVANCED),
-            }
+            set_user_main_pages_visibility()
+
+        if (user.get('uid') is None):
+            show_flash("warning",WarningMessages.W_USER_NO_UID.name)
 
 
 

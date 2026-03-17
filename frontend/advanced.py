@@ -50,7 +50,8 @@ def widget_system_updates(hedaers:Optional[Dict]=None):
     apt = {
         'last_update' : BACKEND.last_apt_time,
         'updates': BACKEND.system_updates,
-        'state': None
+        'state': None,
+        'nms': BACKEND.latest_nms_updates,
     }
 
     if (apt['last_update'] is not None):
@@ -166,11 +167,6 @@ def system_logs(log):
                            active_page="advanced")
 
 # # ACTIONS
-# @bp.route("/advanced/reset-otp",methods=['POST'])
-# def reset_otp():
-#     BACKEND.reset_otp_secret()
-#     session.clear()
-#     return redirect(url_for("main.login"))
 
 @bp.route("/advanced/restart-systemd",methods=['POST'])
 def restart_systemd():
@@ -210,7 +206,6 @@ def zpool_format_disk():
     return risky_operation_reauth("format-disk", lambda token,form: BACKEND.format_disk(form.get("option"),token)) or redirect(url_for("main.advanced"))
 
 
-
 @bp.route('/advanced/apt',methods=['POST'])
 def apt_get():
     action = request.form.get("action",None)
@@ -229,6 +224,27 @@ def apt_get():
             BACKEND.register_task(task_id,pages=["/advanced/apt"],metadata=action,**task)
         except Exception as e:
             show_flash(code=ErrorMessages.E_APT_GET.name,params=[str(e)])
+
+    return redirect(url_for("main.advanced"))
+
+@bp.route('/advanced/nms',methods=['POST'])
+def nms_updates():
+    action = request.form.get("action",None)
+
+
+    if (action == "update"):
+        BACKEND.check_nms_updates()
+    elif (action == "upgrade"):
+        task = None # get task here when endpioint is available
+
+        if task is None:
+            show_flash(code=ErrorMessages.E_APT_GET.name)
+        else:
+            try:
+                task_id = task.get("task_id")
+                BACKEND.register_task(task_id,pages=["/advanced/nms"],metadata=action,**task)
+            except Exception as e:
+                show_flash(code=ErrorMessages.E_APT_GET.name,params=[str(e)])
 
     return redirect(url_for("main.advanced"))
 

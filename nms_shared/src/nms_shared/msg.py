@@ -105,6 +105,9 @@ class ErrorMessages(Enum):
     E_USER_COPY_FILES = "E_USER_COPY_FILES"
     E_USER_DELETE = "E_USER_DELETE"
     E_USER_LOGIN_RESET = "E_USER_LOGIN_RESET"
+    E_USER_SYSTEM = "E_USER_SYSTEM"
+
+    E_SYSTEM_UPDATES = "E_SYSTEM_UPDATES"
 
     @staticmethod
     def get_error_from_string(error_code:str,*args,**kwargs) -> str:
@@ -127,6 +130,7 @@ class WarningMessages(Enum):
     W_DISK_FORMAT = "W_DISK_FORMAT"
     W_POOL_DISK_OFFLINE = "W_POOL_DISK_OFFLINE"
     W_NEW_USER = "W_NEW_USER"
+    W_USER_NO_UID = "W_USER_NO_UID"
 
 
     @staticmethod
@@ -307,6 +311,10 @@ ERROR_MESSAGES = {
     ErrorMessages.E_USER_COPY_FILES: lambda user,info: _("Error occurred while moving files of the user %(user)s: %(info)s.") % {'info':info,'user':user}, #<-----
     ErrorMessages.E_USER_DELETE: lambda user,info: _("Error occurred while deleting the user %(user)s: %(info)s.") % {'info':info,'user':user}, #<-----
     ErrorMessages.E_USER_LOGIN_RESET : lambda user,info: _("Error occurred while resetting the login credentials for %(user)s: %(info)s.") % {'info':info,'user':user}, #<-----
+    ErrorMessages.E_USER_SYSTEM: lambda info: _("Error while retrieving the list of system users: %(info)s.") % {'info':info},
+
+    ErrorMessages.E_SYSTEM_UPDATES: lambda: _("Unable to retrieve updates.")
+
 }
 
 WARNING_MESSAGES = {
@@ -318,6 +326,7 @@ WARNING_MESSAGES = {
     WarningMessages.W_POOL_NEEDED : lambda : _("You need to configure your disk array before enabling any access services"),
     WarningMessages.W_POOL_DISK_OFFLINE : lambda : _("One or more of your disks in the array is offline. If redundancy is active, you can still use the array. Please, reinsert or replace your disk soon."),
     WarningMessages.W_NEW_USER : lambda user, info : _("User %(user)s has been created successfully. However, there has been some issues in setting their quota: %(info)s.") % {'user':user,"info":info},
+    WarningMessages.W_USER_NO_UID: lambda: _("Your user does not have a local user associated. Contact a system administrator to fix the issue in the Users tab.")
 }
 
 SUCCESS_MESSAGES = {

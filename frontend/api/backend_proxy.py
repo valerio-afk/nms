@@ -254,7 +254,9 @@ class BackEndProxy:
     def users(this) -> List[dict]:
         return this._request("users/get/all")
 
-
+    @property
+    def system_users(this) -> List[dict]:
+        return this._request("users/get/sys")
 
 
     #SYSTEM PROPERTIES
@@ -267,6 +269,10 @@ class BackEndProxy:
     @property
     def system_updates(this) -> List[str]:
         return this._get_property_request("system","system_updates") or []
+
+    @property
+    def latest_nms_updates(this) -> Optional[Dict[str, str]]:
+        return this._request("system/nms/updates",RequestMethod.GET)
 
     @property
     def system_information(this) -> Dict[str,Any]:
@@ -591,8 +597,6 @@ class BackEndProxy:
         this._request(f"services/update/{service}",RequestMethod.POST,body_params=kwargs)
 
 
-
-
     #SYSTEM METHODS
     def get_logs(this,filter:LogFilter,since:Optional[int]=None,until:Optional[int]=None) -> Optional[Dict]:
         return this._request(f'system/logs/{filter.value}',RequestMethod.GET,qstring_params={"date_from":since,"date_to":until})
@@ -615,6 +619,9 @@ class BackEndProxy:
 
     def apt_get_upgrade(this) -> Optional[Dict]:
         return this.apt_get("upgrade")
+
+    def check_nms_updates(this) -> None:
+        this._request("system/nms/updates",RequestMethod.POST)
 
     #NETWORK METHODS
     def change_iface_status(this,iface:str,action:Union[Literal['up'],Literal['down']]) -> None:
@@ -684,7 +691,14 @@ class BackEndProxy:
         this._request("users/set/quota",RequestMethod.POST,body_params={"username": username, "quota": quota})
 
     def change_username(this,old_username:str,new_username:str) -> None:
-        this._request("users/set/username",RequestMethod.POST,body_params={"old_username": old_username, "new_username": new_username})
+        this._request("users/set/username",
+                      RequestMethod.POST,
+                      body_params={"old_username": old_username, "new_username": new_username})
+
+    def assign_system_user(this, nms_username:str, sys_user:str) -> None:
+        this._request("users/set/sys-user",
+                      RequestMethod.POST,
+                      body_params={"old_username": nms_username, "new_username": sys_user})
 
     def set_sudo(this,username:str,sudo:bool) -> None:
         this._request("users/set/sudo",RequestMethod.POST,body_params={"username": username, "sudo": sudo})

@@ -1,5 +1,5 @@
 from nms_shared import ErrorMessages, SuccessMessages
-from . import frontend as bp, request,  redirect, url_for, session, NMSBACKEND as BACKEND
+from . import frontend as bp, request, redirect, url_for, session, NMSBACKEND as BACKEND, set_user_main_pages_visibility
 from flask import Response, render_template, send_file, g, abort
 from flask_wtf.csrf import generate_csrf, validate_csrf, ValidationError
 from io import BytesIO
@@ -45,6 +45,7 @@ def login() -> Union[Response,str]:
                 session["last_activity"] = time.time()
                 session["ip"] = request.remote_addr
                 session["user"] = BACKEND.current_user
+                set_user_main_pages_visibility()
                 authenticated = True
             elif (not is_otp_conf):
                 session.clear()

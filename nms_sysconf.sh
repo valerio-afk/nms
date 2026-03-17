@@ -462,6 +462,18 @@ create_group() {
     fi
 }
 
+get_free_uid() {
+    local start=100
+    local end=999
+
+    for ((uid=start; uid<=end; uid++)); do
+        if ! getent passwd "$uid" > /dev/null; then
+            echo "$uid"
+            return 0
+        fi
+    done
+
+
 
 manage_users() {
     log_info "Starting user management..."
@@ -472,8 +484,9 @@ manage_users() {
         usermod -s /usr/sbin/nologin www-data
         log_info "Login shell for www-data has been changed to nologin"
     else
+        uid=$(get_free_uid)
         log_info "Creating user 'www-data' with no login..."
-        if ! useradd -M -r -s /usr/sbin/nologin www-data >> "$LOG_FILE" 2>&1; then
+        if ! useradd -M -r -u "$uid" -s /usr/sbin/nologin www-data >> "$LOG_FILE" 2>&1; then
             log_warn "Failed to create user 'www-data'"
         else
             log_info "User 'www-data' created successfully"
@@ -485,7 +498,8 @@ manage_users() {
         log_info "User 'backend' already exists"
     else
         log_info "Creating user 'backend' with no login and sudo group..."
-        if ! useradd -M -s /usr/sbin/nologin -G sudo backend >> "$LOG_FILE" 2>&1; then
+        uid=$(get_free_uid)
+        if ! useradd -M -u "$uid" -s /usr/sbin/nologin -G sudo backend >> "$LOG_FILE" 2>&1; then
             log_warn "Failed to create user 'backend'"
         else
             log_info "User 'backend' created successfully and added to sudo group"
@@ -501,7 +515,7 @@ manage_users() {
 
     if [[ -z "$uid1000_user" ]]; then
         log_info "No user with UID 1000 found. Creating user 'user'..."
-        if ! useradd -M -s /bin/bash user >> "$LOG_FILE" 2>&1; then
+        if ! useradd -M -s -u 1000 /bin/bash user >> "$LOG_FILE" 2>&1; then
             log_warn "Failed to create user 'user'"
         else
             log_info "User 'user' created successfully"

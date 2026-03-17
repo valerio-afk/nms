@@ -95,22 +95,6 @@ def create_flask_app():
 
     CSRFProtect(app)
 
-    # celery_init_app(app)
-    babel.init_app(app,locale_selector=get_locale)
-
-
+    babel.init_app(app,locale_selector=get_locale,default_translation_directories="frontend/translations")
 
     return app
-
-
-# def celery_init_app(app):
-#     class FlaskTask(Task):
-#         def __call__(self, *args: object, **kwargs: object) -> object:
-#             with app.app_context():
-#                 return self.run(*args, **kwargs)
-#
-#     celery_app = Celery(app.name, task_cls=FlaskTask)
-#     celery_app.config_from_object(app.config["CELERY"])
-#     celery_app.set_default()
-#     app.extensions["celery"] = celery_app
-#     return celery_app

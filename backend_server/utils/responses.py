@@ -141,6 +141,7 @@ class UserProfile(NewUserProfile):
     admin:bool
     first_login_token: Optional[str] = Field(None)
     home_dir: Optional[str] = Field(None)
+    uid:Optional[int] = Field(None)
 
 class AccessServiceCredentials(BaseModel):
     username:str

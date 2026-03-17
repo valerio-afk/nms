@@ -1,4 +1,5 @@
-from backend_server.utils.cmdl import CommandLine, ZFSLoadKey, ZFSMount, LocalCommandLineTransaction, ZFSUnmount
+from backend_server.utils.cmdl import CommandLine, ZFSLoadKey, ZFSMount, LocalCommandLineTransaction, ZFSUnmount, \
+    GetEntPasswd
 from backend_server.utils.cmdl import UserModChangeHomeDir, Mkdir, Chown, Chmod
 from backend_server.utils.cmdl import ZFSUnLoadKey, ZFSDestroy, ZFSCreate, ZPoolStatus, ZFSList, ZPoolExport, ZPoolScrub
 from backend_server.utils.cmdl import ZPoolAttach, ZPoolAdd, ZPoolImport, CreateKey, ZPoolCreate, ZPoolDestroy
@@ -42,12 +43,16 @@ def align_home_directories() -> None:
         return
 
     for u in users:
-        home_dir = str(os.path.join(mountpoint, u))
+        home_dir = str(os.path.join(mountpoint, u.username))
 
         cmd = Stat(home_dir,sudo=True).execute()
 
         if (cmd.returncode != 0):
-            Mkdir(home_dir, sudo=True).execute() # this can file if the directory already exists
+            Mkdir(home_dir, sudo=True).execute()
+
+        cmd = GetEntPasswd(u.username).execute()
+        if (cmd.returncode != 0):
+            continue
 
         cmds = [
             UserModChangeHomeDir(u.username,u.home_dir,home_dir),
@@ -68,13 +73,16 @@ def mount() -> None:
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_NO_CONF.name))
 
     if (not CONFIG.is_mounted):
-        cmds = []
 
         if (CONFIG.has_encryption):
-            cmds.append(ZFSLoadKey(CONFIG.pool_name, CONFIG.key_filename))
+            # sometimes the key can be already loaded and this will result in an error
+            # so we dont need to stop
+            ZFSLoadKey(CONFIG.pool_name, CONFIG.key_filename).execute()
 
-        cmds.append(ZFSMount(CONFIG.pool_name))
-        cmds.append(ZFSMount(CONFIG.pool_name, CONFIG.dataset_name))
+        cmds = [
+            ZFSMount(CONFIG.pool_name),
+            ZFSMount(CONFIG.pool_name, CONFIG.dataset_name)
+        ]
 
         trans = LocalCommandLineTransaction(*cmds)
 
@@ -639,13 +647,14 @@ def pool_attach(data:ImportPool,token:dict=Depends(verify_token)) -> None:
 
     if (not trans.success):
         errors = "\n".join([o['stderr'] for o in output])
+        ZPoolExport(data.pool_name).execute()
         raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_ATTACH.name, params=[errors]))
 
     CONFIG.init_pool()
 
     try:
         if (not CONFIG.is_mounted):
-            pool_mount()
+            mount()
 
         CONFIG.flush_config()
         align_home_directories()

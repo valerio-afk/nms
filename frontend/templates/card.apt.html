@@ -1,9 +1,11 @@
 {% extends "card.html" %}
 
-{% block card_title %}<i class="bi bi-box-fill"></i> {{ _("System Updates") }}{% endblock %}
+{% block card_title %}<i class="bi bi-box-fill"></i> {{ _("Updates") }}{% endblock %}
 
 {% block card_content %}
 {% set enable_js = false %}
+
+<h4>{{ _("Base System") }}</h4>
 
 <dl class="row">
     <dt class="col-sm-5">{{ _("Last check:") }}</dt>
@@ -52,6 +54,33 @@
                 {% endif %}
             {% endif %}
         </div>
+      </div>
+</form>
+
+<h4 class="mt-4">{{ _("NAS Management System") }}</h4>
+
+<dl class="row">
+    <dt class="col-sm-8">{{ _("New Version Available:") }} </dt>
+    <dd class="col-sm-4">{{ nms.version if nms else _("No") }}</dd>
+</dl>
+
+<form method="POST" class="disable-on-submit" action="{{ url_for('main.nms_updates') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row g-1">
+        {% if nms is none %}
+            <div class="col-12">
+                <button class="btn btn-success w-100" type="submit" name="action" value="update">{{ _("Check for updates") }}</button>
+            </div>
+        {% else %}
+            <div class="col-12">
+                {% if state is none  %}
+                    <button class="btn btn-warning w-100" type="submit" name="action" value="upgrade">{{ _("Update") }}</button>
+                {% elif nms_state == 'upgrade' %}
+                    {% set enable_js = true %}
+                    <button class="btn btn-secondary w-100" type="submit" disabled>{{ _("Updating in progress...") }}</button>
+                {% endif %}
+            </div>
+        {% endif %}
       </div>
 </form>
 

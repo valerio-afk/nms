@@ -1,6 +1,3 @@
-import threading
-import time
-
 from .responses import ErrorMessage
 from backend_server.utils.cmdl import ChPasswd, SystemCtlUnmask, SystemCtlEnable, SystemCtlStart, SystemCtlDisable
 from backend_server.utils.cmdl import  Touch, Chmod, UserModAddGroup, GPasswdRemoveGroup, LocalCommandLineTransaction
@@ -18,6 +15,9 @@ import os.path
 import re
 import subprocess
 import tempfile
+import time
+import threading
+
 
 class SystemService:
     def __init__(this,service_name:Optional[str]=None, config_file:Optional[str]=None,**kwargs):
@@ -223,15 +223,21 @@ class SSHService(SystemService):
         if (len(output)!=1):
             raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name,params=[username]))
 
-        stdout_getent = output[0].get("stdout","").split(":",2)
-        uname = stdout_getent[0].strip()
-        shadow_password = stdout_getent[1].strip()
+        stdout_getent = output[0].get("stdout","")
 
-        if (len(shadow_password) == 0):
-            raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name,params=[username]))
+        if (len(stdout_getent)==0):
+            raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name, params=[username]))
+        else:
 
-        if (uname != username):
-            raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name,params=[username]))
+            stdout_token = stdout_getent.split(":")
+            uname = stdout_token[0].strip()
+            shadow_password = stdout_token[1].strip()
+
+            if (len(shadow_password) == 0):
+                raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name,params=[username]))
+
+            if (uname != username):
+                raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name,params=[username]))
 
         chpasswd = ChPasswd(uname,new_password,shadow_password)
 

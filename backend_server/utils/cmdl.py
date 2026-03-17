@@ -321,7 +321,7 @@ class ZPoolCreate(ZPoolCommand):
 
 
 class ZpoolJsonSubCommand(ZPoolCommand):
-    def __init__(this,subcommand,pool,show_json=True,**kwargs):
+    def __init__(this,subcommand:str,pool:Optional[str]=None,show_json=True,**kwargs):
         super().__init__(subcommand=subcommand, **kwargs)
         this._pool = pool
         this._show_json = show_json
@@ -389,7 +389,7 @@ class ZPoolList(ZpoolJsonSubCommand):
         super().__init__(subcommand="list",pool=pool,sudo=False,**kwargs)
 
 class ZPoolStatus(ZpoolJsonSubCommand):
-    def __init__(this, pool,**kwargs):
+    def __init__(this, pool:Optional[str]=None,**kwargs):
         super().__init__(subcommand="status",pool=pool,sudo=False,**kwargs)
 
 class ZpoolGet(ZpoolJsonSubCommand):
@@ -1314,7 +1314,7 @@ class UserModChangeHomeDir(RevertibleCommandLine):
         )
 
 class UserAdd(RevertibleCommandLine):
-    def __init__(this,username:str,groups:List[str],home_dir:str,allow_login:bool,**kwargs):
+    def __init__(this,username:str,groups:List[str],home_dir:Optional[str],allow_login:bool,**kwargs):
         cmd = ['useradd', '-U', '-s']
 
         if allow_login:
@@ -1322,7 +1322,8 @@ class UserAdd(RevertibleCommandLine):
         else:
             cmd.append('/usr/sbin/nologin')
 
-        cmd.extend(['-m','-d',home_dir])
+        if (home_dir is not None):
+            cmd.extend(['-m','-d',home_dir])
 
         if (len(groups)>0):
             cmd.extend(['-G', ','.join(groups)])
@@ -1443,9 +1444,12 @@ class GetEntShadow(CommandLine):
         )
 
 class GetEntPasswd(CommandLine):
-    def __init__(this,username):
-        cmd = ['getent','passwd',username]
+    def __init__(this,username:Optional[str]=None):
+        cmd = ['getent','passwd']
         this._username = username
+
+        if (username is not None):
+            cmd.append(username)
 
         super().__init__(cmd,sudo=True,mask_output=True)
 

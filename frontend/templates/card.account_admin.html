@@ -12,63 +12,94 @@
 
 {% block card_content %}
 
-
-<form method="POST" class="disable-on-submit"  action="{{ url_for('main.change_username') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="username" value="{{ user.username }}">
-    <div class="row mb-3">
-            <dt class="col-sm-5 col-form-label">{{ _("Username") }}:</dt>
-            <div class="col-sm-5"><input type="text" name="new_username" value="{{ user.username }}" class="form-control" /> </div>
-            <div class="col-sm-2"><button type="submit" class="btn btn-success"><i class="bi bi-send-fill"></i></button></div>
+{% if sys_users %}
+    <form method="POST" class="disable-on-submit" action="{{ url_for('main.assign_sys_user') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="username" value="{{ user.username }}">
+        <div class="row mb-3">
+                <dt class="col-sm-5 col-form-label">{{ _("Available Users") }}:</dt>
+                <div class="col-sm-5">
+                    <select name="sys_user" class="form-control">
+                            <option value="-" class="fst-italic">{{ _("Create a new system user") }}</option>
+                        <optgroup label="——————————————">
+                            {% for u in sys_users %}
+                                <option value="{{ u }}">{{ u }}</option>
+                            {% endfor %}
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="col-sm-2"><button type="submit" class="btn btn-success"><i class="bi bi-send-fill"></i></button></div>
+        </div>
+        <div class="row">
+         <p class="text-muted">
+             {{ _("This user will be renamed according to the system user selected. This may cause the user to be logged out.") }}
+         </p>
     </div>
-</form>
-<form method="POST" class="disable-on-submit"  action="{{ url_for('main.change_fullname') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="username" value="{{ user.username }}">
+    </form>
+{% else %}
+
+    <form method="POST" class="disable-on-submit"  action="{{ url_for('main.change_username') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="username" value="{{ user.username }}">
+        <div class="row mb-3">
+                <dt class="col-sm-5 col-form-label">{{ _("Username") }}:</dt>
+                <div class="col-sm-5"><input type="text" name="new_username" value="{{ user.username }}" class="form-control" /> </div>
+                <div class="col-sm-2"><button type="submit" class="btn btn-success"><i class="bi bi-send-fill"></i></button></div>
+        </div>
+    </form>
+    <form method="POST" class="disable-on-submit"  action="{{ url_for('main.change_fullname') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="username" value="{{ user.username }}">
+        <div class="row mb-3">
+                <dt class="col-sm-5 col-form-label">{{ _("Visible Name") }}:</dt>
+                <div class="col-sm-5"><input type="text" name="fullname" value="{{ user.visible_name }}" class="form-control" /> </div>
+                <div class="col-sm-2"><button type="submit" class="btn btn-success"><i class="bi bi-send-fill"></i></button></div>
+        </div>
+    </form>
+
     <div class="row mb-3">
-            <dt class="col-sm-5 col-form-label">{{ _("Visible Name") }}:</dt>
-            <div class="col-sm-5"><input type="text" name="fullname" value="{{ user.visible_name }}" class="form-control" /> </div>
-            <div class="col-sm-2"><button type="submit" class="btn btn-success"><i class="bi bi-send-fill"></i></button></div>
+            <dt class="col-sm-5 col-form-label">{{ _("User ID") }}:</dt>
+            <div class="col-sm-6">{{ user.uid }}</div>
     </div>
-</form>
 
 
-{% if user.quota %}
-<form method="POST" class="disable-on-submit"  action="{{ url_for('main.user_quota') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="username" value="{{ user.username }}">
+    {% if user.quota %}
+    <form method="POST" class="disable-on-submit"  action="{{ url_for('main.user_quota') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="username" value="{{ user.username }}">
+        <div class="row mb-3">
+                <dt class="col-sm-5 col-form-label">{{ _("Quota") }}:</dt>
+                <div class="col-sm-5"><input type="text" name="quota" value="{{ user.quota.quota | human_readable_bytes }}" class="form-control" /> </div>
+                <div class="col-sm-2"><button type="submit" class="btn btn-success"><i class="bi bi-send-fill"></i></button></div>
+        </div>
+    </form>
+
     <div class="row mb-3">
-            <dt class="col-sm-5 col-form-label">{{ _("Quota") }}:</dt>
-            <div class="col-sm-5"><input type="text" name="quota" value="{{ user.quota.quota | human_readable_bytes }}" class="form-control" /> </div>
-            <div class="col-sm-2"><button type="submit" class="btn btn-success"><i class="bi bi-send-fill"></i></button></div>
+        <dt class="col-sm-5">{{ _("Used Space") }}:</dt>
+        <dd class="col-sm-7">
+            {% if user.quota %}
+                {{ user.quota.used | human_readable_bytes }}
+            {% else %}
+                {{ _("Unknown") }}
+            {% endif %}
+        </dd>
     </div>
-</form>
+    {% endif %}
 
-<div class="row mb-3">
-    <dt class="col-sm-5">{{ _("Used Space") }}:</dt>
-    <dd class="col-sm-7">
-        {% if user.quota %}
-            {{ user.quota.used | human_readable_bytes }}
-        {% else %}
-            {{ _("Unknown") }}
-        {% endif %}
-    </dd>
-</div>
+    <form method="POST" class="disable-on-submit" action="{{ url_for('main.set_sudo') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="username" value="{{ user.username }}">
+        <div class="row mb-3">
+                <dt class="col-sm-5 col-form-label">{{ _("Superuser") }}:</dt>
+                <div class="col-sm-5">
+                    <span class="form-check form-switch">
+                         <input class="form-check-input" type="checkbox" role="switch" name="sudo" id="sudo" {{ 'checked' if user.sudo else '' }}>
+                    </span>
+                </div>
+                <div class="col-sm-2"><button type="submit" class="btn btn-success"><i class="bi bi-send-fill"></i></button></div>
+        </div>
+    </form>
 {% endif %}
-
-<form method="POST" class="disable-on-submit" action="{{ url_for('main.set_sudo') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="username" value="{{ user.username }}">
-    <div class="row mb-3">
-            <dt class="col-sm-5 col-form-label">{{ _("Superuser") }}:</dt>
-            <div class="col-sm-5">
-                <span class="form-check form-switch">
-                     <input class="form-check-input" type="checkbox" role="switch" name="sudo" id="sudo" {{ 'checked' if user.sudo else '' }}>
-                </span>
-            </div>
-            <div class="col-sm-2"><button type="submit" class="btn btn-success"><i class="bi bi-send-fill"></i></button></div>
-    </div>
-</form>
 
 {% if user.first_login_token %}
 <div class="row mb-1">

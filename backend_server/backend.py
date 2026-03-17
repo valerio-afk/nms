@@ -12,7 +12,10 @@ async def automount(app:FastAPI):
     from backend_server.v1.pool import mount
     if ((CONFIG.is_pool_configured) and (not CONFIG.is_mounted)):
         CONFIG.info("Start up automount")
-        mount()
+        try:
+            mount()
+        except HTTPException as e:
+            ... # something went wrong
 
     yield
 

@@ -1,8 +1,8 @@
 from .auth import check_permission
-from backend_server.utils.cmdl import GetUserUID, RSync, Chown, Mkdir, UserDel, Chmod, GroupModChangeGroupName
-from backend_server.utils.cmdl import LocalCommandLineTransaction, UserModAddGroup, GPasswdRemoveGroup, UserAdd
+from backend_server.utils.cmdl import RSync, Chown, Mkdir, UserDel, GroupModChangeGroupName, GetEntShadow, GetEntPasswd
+from backend_server.utils.cmdl import LocalCommandLineTransaction, UserModAddGroup, GPasswdRemoveGroup
 from backend_server.utils.cmdl import ZFSSetQuota, UserModChangeUsername, SMBPasswd, RenameFile, UserModChangeHomeDir
-from backend_server.utils.config import CONFIG
+from backend_server.utils.config import CONFIG, create_system_user
 from backend_server.utils.responses import ChgFullnameData, ChangeQuotaData, ChangeUsernameData, SudoData, UserDelete
 from backend_server.utils.responses import NewUserProfile, WarningMessage, UserPermissionsData
 from backend_server.utils.responses import UserProfile, AccessServiceCredentials, ErrorMessage, SuccessMessage
@@ -26,9 +26,29 @@ def allow_self_change(current_username:str,target_username:str):
         check_permission(current_username, UserPermissions.USERS_ACCOUNT_MANAGE)
 
 
-@users.get("/get",response_model=Optional[UserProfile],summary="Get the information of the logged user")
+@users.get("/get",response_model=Optional[UserProfile],summary="Get information of the logged user")
 def get_user(token:dict=Depends(verify_token)) -> Optional[UserProfile]:
     return CONFIG.get_user(token.get("username"))
+
+@users.get("/get/sys",response_model=List[str],summary="Get the list of system usernames that have not been associated to other user")
+def get_available_system_users():
+    nms_users = CONFIG.users
+    used_uid = [uid for x in nms_users if (uid:=x.uid) is not None]
+
+    cmd = GetEntPasswd().execute()
+
+    if (cmd.returncode!=0):
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_USER_SYSTEM.name,params=[cmd.stderr]))
+
+    system_users = []
+
+    for u in cmd.stdout.splitlines():
+        tokens = u.split(":")
+        uid = int(tokens[2])
+        if ((uid not in used_uid) and (uid>=1000)):
+            system_users.append(tokens[0])
+
+    return system_users
 
 @users.get("/get/all",response_model=List[UserProfile],summary="Get the list of all users")
 def get_all_users(token:dict=Depends(verify_token)) -> List[UserProfile]:
@@ -66,19 +86,30 @@ def set_username(data:ChangeUsernameData,token:dict=Depends(verify_token)) -> di
     username = token.get("username")
     check_permission(username, UserPermissions.USERS_ACCOUNT_MANAGE)
 
-    cmds = [
-        UserModChangeUsername(data.old_username,data.new_username),
-        GroupModChangeGroupName(data.old_username, data.new_username),
-    ]
+    cmd = GetEntShadow(data.old_username).execute()
+    out = cmd.stdout
 
-    trans = LocalCommandLineTransaction(*cmds, privileged=True)
-    output = trans.run()
+    if (len(out) == 0):
+        u = CONFIG.get_user(data.old_username)
+        if (u is None):
+            HTTPException(status_code=500,
+                          detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name, params=[data.username]))
 
-    if (not trans.success):
-        errors = "\n".join([o['stderr'].strip() for o in output])
-        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_NAME.name, params=[errors]))
+        create_system_user(data.new_username, u.permissions, u.sudo)
+    else:
+        cmds = [
+            UserModChangeUsername(data.old_username,data.new_username),
+            GroupModChangeGroupName(data.old_username, data.new_username),
+        ]
 
-    SMBPasswd(data.old_username,flag=SMBPasswd.Flags.DELETE).execute()  # if this step fails, it's ok - we dont know if this user had smb
+        trans = LocalCommandLineTransaction(*cmds, privileged=True)
+        output = trans.run()
+
+        if (not trans.success):
+            errors = "\n".join([o['stderr'].strip() for o in output])
+            raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_NAME.name, params=[errors]))
+
+        SMBPasswd(data.old_username,flag=SMBPasswd.Flags.DELETE).execute()  # if this step fails, it's ok - we dont know if this user had smb
 
     mountpoint = CONFIG.mountpoint
 
@@ -86,17 +117,18 @@ def set_username(data:ChangeUsernameData,token:dict=Depends(verify_token)) -> di
         old_homedir = os.path.join(mountpoint,data.old_username)
         new_homedir = os.path.join(mountpoint, data.new_username)
 
-        cmds = [
-            RenameFile(old_homedir,new_homedir),
-            UserModChangeHomeDir(data.new_username,old_homedir,new_homedir),
-        ]
+        if(old_homedir!=new_homedir):
+            cmds = [
+                RenameFile(old_homedir,new_homedir),
+                UserModChangeHomeDir(data.new_username,old_homedir,new_homedir),
+            ]
 
-        trans = LocalCommandLineTransaction(*cmds,privileged=True)
-        output = trans.run()
+            trans = LocalCommandLineTransaction(*cmds,privileged=True)
+            output = trans.run()
 
-        if (not trans.success):
-            errors = "\n".join([o['stderr'].strip() for o in output])
-            raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_USER_NAME.name,params=[errors]))
+            if (not trans.success):
+                errors = "\n".join([o['stderr'].strip() for o in output])
+                raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_USER_NAME.name,params=[errors]))
 
     CONFIG.change_username(data.old_username,data.new_username)
     CONFIG.flush_config()
@@ -105,19 +137,47 @@ def set_username(data:ChangeUsernameData,token:dict=Depends(verify_token)) -> di
 
     return {"detail": SuccessMessage(code=SuccessMessages.S_USER_NAME.name)}
 
+@users.post("/set/sys-user",summary="Assign a specific system user (Unix) to the given user (their username will be renamed)")
+def assign_system_user(data:ChangeUsernameData,token:dict=Depends(verify_token)) -> dict:
+    username = token.get("username")
+    check_permission(username, UserPermissions.USERS_ACCOUNT_MANAGE)
+
+    CONFIG.change_username(data.old_username, data.new_username)
+    CONFIG.flush_config()
+
+    CONFIG.warning(f"System user {data.new_username} assigned to {data.old_username} by {username}")
+
+    return {"detail": SuccessMessage(code=SuccessMessages.S_USER_NAME.name)}
+
+
+
 @users.post("/set/sudo",summary="Add or remove a user from sudoers")
 def sudoers(data:SudoData,token:dict=Depends(verify_token)) -> dict:
     username = token.get("username")
     check_permission(username,UserPermissions.USERS_ACCOUNT_MANAGE)
 
-    cmd = UserModAddGroup(data.username,"sudo")  if (data.sudo) else GPasswdRemoveGroup(data.username,"sudo")
+    cmd = GetEntShadow(data.username).execute()
+    out = cmd.stdout
 
-    output = cmd.execute()
+    add_sudo = data.sudo
 
-    if (output.returncode != 0):
-        HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_USER_SUDO.name,params=[output.stderr]))
+    if (len(out)==0):
+        u = CONFIG.get_user(data.username)
+        if (u is None):
+            HTTPException(status_code=500,
+                          detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name, params=[data.username]))
 
-    CONFIG.warning(f"Superuser status changed for {data.username} by {username}: {'Yes' if data.sudo else 'No'}")
+        create_system_user(data.username,u.permissions,add_sudo)
+
+    else:
+        cmd = UserModAddGroup(data.username,"sudo")  if (data.sudo) else GPasswdRemoveGroup(data.username,"sudo")
+
+        output = cmd.execute()
+
+        if (output.returncode != 0):
+            HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_USER_SUDO.name,params=[output.stderr]))
+
+    CONFIG.warning(f"Superuser status changed for {data.username} by {username}: {'Yes' if add_sudo else 'No'}")
 
     return {"detail":SuccessMessage(code=SuccessMessages.S_USER_SUDO.name)}
 
@@ -149,6 +209,18 @@ def change_password(service:str,credentials:AccessServiceCredentials,token:dict=
     if (service in services):
         s = services[service]
         if (hasattr(s,"set_password")):
+            cmd = GetEntShadow(credentials.username).execute()
+
+            out = cmd.stdout
+
+            if (len(out)==0):
+                u = CONFIG.get_user(credentials.username)
+                if (u is None):
+                    raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name,params=[credentials.username]))
+
+                create_system_user(credentials.username,u.permissions,u.sudo)
+
+
             s.set_password(credentials.username,credentials.password)
         else:
             raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_UNKNOWN_METHOD.name))
@@ -159,36 +231,18 @@ def change_password(service:str,credentials:AccessServiceCredentials,token:dict=
     return {"detail":SuccessMessage(code=SuccessMessages.S_USER_PASSWORD.name)}
 
 
+
+
 @users.post("/new",summary="Create a new user")
 def new_user(profile:NewUserProfile,token:dict=Depends(verify_token)) -> dict:
     username = token.get("username")
     check_permission(username,UserPermissions.USERS_ACCOUNT_MANAGE)
 
-    def_groups = ['plugdev','users','netdev']
+    try:
+        uid = create_system_user(profile.username,profile.permissions,profile.sudo)
+    except Exception as e:
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NEW_USER.name,params=[str(e)]) )
 
-    if (UserPermissions.SERVICES_SMB_ACCESS.name in profile.permissions):
-        def_groups.append('sambashare')
-    if (profile.sudo):
-        def_groups.append('sudo')
-
-    allow_login = UserPermissions.SERVICES_SSH_ACCESS.name in profile.permissions
-    home_dir = os.path.join(CONFIG.mountpoint,profile.username)
-
-    cmds = [
-        UserAdd(profile.username,def_groups,home_dir,allow_login),
-        GetUserUID(profile.username),
-        Chown(profile.username,profile.username,home_dir,['-R']),
-        Chmod(home_dir,"0700", ['-R'])
-    ]
-
-    trans = LocalCommandLineTransaction(*cmds,privileged=True)
-    output = trans.run()
-
-    if (not trans.success):
-        error = "\n".join([o['stderr'].strip() for o in output])
-        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NEW_USER.name,params=[error]) )
-
-    uid = int(output[-1]['stdout'])
 
     CONFIG.add_user(profile.username,profile.visible_name,profile.permissions,uid)
     CONFIG.flush_config()

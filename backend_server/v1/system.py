@@ -1,6 +1,6 @@
 from backend_server.utils.cmdl import Shutdown, Reboot, SystemCtlRestart, LocalCommandLineTransaction, JournalCtl
 from backend_server.utils.config import CONFIG
-from backend_server.utils.responses import BackendProperty, BackgroundTask
+from backend_server.utils.responses import BackendProperty, BackgroundTask, ErrorMessage
 from backend_server.utils.scheduler import SCHEDULER
 from backend_server.utils.threads import AptGetUpdateThread, AptGetUpgradeThread
 from backend_server.v1.auth import verify_token_factory, UserPermissions, check_permission
@@ -8,13 +8,16 @@ from backend_server.v1.net import net_counter
 from collections import OrderedDict
 from enum import Enum
 from fastapi import APIRouter, Depends, HTTPException
+from nms_shared import ErrorMessages
 from nms_shared.constants import APT_LISTS
 from nms_shared.enums import LogFilter
+from requests.exceptions import HTTPError
 from typing import Optional, Dict, Union
 import datetime
 import os
 import platform
 import psutil
+import requests
 
 verify_token = verify_token_factory()
 
@@ -155,6 +158,34 @@ def apt_get(action:AptGetActions,token:dict=Depends(verify_token)) -> Background
     CONFIG.info(f"apt {log_action} requested by {username} with task id {task_id}")
 
     return BackgroundTask(task_id=task_id,running=True,progress=None,eta=None,detail=None)
+
+@system.post("/nms/updates", summary="Retrieve information for new NMS updates from GitHub")
+def get_latest_github_release(token:dict=Depends(verify_token)) -> None:
+    check_permission(token.get("username"), UserPermissions.SYS_ADMIN_UPDATES)
+
+    response = requests.get("https://api.github.com/repos/valerio-afk/nms/releases/latest")
+
+    try:
+        response.raise_for_status()
+    except HTTPError:
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_SYSTEM_UPDATES.name))
+
+    try:
+        d = response.json()
+    except Exception:
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_UNKNOWN_RESPONSE.name))
+
+    name = d.get("tag_name")
+    url = d.get("tarball_url")
+
+    if ((name is not None) and (url is not None)):
+        CONFIG.new_nms_update(name,url)
+        CONFIG.flush_config()
+
+@system.get("/nms/updates", summary="Provides information related to the newest NMS version retrieved.")
+def get_latest_github_release(token:dict=Depends(verify_token)) -> Optional[Dict]:
+    check_permission(token.get("username"), UserPermissions.SYS_ADMIN_UPDATES)
+    return CONFIG.nms_updates
 
 
 

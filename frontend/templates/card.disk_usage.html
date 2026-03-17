@@ -27,6 +27,8 @@
     </div>
   </div>
 
+  {% if user_usage %}
+
   <div class="col-sm-12 col-md-6 col-lg-6">
     <h5>{{ _("Personal") }}</h5>
     {% set personal_limit = user_usage.quota if user_usage.quota and (user_usage.quota>0) else global_usage.total %}
@@ -50,6 +52,7 @@
       </div>
     </div>
   </div>
+  {% endif %}
 </div>
 
 
