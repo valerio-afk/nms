@@ -316,7 +316,7 @@ clone_git_repo() {
 debian_network_manager() {
   local NM_CONF="/etc/NetworkManager/NetworkManager.conf"
 
-  if [[ -z "$repo_url" ]]; then
+  if [[ -z "$NM_CONF" ]]; then
       log_error "Network Manager Configuration file not found. Skipping..."
       return 0
   fi
