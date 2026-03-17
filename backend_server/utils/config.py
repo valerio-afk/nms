@@ -275,7 +275,7 @@ class NMSConfig(Logger):
         process = cmd.execute()
 
         if process.returncode != 0:
-            raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_MOUNTPOINT.name,params=[process.stderr]))
+            return None
 
         d = json.loads(process.stdout)
         pool = this.pool_name
@@ -482,7 +482,13 @@ class NMSConfig(Logger):
             },
             "systemd": {
                 "services": ['nmswebapp.service','nmsbackend.service','wg-quick@wg0.service']
-            }
+            },
+            "updates": {
+                "apt": {
+                    "last": None,
+                    "packages": []
+                }
+            },
         }
 
         this._cfg = cfg

@@ -40,6 +40,7 @@ SERVICES_TO_DISABLE=(
     nmbd
     rpcbind
     nfs-server
+    networking
 )
 
 # ----- Colour codes -----
@@ -445,9 +446,11 @@ manage_users() {
     # --- 1. www-data ---
     if id "www-data" &>/dev/null; then
         log_info "User 'www-data' already exists"
+        usermod -s /usr/sbin/nologin www-data
+        log_info "Login shell for www-data has been changed to nologin"
     else
         log_info "Creating user 'www-data' with no login..."
-        if ! useradd -r -s /usr/sbin/nologin www-data >> "$LOG_FILE" 2>&1; then
+        if ! useradd -M -r -s /usr/sbin/nologin www-data >> "$LOG_FILE" 2>&1; then
             log_warn "Failed to create user 'www-data'"
         else
             log_info "User 'www-data' created successfully"
@@ -459,7 +462,7 @@ manage_users() {
         log_info "User 'backend' already exists"
     else
         log_info "Creating user 'backend' with no login and sudo group..."
-        if ! useradd -m -s /usr/sbin/nologin -G sudo backend >> "$LOG_FILE" 2>&1; then
+        if ! useradd -M -s /usr/sbin/nologin -G sudo backend >> "$LOG_FILE" 2>&1; then
             log_warn "Failed to create user 'backend'"
         else
             log_info "User 'backend' created successfully and added to sudo group"
@@ -475,7 +478,7 @@ manage_users() {
 
     if [[ -z "$uid1000_user" ]]; then
         log_info "No user with UID 1000 found. Creating user 'user'..."
-        if ! useradd -m -s /bin/bash user >> "$LOG_FILE" 2>&1; then
+        if ! useradd -M -s /bin/bash user >> "$LOG_FILE" 2>&1; then
             log_warn "Failed to create user 'user'"
         else
             log_info "User 'user' created successfully"
@@ -486,6 +489,14 @@ manage_users() {
             log_warn "Failed to rename $uid1000_user to 'user'"
         else
             log_info "User $uid1000_user renamed to 'user'"
+
+            uid1000_homedir=$(getent passwd 1000 | cut -d: -f6 || true)
+
+            if [[ -d "$uid1000_homedir" ]]; then
+              rm -rf ${uid1000_homedir}
+              log_warn "Home directory ${uid1000_homedir} deleted"
+            fi
+
         fi
 
         log_info "Adding 'user' to group 'users'..."
@@ -840,6 +851,48 @@ EOF
     fi
 }
 
+# Build stuff
+build_box_app() {
+    local APP_DIR="$1"
+
+    if [[ -z "$APP_DIR" ]]; then
+        log_error "No application directory provided to build Box"
+        return 1
+    fi
+
+    if [[ ! -d "$APP_DIR" ]]; then
+        log_error "Directory '$APP_DIR' does not exist"
+        return 1
+    fi
+
+    log_info "Building Box application in $APP_DIR..."
+
+    cd "$APP_DIR" || {
+        log_error "Failed to enter directory $APP_DIR"
+        return 1
+    }
+
+    log_info "Installing npm dependencies..."
+    if ! npm install >> "$LOG_FILE" 2>&1; then
+        log_error "npm install failed"
+        return 1
+    fi
+
+    log_info "Auditing dependencies..."
+    if ! npm audit fix >> "$LOG_FILE" 2>&1; then
+        log_error "npm audit fix failed"
+        return 1
+    fi
+
+    log_info "Running Box production build..."
+    if ! npm run build >> "$LOG_FILE" 2>&1; then
+        log_error "Box build failed"
+        return 1
+    fi
+
+    log_info "Box build completed successfully"
+}
+
 
 
 # Check if the script is run by root
@@ -869,9 +922,7 @@ enable_network_manager
 # Step 7 --- Install redis
 install_redis_docker
 
-# Step 8 --- Install & Configuring IFM (Improved File Manager)
-#clone_git_repo "$IFM_REPO_URL" "$IFM_REPO_DIR"
-#build_docker_image "$IFM_REPO_DIR" "ifm:latest"
+# Step 8 ---
 
 #Step 9 --- Configure users
 manage_users

@@ -1,5 +1,5 @@
 from .auth import check_permission
-from backend_server.utils.cmdl import GetUserUID, RSync, Chown, Mkdir, UserDel
+from backend_server.utils.cmdl import GetUserUID, RSync, Chown, Mkdir, UserDel, Chmod, GroupModChangeGroupName
 from backend_server.utils.cmdl import LocalCommandLineTransaction, UserModAddGroup, GPasswdRemoveGroup, UserAdd
 from backend_server.utils.cmdl import ZFSSetQuota, UserModChangeUsername, SMBPasswd, RenameFile, UserModChangeHomeDir
 from backend_server.utils.config import CONFIG
@@ -73,6 +73,7 @@ def set_username(data:ChangeUsernameData,token:dict=Depends(verify_token)) -> di
 
     cmds = [
         UserModChangeUsername(data.old_username,data.new_username),
+        GroupModChangeGroupName(data.old_username,data.new_username),
         RenameFile(old_homedir,new_homedir),
         UserModChangeHomeDir(data.new_username,old_homedir,new_homedir),
     ]
@@ -163,6 +164,8 @@ def new_user(profile:NewUserProfile,token:dict=Depends(verify_token)) -> dict:
     cmds = [
         UserAdd(profile.username,def_groups,home_dir,allow_login),
         GetUserUID(profile.username),
+        Chown(profile.username,profile.username,home_dir,['-R']),
+        Chmod(home_dir,"0700", ['-R'])
     ]
 
     trans = LocalCommandLineTransaction(*cmds,privileged=True)

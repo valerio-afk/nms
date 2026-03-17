@@ -214,3 +214,7 @@ class CreatePool(BaseModel):
 class ReplaceDevice(BaseModel):
     old_device: str
     new_device: str
+
+class ImportPool(BaseModel):
+    pool_name: str
+    load_key:bool

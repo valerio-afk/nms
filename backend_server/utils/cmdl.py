@@ -1185,6 +1185,29 @@ class UserModChangeUsername(RevertibleCommandLine):
             serialisation.get('new', None),
         )
 
+class GroupModChangeGroupName(RevertibleCommandLine):
+    def __init__(this,old,new):
+        cmd = ['groupmod', '-n', new, old]
+        revert_cmd = ['groupmod', '-n', old, new]
+        super().__init__(cmd,revert_cmd,sudo=True)
+
+        this._old = old
+        this._new = new
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['old'] = this._old
+        d['new'] = this._new
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return GroupModChangeGroupName(
+            serialisation.get('old',None),
+            serialisation.get('new', None),
+        )
+
 class UserModAddGroup(RevertibleCommandLine):
     def __init__(this,username:str,group:str):
         cmd = ['usermod','-aG',group,username]

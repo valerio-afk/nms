@@ -1,3 +1,5 @@
+from io import BytesIO
+
 from flask import flash, session, abort
 from flask_babel import _, format_datetime
 from frontend.api.tasks import BackgroundTask, ResilverStatusTask
@@ -91,6 +93,7 @@ class BackEndProxy:
                  qstring_params:Optional[dict] = None,
                  body_params:Optional[dict] = None,
                  extra_headers:Optional[dict] = None,
+                 files:Optional[Dict[str,Tuple]] = None,
                  ignore_exception:bool = False,
                  ) -> Optional[Union[bool,dict,list]]:
         url = f"{BackEndProxy.API}/{BackEndProxy.VERSION}/{endpoint}"
@@ -123,6 +126,8 @@ class BackEndProxy:
         if (body_params is not None):
             req_params["json"] = body_params
             headers["Content-Type"] = "application/json"
+        if (files is not None):
+            req_params["files"] = files
 
         req_params["headers"] = headers
 
@@ -549,10 +554,27 @@ class BackEndProxy:
     def rollback_snapshot(this, snapshot_name: str):
         this._request(f"pool/snapshot/{snapshot_name}",RequestMethod.PATCH)
 
+    def import_pool_key(this,filename:str,stream:BytesIO,mimetype:str) -> None:
+        this._request(
+            "pool/import/key",
+            RequestMethod.POST,
+            files={
+                "key_file": (filename,stream,mimetype)
+            }
+        )
+
+    def import_pool(this,pool_name:str,load_key:bool) -> None:
+        this._request(
+            "pool/attach",
+            RequestMethod.POST,
+            body_params={"pool_name":pool_name,"load_key":load_key},
+        )
+
+
     #DISK METHODS
     def format_disk(this,dev:str, auth_token:str) -> None:
         this._request(
-            "disks/format",
+            "pool/import/key",
             RequestMethod.POST,
             qstring_params={"dev":dev},
             extra_headers={"X-Extra-Auth-format-disk":auth_token}

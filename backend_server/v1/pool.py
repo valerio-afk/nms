@@ -1,10 +1,11 @@
 from backend_server.utils.cmdl import CommandLine, ZFSLoadKey, ZFSMount, LocalCommandLineTransaction, ZFSUnmount, \
-    UserModChangeHomeDir, Mkdir
+    UserModChangeHomeDir, Mkdir, Chown, Chmod
 from backend_server.utils.cmdl import ZFSUnLoadKey, ZFSDestroy, ZFSCreate, ZPoolStatus, ZFSList, ZPoolExport, ZPoolScrub
 from backend_server.utils.cmdl import ZPoolAttach, ZPoolAdd, ZPoolImport, CreateKey, ZPoolCreate, ZPoolDestroy
 from backend_server.utils.cmdl import ZPoolClear, ZPoolReplace, Stat
 from backend_server.utils.config import CONFIG
-from backend_server.utils.responses import ExpasionStatus, BackendProperty, ErrorMessage, SuccessMessage, BackgroundTask
+from backend_server.utils.responses import ExpasionStatus, BackendProperty, ErrorMessage, SuccessMessage, \
+    BackgroundTask, ImportPool
 from backend_server.utils.responses import PoolSnapshot, CreatePool, ReplaceDevice
 from backend_server.utils.scheduler import SCHEDULER
 from backend_server.utils.threads import ScrubStateChecker, PoolExpansionStatus, ResilverStateChecker
@@ -37,7 +38,9 @@ remove_partition:Callable[[str],str] = lambda path : re.sub(r"-part[0-9]$","",pa
 
 def align_home_directories() -> None:
     users = CONFIG.users
-    mountpoint = CONFIG.mountpoint
+
+    if ((mountpoint:= CONFIG.mountpoint) is None):
+        return
 
     for u in users:
         home_dir = str(os.path.join(mountpoint, u))
@@ -45,17 +48,21 @@ def align_home_directories() -> None:
         cmd = Stat(home_dir,sudo=True).execute()
 
         if (cmd.returncode != 0):
-            cmds = [
-                Mkdir(home_dir,sudo=True),
-                UserModChangeHomeDir(u.username,u.home_dir,home_dir)
-            ]
+            Mkdir(home_dir, sudo=True).execute() # this can file if the directory already exists
 
-            trans = LocalCommandLineTransaction(*cmds)
-            output = trans.run()
+        cmds = [
+            UserModChangeHomeDir(u.username,u.home_dir,home_dir),
+            Chown(uid=u.username,gid=u.username,path=home_dir,flags=['-R'],sudo=True),
+            Chmod(path=home_dir,perm="0700",flags=["-R"],sudo=True),
 
-            if (not trans.success):
-                errors = "\n".join([o['stderr'] for o in output])
-                raise Exception(errors)
+        ]
+
+        trans = LocalCommandLineTransaction(*cmds)
+        output = trans.run()
+
+        if (not trans.success):
+            errors = "\n".join([o['stderr'] for o in output])
+            raise Exception(errors)
 
 def mount() -> None:
     if (not CONFIG.is_pool_configured):
@@ -613,19 +620,19 @@ def pool_detach(token:dict=Depends(verify_token)) -> None:
     CONFIG.warning(f"Pool detached by {username}")
 
 @pool.post(
-    "/attach/{pool_name}",
+    "/attach",
     responses={500: {"description": "Any internal errors"}},
     summary="Attach an existing disk array"
 )
-def pool_attach(pool_name:str,load_key:bool=False,token:dict=Depends(verify_token)) -> None:
+def pool_attach(data:ImportPool,token:dict=Depends(verify_token)) -> None:
     check_permission(username:=token.get("username"), UserPermissions.POOL_CONF_IMPORT)
     if (CONFIG.is_pool_configured):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_CONFIG.name))
 
-    commands: List[CommandLine] = [ZPoolImport(pool_name)]
+    commands: List[CommandLine] = [ZPoolImport(data.pool_name)]
 
-    if (load_key):
-        commands.append(ZFSLoadKey(pool_name, KEYPATH))
+    if (data.load_key):
+        commands.append(ZFSLoadKey(data.pool_name, KEYPATH))
 
 
     trans = LocalCommandLineTransaction(*commands)
@@ -635,22 +642,20 @@ def pool_attach(pool_name:str,load_key:bool=False,token:dict=Depends(verify_toke
         errors = "\n".join([o['stderr'] for o in output])
         raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_ATTACH.name, params=[errors]))
 
-
-
     CONFIG.init_pool()
-
 
     try:
         if (not CONFIG.is_mounted):
             pool_mount()
 
         CONFIG.flush_config()
+        align_home_directories()
     except Exception as e:
         #revert configuration to previous state
         CONFIG.load_configuration_file()
         raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_ATTACH.name, params=[str(e)]))
 
-    CONFIG.info(f"Pool {pool_name} attached by {username}")
+    CONFIG.info(f"Pool {data.pool_name} attached by {username}")
 
 
 @pool.post("/create",
@@ -777,7 +782,7 @@ def destroy_disk_array(auth:Dict=Depends(verify_token_header_factory("destroy"))
 
     return {"detail": SuccessMessage(code=SuccessMessages.S_POOL_DESTROYED.name)}
 
-@pool.post("/import-key",
+@pool.post("/import/key",
     responses={500: {"description": "Any internal errors"}},
     summary="Import encryption key for a disk array",)
 async def import_key(key_file: UploadFile = File(...),token:dict=Depends(verify_token)) -> None:
@@ -802,6 +807,8 @@ async def import_key(key_file: UploadFile = File(...),token:dict=Depends(verify_
 
 
     CONFIG.info(f"New encryption key imported by {username}")
+
+
 
 @pool.post("/recover",
     responses={500: {"description": "Any internal errors"}},

@@ -1,5 +1,8 @@
+import werkzeug.datastructures
 from nms_shared.enums import UserPermissions
 from nms_shared.utils import match_permissions
+from werkzeug.datastructures import FileStorage
+
 from . import frontend as bp, NMSBACKEND as BACKEND
 from .api.backend_proxy import show_flash
 from .api.tasks import PoolExpansionTask
@@ -147,11 +150,8 @@ def import_pool(pool) -> Response:
     if form.validate_on_submit():
         try:
             load_key = False
-            if (form.key.data):
-
-                key_data = form.key.data.read()
-
-                BACKEND.import_tank_key(key_data)
+            if (key_data:=form.key.data):
+                BACKEND.import_pool_key(key_data.filename,key_data.stream,key_data.mimetype)
                 load_key = True
 
             BACKEND.import_pool(pool,load_key)
