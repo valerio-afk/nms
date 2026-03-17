@@ -1,12 +1,11 @@
-from backend_server.utils.cmdl import CommandLine, ZFSLoadKey, ZFSMount, LocalCommandLineTransaction, ZFSUnmount, \
-    UserModChangeHomeDir, Mkdir, Chown, Chmod
+from backend_server.utils.cmdl import CommandLine, ZFSLoadKey, ZFSMount, LocalCommandLineTransaction, ZFSUnmount
+from backend_server.utils.cmdl import UserModChangeHomeDir, Mkdir, Chown, Chmod
 from backend_server.utils.cmdl import ZFSUnLoadKey, ZFSDestroy, ZFSCreate, ZPoolStatus, ZFSList, ZPoolExport, ZPoolScrub
 from backend_server.utils.cmdl import ZPoolAttach, ZPoolAdd, ZPoolImport, CreateKey, ZPoolCreate, ZPoolDestroy
 from backend_server.utils.cmdl import ZPoolClear, ZPoolReplace, Stat
 from backend_server.utils.config import CONFIG
-from backend_server.utils.responses import ExpasionStatus, BackendProperty, ErrorMessage, SuccessMessage, \
-    BackgroundTask, ImportPool
-from backend_server.utils.responses import PoolSnapshot, CreatePool, ReplaceDevice
+from backend_server.utils.responses import ExpasionStatus, BackendProperty, ErrorMessage, SuccessMessage
+from backend_server.utils.responses import PoolSnapshot, CreatePool, ReplaceDevice, BackgroundTask, ImportPool
 from backend_server.utils.scheduler import SCHEDULER
 from backend_server.utils.threads import ScrubStateChecker, PoolExpansionStatus, ResilverStateChecker
 from backend_server.v1.auth import verify_token_factory, verify_token_header_factory, check_permission
@@ -629,7 +628,7 @@ def pool_attach(data:ImportPool,token:dict=Depends(verify_token)) -> None:
     if (CONFIG.is_pool_configured):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_CONFIG.name))
 
-    commands: List[CommandLine] = [ZPoolImport(data.pool_name)]
+    commands: List[CommandLine] = [ZPoolImport(data.pool_name,force=True)]
 
     if (data.load_key):
         commands.append(ZFSLoadKey(data.pool_name, KEYPATH))

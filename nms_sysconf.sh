@@ -970,4 +970,3 @@ install_noip_duc
 
 #Step 14 --- Configure nginx as a reverse proxy
 configure_nginx_nms
-}

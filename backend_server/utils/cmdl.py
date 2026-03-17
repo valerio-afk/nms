@@ -217,27 +217,35 @@ class ZPoolDestroy(ZPoolCommand):
         return ZPoolDestroy(serialisation.get('tank_name',None),serialisation.get("force",False))
 
 class ZPoolImport(ZPoolCommand):
-    def __init__(this,tank_name = None):
+    def __init__(this, pool_name:Optional[str] = None, force:bool=False,**kwargs):
         revert = None
-        this._tank_name = tank_name
+        this._pool_name = pool_name
+        this._force = force
 
-        if (tank_name is not None):
-            revert = ['zpool','export',tank_name]
+        if (pool_name is not None):
+            revert = ['zpool','export', pool_name]
 
-        super().__init__("import", sudo=True,revert_command=revert)
+        super().__init__("import", sudo=True,revert_command=revert,**kwargs)
 
-        if (tank_name is not None):
-            this.append(tank_name)
+        if (pool_name is not None):
+            this.append(pool_name)
+
+            if (force):
+                this.append("-f")
 
     def to_dict(this):
         d = super().to_dict()
-        d['tank_name'] = this._tank_name
+        d['pool_name'] = this._pool_name
+        d['force'] = this._force
 
         return d
 
     @staticmethod
     def from_dict(serialisation):
-        return ZPoolImport(serialisation.get('tank_name',None))
+        return ZPoolImport(
+            serialisation.get('pool_name',None),
+            serialisation.get('force', None)
+        )
 
 class ZPoolExport(ZPoolCommand):
     def __init__(this,tank_name):
