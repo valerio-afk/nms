@@ -144,8 +144,6 @@ def user_account() -> str:
                            extra_css=get_widgets_css_files(widgets)
                            )
 
-
-
 @bp.route("/account/fullname",methods=["POST"])
 def account_fullname() -> Response:
     form = request.form
@@ -238,6 +236,8 @@ def user_quota() -> Response:
 
     return redirect(url_for("main.users",q=username))
 
+
+
 @bp.route("/users/username",methods=["POST"])
 def change_username() -> Response:
     username = request.form.get("username")
@@ -256,6 +256,24 @@ def change_username() -> Response:
 
     return redirect(url_for("main.users",q=username))
 
+
+@bp.route("/users/fullname",methods=["POST"])
+def change_fullname() -> Response:
+    form = request.form
+
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+    else:
+        username = form["username"]
+        BACKEND.set_user_fullname(username,form["fullname"])
+
+        session["user"] = BACKEND.current_user
+
+        return redirect(url_for("main.users",q=username))
+
+    return redirect(url_for("main.users"))
 
 @bp.route("/users/sudo",methods=["POST"])
 def set_sudo() -> Response:
