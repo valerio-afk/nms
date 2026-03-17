@@ -312,12 +312,35 @@ clone_git_repo() {
 }
 
 # Raspberry Pi stuff
+
+debian_network_manager() {
+  local NM_CONF="/etc/NetworkManager/NetworkManager.conf"
+
+  if [[ -z "$repo_url" ]]; then
+      log_error "Network Manager Configuration file not found. Skipping..."
+      return 0
+  fi
+
+  cat <<EOF | tee "$NM_CONF" >/dev/null
+[main]
+plugins=ifupdown,keyfile
+
+[ifupdown]
+managed=true
+EOF
+
+  systemctl restart NetworkManager
+
+  log_info "NetworkManager configured successfully"
+}
+
 enable_network_manager() {
     log_info "Enabling NetworkManager via raspi-config..."
 
     # Check if raspi-config is installed
     if ! command -v raspi-config &>/dev/null; then
-        log_warn "raspi-config is not installed. Skipping NetworkManager configuration."
+        log_warn "raspi-config is not installed. Trying another way."
+        debian_network_manager
         return 0
     fi
 
@@ -906,18 +929,19 @@ add_contrib_nonfree
 # Step 2 --- Install packages
 install_packages "${PACKAGES[@]}"
 modprobe zfs
+
 # Step 3 --- Disable systemctl services
 manage_services stop "${SERVICES_TO_DISABLE[@]}"
 manage_services disable "${SERVICES_TO_DISABLE[@]}"
+enable_network_manager
+
+# Step 3.5 --- Configure network manager
 
 # Step 4 --- Create python virtual environment
 setup_python_venv "$PYTHON_VENV_PATH"
 
 # Step 5 --- Cloning NMS git repository
 clone_git_repo "$REPO_URL" "$DEST_DIR"
-
-# Step 6 --- Raspberry config
-enable_network_manager
 
 # Step 7 --- Install redis
 install_redis_docker
@@ -946,3 +970,4 @@ install_noip_duc
 
 #Step 14 --- Configure nginx as a reverse proxy
 configure_nginx_nms
+}
