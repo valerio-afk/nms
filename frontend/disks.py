@@ -156,11 +156,11 @@ def import_pool(pool) -> Response:
 
             BACKEND.import_pool(pool,load_key)
 
-            flash(f"Pool {pool} imported successfully.","success")
+            # flash(f"Pool {pool} imported successfully.","success")
 
         except Exception as e:
             flash(f"Error while importing {pool}: {str(e)}","error")
-            raise e
+            # raise e
 
     return redirect(url_for("main.disk_management"))
 
