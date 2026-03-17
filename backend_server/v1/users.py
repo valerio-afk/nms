@@ -66,24 +66,37 @@ def set_username(data:ChangeUsernameData,token:dict=Depends(verify_token)) -> di
     username = token.get("username")
     check_permission(username, UserPermissions.USERS_ACCOUNT_MANAGE)
 
-    old_homedir = os.path.join(CONFIG.mountpoint,data.old_username)
-    new_homedir = os.path.join(CONFIG.mountpoint, data.new_username)
-
-    SMBPasswd(data.old_username, flag=SMBPasswd.Flags.DELETE).execute() #if this step fails, it's ok - we dont know if this user had smb
-
     cmds = [
         UserModChangeUsername(data.old_username,data.new_username),
-        GroupModChangeGroupName(data.old_username,data.new_username),
-        RenameFile(old_homedir,new_homedir),
-        UserModChangeHomeDir(data.new_username,old_homedir,new_homedir),
+        GroupModChangeGroupName(data.old_username, data.new_username),
     ]
 
-    trans = LocalCommandLineTransaction(*cmds,privileged=True)
+    trans = LocalCommandLineTransaction(*cmds, privileged=True)
     output = trans.run()
 
     if (not trans.success):
         errors = "\n".join([o['stderr'].strip() for o in output])
-        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_USER_QUOTA.name,params=[errors]))
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_NAME.name, params=[errors]))
+
+    SMBPasswd(data.old_username,flag=SMBPasswd.Flags.DELETE).execute()  # if this step fails, it's ok - we dont know if this user had smb
+
+    mountpoint = CONFIG.mountpoint
+
+    if (mountpoint is not None):
+        old_homedir = os.path.join(mountpoint,data.old_username)
+        new_homedir = os.path.join(mountpoint, data.new_username)
+
+        cmds = [
+            RenameFile(old_homedir,new_homedir),
+            UserModChangeHomeDir(data.new_username,old_homedir,new_homedir),
+        ]
+
+        trans = LocalCommandLineTransaction(*cmds,privileged=True)
+        output = trans.run()
+
+        if (not trans.success):
+            errors = "\n".join([o['stderr'].strip() for o in output])
+            raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_USER_NAME.name,params=[errors]))
 
     CONFIG.change_username(data.old_username,data.new_username)
     CONFIG.flush_config()
