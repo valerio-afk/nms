@@ -623,6 +623,9 @@ class BackEndProxy:
     def check_nms_updates(this) -> None:
         this._request("system/nms/updates",RequestMethod.POST)
 
+    def update_nms(this) -> None:
+        this._request("system/nms/updates",RequestMethod.PATCH)
+
     #NETWORK METHODS
     def change_iface_status(this,iface:str,action:Union[Literal['up'],Literal['down']]) -> None:
         this._request(f"net/{iface}/{action}",RequestMethod.POST)

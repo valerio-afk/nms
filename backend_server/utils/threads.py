@@ -2,20 +2,24 @@ import datetime
 from abc import abstractmethod
 from string import Template
 from nms_shared.enums import RequestMethod
-import requests
 from nms_shared.disks import Disk
 from nms_shared.threads import NMSThread
-from backend_server.utils.cmdl import ZPoolStatus, APTGetUpdate, APTGetUpgrade
+from backend_server.utils.cmdl import ZPoolStatus, APTGetUpdate, APTGetUpgrade, TarArchive, Chown, Chmod, \
+    LocalCommandLineTransaction
 from nms_shared import ErrorMessages, SuccessMessages
 from backend_server.utils.responses import ErrorMessage, SuccessMessage
 from fastapi import HTTPException
-from typing import Optional
+from typing import Optional, Callable
 from urllib.parse import quote_plus
 import psutil
 import time
 import json
 import threading
 import subprocess
+import re
+import tempfile
+import os
+import requests
 
 class LongWaitThread(NMSThread):
     def __init__(this, interval:int) -> None:
@@ -196,6 +200,73 @@ class AptGetUpgradeThread(NMSThread):
         except Exception as e:
             raise HTTPException(status_code=500,
                                 detail=ErrorMessage(code=ErrorMessage.E_APT_GET.name, params=[str(e)]))
+
+class NMSUpdate(NMSThread):
+    def __init__(this, callback:Callable):
+        super().__init__()
+        this._cb = callback
+
+    def run(this) -> None:
+        from backend_server.utils.config import CONFIG
+        release = CONFIG.nms_updates
+
+        tarball_url = release.get("tarball_url")
+        new_version = release.get("version")
+
+        if (tarball_url is None):
+            raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_SYSTEM_UPDATES.name))
+
+        try:
+            with requests.get(tarball_url, stream=True) as r:
+                r.raise_for_status()
+
+                filename = None
+
+                cd = r.headers.get("Content-Disposition")
+                if (cd is not None):
+                    match = re.search(r'filename="?([^"]+)"?', cd)
+                    if match:
+                        filename = match.group(1)
+
+                if (filename is None):
+                    filename = "release.tar.xz"
+
+                tmp_path = os.path.join(tempfile.gettempdir(), filename)
+
+                with open(tmp_path, "wb") as f:
+                    for chunk in r.iter_content(1024 * 1024):
+                        if chunk:
+                            f.write(chunk)
+
+        except requests.exceptions.HTTPError as e:
+            raise HTTPException(status_code=500,
+                                detail=ErrorMessage(code=ErrorMessages.E_APT_GET.name, params=[str(e)]))
+
+        cwd = os.getcwd()
+
+        # cmds = [
+        #     TarArchive(cwd,tmp_path,action=TarArchive.TarAction.EXTRACT),
+        #     Chown("root","www-data",cwd,['-R']),
+        #     Chmod(this.config_filename, "600"),
+        #     Chown("backend", "backend", this.config_filename),
+        #      NPM RUN BUILD
+        # ]
+        #
+        # trans = LocalCommandLineTransaction(*cmds,privileged=True)
+        # output = trans.run()
+        #
+        #
+        # if (not trans.success):
+        #     errors = "\n".join([o['stderr'] for o in output])
+        #     raise HTTPException(status_code=500,
+        #                         detail=ErrorMessage(code=ErrorMessages.E_APT_GET.name, params=[errors]))
+
+        CONFIG.info(f"NMS updated to {new_version}")
+
+        CONFIG.new_nms_update()
+        CONFIG.flush_config()
+
+        this._cb()
 
 
 class ResilverStateChecker(NMSThread):

@@ -1104,12 +1104,14 @@ class NMSConfig(Logger):
             if (nms.get('version') != ver):
                 new_update = True
 
-
         if (new_update):
             this._cfg['updates']['releases'] = {
                 "version": version,
                 "tarball_url": tarball_url
             }
+
+    def clean_nms_update(this) -> None:
+        this._cfg['updates']['releases'] = None
 
 
 

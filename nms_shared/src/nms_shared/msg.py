@@ -108,6 +108,7 @@ class ErrorMessages(Enum):
     E_USER_SYSTEM = "E_USER_SYSTEM"
 
     E_SYSTEM_UPDATES = "E_SYSTEM_UPDATES"
+    E_SYSTEM_DIST = "E_SYSTEM_DIST"
 
     @staticmethod
     def get_error_from_string(error_code:str,*args,**kwargs) -> str:
@@ -313,7 +314,8 @@ ERROR_MESSAGES = {
     ErrorMessages.E_USER_LOGIN_RESET : lambda user,info: _("Error occurred while resetting the login credentials for %(user)s: %(info)s.") % {'info':info,'user':user}, #<-----
     ErrorMessages.E_USER_SYSTEM: lambda info: _("Error while retrieving the list of system users: %(info)s.") % {'info':info},
 
-    ErrorMessages.E_SYSTEM_UPDATES: lambda: _("Unable to retrieve updates.")
+    ErrorMessages.E_SYSTEM_UPDATES: lambda: _("Unable to retrieve updates."),
+    ErrorMessages.E_SYSTEM_DIST: lambda info: _("Error while creating distribution archive: %(info)s.") % {'info':info},
 
 }
 

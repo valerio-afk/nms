@@ -3,13 +3,14 @@ from .import NMSBACKEND as BACKEND, frontend as bp
 from flask import render_template, redirect, url_for, request, flash, g, send_file, session, Response
 from flask_babel import format_datetime, _
 from flask_wtf.csrf import  validate_csrf
+from frontend.utils.decorators import wait
 from frontend.utils.widget import render_widget,get_widgets_html,get_widgets_css_files
 from io import BytesIO
 from nms_shared import ErrorMessages
 from nms_shared.constants import HTTP_REPEAT_HEADER
 from nms_shared.enums import LogFilter, UserPermissions
 from nms_shared.utils import match_permissions
-from typing import Optional, Dict, Callable, Any
+from typing import Optional, Dict, Callable, Any, Union
 from werkzeug.datastructures import ImmutableMultiDict
 from wtforms import ValidationError
 import base64
@@ -228,6 +229,7 @@ def apt_get():
     return redirect(url_for("main.advanced"))
 
 @bp.route('/advanced/nms',methods=['POST'])
+@wait(redirect_to="/advanced/nms/wait",tag="nms_update")
 def nms_updates():
     action = request.form.get("action",None)
 
@@ -235,17 +237,34 @@ def nms_updates():
     if (action == "update"):
         BACKEND.check_nms_updates()
     elif (action == "upgrade"):
-        task = None # get task here when endpioint is available
+        task = BACKEND.update_nms()
 
         if task is None:
             show_flash(code=ErrorMessages.E_APT_GET.name)
         else:
             try:
                 task_id = task.get("task_id")
-                BACKEND.register_task(task_id,pages=["/advanced/nms"],metadata=action,**task)
+                BACKEND.register_task(task_id,
+                                      pages=["/advanced"],
+                                      metadata="nms_update",**task)
             except Exception as e:
                 show_flash(code=ErrorMessages.E_APT_GET.name,params=[str(e)])
 
     return redirect(url_for("main.advanced"))
 
 
+@bp.route('/advanced/nms/wait')
+def nms_updates_wait() -> Union[str,Response]:
+    tasks = BACKEND.get_tasks_by_metadata("nms_update")
+
+    if len(tasks) == 0:
+        return redirect(url_for("main.advanced"))
+
+    update_task = tasks.pop()
+
+    return render_template("wait.indeterminate.html",
+                           active_page="advanced",
+                           refresh_to=url_for("main.advanced"),
+                           task_id=update_task.task_id,
+                           waiting_message=_("Update in progress. At the end of this operation, NMS will be restarted. You may refresh this page. If it becomes unresponsive, wait a few more seconds and retry."),
+                           csp_nonce=g.csp_nonce)

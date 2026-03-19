@@ -1,8 +1,9 @@
 from backend_server.utils.cmdl import Shutdown, Reboot, SystemCtlRestart, LocalCommandLineTransaction, JournalCtl
+from backend_server.utils.cmdl import TarArchive
 from backend_server.utils.config import CONFIG
 from backend_server.utils.responses import BackendProperty, BackgroundTask, ErrorMessage
 from backend_server.utils.scheduler import SCHEDULER
-from backend_server.utils.threads import AptGetUpdateThread, AptGetUpgradeThread
+from backend_server.utils.threads import AptGetUpdateThread, AptGetUpgradeThread, NMSUpdate
 from backend_server.v1.auth import verify_token_factory, UserPermissions, check_permission
 from backend_server.v1.net import net_counter
 from collections import OrderedDict
@@ -18,6 +19,7 @@ import os
 import platform
 import psutil
 import requests
+
 
 verify_token = verify_token_factory()
 
@@ -78,6 +80,15 @@ def system_information() -> Dict[str, str]:
 
     return sys_info
 
+def restart_services(username) -> None:
+    cmds = [SystemCtlRestart(service) for service in CONFIG.systemd_services]
+
+    CONFIG.warning(f"systemd services restart requested by {username}. Be right back.")
+
+    if (len(cmds) > 0):
+        trans = LocalCommandLineTransaction(*cmds)
+        trans.run()
+
 class SystemProperties(Enum):
     system_information = "system_information"
     system_updates = "system_updates"
@@ -127,13 +138,8 @@ def restart(token:dict=Depends(verify_token)):
 @system.post('/restart-systemd-services',summary="Restart main system services")
 def restart_systemd_services(token:dict=Depends(verify_token)) -> None:
     check_permission(username:=token.get("username"), UserPermissions.SYS_ADMIN_SYSTEMCTL)
-    cmds = [SystemCtlRestart(service) for service in CONFIG.systemd_services]
 
-    CONFIG.warning(f"systemd services restart requested by {username}. Be right back.")
-
-    if (len(cmds) > 0):
-        trans = LocalCommandLineTransaction(*cmds)
-        trans.run()
+    restart_services(username)
 
 @system.post('/apt/{action}',
             responses={
@@ -186,6 +192,19 @@ def get_latest_github_release(token:dict=Depends(verify_token)) -> None:
 def get_latest_github_release(token:dict=Depends(verify_token)) -> Optional[Dict]:
     check_permission(token.get("username"), UserPermissions.SYS_ADMIN_UPDATES)
     return CONFIG.nms_updates
+
+
+@system.patch("/nms/updates", summary="Update NMS",response_model=Optional[BackgroundTask])
+def nms_update(token:dict=Depends(verify_token)) -> Optional[BackgroundTask]:
+    check_permission(username:=token.get("username"), UserPermissions.SYS_ADMIN_UPDATES)
+
+    thread = NMSUpdate(lambda: restart_services(username))
+    task_id = SCHEDULER.schedule(thread)
+
+    CONFIG.info(f"NMS update in progress requested by {username} with task id {task_id}")
+
+    return BackgroundTask(task_id=task_id, running=True, progress=None, eta=None, detail=None)
+
 
 
 
@@ -253,3 +272,38 @@ def journalctl(filter:LogFilter,
 @system.get("/test",summary="Test checking if the client/server connection works properly")
 def test(token:dict=Depends(verify_token)) -> None:
     check_permission(token.get("username"), UserPermissions.CLIENT_DASHBOARD_ACCESS)
+
+@system.post("/make-dist",summary="Create a tarball archive with NMS distribution. The output file will be saved in NMS root directory")
+def make_tarball(token:dict=Depends(verify_token)) -> None:
+    u = CONFIG.get_user(token.get("username"))
+    from backend_server import __version__ as version
+
+    if (not u.admin):
+        raise HTTPException(status_code=401)
+
+    pwd = os.getcwd()
+
+    cmd = TarArchive(
+        pwd,
+        f"nms-{version}.tar.xz",
+        action=TarArchive.TarAction.CREATE,
+        compression=TarArchive.TarCompression.XZ,
+        exclude=[
+            ".idea",
+            "box/dist",
+            "box/node_modules",
+            ".gitignore",
+            ".github",
+            ".gitattributes",
+            ".git",
+            "__pycache__",
+            "build",
+            "nms_shared.egg-info",
+            "pots",
+            "nms.json",
+            "*.tar*"
+        ]
+    ).execute()
+
+    if (cmd.returncode != 0):
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_SYSTEM_DIST.name,params=[cmd.stderr]))

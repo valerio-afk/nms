@@ -40,6 +40,9 @@ class CommandLine(ABC):
         if (this._sudo):
             raw_cmd = ["sudo"] + raw_cmd
 
+        from logging import getLogger
+        getLogger().error(raw_cmd)
+
         output = subprocess.run(raw_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
         if (isinstance(this,Touch)):
@@ -2098,3 +2101,58 @@ class Cat(CommandLine):
         )
 
 
+class TarArchive(CommandLine):
+    class TarAction(Enum):
+        EXTRACT ='x'
+        CREATE  ='c'
+
+    class TarCompression(Enum):
+        AUTO = 'a'
+        BZIP2= 'j'
+        XZ   = 'J'
+        GZIP = 'z'
+    def __init__(this,
+                 path:str,
+                 filename:str,
+                 action:TarAction,
+                 compression:Optional[TarCompression]=TarCompression.AUTO,
+                 exclude:Optional[List[str]]=None,
+                 **kwargs):
+
+        this._path = path
+        this._filename = filename
+        this._action = action
+        this.compression = compression
+        this.exclude = exclude
+
+        flags = f"-{action.value}{compression.value}f"
+
+        cmd = ['tar',flags,filename,'-C', path]
+
+        if (exclude is not None):
+            for e in exclude:
+                cmd.append(f"--exclude={e}")
+
+        cmd.append(".")
+
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['path'] = this._path
+        d['filename'] = this._filename
+        d['action'] = this._action
+        d['compression'] = this._compression
+        d['exclude'] = this._exclude
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return TarArchive(
+            serialisation.get("path", None),
+            serialisation.get("filename", None),
+            serialisation.get("action", None),
+            serialisation.get("compression", None),
+            serialisation.get("exclude", None),
+        )
