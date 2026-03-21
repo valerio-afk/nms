@@ -663,6 +663,8 @@ When creating a disk array, you can choose to enable the following options
 
 Contributions, translations, issues, and feature requests are welcome!
 
+In interested, learn more about the backend [API endpoints](API.md).
+
 ---
 
 ## 🔮 Future Plans
