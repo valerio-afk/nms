@@ -2,9 +2,9 @@ from .v1.api import v1
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from nms_shared.utils import setup_logger
 from .utils.responses import ErrorMessage
 from contextlib import asynccontextmanager
+from logging import getLogger
 
 @asynccontextmanager
 async def automount(app:FastAPI):
@@ -31,16 +31,38 @@ app.add_middleware(
 
 app.include_router(v1)
 
-setup_logger(__name__)
 
 # Custom exception handler
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     detail = exc.detail
+
+    logger = getLogger("nms.backend")
+
+    logger.error(
+        f"Exception on {request.method} {request.url} -> {exc.detail}",
+        exc_info=exc
+    )
+
     if isinstance(detail, ErrorMessage):
         detail = detail.model_dump()
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": detail},
+        headers=exc.headers
+    )
+
+@app.exception_handler(Exception)
+async def exception_handler(request: Request, exc: Exception):
+
+    logger = getLogger("nms.backend")
+
+    logger.error(
+        f"Exception on {request.method} {request.url} -> {exc.detail}",
+        exc_info=exc
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": ErrorMessage(code=ErrorMessages.E_UNKNOWN.name)},
         headers=exc.headers
     )

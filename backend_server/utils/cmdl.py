@@ -10,10 +10,11 @@ import subprocess
 
 
 class CommandLine(ABC):
-    def __init__(this,command,sudo=False,mask_output=False):
+    def __init__(this,command:List[str],sudo:bool=False,mask_output:bool=False,cwd:Optional[str]=None):
         this._command = command
         this._sudo = sudo
         this._mask_output=mask_output
+        this._cwd = os.getcwd() if cwd is None else cwd
 
     def append(this,cmd):
         if (isinstance(cmd,list) or (isinstance(cmd,tuple))):
@@ -24,11 +25,15 @@ class CommandLine(ABC):
             raise TypeError("The `cmd` parameter must be either a list or a string")
 
     @property
-    def command(this):
+    def command(this) -> List[str]:
         return this._command
 
     @property
-    def mask_output(this):
+    def cwd(this) ->str:
+        return this._cwd
+
+    @property
+    def mask_output(this) -> bool:
         return this._mask_output
 
 
@@ -40,31 +45,21 @@ class CommandLine(ABC):
         if (this._sudo):
             raw_cmd = ["sudo"] + raw_cmd
 
-        from logging import getLogger
-        getLogger().error(raw_cmd)
-
-        output = subprocess.run(raw_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-        if (isinstance(this,Touch)):
-            import logging
-
-            l = logging.getLogger(__name__)
-            l.error(type(this))
-            l.error(" ".join(raw_cmd))
-            l.error(output.stdout)
-            l.error(output.stderr)
-            l.error(output.returncode)
-
+        output = subprocess.run(raw_cmd,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE,
+                                text=True,
+                                cwd=this.cwd)
 
         return output
 
-    def execute(this,**kwargs):
+    def execute(this,**kwargs)-> Optional[CompletedProcess[str]]:
         return this._execute(this.command)
 
-    def to_dict(this):
+    def to_dict(this) -> Dict[str,Any]:
         return {"__class__":this.__class__.__name__}
 
-    def to_json(this):
+    def to_json(this) -> Dict[str,Any]:
         return this.to_dict()
 
     @staticmethod
@@ -2155,4 +2150,24 @@ class TarArchive(CommandLine):
             serialisation.get("action", None),
             serialisation.get("compression", None),
             serialisation.get("exclude", None),
+        )
+
+
+class NPMRun(CommandLine):
+    def __init__(this,command:str,**kwargs):
+        cmd = ['npm','run',command]
+        this._command = command
+
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['command'] = this._command
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return NPMRun(
+            serialisation.get("command", None),
         )

@@ -1,0 +1,38 @@
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  colour:
+    (): nms_shared.utils.ColourFormatter
+
+handlers:
+  default:
+    class: logging.StreamHandler
+    formatter: colour
+    stream: ext://sys.stderr
+
+loggers:
+  uvicorn:
+    handlers: [default]
+    level: INFO
+    propagate: false
+
+  uvicorn.error:
+    handlers: [default]
+    level: INFO
+    propagate: false
+
+  uvicorn.access:
+    handlers: [default]
+    level: INFO
+    propagate: false
+
+  nms.backend:
+    handlers: [default]
+    level: INFO
+    propagate: false
+
+  nms.webapp:
+    handlers: [ default ]
+    level: INFO
+    propagate: false

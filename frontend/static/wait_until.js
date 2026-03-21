@@ -36,6 +36,7 @@ class WaitUntil {
     this.endpoint = opts.endpoint || '/check_tasks';
     this.contentType = opts.contentType || 'application/json';
     this.csrf_token = opts.csrf_token || null;
+    this.redirect_on_error = opts.redirect_on_error || false
     this.callback = opts.callback || indeterminateWaitChecker;
     this._pollTimer = null;
     this._stopped = false;
@@ -56,19 +57,28 @@ class WaitUntil {
         body: JSON.stringify({ path: this.path })
       });
 
+      let force_redirect = false
+
       if (!res.ok) {
-        // HTTP error — treat as "do nothing" but surface info to console
         console.error(`WaitUntil: server returned ${res.status} ${res.statusText}`);
-        return { redirected: false, data: null };
+        if (this.redirect_on_error === true ||
+          (((typeof this.redirect_on_error) === "number") && (res.status === this.redirect_on_error)))
+        {
+          force_redirect = true;
+        }
       }
 
-      const data = await res.json();
-      const r = this.callback(data)
+      let data = null
+      let r = force_redirect
 
-      if (r)
+      if (res.ok)
       {
-         window.location.href = this.path;
+        data = await res.json();
+        r = this.callback(data)
       }
+
+      if (r || force_redirect) window.location.href = this.path;
+
 
       return { redirected: r, data };
     }

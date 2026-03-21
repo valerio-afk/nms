@@ -1,5 +1,6 @@
 from .api.backend_proxy import show_flash
 from .import NMSBACKEND as BACKEND, frontend as bp
+from ansi2html import Ansi2HTMLConverter
 from flask import render_template, redirect, url_for, request, flash, g, send_file, session, Response
 from flask_babel import format_datetime, _
 from flask_wtf.csrf import  validate_csrf
@@ -13,6 +14,7 @@ from nms_shared.utils import match_permissions
 from typing import Optional, Dict, Callable, Any, Union
 from werkzeug.datastructures import ImmutableMultiDict
 from wtforms import ValidationError
+
 import base64
 import datetime
 
@@ -104,6 +106,7 @@ def async_widget_system_updates():
 # MAIN PAGE
 
 @bp.route("/advanced")
+@wait(redirect_to="/advanced/nms/wait",tag="nms_update")
 def advanced():
     advanced_widgets = []
 
@@ -132,6 +135,8 @@ def advanced():
 @bp.route('/advanced/logs/<string:log>')
 def system_logs(log):
     match (log):
+        case "nginx":
+            log_filter = LogFilter.WEB_SERVER
         case "backend":
             log_filter = LogFilter.BACKEND
         case _:
@@ -140,8 +145,6 @@ def system_logs(log):
     start = request.args.get('start')
     end = request.args.get('end')
 
-    since = None
-    until = None
 
     if (end is None):
        until = datetime.datetime.now().timestamp()
@@ -159,6 +162,10 @@ def system_logs(log):
     until = int(until)
 
     logs = BACKEND.get_logs(log_filter,since=since,until=until)
+
+    conv = Ansi2HTMLConverter()
+    logs = conv.convert(logs,full=False)
+
 
     return render_template("advanced.logs.html",
                            active=log_filter.value,
@@ -229,7 +236,6 @@ def apt_get():
     return redirect(url_for("main.advanced"))
 
 @bp.route('/advanced/nms',methods=['POST'])
-@wait(redirect_to="/advanced/nms/wait",tag="nms_update")
 def nms_updates():
     action = request.form.get("action",None)
 
@@ -237,11 +243,16 @@ def nms_updates():
     if (action == "update"):
         BACKEND.check_nms_updates()
     elif (action == "upgrade"):
+        from logging import getLogger
+        # log = getLogger("nms.webapp")
+
         task = BACKEND.update_nms()
+        # log.error(task)
 
         if task is None:
             show_flash(code=ErrorMessages.E_APT_GET.name)
         else:
+
             try:
                 task_id = task.get("task_id")
                 BACKEND.register_task(task_id,

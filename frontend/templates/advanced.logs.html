@@ -12,6 +12,10 @@
     <li class="nav-item">
       <a class="nav-link {% if active == 'backend' %} active {% endif %}" href="{{ url_for('main.system_logs',log='backend',start=date_filter['start'],end=date_filter['end']) }}"><i class="bi bi-gear-wide-connected"></i> {{ _("Backend") }}</a>
     </li>
+
+    <li class="nav-item">
+      <a class="nav-link {% if active == 'nginx' %} active {% endif %}" href="{{ url_for('main.system_logs',log='nginx',start=date_filter['start'],end=date_filter['end']) }}"><i class="bi bi-gear-wide-connected"></i> {{ _("Web Server") }}</a>
+    </li>
   </ul>
 
   <form class="d-flex align-items-center ms-auto gap-2" action="{{ url_for('main.system_logs',log=active) }}" method="get">

@@ -5,7 +5,7 @@ from nms_shared.enums import RequestMethod
 from nms_shared.disks import Disk
 from nms_shared.threads import NMSThread
 from backend_server.utils.cmdl import ZPoolStatus, APTGetUpdate, APTGetUpgrade, TarArchive, Chown, Chmod, \
-    LocalCommandLineTransaction
+    LocalCommandLineTransaction, NPMRun
 from nms_shared import ErrorMessages, SuccessMessages
 from backend_server.utils.responses import ErrorMessage, SuccessMessage
 from fastapi import HTTPException
@@ -244,26 +244,27 @@ class NMSUpdate(NMSThread):
 
         cwd = os.getcwd()
 
-        # cmds = [
-        #     TarArchive(cwd,tmp_path,action=TarArchive.TarAction.EXTRACT),
-        #     Chown("root","www-data",cwd,['-R']),
-        #     Chmod(this.config_filename, "600"),
-        #     Chown("backend", "backend", this.config_filename),
-        #      NPM RUN BUILD
-        # ]
-        #
-        # trans = LocalCommandLineTransaction(*cmds,privileged=True)
-        # output = trans.run()
-        #
-        #
-        # if (not trans.success):
-        #     errors = "\n".join([o['stderr'] for o in output])
-        #     raise HTTPException(status_code=500,
-        #                         detail=ErrorMessage(code=ErrorMessages.E_APT_GET.name, params=[errors]))
+        cmds = [
+            TarArchive(cwd,tmp_path,action=TarArchive.TarAction.EXTRACT),
+            NPMRun("build",cwd=os.path.join(cwd,"box")),
+            Chown("root","www-data",cwd,['-R']),
+            Chmod(CONFIG.config_filename, "600"),
+            Chown("backend", "backend", CONFIG.config_filename),
+
+        ]
+
+        trans = LocalCommandLineTransaction(*cmds,privileged=True)
+        output = trans.run()
+
+
+        if (not trans.success):
+            errors = "\n".join([o['stderr'] for o in output])
+            raise HTTPException(status_code=500,
+                                detail=ErrorMessage(code=ErrorMessages.E_APT_GET.name, params=[errors]))
 
         CONFIG.info(f"NMS updated to {new_version}")
 
-        CONFIG.new_nms_update()
+        CONFIG.clean_nms_update()
         CONFIG.flush_config()
 
         this._cb()

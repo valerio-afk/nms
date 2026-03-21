@@ -259,6 +259,8 @@ def journalctl(filter:LogFilter,
             service = "nmswebapp.service"
         case LogFilter.BACKEND:
             service = "nmsbackend.service"
+        case LogFilter.WEB_SERVER:
+            service = "nginx.service"
 
     cmd = JournalCtl(service,since=since,until=until)
 

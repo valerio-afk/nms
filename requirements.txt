@@ -18,3 +18,5 @@ python-multipart >= 0.0.22
 requests >= 2.32.3
 cryptography >= 44.0.1
 asgiref >= 3.11.1
+pyyaml >= 6.0.3
+ansi2html >= 1.9.2

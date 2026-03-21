@@ -9,6 +9,7 @@ class DiskStatus(Enum):
 class LogFilter(Enum):
     FRONTEND = 'frontend'
     BACKEND = 'backend'
+    WEB_SERVER = 'nginx'
 
 class RequestMethod(Enum):
     GET = "GET"

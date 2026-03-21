@@ -6,7 +6,8 @@ set -o nounset      # Error on undefined variables
 #Globals
 PYTHON_VENV_PATH="/opt/python3"
 LOG_FILE="/var/log/nms.log"
-REPO_URL="https://github.com/valerio-afk/nms"
+REPOSITORY="valerio-afk/nms"
+REPO_URL="https://github.com/${REPOSITORY}"
 DEST_DIR="/nms"
 
 #IFM_REPO_URL="https://github.com/misterunknown/ifm.git"
@@ -32,6 +33,7 @@ PACKAGES=(
     nodejs
     npm
     git
+    jq
 )
 
 SERVICES_TO_DISABLE=(
@@ -282,6 +284,49 @@ install_editable_package() {
 }
 
 #Git stuff
+download_latest_release() {
+    local repo="$1"
+    local tmp_file
+    local tag
+
+    tmp_file="/tmp/${repo##*/}-latest.tar.gz"
+
+    # Get latest tag
+    tag=$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest" \
+        | jq -r .tag_name) || {
+        log_warn "Failed to fetch latest release info"
+        return 1
+    }
+
+    if [[ -z "$tag" || "$tag" == "null" ]]; then
+        log_warn "No valid release tag found"
+        return 1
+    fi
+
+    # Download tarball
+    curl -fL "https://github.com/$repo/archive/refs/tags/$tag.tar.gz" \
+        -o "$tmp_file" || {
+        log_error "Download failed"
+        return 1
+    }
+
+    # Ensure destination exists
+    mkdir -p /nms || {
+        log_error "Failed to create /nms"
+        return 1
+    }
+
+    # Extract (strip top-level directory)
+    tar -xzf "$tmp_file" -C /nms --strip-components=1 || {
+        log_err "Extraction failed"
+        return 1
+    }
+
+    rm "$tmp_file"
+
+    return 0
+}
+
 clone_git_repo() {
     local repo_url="$1"
     local dest_dir="$2"   # Where to clone the repo
@@ -652,7 +697,7 @@ Group=www-data
 WorkingDirectory=$app_dir
 Environment="PATH=$venv_path/bin:$PATH"
 Environment="NMS_SECRET_KEY=$NMS_SECRET_KEY"
-ExecStart=$venv_path/bin/uvicorn frontend.app:frontend_app --host 127.0.0.1 --port 8080 --reload
+ExecStart=$venv_path/bin/uvicorn frontend.app:frontend_app --host 127.0.0.1 --port 8080 --reload --log-config logging.yaml
 Restart=always
 RestartSec=5
 
@@ -691,7 +736,7 @@ Group=backend
 WorkingDirectory=$app_dir
 Environment="PATH=$venv_path/bin:$PATH"
 Environment="NMS_SECRET_KEY=$NMS_SECRET_KEY"
-ExecStart=$venv_path/bin/uvicorn backend_server.backend:app --host 127.0.0.1 --port 8081 --reload
+ExecStart=$venv_path/bin/uvicorn backend_server.backend:app --host 127.0.0.1 --port 8081 --reload --log-config logging.yaml
 Restart=always
 RestartSec=5
 
@@ -947,15 +992,19 @@ modprobe zfs
 # Step 3 --- Disable systemctl services
 manage_services stop "${SERVICES_TO_DISABLE[@]}"
 manage_services disable "${SERVICES_TO_DISABLE[@]}"
-enable_network_manager
 
 # Step 3.5 --- Configure network manager
+enable_network_manager
 
 # Step 4 --- Create python virtual environment
 setup_python_venv "$PYTHON_VENV_PATH"
 
 # Step 5 --- Cloning NMS git repository
-clone_git_repo "$REPO_URL" "$DEST_DIR"
+if download_latest_release "${REPOSITORY}"; then
+  log_info "Latest release of NMS downloaded and installed successfully"
+else
+  clone_git_repo "$REPO_URL" "$DEST_DIR"
+fi
 
 # Step 7 --- Install redis
 install_redis_docker
@@ -984,3 +1033,9 @@ install_noip_duc
 
 #Step 14 --- Configure nginx as a reverse proxy
 configure_nginx_nms
+
+# Done
+IP=$(ip -o -4 addr show up scope global | awk '{split($4,a,"/"); print a[1]; exit}')
+if [ -n "$IP" ]; then
+  log_info "Now you can use your browser and go to http://$IP"
+fi

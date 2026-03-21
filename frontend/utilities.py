@@ -12,7 +12,7 @@ def check_tasks():
 
     tasks = BACKEND.get_tasks_by_path(path)
 
-    return jsonify([t.id for t in tasks])
+    return jsonify([t.task_id for t in tasks])
 
 @bp.route('/check_tasks/<string:task_id>', methods=['POST'])
 def check_task_by_id(task_id:str) -> Response:

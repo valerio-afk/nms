@@ -19,16 +19,20 @@ class ColourFormatter(logging.Formatter):
 
         # build message
         formatted = f"{color}[{record.name}] [{record.levelname}] [{dt}] {record.getMessage()}{reset}"
+        if record.exc_info:
+            formatted += "\n" + self.formatException(record.exc_info)
         return formatted
 
 def setup_logger(name: str, level=logging.INFO) -> Logger:
     logger = logging.getLogger(name)
     logger.setLevel(level)
 
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(ColourFormatter())
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(ColourFormatter())
 
-    logger.addHandler(handler)
+        logger.addHandler(handler)
+
     logger.propagate = False
     return logger
 

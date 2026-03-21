@@ -1,13 +1,9 @@
-from logging import getLogger
-
-from nms_shared.utils import setup_logger
-
-setup_logger(__name__)
-
+import logging
 
 class Logger:
     def __init__(this):
-        this._logger = getLogger(__name__)
+
+        this._logger = logging.getLogger("nms.backend")
 
     def info(this, msg:str) -> None:
         this._logger.info(msg)

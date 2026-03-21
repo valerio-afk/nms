@@ -275,3 +275,28 @@ table#snapshot-list tr td
 {
     vertical-align:middle;
 }
+
+/* DEBUG - Cyan */
+.ansi36 {
+    color: #00bcd4;
+}
+
+/* INFO - Green */
+.ansi32 {
+    color: #4caf50;
+}
+
+/* WARNING - Yellow */
+.ansi33 {
+    color: #ffb300;
+}
+
+/* ERROR - Red */
+.ansi31 {
+    color: #f44336;
+}
+
+/* CRITICAL - Magenta */
+.ansi35 {
+    color: #9c27b0;
+}

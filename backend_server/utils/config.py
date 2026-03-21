@@ -165,8 +165,6 @@ class NMSConfig(Logger):
         this._setup_access_services()
         this._ddns_init()
 
-
-
     def _setup_access_services(this) -> None:
         module = import_module("backend_server.utils.services")
 
