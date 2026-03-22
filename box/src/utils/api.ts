@@ -146,6 +146,55 @@ export async function rmFs(path: string): Promise<void> {
     });
 }
 
+export async function zipFs(targetPath: string, files: string[]): Promise<void> {
+    // Assuming backend endpoint is /fs/zip to match typical routing. If it's literally /zip, we route it.
+    await apiRequest('/fs/zip', {
+        method: 'POST',
+        body: JSON.stringify({
+            zip_filename: targetPath,
+            files: files
+        })
+    });
+}
+
+export async function unzipFs(path: string): Promise<void> {
+    await apiRequest(`/fs/unzip/${path}`, {
+        method: 'POST'
+    });
+}
+
 export async function getQuota(): Promise<UserQuota> {
     return await apiRequest<UserQuota>('/fs/quota', { method: 'GET' });
+}
+
+export async function getChecksum(path: string): Promise<string> {
+    return await apiRequest<string>(`/fs/checksum/${path}`, { method: 'GET' });
+}
+
+export async function getPreviewToken(path: string): Promise<string> {
+    const endpoint = `/fs/preview/${path}`;
+    const url = `${API_BASE_URL}${endpoint}`;
+
+    const token = localStorage.getItem('authToken') || '';
+    const headers: Record<string, string> = {};
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(url, { method: 'HEAD', headers });
+
+    if (!response.ok) {
+        throw new Error('Failed to fetch preview token');
+    }
+
+    return response.headers.get('x-preview-token') || '';
+}
+
+export function getPreviewUrl(path: string, previewToken: string): string {
+    const endpoint = `/fs/preview/${path}`;
+    const url = `${API_BASE_URL}${endpoint}`;
+    if (previewToken) {
+        return `${url}?token=${encodeURIComponent(previewToken)}`;
+    }
+    return url;
 }

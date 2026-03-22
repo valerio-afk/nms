@@ -22,8 +22,6 @@ def check_permission(username:str, perm:UserPermissions) -> None:
     if (not CONFIG.has_user_permission(username,perm)):
         raise HTTPException(status_code=401,detail=perm.value)
 
-
-
 def create_token(username:str,purpose:str, duration:int) -> str:
     encoded_jwt, exp_timestamp = _create_token(username,purpose,duration)
     CONFIG.add_issued_token(encoded_jwt, exp_timestamp)
@@ -31,8 +29,6 @@ def create_token(username:str,purpose:str, duration:int) -> str:
 
 def token_verification(token:str,requested_purpose:str) -> Dict[str, Any]:
     try:
-
-
         payload = jwt.decode(token, SECRET_KEY, algorithms="HS256")
 
         purpose = payload.get("purpose")

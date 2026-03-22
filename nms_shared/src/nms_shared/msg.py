@@ -110,6 +110,10 @@ class ErrorMessages(Enum):
     E_SYSTEM_UPDATES = "E_SYSTEM_UPDATES"
     E_SYSTEM_DIST = "E_SYSTEM_DIST"
 
+    E_FS_NOT_FILE = "E_FS_NOT_FILE"
+    E_FS_ZIP = "E_FS_ZIP"
+    E_FS_UNZIP = "E_FS_UNZIP"
+
     @staticmethod
     def get_error_from_string(error_code:str,*args,**kwargs) -> str:
         return ErrorMessages.get_error(ErrorMessages[error_code],*args,**kwargs)
@@ -316,6 +320,10 @@ ERROR_MESSAGES = {
 
     ErrorMessages.E_SYSTEM_UPDATES: lambda: _("Unable to retrieve updates."),
     ErrorMessages.E_SYSTEM_DIST: lambda info: _("Error while creating distribution archive: %(info)s.") % {'info':info},
+
+    ErrorMessages.E_FS_NOT_FILE: lambda path: _("The provided path `%(path)s` neither exists nor is a file.") % {'path':path},
+    ErrorMessages.E_FS_ZIP: lambda path,info: _("Error while zipping: `%(path)s`: %(info)s.") % {'path':path,'info':info},
+    ErrorMessages.E_FS_UNZIP: lambda path,info: _("Error while unzipping: `%(path)s`: %(info)s.") % {'path':path,'info':info},
 
 }
 

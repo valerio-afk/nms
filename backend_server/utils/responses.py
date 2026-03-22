@@ -183,6 +183,7 @@ class UserDelete(BaseModel):
 
 class FileInfo(BaseModel):
     type:Literal["dir","image","video","audio","text","zip","bin","pdf","unk"]
+    mimetype:Optional[str] = Field(None)
     name:str
     size:Optional[int]
     creation_time:int
@@ -219,3 +220,7 @@ class ReplaceDevice(BaseModel):
 class ImportPool(BaseModel):
     pool_name: str
     load_key:bool
+
+class ZipFile(BaseModel):
+    zip_filename: str
+    files: List[str]

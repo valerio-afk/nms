@@ -34,6 +34,8 @@ PACKAGES=(
     npm
     git
     jq
+    acl
+    libfile-mimeinfo-perl
 )
 
 SERVICES_TO_DISABLE=(
@@ -864,6 +866,7 @@ server
 {
     listen 80;
     server_name _;
+    client_max_body_size 10M;
 
     location /
     {

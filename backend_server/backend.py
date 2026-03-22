@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from .utils.responses import ErrorMessage
 from contextlib import asynccontextmanager
 from logging import getLogger
+from nms_shared import ErrorMessages
 
 @asynccontextmanager
 async def automount(app:FastAPI):
@@ -58,11 +59,10 @@ async def exception_handler(request: Request, exc: Exception):
     logger = getLogger("nms.backend")
 
     logger.error(
-        f"Exception on {request.method} {request.url} -> {exc.detail}",
+        f"Exception on {request.method} {request.url}",
         exc_info=exc
     )
     return JSONResponse(
         status_code=500,
-        content={"detail": ErrorMessage(code=ErrorMessages.E_UNKNOWN.name)},
-        headers=exc.headers
+        content={"detail": {"code":ErrorMessages.E_UNKNOWN.name}}
     )

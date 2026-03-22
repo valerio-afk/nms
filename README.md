@@ -171,6 +171,7 @@ NMS expects the following programs and system tools to be installed in your syst
 > * npm
 > * git
 > * jq
+> * acl
 
 You should adapt the name of these packages for your distribution.
 
@@ -609,7 +610,7 @@ In this page, you can activate and deactivate the following access services:
 > * `FTP`: this services relies on system users to log in. The password set for SSH will also allow you to log in via FTP
 > * `NFS`: no login is required. Access control is guaranteed via IP address.
 > * `SMB`: Windows share (SMB) uses different credentials. Although the username remains the same, go to your account page to set a password.
-> * `WEB`: OTP login.
+> * `WEB`: OTP login. [See box to learn more](#-box).
 
 This page will also explain how to access them remotely with different operating systems.
 
@@ -643,6 +644,8 @@ A disk array (or pool) is the virtual disk created by merging several physical h
 > 
 > To take the most of your NAS, it is highly recommended to install disks of the same size. Sometimes, it is recommended to buy disks for different brands, as long as their sizes match.
 
+![new_pool.png](images/new_pool.png)
+
 When creating a disk array, you can choose to enable the following options
 
 * **Redundancy:** Using a minimum of 3 disks, the system will use 1/3 of the space to generate redundancy information. Although you will have 1/3 (or 1/4 with 4 disks) less disk space at your disposal, this setting is crucial to recover data if one disk physically breaks down.
@@ -659,11 +662,110 @@ When creating a disk array, you can choose to enable the following options
 
 ---
 
+## 📦 Box
+
+MS includes a built-in **lightweight web-based file browser**.
+
+If you have used services like Dropbox, OneDrive, or Google Drive, the concept should feel familiar.
+
+Box is a **multi-user, self-hosted file management web application** written in React.  
+Although it is separated from the main admin dashboard, it shares the same authentication system, user accounts, and backend, making it fully integrated with NMS.
+
+![box.png](images/box.png)
+
+
+### 🤔 Why not use an off-the-shelf solution?
+
+Several existing solutions were evaluated, but none were fully aligned with NMS design goals.
+
+Below is a summary of the main alternatives considered and why they were not adopted:
+
+#### **Nextcloud**
+- Very large and complex project  
+- Concerns about performance and resource usage, especially on low-power devices like Raspberry Pi<sup>[1]</sup>
+
+
+#### **FileBrowser**
+- Runs under a single system user  
+- All uploaded files would be owned by that user rather than the actual uploader  
+
+This creates:
+- ❌ Permission inconsistencies<sup>[2]</sup>
+- ❌ Potential quota bypass  
+- ❌ Misalignment with Linux user-based access control  
+
+#### **MinIO**
+- Provides both a web interface and an S3-compatible API  
+
+However:
+- Files are treated as **objects (data + metadata)** rather than standard filesystem entries  
+- This breaks compatibility with other access methods (e.g., SMB, NFS, SSH)
+
+### 🎯 Summary
+
+Box exists to provide:
+
+- ✅ Proper multi-user file ownership  
+- ✅ Seamless integration with Linux permissions  
+- ✅ Compatibility with all access protocols (SMB, NFS, SSH, etc.)  
+- ✅ A lightweight and consistent user experience  
+
+> In short: **a file manager that behaves correctly within a real filesystem, not an abstraction on top of it.**
+
+### 🗒️ Notes
+
+[1] OpenZFS can be memory-intensive, especially with large storage pools.  
+Since NMS prioritises storage reliability and performance, introducing a heavy application like Nextcloud could compromise system efficiency—particularly on resource-constrained devices.
+
+[2] A potential workaround for FileBrowser (e.g., using `inotify` to reassign file ownership) was explored.  
+However, `inotify` does not appear to behave reliably with OpenZFS in this context.  
+It is unclear whether this is due to OpenZFS limitations or environmental factors, and it may be investigated further.
+
+---
+## 🛡 VPN & Remote Access
+
+NMS includes built-in support for a VPN using **WireGuard**, providing a secure way to access your NAS remotely.
+
+> ⚠️ **Important Note**
+> 
+> It is strongly discouraged to expose your NAS directly to the internet via port forwarding (e.g., port 80).
+> 
+> Opening HTTP port:
+> * Exposes your system to automated scans and attacks 
+> * Increases the risk of unauthorised access 
+> * Requires additional hardening (TLS, firewall rules, intrusion detection, etc.)
+
+Instead of exposing web services, it is much safer to:
+
+* Forward only the WireGuard VPN port: 51820
+* Access your NAS through the VPN tunnel
+
+### ⚙️ Port Forwarding (Generic Steps)
+
+> ⚠️ **Important Note**
+> 
+> The exact steps depend on your router model and firmware.
+
+In general, you will need to:
+
+1. Log into your router’s admin interface (typically 192.168.0.1 or 192.168.1.1)
+1. Locate the Port Forwarding or NAT section
+1. Create a new rule:
+   * External Port: 51820
+   * Internal IP: IP address of your NMS server
+   * Internal Port: 51820
+   * Protocol: UDP
+1. Save and apply the configuration
+
+Once the VPN is enabled in the `Network` page and your device(s) public keys have been added, connect from your remote device(s) and access NMS at: `http://10.0.0.1`.
+
+---
 ## 🤝 Contributing
 
 Contributions, translations, issues, and feature requests are welcome!
 
 In interested, learn more about the backend [API endpoints](API.md).
+
 
 ---
 

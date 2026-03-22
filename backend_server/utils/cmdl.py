@@ -1961,14 +1961,22 @@ class Mkdir(RevertibleCommandLine):
         )
 
 class LS(CommandLine):
-    def __init__(this,path:str,**kwargs):
-        cmd = ['ls', path]
+    def __init__(this,path:str,all:bool=False,**kwargs):
+        cmd = ['ls']
+
+        if (all):
+            cmd.append("-a")
+
+        cmd.append(path)
+
         this._path = path
+        this._all = all
         super().__init__(cmd,**kwargs)
 
     def to_dict(this):
         d = super().to_dict()
         d['path'] = this._path
+        d['all'] = this._all
 
         return d
 
@@ -1976,6 +1984,7 @@ class LS(CommandLine):
     def from_dict(serialisation):
         return LS(
             serialisation.get("path", None),
+            serialisation.get("all", False),
         )
 
 class Stat(CommandLine):
@@ -2005,7 +2014,7 @@ class Stat(CommandLine):
 
 class MimeType(CommandLine):
     def __init__(this,filename:str,**kwargs):
-        cmd = ['file','--mime-type',filename]
+        cmd = ['mimetype',filename]
         this._filename = filename
 
         super().__init__(cmd,**kwargs)
@@ -2170,4 +2179,120 @@ class NPMRun(CommandLine):
     def from_dict(serialisation):
         return NPMRun(
             serialisation.get("command", None),
+        )
+
+class SetfACL(CommandLine):
+    class IdentifierType(Enum):
+        USER  = 'u'
+        GROUP = 'g'
+
+    def __init__(this,identifier:str,
+                 path: str,
+                 type:IdentifierType=IdentifierType.USER,
+                 permissions:str="rwx",
+                 mask:Optional[str]=None,
+                 recursive:bool=False,
+                 default:bool=False,
+                 **kwargs):
+
+        this._identifier = identifier
+        this._type = type
+        this._recursive = recursive
+        this._default = default
+        this._permissions = permissions
+        this._mask = mask
+
+        cmd = ['setfacl']
+
+        if (recursive):
+            cmd.append('-R')
+
+        if (default):
+            cmd.append('-d')
+
+        cmd.append("-m")
+
+        target = f"{type.value}:{identifier}:{permissions}"
+
+        if (mask is not None):
+            target+=f",m:{mask}"
+
+        cmd.extend([target,path])
+
+        kwargs.setdefault("sudo",True)
+
+        super().__init__(cmd, **kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['path'] = this._path
+        d['type'] = this._type.value
+        d['recursive'] = this._recursive
+        d['default'] = this._default
+        d['permissions'] = this._permissions
+        d['mask'] = this._mask
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return SetfACL(
+            serialisation.get("path", None),
+            serialisation.get("type", None),
+            serialisation.get("permissions", None),
+            serialisation.get("mask", None),
+            serialisation.get("recursive", None),
+            serialisation.get("default", None),
+        )
+
+
+class Unpack(CommandLine):
+    def __init__(this,filename:str,**kwargs):
+        cmd = ['unp','-U',filename]
+        this._filename = filename
+
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['filename'] = this._filename
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return Unpack(
+            serialisation.get("filename", None),
+        )
+
+class Zip(CommandLine):
+    def __init__(this,zip_file:str,files:List[str],recursive:bool=True,**kwargs):
+        cmd = ['zip']
+
+        if (recursive):
+            cmd.append('-r')
+
+        cmd.append(zip_file)
+        cmd.extend(files)
+
+        this._zip_file = zip_file
+        this._files = files
+        this._recursive = recursive
+
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['zip_file'] = this._zip_file
+        d['files'] = this._files
+        d['recursive'] = this._recursive
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return Zip(
+            serialisation.get("zip_file", None),
+            serialisation.get('files', []),
+            serialisation.get('recursive', True),
         )

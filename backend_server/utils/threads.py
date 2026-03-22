@@ -72,7 +72,7 @@ class FreeOldChunkFiles(LongWaitThread):
     def run(this) -> None:
         while (this.is_running):
             subprocess.run(
-                ["find", this._mountpoint, "-type", "f", "-name", ".*.nms.chunk", "-mtime", "+1", "-delete"],
+                ["sudo","find", this._mountpoint, "-type", "f", "-name", ".*.nms.chunk", "-mtime", "+1", "-delete"],
                 stdout = subprocess.PIPE, stderr = subprocess.PIPE, text = True
             )
             if this._stop_event.wait(timeout=this.interval):
@@ -447,5 +447,3 @@ class ClouDNS(TokenBasedDDNSThread):
 
     def _check_success(this,response:requests.Response)->bool:
         return response.text.strip() == "OK"
-
-# MTE3NTc3MzY6NzIwNDcyMTU2OjVhNzIyNjM0ZDQ1OTgxODZlYjEwNDVkMjNiZDk2ODU2ZTA3ODE3YTI5ODJiYjllYWM3ZjQ4NmYxNTEwYWU5MTY

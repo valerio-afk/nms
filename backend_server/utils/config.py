@@ -1077,8 +1077,11 @@ class NMSConfig(Logger):
     def get_upload_session(this, id:str) -> dict:
         return this._uploads.get(id)
 
-    def increment_upload_offset(this, id: str, length:int) -> int:
-        this._uploads[id]["offset"] += length
+    def increment_upload_offset(this, id: str, length:int, reset:bool=False) -> int:
+        if (reset):
+            this._uploads[id]["offset"] = length
+        else:
+            this._uploads[id]["offset"] += length
 
         return this._uploads[id]["offset"]
 

@@ -1,14 +1,20 @@
 import { useState, useEffect, useMemo, useRef, useContext } from 'react';
-import { browseFs, mkdirFs, mvFs, rmFs, type FSBrowse, type FileInfo, ApiError } from './utils/api';
+import { browseFs, mkdirFs, mvFs, rmFs, zipFs, unzipFs, type FSBrowse, type FileInfo, ApiError, API_BASE_URL } from './utils/api';
+import Uppy from '@uppy/core';
+import Tus from '@uppy/tus';
+import DashboardModal from '@uppy/react/dashboard-modal';
+import '@uppy/core/css/style.min.css';
+import '@uppy/dashboard/css/style.min.css';
 import { formatBytes, formatDate } from './utils/formats'
 import {
     Folder, Image, Film, Music, FileText,
     FileArchive, Binary, FileOutput, FileQuestion,
     ChevronRight, ArrowUp, ArrowDown, ShieldAlert,
     FolderPlus, Upload, Edit2, Download, Trash2,
-    MoveRight, CornerLeftUp
+    MoveRight, CornerLeftUp, ArchiveRestore
 } from 'lucide-react';
 import { ContextMenuContext } from './App';
+import FilePreviewModal from './components/FilePreviewModal';
 
 const humanReadableType = (type: FileInfo['type']): string => {
     switch (type) {
@@ -75,6 +81,12 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
+    // Zip Context State
+    const [isZipModalOpen, setIsZipModalOpen] = useState(false);
+    const [zipFileName, setZipFileName] = useState('');
+    const [isZipping, setIsZipping] = useState(false);
+    const [isUnzipping, setIsUnzipping] = useState(false);
+
     // Move Modal (Directory Picker) State
     const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
     const [isMoving, setIsMoving] = useState(false);
@@ -84,6 +96,149 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
 
     // Drag and Drop State
     const [draggedItem, setDraggedItem] = useState<string | null>(null);
+
+    // File Preview Modal State
+    const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+    const [previewFile, setPreviewFile] = useState<FileInfo | null>(null);
+
+    const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+    const [isDraggingOverMain, setIsDraggingOverMain] = useState(false);
+    const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
+    const [isDarkMode, setIsDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
+
+    const [currentConflict, setCurrentConflict] = useState<{
+        file: import('@uppy/core').UppyFile<any, any>;
+        resolve: (action: { type: 'resume' | 'overwrite' | 'rename', newName?: string }) => void;
+    } | null>(null);
+    const [conflictNewName, setConflictNewName] = useState('');
+
+    useEffect(() => {
+        const uppyRoot = document.querySelector('.uppy-Root');
+        if (uppyRoot) {
+            if (currentConflict) {
+                uppyRoot.setAttribute('inert', 'true');
+            } else {
+                uppyRoot.removeAttribute('inert');
+            }
+        }
+    }, [currentConflict]);
+
+    const browseDataRef = useRef(browseData);
+    useEffect(() => {
+        browseDataRef.current = browseData;
+    }, [browseData]);
+
+    useEffect(() => {
+        const observer = new MutationObserver(() => {
+            setIsDarkMode(document.documentElement.classList.contains('dark'));
+        });
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+        return () => observer.disconnect();
+    }, []);
+
+    const currentPathRef = useRef(currentPath);
+    useEffect(() => {
+        currentPathRef.current = currentPath;
+    }, [currentPath]);
+
+    const uppy = useMemo(() => {
+        const token = localStorage.getItem('authToken') || '';
+        const u = new Uppy({
+            allowMultipleUploadBatches: true,
+        }).use(Tus, {
+            endpoint: `${API_BASE_URL}/fs/upload`,
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            chunkSize: 10 * 1024 * 1024, // 10MB chunk size
+        });
+
+        u.on('file-added', (file) => {
+            const fileState = u.getFile(file.id);
+            if (!fileState) return;
+            const newMeta = { ...fileState.meta };
+            delete newMeta.filename;
+            delete newMeta.relativePath;
+
+            let resolvedPath = newMeta.path !== undefined ? String(newMeta.path) : currentPathRef.current;
+            if (!resolvedPath || resolvedPath === "/") {
+                resolvedPath = "./";
+            } else if (resolvedPath !== "." && !resolvedPath.startsWith("./")) {
+                resolvedPath = `./${resolvedPath}`;
+            }
+            newMeta.path = resolvedPath;
+
+            u.setFileState(file.id, { meta: newMeta });
+        });
+
+        u.addPreProcessor(async (fileIDs) => {
+            for (const fileID of fileIDs) {
+                const file = u.getFile(fileID);
+                if (!file) continue;
+
+                const uploadPath = file.meta.path as string;
+                const fileName = file.name;
+
+                const normalizedUploadPath = uploadPath === './' ? '' : uploadPath.replace(/^\.\//, '');
+
+                let fileExists = false;
+                if (normalizedUploadPath === currentPathRef.current && browseDataRef.current) {
+                    fileExists = browseDataRef.current.files.some(f => f.name === fileName);
+                } else {
+                    try {
+                        const data = await browseFs(normalizedUploadPath);
+                        fileExists = data.files.some(f => f.name === fileName);
+                    } catch (e) {
+                        // Directory access issue or it doesn't exist, ignore
+                    }
+                }
+
+                if (fileExists) {
+                    const action = await new Promise<{ type: 'resume' | 'overwrite' | 'rename', newName?: string }>((resolve) => {
+                        setCurrentConflict({
+                            file,
+                            resolve: (actionType) => resolve(actionType)
+                        });
+                    });
+
+                    setCurrentConflict(null);
+                    setConflictNewName('');
+
+                    if (action.type === 'overwrite') {
+                        const targetDelPath = normalizedUploadPath ? `${normalizedUploadPath}/${fileName}` : fileName;
+                        try {
+                            await rmFs(targetDelPath);
+                        } catch (e) {
+                            console.error('Failed to overwrite', e);
+                        }
+                    } else if (action.type === 'rename' && action.newName) {
+                        const fileState = u.getFile(fileID);
+                        u.setFileState(fileID, {
+                            name: action.newName,
+                            meta: { ...fileState.meta, name: action.newName }
+                        });
+                    }
+                }
+            }
+        });
+
+        return u;
+    }, []);
+
+    useEffect(() => {
+        const handleComplete = () => {
+            loadPath(currentPathRef.current);
+            setIsUploadModalOpen(false);
+        };
+        uppy.on('complete', handleComplete);
+        return () => {
+            uppy.off('complete', handleComplete);
+        };
+    }, [uppy]);
+
+    useEffect(() => {
+        if (!isUploadModalOpen) {
+            uppy.cancelAll();
+        }
+    }, [isUploadModalOpen, uppy]);
 
     type SortField = 'name' | 'size' | 'type' | 'date';
     type SortDirection = 'asc' | 'desc';
@@ -269,6 +424,53 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
         }
     };
 
+    const handleZipSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!zipFileName.trim() || selectedItems.size === 0) return;
+
+        setIsZipping(true);
+        setError(null);
+        try {
+            let finalZipName = zipFileName.trim();
+            if (!finalZipName.toLowerCase().endsWith('.zip')) {
+                finalZipName += '.zip';
+            }
+            const targetPath = currentPath ? `${currentPath}/${finalZipName}` : finalZipName;
+            
+            // Relative paths from user root requested by backend
+            const itemsToZip = Array.from(selectedItems).map(item => currentPath ? `${currentPath}/${item}` : item);
+            
+            await zipFs(targetPath, itemsToZip);
+            setIsZipModalOpen(false);
+            setZipFileName('');
+            setSelectedItems(new Set());
+            await loadPath(currentPath);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error zipping files');
+            setIsZipModalOpen(false);
+        } finally {
+            setIsZipping(false);
+        }
+    };
+
+    const handleUnzip = async () => {
+        if (selectedItems.size !== 1) return;
+        const item = Array.from(selectedItems)[0];
+        const itemPath = currentPath ? `${currentPath}/${item}` : item;
+        
+        setIsUnzipping(true);
+        setError(null);
+        try {
+            await unzipFs(itemPath);
+            setSelectedItems(new Set());
+            await loadPath(currentPath);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error unzipping archive');
+        } finally {
+            setIsUnzipping(false);
+        }
+    };
+
     const handleMoveSubmit = async () => {
         if (selectedItems.size === 0) return;
 
@@ -318,13 +520,113 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
         e.dataTransfer.setData('text/plain', JSON.stringify(itemsToDrag));
     };
 
-    const handleDragOver = (e: React.DragEvent) => {
+    const handleMainDragEnter = (e: React.DragEvent) => {
         e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
+        e.stopPropagation();
+        if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
+            setIsDraggingOverMain(true);
+        }
+    };
+
+    const handleMainDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = e.currentTarget.getBoundingClientRect();
+        if (
+            e.clientX <= rect.left || e.clientX >= rect.right ||
+            e.clientY <= rect.top || e.clientY >= rect.bottom ||
+            e.clientY === 0
+        ) {
+            setIsDraggingOverMain(false);
+        }
+    };
+
+    const handleMainDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
+            e.dataTransfer.dropEffect = 'copy';
+        }
+    };
+
+    const handleMainDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDraggingOverMain(false);
+        setDragOverFolder(null);
+        if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
+
+            Array.from(e.dataTransfer.files).forEach(file => {
+                uppy.addFile({
+                    name: file.name,
+                    type: file.type,
+                    data: file,
+                    meta: {
+                        path: currentPath || "./"
+                    }
+                });
+            });
+            setIsUploadModalOpen(true);
+        }
+    };
+
+    const handleFolderDragEnter = (e: React.DragEvent, targetName: string) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
+            setDragOverFolder(targetName);
+        }
+    };
+
+    const handleFolderDragLeave = (e: React.DragEvent, targetName: string) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = e.currentTarget.getBoundingClientRect();
+        if (
+            e.clientX <= rect.left || e.clientX >= rect.right ||
+            e.clientY <= rect.top || e.clientY >= rect.bottom ||
+            e.clientY === 0
+        ) {
+            if (dragOverFolder === targetName) setDragOverFolder(null);
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent, targetName?: string) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
+            e.dataTransfer.dropEffect = 'copy';
+            if (targetName && dragOverFolder !== targetName) {
+                setDragOverFolder(targetName);
+            }
+        } else {
+            e.dataTransfer.dropEffect = 'move';
+        }
     };
 
     const handleDrop = async (e: React.DragEvent, targetFile: FileInfo) => {
         e.preventDefault();
+        e.stopPropagation();
+        setIsDraggingOverMain(false);
+        setDragOverFolder(null);
+
+        if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
+            const targetPath = targetFile.type === 'dir'
+                ? (currentPath ? `${currentPath}/${targetFile.name}` : targetFile.name)
+                : currentPath;
+
+            Array.from(e.dataTransfer.files).forEach(file => {
+                uppy.addFile({
+                    name: file.name,
+                    type: file.type,
+                    data: file,
+                    meta: {
+                        path: targetPath || "./"
+                    }
+                });
+            });
+            setIsUploadModalOpen(true);
+            return;
+        }
 
         if (!draggedItem) {
             return;
@@ -417,6 +719,9 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
         if (file.type === 'dir') {
             const nextPath = currentPath ? `${currentPath}/${file.name}` : file.name;
             loadPath(nextPath);
+        } else {
+            setPreviewFile(file);
+            setIsPreviewModalOpen(true);
         }
     };
 
@@ -514,9 +819,91 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     const multiSelected = selectedItems.size > 1;
     const noneSelected = selectedItems.size === 0;
     const singleSelected = selectedItems.size === 1;
+    const isSingleZipSelected = singleSelected && Array.from(selectedItems)[0].toLowerCase().endsWith('.zip');
 
     return (
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm ring-1 ring-gray-900/5 dark:ring-white/10 p-6 md:p-8 min-h-[500px]" onContextMenu={handleContextMenu} onClick={handleContextMenuClick}>
+        <div
+            className={`bg-white dark:bg-zinc-900 rounded-2xl shadow-sm ring-1 ring-gray-900/5 p-6 md:p-8 min-h-[500px] transition-colors ${
+                isDraggingOverMain && !dragOverFolder
+                    ? 'bg-indigo-50/50 dark:bg-indigo-900/10 border-2 border-dashed border-indigo-400 dark:border-indigo-500'
+                    : 'dark:ring-white/10'
+            }`}
+            onContextMenu={handleContextMenu}
+            onClick={handleContextMenuClick}
+            onDragEnter={handleMainDragEnter}
+            onDragLeave={handleMainDragLeave}
+            onDragOver={handleMainDragOver}
+            onDrop={handleMainDrop}
+        >
+            <DashboardModal
+                uppy={uppy}
+                open={isUploadModalOpen}
+                onRequestClose={() => setIsUploadModalOpen(false)}
+                closeModalOnClickOutside
+                proudlyDisplayPoweredByUppy={false}
+                theme={isDarkMode ? 'dark' : 'light'}
+            />
+
+            {currentConflict && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-gray-900/50 dark:bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl ring-1 ring-gray-900/5 dark:ring-white/10 w-full max-w-md p-6 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
+                                <ShieldAlert className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">File Already Exists</h3>
+                        </div>
+                        <div className="mb-6">
+                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                A file named <strong className="text-gray-900 dark:text-gray-100 break-all">{currentConflict.file.name}</strong> already exists in this folder.
+                            </p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                What would you like to do?
+                            </p>
+                            
+                            <div className="space-y-3">
+                                <button
+                                    onClick={() => currentConflict.resolve({ type: 'resume' })}
+                                    className="w-full px-4 py-2 text-sm font-medium text-left text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                                >
+                                    <strong>Resume Upload</strong>
+                                    <span className="block text-xs font-normal text-gray-500 dark:text-gray-400">Continue the upload (append or resume if supported)</span>
+                                </button>
+                                <button
+                                    onClick={() => currentConflict.resolve({ type: 'overwrite' })}
+                                    className="w-full px-4 py-2 text-sm font-medium text-left text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 dark:bg-zinc-800 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors"
+                                >
+                                    <strong>Overwrite File</strong>
+                                    <span className="block text-xs font-normal text-red-500/80 dark:text-red-400/80">Delete the existing file and upload this one</span>
+                                </button>
+                                <div className="p-3 border border-gray-200 dark:border-zinc-700 rounded-lg">
+                                    <label htmlFor="conflictRename" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Rename New File
+                                    </label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            id="conflictRename"
+                                            value={conflictNewName}
+                                            onChange={(e) => setConflictNewName(e.target.value)}
+                                            placeholder="Enter new filename"
+                                            className="flex-1 px-3 py-1.5 text-sm bg-gray-50 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700 dark:placeholder-gray-400 dark:text-white"
+                                        />
+                                        <button
+                                            onClick={() => currentConflict.resolve({ type: 'rename', newName: conflictNewName })}
+                                            disabled={!conflictNewName.trim() || conflictNewName.trim() === currentConflict.file.name}
+                                            className="px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                                        >
+                                            Rename
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {isCreateFolderModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 dark:bg-black/50 backdrop-blur-sm">
                     <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl ring-1 ring-gray-900/5 dark:ring-white/10 w-full max-w-md p-6 animate-in fade-in zoom-in-95 duration-200">
@@ -773,6 +1160,72 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                 </div>
             )}
 
+            {isZipModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 dark:bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl ring-1 ring-gray-900/5 dark:ring-white/10 w-full max-w-md p-6 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                                <FileArchive className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Create Archive</h3>
+                        </div>
+                        <form onSubmit={handleZipSubmit}>
+                            <div className="mb-6">
+                                <label htmlFor="zipName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Archive Name
+                                </label>
+                                <input
+                                    type="text"
+                                    id="zipName"
+                                    value={zipFileName}
+                                    onChange={(e) => setZipFileName(e.target.value)}
+                                    placeholder="e.g. backup.zip"
+                                    className="w-full px-4 py-2 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block dark:bg-zinc-800 dark:border-zinc-700 dark:placeholder-gray-400 dark:text-white dark:focus:ring-indigo-500 dark:focus:border-indigo-500"
+                                    disabled={isZipping}
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsZipModalOpen(false);
+                                        setZipFileName('');
+                                    }}
+                                    disabled={isZipping}
+                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-700 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isZipping || !zipFileName.trim()}
+                                    className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 dark:focus:ring-offset-zinc-900 transition-colors flex items-center gap-2"
+                                >
+                                    {isZipping ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            Zipping...
+                                        </>
+                                    ) : (
+                                        'Zip'
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            <FilePreviewModal
+                isOpen={isPreviewModalOpen}
+                onClose={() => {
+                    setIsPreviewModalOpen(false);
+                    setPreviewFile(null);
+                }}
+                file={previewFile}
+                currentPath={currentPath}
+            />
 
             {
                 <>
@@ -786,6 +1239,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             Create Folder
                         </button>
                         <button
+                            onClick={() => setIsUploadModalOpen(true)}
                             disabled={multiSelected}
                             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
                         >
@@ -807,6 +1261,26 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                         >
                             <MoveRight className="w-4 h-4" />
                             Move
+                        </button>
+                        <button
+                            disabled={noneSelected}
+                            onClick={() => setIsZipModalOpen(true)}
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                        >
+                            <FileArchive className="w-4 h-4" />
+                            Zip
+                        </button>
+                        <button
+                            disabled={!isSingleZipSelected || isUnzipping}
+                            onClick={handleUnzip}
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                        >
+                            {isUnzipping ? (
+                                <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                                <ArchiveRestore className="w-4 h-4" />
+                            )}
+                            Unzip
                         </button>
                         <button
                             disabled={noneSelected}
@@ -852,6 +1326,18 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             <MoveRight className="w-4 h-4" />Move
                         </a>
                         <a
+                            onClick={noneSelected ? undefined : () => setIsZipModalOpen(true)}
+                            className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${!noneSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                        >
+                            <FileArchive className="w-4 h-4" /> Zip
+                        </a>
+                        <a
+                            onClick={!isSingleZipSelected ? undefined : handleUnzip}
+                            className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${isSingleZipSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                        >
+                            <ArchiveRestore className="w-4 h-4" /> Unzip
+                        </a>
+                        <a
                             className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${!noneSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
                         >
                             <Download className="w-4 h-4" /> Download
@@ -892,14 +1378,19 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                     key={idx}
                                     draggable
                                     onDragStart={(e) => handleDragStart(e, file.name)}
-                                    onDragOver={handleDragOver}
+                                    onDragEnter={(e) => file.type === 'dir' && handleFolderDragEnter(e, file.name)}
+                                    onDragLeave={(e) => file.type === 'dir' && handleFolderDragLeave(e, file.name)}
+                                    onDragOver={(e) => handleDragOver(e, file.type === 'dir' ? file.name : undefined)}
                                     onDrop={(e) => handleDrop(e, file)}
                                     onClick={(e) => handleRowClick(e, file, idx)}
                                     onDoubleClick={() => handleDoubleClick(file)}
-                                    className={`group transition-colors cursor-pointer ${selectedItems.has(file.name)
-                                        ? 'bg-indigo-50 dark:bg-indigo-900/20'
-                                        : 'hover:bg-gray-50 dark:hover:bg-zinc-800/50'
-                                        }`}
+                                    className={`group transition-colors cursor-pointer ${
+                                        dragOverFolder === file.name
+                                            ? 'bg-indigo-100 dark:bg-indigo-900/40 outline-dashed outline-2 outline-indigo-400 -outline-offset-2'
+                                            : selectedItems.has(file.name)
+                                                ? 'bg-indigo-50 dark:bg-indigo-900/20'
+                                                : 'hover:bg-gray-50 dark:hover:bg-zinc-800/50'
+                                    }`}
                                 >
                                     <td className="py-3 px-4">
                                         <div className="flex items-center gap-3">

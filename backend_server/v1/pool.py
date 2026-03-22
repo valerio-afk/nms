@@ -1,6 +1,5 @@
-from backend_server.utils.cmdl import CommandLine, ZFSLoadKey, ZFSMount, LocalCommandLineTransaction, ZFSUnmount, \
-    GetEntPasswd
-from backend_server.utils.cmdl import UserModChangeHomeDir, Mkdir, Chown, Chmod
+from backend_server.utils.cmdl import CommandLine, ZFSLoadKey, ZFSMount, LocalCommandLineTransaction, ZFSUnmount
+from backend_server.utils.cmdl import UserModChangeHomeDir, Mkdir, Chown, Chmod, GetEntPasswd, SetfACL, ZFSSetQuota
 from backend_server.utils.cmdl import ZFSUnLoadKey, ZFSDestroy, ZFSCreate, ZPoolStatus, ZFSList, ZPoolExport, ZPoolScrub
 from backend_server.utils.cmdl import ZPoolAttach, ZPoolAdd, ZPoolImport, CreateKey, ZPoolCreate, ZPoolDestroy
 from backend_server.utils.cmdl import ZPoolClear, ZPoolReplace, Stat
@@ -67,6 +66,23 @@ def align_home_directories() -> None:
         if (not trans.success):
             errors = "\n".join([o['stderr'] for o in output])
             raise Exception(errors)
+
+    mask = "rwx"
+
+    acl_cmd = [
+        SetfACL("backend",mountpoint,recursive=True,mask=mask),
+        SetfACL("backend", mountpoint, recursive=True,default=True,mask=mask),
+        SetfACL("backend", mountpoint,type=SetfACL.IdentifierType.GROUP, recursive=True,mask=mask),
+        SetfACL("backend", mountpoint,type=SetfACL.IdentifierType.GROUP, recursive=True, default=True,mask=mask),
+        ZFSSetQuota("backend", "none", CONFIG.pool_name, CONFIG.dataset_name, sudo=True), # just to be safe
+    ]
+
+    trans = LocalCommandLineTransaction(*acl_cmd)
+    output = trans.run()
+
+    if (not trans.success):
+        errors = "\n".join([o['stderr'] for o in output])
+        raise Exception(errors)
 
 def mount() -> None:
     if (not CONFIG.is_pool_configured):

@@ -1,23 +1,25 @@
-from backend_server.utils.cmdl import Chown, Chmod, LocalCommandLineTransaction, LS, Stat, MimeType, Mkdir, Move, \
-    RemoveFile
+from PIL import Image
+from backend_server.utils.cmdl import Chown, Chmod, LocalCommandLineTransaction, LS, Stat, MimeType, Mkdir, Move, Unpack
+from backend_server.utils.cmdl import RemoveFile, Touch, SetfACL, Zip
 from backend_server.utils.config import CONFIG
 from backend_server.utils.responses import ErrorMessage, UserProfile, FileInfo, FSBrowse, MkDirModel, MvModel, Quota
-from backend_server.v1.auth import verify_token_factory, check_permission
+from backend_server.utils.responses import ZipFile
+from backend_server.v1.auth import verify_token_factory, check_permission, create_token, token_verification
 from datetime import datetime,timedelta, UTC
 from email.utils import format_datetime
 from fastapi import HTTPException, APIRouter, Depends, Request, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from io import BytesIO
 from nms_shared import ErrorMessages
 from nms_shared.enums import UserPermissions
 from pathlib import Path
 from typing import Optional, List, Generator
 import base64
 import grp
-import pwd
+import hashlib
 import os
-import re
+import pwd
 import subprocess
-import uuid
 
 verify_token = verify_token_factory()
 
@@ -27,20 +29,14 @@ fs = APIRouter(
     dependencies=[Depends(verify_token)]
 )
 
+fs_preview = APIRouter(
+    prefix='/fs',
+    tags=['fs']
+)
+
 TUS_VERSION = "1.0.0"
 
-def get_upload_chunks(path:Path, upload_id:str)->List[str]:
-    ls_cmd = LS(str(path)).execute()
 
-    r = re.compile(r"^."+ upload_id +r"_([a-zA-Z0-9\-]{4,12}){4}\.nms\.chunk$")
-
-    return [f for f in ls_cmd.stdout.splitlines() if r.match(f) is not None]
-
-def delete_chunks(p:Path, upload_id:str)->None:
-    chunks = get_upload_chunks(p, upload_id)
-
-    for f in chunks:
-        RemoveFile(f, sudo=True).execute()
 
 
 def check_path_jail(user:UserProfile,path:str,stat_last:bool=True) -> Path:
@@ -76,15 +72,9 @@ def check_path_jail(user:UserProfile,path:str,stat_last:bool=True) -> Path:
     return requested_path
 
 
-
-
 def change_permissions(path:str,group:str="users") -> None:
     if (not CONFIG.is_mounted):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_UNMOUNTED.name))
-
-
-    # subprocess.run(["sudo","chown", f":{group}", "-R", mountpoint])
-    # subprocess.run(["sudo","chmod", "770", "-R", mountpoint])
 
     cmds = [
         Chown(None,group, path,['-R'],True),
@@ -113,6 +103,122 @@ def change_ownership(path:str) -> None:
 
     except Exception as e:
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_FS_CH_PERM.name, params=[path, str(e)]))
+
+
+# def file_generator(path:str,chunk_size:Optional[int]=1024**2, start:int=0,end:Optional[int]=None) -> Generator[bytes, None, None]:
+#     proc = subprocess.Popen(
+#         ["dd", f"if={path}", "status=none","iflag=skip_bytes",f"skip={start}"],
+#         stdout=subprocess.PIPE
+#     )
+#
+#     delta = None if end is None else (end-start+1)
+#
+#     if (chunk_size is None):
+#         if (end is None):
+#             chunk_size=1024**2
+#         else:
+#             chunk_size=end-start+1
+#
+#     while True:
+#         if ((delta is not None) and (delta<=0)):
+#             break
+#
+#         read_size = chunk_size if delta is None else min(chunk_size,delta)
+#         chunk = proc.stdout.read(read_size)
+#
+#         if (not chunk):
+#             break
+#
+#         if (delta is not None):
+#             delta -= len(chunk)
+#
+#         yield chunk
+
+def file_generator(path: str, chunk_size:int=1024**2, start: int = 0, end:Optional[int] = None) -> Generator[bytes, None, None]:
+    with open(path, "rb") as f:
+        f.seek(start)
+
+        remaining = None if end is None else (end - start + 1)
+
+        while True:
+            read_n_bytes = chunk_size if remaining is None else min(chunk_size, remaining)
+            chunk = f.read(read_n_bytes)
+
+            if not chunk:
+                break
+
+            if remaining is not None:
+                remaining -= len(chunk)
+
+            yield chunk
+
+            if remaining is not None and remaining <= 0:
+                break
+
+def get_file_info(path:str) -> Optional[FileInfo]:
+    stat = Stat(path, "%n\n%s\n%F\n%W").execute()
+
+    if (stat.returncode == 0):
+        fullpath, size, ftype, creation_time = (
+            stat.stdout.splitlines())
+
+        fname = os.path.split(path)[1]
+
+        match (ftype):
+            case "directory":
+                ftype = "dir"
+                mime_type = "inode/directory"
+            case "regular file":
+                mime_type_cmd = MimeType(path).execute()
+                ftype = "bin"
+                mime_type = "application/octet-stream"
+
+                if (mime_type_cmd.returncode == 0):
+                    out = mime_type_cmd.stdout
+                    _, mime_type = out.rsplit(":", 1)
+
+                    if ("video" in mime_type):
+                        ftype = "video"
+                    elif ("audio" in mime_type):
+                        ftype = "audio"
+                    elif ("image" in mime_type):
+                        ftype = "image"
+                    elif ("application/pdf" in mime_type):
+                        ftype = "pdf"
+                    elif (("text" in mime_type) or ("shellscript" in mime_type)):
+                        ftype = "text"
+                    else:
+                        compressed = [
+                            "application/zip",
+                            "application/x-tar",
+                            "application/gzip",
+                            "application/x-bzip2",
+                            "application/x-xz",
+                            "application/x-rar",
+                            "application/vnd.rar",
+                            "application/zstd",
+                            "application/x-7z-compressed",
+                            "application/x-lzip",
+                            "application/x-lzma"
+                        ]
+
+                        if (any([t in mime_type for t in compressed])):
+                            ftype = "zip"
+
+            case _:
+                ftype = "unk"
+                mime_type = None
+
+        return FileInfo(
+            name=str(fname),
+            size=int(size),
+            type=ftype,
+            mimetype = mime_type.strip(),
+            real=True,
+            creation_time=int(creation_time)
+        )
+    else:
+        return None
 
 @fs.delete(
     "/mountpoint",
@@ -146,6 +252,9 @@ def rm_mountpoint(mountpoint:str,token:dict=Depends(verify_token)) -> None:
     CONFIG.warning(f"Mountpoint {mountpoint} has been removed by {username}.")
 
 
+
+
+
 @fs.get("/browse",response_model=FSBrowse,summary="Get the list of files of the logged user.")
 @fs.get("/browse/{path:path}",response_model=FSBrowse,summary="Get the list of files of the logged user.")
 def ls_dir(path: Optional[str]=None, token:dict=Depends(verify_token)) -> FSBrowse:
@@ -160,7 +269,7 @@ def ls_dir(path: Optional[str]=None, token:dict=Depends(verify_token)) -> FSBrow
 
     p = check_path_jail(user, path)
 
-    ls = LS(str(p),sudo=True).execute()
+    ls = LS(str(p)).execute()
 
     if (ls.returncode != 0):
         HTTPException(status_code=500)
@@ -169,78 +278,40 @@ def ls_dir(path: Optional[str]=None, token:dict=Depends(verify_token)) -> FSBrow
 
     for f in ls.stdout.splitlines():
         current = p.joinpath(f)
-        stat = Stat(str(current),"%n\n%s\n%F\n%W",sudo=True).execute()
 
-        if (stat.returncode == 0):
-            fullpath,size,ftype,creation_time = (
-                stat.stdout.splitlines())
+        obj = get_file_info(str(current))
 
-            fname = Path(fullpath).relative_to(p)
-
-            match(ftype):
-                case "directory":
-                    ftype = "dir"
-                case "regular file":
-                    mime_type = MimeType(str(current),sudo=True).execute()
-                    ftype = "bin"
-
-                    if (mime_type.returncode == 0):
-                        out = mime_type.stdout
-                        _,mime = out.rsplit(":",1)
-                        if ("video" in mime):
-                            ftype="video"
-                        elif ("audio" in mime):
-                            ftype="audio"
-                        elif ("image" in mime):
-                            ftype="image"
-                        elif ("application/pdf" in mime):
-                            ftype="pdf"
-                        elif ("text" in mime):
-                            ftype="text"
-                        else:
-                            compressed = [
-                                "applcation/zip",
-                                "application/x-tar",
-                                "application/gzip",
-                                "application/x-bzip2",
-                                "application/x-xz",
-                                "application/x-rar",
-                                "application/vnd.rar",
-                                "application/zstd",
-                                "application/x-7z-compressed",
-                                "application/x-lzip",
-                                "application/x-lzma"
-                            ]
-
-                            if (any([t in mime for t in compressed])):
-                                ftype = "zip"
-
-                case _:
-                    ftype = "unk"
-
-            obj = FileInfo(
-                name=str(fname),
-                size=int(size),
-                type=ftype,
-                real = True,
-                creation_time=int(creation_time)
-            )
-        else:
-            obj = FileInfo(
-                name=f,
-                size=0,
-                type="unk",
-                real=False,
-                creation_time=0
-            )
-
-        files.append(obj)
+        if (obj is not None):
+            files.append(obj)
 
     files.sort(key=lambda x: x.name)
 
     browsed_path = p.relative_to(user.home_dir)
 
     return FSBrowse(path=str(browsed_path),files=files)
+
+@fs.get("/checksum/{path:path}",response_model=str,summary="Get MD5 checksum of the specified file")
+def checksum(path: Optional[str]=None, token:dict=Depends(verify_token)) -> str:
+    check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
+    user = CONFIG.get_user(token.get("username", None))
+
+    if (not user):
+        raise HTTPException(status_code=401)
+
+    if (path is None):
+        path = "."
+
+    p = check_path_jail(user, path)
+
+    if (not os.path.exists(p)) or (not os.path.isfile(p)):
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_FS_NOT_FILE.name,params=[str(p)]))
+
+    md5 = hashlib.md5()
+    with open(p, 'rb') as f:
+        for chunk in iter(lambda: f.read(1024*1024), b''):
+            md5.update(chunk)
+
+    return md5.hexdigest()
 
 @fs.post("/mkdir",summary="Create a new directory within the user space.")
 def fs_mkdir(data:MkDirModel,token:dict=Depends(verify_token)) -> None:
@@ -312,27 +383,33 @@ def fs_upload(request:Request, token:dict=Depends(verify_token)) -> Response:
         pairs = header.split(",")
 
         for pair in pairs:
-            key, value = pair.strip().split(" ", 1)
-            decoded = base64.b64decode(value).decode("utf-8")
-            metadata[key] = decoded
+            try:
+                key, value = pair.strip().split(" ", 1)
+                decoded = base64.b64decode(value).decode("utf-8")
+                metadata[key] = decoded
+            except Exception as e:
+                raise Exception(str(header))
 
         return metadata
 
-    upload_id = CONFIG.initiate_upload_session(int(upload_length),parse_metadata(metadata))
+
+
+    upload_id = CONFIG.init_upload(int(upload_length),parse_metadata(metadata))
 
     location = request.url_for("chunk_upload", upload_id=upload_id)
+
 
     CONFIG.info(f"Upload session {upload_id} initiated by {user.username}")
 
     return Response(
         status_code=201,
         headers={
-            "Location": location,
+            "Location": str(location),
             "Tus-Resumable": TUS_VERSION,
         },
     )
 
-@fs.options("/uploads")
+@fs.options("/upload")
 def options_upload():
     return Response(
         status_code=204,
@@ -343,7 +420,7 @@ def options_upload():
         },
     )
 
-@fs.head("/uploads/{upload_id}", summary="Retrieve information regarding an upload session")
+@fs.head("/upload/{upload_id}", summary="Retrieve information regarding an upload session")
 def head_upload(upload_id: str,token:dict=Depends(verify_token)) -> Response:
     check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
     user = CONFIG.get_user(token.get("username", None))
@@ -353,16 +430,42 @@ def head_upload(upload_id: str,token:dict=Depends(verify_token)) -> Response:
 
     meta = CONFIG.get_upload_session(upload_id)
 
+    offset = 0
+
+    if (meta is None):
+        return Response(
+            status_code=404,
+            headers={
+                "Tus-Resumable": TUS_VERSION,
+                "Upload-Offset": str(offset),
+            }
+        )
+
+    fname = meta.get("metadata", {}).get("name", upload_id)
+    rel_path = meta.get("metadata", {}).get("path", ".")
+    p = check_path_jail(user, rel_path)
+
+
+    if (not os.path.exists(upload_full_path:=p.joinpath(fname))):
+        Touch(str(upload_full_path)).execute()
+    else:
+        if (meta.get("metadata", {}).get("overwrite", False) ):
+            h = open(upload_full_path, "w+b") # truncate file
+            h.close()
+        else:
+            offset = upload_full_path.stat().st_size
+            CONFIG.increment_upload_offset(upload_id, offset,reset=True)
+
     return Response(
         status_code=200,
         headers={
-            "Upload-Offset": str(meta.get("offset",0)),
+            "Upload-Offset": str(offset),
             "Upload-Length": str(meta.get("length",0)),
             "Tus-Resumable": TUS_VERSION,
         },
     )
 
-@fs.patch("/uploads/{upload_id}", summary="Upload a chunk of a file upload session")
+@fs.patch("/upload/{upload_id}", summary="Upload a chunk of a file upload session")
 async def chunk_upload(upload_id: str, request: Request, token:dict=Depends(verify_token)) -> Response:
     check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
     user = CONFIG.get_user(token.get("username", None))
@@ -371,62 +474,60 @@ async def chunk_upload(upload_id: str, request: Request, token:dict=Depends(veri
         raise HTTPException(status_code=401)
 
     meta = CONFIG.get_upload_session(upload_id)
+    fname = meta.get("metadata", {}).get("name", upload_id)
+
     rel_path = meta.get("metadata",{}).get("path",".")
-
     p = check_path_jail(user, rel_path)
-    id = uuid.uuid4()
 
-    chunk_fname = f".{upload_id}_{id}.nms.chunk"
-    chunk_tmp_path = os.path.join("/tmp", chunk_fname)
-    chunk_file_path = os.path.join(p, chunk_fname)
+    complete_file_path = str(p.joinpath(fname))
 
-    chunk = await request.body()
-
-    with (open(chunk_tmp_path,"wb")) as f:
-        f.write(chunk)
-
-    mv_out = Move(chunk_tmp_path, chunk_file_path, sudo=True).execute()
+    upload_offset = int(request.headers.get("Upload-Offset",0))
+    actual_offset = meta.get("offset", 0)
 
     expires = datetime.now(UTC) + timedelta(hours=24)
     formated_expire_date = format_datetime(expires, usegmt=True)
 
-    CONFIG.info(f"New chunk for {upload_id} of size {len(chunk)} received from {user.username}")
+    try:
 
+        if (actual_offset!=upload_offset):
+            CONFIG.error(f"Upload session {upload_id} does not have the correct offset ({actual_offset}!={upload_offset})])")
+            raise Exception()
 
-    if (mv_out.returncode != 0):
+        chunk = await request.body()
+        actual_upload_length = len(chunk)
+
+        with (open(complete_file_path,"r+b")) as f:
+            f.seek(upload_offset)
+            f.write(chunk)
+
+    except Exception as e:
+        CONFIG.error(e)
+
         return Response(
-            status_code=204,
+            status_code=409,
             headers={
-                "Upload-Offset": "0",
+                "Upload-Offset": str(actual_offset),
                 "Tus-Resumable": TUS_VERSION,
                 "Upload-Expires": formated_expire_date,
             }
         )
 
-    offset = CONFIG.increment_upload_offset(upload_id,len(chunk))
+
+    CONFIG.info(f"New chunk for {upload_id} of size {actual_upload_length} received from {user.username}")
+
+    offset = CONFIG.increment_upload_offset(upload_id,actual_upload_length)
 
     if (CONFIG.is_upload_complete(upload_id)):
-        fname = meta.get("metadata",{}).get("filename",upload_id)
-
-        complete_file_path = str(p.joinpath(fname))
-
-        chunks  = get_upload_chunks(p,upload_id)
-
-        for f in chunks:
-            tee_cmd = ['sudo','tee',complete_file_path]
-            with subprocess.Popen(["cat", p.joinpath(f)], stdout=subprocess.PIPE) as proc:
-                subprocess.run(tee_cmd,stdin=proc.stdout)
-                proc.wait()
-
-        delete_chunks(p,upload_id)
-
         cmds = [
             Chown(user.username, user.username, complete_file_path, sudo=True),
             Chmod(complete_file_path, "700", sudo=True),
+            SetfACL("backend", complete_file_path,mask="rwx", sudo=True),
         ]
 
         LocalCommandLineTransaction(*cmds).run()
         CONFIG.info(f"Upload {upload_id} finished successfully: {complete_file_path}")
+        CONFIG.delete_upload_session(upload_id)
+
 
     return Response(
         status_code=204,
@@ -437,7 +538,7 @@ async def chunk_upload(upload_id: str, request: Request, token:dict=Depends(veri
         })
 
 
-@fs.delete("/uploads/{upload_id}")
+@fs.delete("/upload/{upload_id}")
 async def terminate_upload(upload_id: str, token:dict=Depends(verify_token)) -> Response:
     check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
     user = CONFIG.get_user(token.get("username", None))
@@ -451,10 +552,13 @@ async def terminate_upload(upload_id: str, token:dict=Depends(verify_token)) -> 
         raise HTTPException(status_code=404, detail="Upload not found")
 
     rel_path = meta.get("metadata", {}).get("path", ".")
+    fname = meta.get("metadata", {}).get("name", upload_id)
 
     p = check_path_jail(user, rel_path)
 
-    delete_chunks(p,upload_id)
+    RemoveFile(str(p.joinpath(fname))).execute()
+
+    CONFIG.delete_upload_session(upload_id)
 
     CONFIG.warning(f"Upload {upload_id} terminated by {user.username}")
 
@@ -485,19 +589,12 @@ def download_file(filename: str, token:dict=Depends(verify_token)) -> StreamingR
     if (len(fname) == 0):
         raise HTTPException(status_code=500)
 
-    def _file_generator(path:str,chunk_size=1024**2) -> Generator[bytes, None, None]:
-        proc = subprocess.Popen(
-            ["cat", path],
-            stdout=subprocess.PIPE
-        )
 
-        while chuck:= proc.stdout.read(chunk_size):
-            yield chuck
 
     CONFIG.info(f"File {filename} downloaded by {user.username}")
 
     return StreamingResponse(
-        _file_generator(filename),
+        file_generator(filename),
         media_type="application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'}
     )
@@ -525,6 +622,169 @@ def fs_rm(filename: str, token:dict=Depends(verify_token)) -> None:
 
     if (out.returncode != 0):
         raise HTTPException(status_code=500)
+
+@fs.head("/preview/{filename:path}",summary="Generate a token for preview (this is to accommodate <video>)")
+def get_preview_token(filename: str, token:dict=Depends(verify_token)) -> Response:
+    check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
+    user = CONFIG.get_user(token.get("username", None))
+
+    if (not user):
+        raise HTTPException(status_code=401)
+
+    p = check_path_jail(user, filename)
+    path = str(p)
+
+    file_info = get_file_info(path)
+
+    if ((file_info is None) or (file_info.type == 'dir')):
+        raise HTTPException(status_code=400)
+
+    token = create_token(user.username,filename,60)
+
+    return Response(
+        status_code=200,
+        headers={"X-Preview-Token": token},
+    )
+
+@fs_preview.get("/preview/{filename:path}", dependencies=[], summary="Generate a stream for previews. The token required here must be obtained by the HEAD method to the same endpoint.")
+def preview_file(filename: str, request:Request, token:str) -> StreamingResponse:
+    token_data = token_verification(token, filename)
+
+    check_permission(token_data.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
+    user = CONFIG.get_user(token_data.get("username", None))
+
+
+    if (not user):
+        raise HTTPException(status_code=401)
+
+    p = check_path_jail(user, filename)
+    path = str(p)
+
+    file_info = get_file_info(path)
+    headers = {}
+    revoke_token = True
+    partial_response = False
+    response = None
+
+    if (file_info is None):
+        raise HTTPException(status_code=400)
+
+
+
+    match (file_info.type):
+        case "text"|"pdf":
+            mimetype = "text/plain" if file_info.type != "pdf" else "application/pdf"
+            generator = file_generator(path)
+        case "image":
+            mimetype = "image/png"
+
+            img = Image.open(path)
+            img.thumbnail((500,500))
+
+            buffer = BytesIO()
+            img.save(buffer, format="PNG")
+            generator = buffer
+            buffer.seek(0)
+        case "video" | "audio":
+            revoke_token = False
+            response = FileResponse(
+                path,
+                media_type=file_info.mimetype or "application/octet-stream",
+                content_disposition_type="inline",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+            )
+        case _:
+            CONFIG.warning(f"Cannot preview this file type: {file_info.type}")
+            raise HTTPException(status_code=400)
+
+
+
+    if (revoke_token):
+        CONFIG.revoke_token(token)
+
+
+    CONFIG.info(f"File {filename} is being previewed by {user.username}")
+
+    return StreamingResponse(
+        generator,
+        status_code=206 if partial_response else 200,
+        media_type=mimetype,
+        headers=headers,
+    ) if response is None else response
+
+
+@fs.post("/zip",summary="Compress the provided files in a compressed zip archive.")
+def zip(data:ZipFile, token:dict=Depends(verify_token)) -> None:
+    check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
+    user = CONFIG.get_user(token.get("username", None))
+
+    if (not user):
+        raise HTTPException(status_code=401)
+
+    zip_basepath,zip_filename = os.path.split(data.zip_filename)
+
+    p = check_path_jail(user, zip_basepath)
+
+    for f in data.files:
+        check_path_jail(user, f)
+
+    fullpath = str(p)
+
+    cmds = [
+            Zip(data.zip_filename,data.files,sudo=True),
+            Chown(user.username, user.username, fullpath,sudo=True),
+            Chmod(fullpath, "700",sudo=True),
+            SetfACL("backend", fullpath,mask="rwx",sudo=True),
+        ]
+
+    trans = LocalCommandLineTransaction(*cmds)
+    output = trans.run()
+
+    if (not trans.success):
+        errors = "\n ".join([x["stderr"] for x in output])
+        errors += "\n ".join([x["stdout"] for x in output]) #zip sucks and puts errors in the stdout
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_FS_ZIP.name, params=[zip_filename, errors]))
+
+@fs.post("/unzip/{filename:path}",summary="Decompress most of compressed archives (despite the name)")
+def unzip(filename: str, token:dict=Depends(verify_token)) -> None:
+    check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
+    user = CONFIG.get_user(token.get("username", None))
+
+    if (not user):
+        raise HTTPException(status_code=401)
+
+    p = check_path_jail(user, filename)
+    fullpath = str(p)
+    basepath,fname = os.path.split(fullpath)
+
+    file_info = get_file_info(fullpath)
+
+    if ((file_info is None) or (file_info.type != 'zip')):
+        raise HTTPException(status_code=400)
+
+
+
+    cmds = [
+            Unpack(fullpath,cwd=basepath,sudo=True),
+            Chown(user.username, user.username, basepath, flags=["-R"] ,sudo=True),
+            Chmod(basepath, "700", flags=["-R"] ,sudo=True),
+            SetfACL("backend", basepath,mask="rwx",recursive=True,sudo=True),
+        ]
+
+    trans = LocalCommandLineTransaction(*cmds)
+    output = trans.run()
+
+    if (not trans.success):
+        errors = "\n ".join([x["stderr"] for x in output])
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_FS_UNZIP.name, params=[fname, errors]))
+
+
+
+
 
 @fs.get("/quota",summary="Quota usage of the logged user.",response_model=Quota)
 def fs_quota(token:dict=Depends(verify_token)) -> Quota:
