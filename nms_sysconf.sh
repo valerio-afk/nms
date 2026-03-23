@@ -247,6 +247,8 @@ install_requirements() {
 
     log_info "Installing Python packages from $req_file into venv $venv_path..."
 
+    cd / # this should help to solve the raspbian bug
+
     if ! "$pip_bin" install -r "$req_file" >> "$LOG_FILE" 2>&1; then
         log_error "Failed to install Python packages from $req_file"
         return 1
