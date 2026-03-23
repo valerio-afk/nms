@@ -767,14 +767,18 @@ Once the VPN is enabled in the `Network` page and your device(s) public keys hav
 
 Contributions, translations, issues, and feature requests are welcome!
 
-In interested, learn more about the backend [API endpoints](API.md).
+If interested, learn more about the backend [API endpoints](API.md).
 
 
 ---
 
 ## 🔮 Future Plans
 
-* Add S3-compatible remote access services. 
+* Add S3-compatible remote access services
+* Improve Box error handling
+* Expand i18n
+* Maybe a desktop app for synchronisation?
+* Maybe a mobile app?
 
 ---
 
