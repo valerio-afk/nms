@@ -577,14 +577,6 @@ manage_users() {
             log_warn "Failed to rename $uid1000_user to 'user'"
         else
             log_info "User $uid1000_user renamed to 'user'"
-
-            uid1000_homedir=$(getent passwd 1000 | cut -d: -f6 || true)
-
-            if [[ -d "$uid1000_homedir" ]]; then
-              rm -rf ${uid1000_homedir}
-              log_warn "Home directory ${uid1000_homedir} deleted"
-            fi
-
         fi
 
         log_info "Adding 'user' to group 'users'..."
