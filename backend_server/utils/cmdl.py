@@ -7,14 +7,20 @@ import json
 import os
 import socket
 import subprocess
+import time
 
 
 class CommandLine(ABC):
-    def __init__(this,command:List[str],sudo:bool=False,mask_output:bool=False,cwd:Optional[str]=None):
+    def __init__(this,command:List[str],
+                 sudo:bool=False,
+                 mask_output:bool=False,
+                 cwd:Optional[str]=None,
+                 wait:Optional[int]=0):
         this._command = command
         this._sudo = sudo
         this._mask_output=mask_output
         this._cwd = os.getcwd() if cwd is None else cwd
+        this._wait = wait
 
     def append(this,cmd):
         if (isinstance(cmd,list) or (isinstance(cmd,tuple))):
@@ -51,6 +57,9 @@ class CommandLine(ABC):
                                 text=True,
                                 cwd=this.cwd)
 
+        if (this._wait is not None):
+            time.sleep(this._wait)
+
         return output
 
     def execute(this,**kwargs)-> Optional[CompletedProcess[str]]:
@@ -69,8 +78,8 @@ class CommandLine(ABC):
 
 
 class RevertibleCommandLine(CommandLine):
-    def __init__(this, command, revert_command = None, sudo=False,mask_output=False):
-        super().__init__(command,sudo,mask_output)
+    def __init__(this, command, revert_command = None,**kwargs):
+        super().__init__(command,**kwargs)
 
         this._revert_command = revert_command
 
@@ -2117,34 +2126,39 @@ class TarArchive(CommandLine):
         GZIP = 'z'
     def __init__(this,
                  path:str,
-                 filename:str,
+                 archive_filename:str,
                  action:TarAction,
                  compression:Optional[TarCompression]=TarCompression.AUTO,
+                 files:Optional[List[str]] = None,
                  exclude:Optional[List[str]]=None,
                  **kwargs):
 
         this._path = path
-        this._filename = filename
+        this._archive_filename = archive_filename
         this._action = action
         this.compression = compression
         this.exclude = exclude
 
         flags = f"-{action.value}{compression.value}f"
 
-        cmd = ['tar',flags,filename,'-C', path]
+        cmd = ['tar',flags,archive_filename,'-C', path]
 
         if (exclude is not None):
             for e in exclude:
                 cmd.append(f"--exclude={e}")
 
-        cmd.append(".")
+        match (action):
+            case TarArchive.TarAction.EXTRACT:
+                cmd.append(".")
+            case TarArchive.TarAction.CREATE:
+                cmd.extend(files)
 
         super().__init__(cmd,**kwargs)
 
     def to_dict(this):
         d = super().to_dict()
         d['path'] = this._path
-        d['filename'] = this._filename
+        d['archive_filename'] = this._archive_filename
         d['action'] = this._action
         d['compression'] = this._compression
         d['exclude'] = this._exclude
@@ -2155,7 +2169,7 @@ class TarArchive(CommandLine):
     def from_dict(serialisation):
         return TarArchive(
             serialisation.get("path", None),
-            serialisation.get("filename", None),
+            serialisation.get("archive_filename", None),
             serialisation.get("action", None),
             serialisation.get("compression", None),
             serialisation.get("exclude", None),
@@ -2295,4 +2309,48 @@ class Zip(CommandLine):
             serialisation.get("zip_file", None),
             serialisation.get('files', []),
             serialisation.get('recursive', True),
+        )
+
+class SevenZip(CommandLine): #Cannot call this class 7Zip - you know
+    class SevenZipAction(Enum):
+        EXTRACT ='e'
+        CREATE  ='a'
+
+    def __init__(this,zip_file:str,
+                 action:SevenZipAction=SevenZipAction.CREATE,
+                 files:Optional[List[str]]=None,
+                 compression_level:Optional[int]=9,**kwargs):
+        cmd = ['7z',action.value]#,,zip_file] + files
+
+        if ((action == SevenZip.SevenZipAction.CREATE) and (compression_level is not None)):
+            cmd.append(f'-mx={compression_level}')
+
+        cmd.append(zip_file)
+
+        if ((action == SevenZip.SevenZipAction.CREATE) and (files is not None)):
+            cmd.extend(files)
+
+        this._zip_file = zip_file
+        this._files = files
+        this._compression_level = compression_level
+        this._action = action
+
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['zip_file'] = this._zip_file
+        d['files'] = this._files
+        d['compression_level'] = this._compression_level
+        d['action'] = this._action
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return SevenZip(
+            serialisation.get("zip_file", None),
+            serialisation.get('action', SevenZip.SevenZipAction.CREATE),
+            serialisation.get('files', []),
+            serialisation.get('compression_level', True),
         )

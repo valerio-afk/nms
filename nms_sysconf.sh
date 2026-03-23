@@ -36,6 +36,7 @@ PACKAGES=(
     jq
     acl
     libfile-mimeinfo-perl
+    p7zip-full
 )
 
 SERVICES_TO_DISABLE=(

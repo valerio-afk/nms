@@ -113,6 +113,7 @@ class ErrorMessages(Enum):
     E_FS_NOT_FILE = "E_FS_NOT_FILE"
     E_FS_ZIP = "E_FS_ZIP"
     E_FS_UNZIP = "E_FS_UNZIP"
+    E_REL_PATH = "E_REL_PATH"
 
     @staticmethod
     def get_error_from_string(error_code:str,*args,**kwargs) -> str:
@@ -216,6 +217,7 @@ ERROR_MESSAGES = {
     ErrorMessages.E_CSRF : lambda : _("Form validation failed"),
     ErrorMessages.E_UNKNOWN_METHOD : lambda : _("Unknown operation."),
     ErrorMessages.E_READ_FILE : lambda f,info : _("Unable to read the file %(file)s: %(info)s") % {"file":f,'info':info},
+    ErrorMessages.E_REL_PATH : lambda path1, path2: _("Path `%(path1)s is not relative to `%(path2)s`") % {"path1":path1, 'path2':path2},
 
     ErrorMessages.E_POOL_ALREADY_CONF : lambda: _("The disk array is already configured."),
     ErrorMessages.E_POOL_NO_CONF : lambda: _("Disk array not configured yet."),

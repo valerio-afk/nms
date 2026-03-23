@@ -1,5 +1,6 @@
 from PIL import Image
-from backend_server.utils.cmdl import Chown, Chmod, LocalCommandLineTransaction, LS, Stat, MimeType, Mkdir, Move, Unpack
+from backend_server.utils.cmdl import Chown, Chmod, LocalCommandLineTransaction, LS, Stat, MimeType, Mkdir, Move, \
+    Unpack, TarArchive, SevenZip
 from backend_server.utils.cmdl import RemoveFile, Touch, SetfACL, Zip
 from backend_server.utils.config import CONFIG
 from backend_server.utils.responses import ErrorMessage, UserProfile, FileInfo, FSBrowse, MkDirModel, MvModel, Quota
@@ -191,6 +192,7 @@ def get_file_info(path:str) -> Optional[FileInfo]:
                         compressed = [
                             "application/zip",
                             "application/x-tar",
+                            "application/x-compressed-tar",
                             "application/gzip",
                             "application/x-bzip2",
                             "application/x-xz",
@@ -325,10 +327,13 @@ def fs_mkdir(data:MkDirModel,token:dict=Depends(verify_token)) -> None:
 
     new_dir = str(p.joinpath(data.new_dir))
 
+    Mkdir(new_dir, sudo=True).execute() # i need to separate this due to probably race condition screwing up with Chown
+
     cmds = [
-        Mkdir(new_dir,sudo=True),
         Chown(user.username,user.username,new_dir,sudo=True),
         Chmod(new_dir,"700",sudo=True),
+        SetfACL("backend", new_dir, mask="rwx", sudo=True),
+        SetfACL("backend", new_dir, mask="rwx", recursive=True, sudo=True),
     ]
 
     trans = LocalCommandLineTransaction(*cmds)
@@ -589,13 +594,13 @@ def download_file(filename: str, token:dict=Depends(verify_token)) -> StreamingR
     if (len(fname) == 0):
         raise HTTPException(status_code=500)
 
-
+    file_info = get_file_info(str(p))
 
     CONFIG.info(f"File {filename} downloaded by {user.username}")
 
     return StreamingResponse(
-        file_generator(filename),
-        media_type="application/octet-stream",
+        file_generator(str(p)),
+        media_type=file_info.mimetype,
         headers={"Content-Disposition": f'attachment; filename="{fname}"'}
     )
 
@@ -729,13 +734,39 @@ def zip(data:ZipFile, token:dict=Depends(verify_token)) -> None:
 
     p = check_path_jail(user, zip_basepath)
 
+    files_to_compress = []
+
     for f in data.files:
         check_path_jail(user, f)
 
+        try:
+            files_to_compress.append( str(Path(f).relative_to(zip_basepath)) )
+        except ValueError:
+            raise HTTPException(status_code=500,)
+
     fullpath = str(p)
 
+    match (data.format):
+        case "zip":
+            compression_algorithm = Zip(zip_filename,files_to_compress,cwd=fullpath,sudo=True)
+        case "gz":
+            compression_algorithm = TarArchive(".",zip_filename,TarArchive.TarAction.CREATE,TarArchive.TarCompression.GZIP,files_to_compress,cwd=fullpath,sudo=True)
+        case "bz2":
+            compression_algorithm = TarArchive(".", zip_filename, TarArchive.TarAction.CREATE,
+                                               TarArchive.TarCompression.BZIP2, files_to_compress, cwd=fullpath,
+                                               sudo=True)
+        case "xz":
+            compression_algorithm = TarArchive(".", zip_filename, TarArchive.TarAction.CREATE,
+                                               TarArchive.TarCompression.XZ, files_to_compress, cwd=fullpath,
+                                               sudo=True)
+        case '7z':
+            compression_algorithm = SevenZip(zip_filename,
+                                             action=SevenZip.SevenZipAction.CREATE,
+                                             files=files_to_compress,
+                                             cwd=fullpath,sudo=True)
+
     cmds = [
-            Zip(data.zip_filename,data.files,sudo=True),
+            compression_algorithm,
             Chown(user.username, user.username, fullpath,sudo=True),
             Chmod(fullpath, "700",sudo=True),
             SetfACL("backend", fullpath,mask="rwx",sudo=True),
@@ -766,10 +797,13 @@ def unzip(filename: str, token:dict=Depends(verify_token)) -> None:
     if ((file_info is None) or (file_info.type != 'zip')):
         raise HTTPException(status_code=400)
 
-
+    if ("7z" in file_info.mimetype):
+        uncompress_command = SevenZip(fullpath,SevenZip.SevenZipAction.EXTRACT,cwd=basepath,sudo=True)
+    else:
+        uncompress_command = Unpack(fullpath, cwd=basepath, sudo=True) # unpack doesn't like much 7z apparently
 
     cmds = [
-            Unpack(fullpath,cwd=basepath,sudo=True),
+            uncompress_command,
             Chown(user.username, user.username, basepath, flags=["-R"] ,sudo=True),
             Chmod(basepath, "700", flags=["-R"] ,sudo=True),
             SetfACL("backend", basepath,mask="rwx",recursive=True,sudo=True),

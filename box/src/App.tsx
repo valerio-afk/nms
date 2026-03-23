@@ -3,7 +3,7 @@ import Login from './Login';
 import { LogOut } from 'lucide-react';
 import { logout as apiLogout, setAuthToken, getQuota } from './utils/api';
 import StorageBar from './components/StorageBar'
-import FileBrowser from './FileBrowser';
+import FileBrowser from './components/FileBrowser';
 
 interface ContextMenuPosition {
   x: number;

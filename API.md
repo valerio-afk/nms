@@ -375,6 +375,12 @@ Get the list of files of the logged user.
 
 Get the list of files of the logged user.
 
+## /v1/fs/checksum/{path}
+
+### GET
+
+Get MD5 checksum of the specified file
+
 ## /v1/fs/mkdir
 
 ### POST
@@ -393,13 +399,11 @@ Rename or move a file/directory within the user space.
 
 Initiate an upload session via TUS protocol
 
-## /v1/fs/uploads
-
 ### OPTIONS
 
 Options Upload
 
-## /v1/fs/uploads/{upload_id}
+## /v1/fs/upload/{upload_id}
 
 ### HEAD
 
@@ -422,6 +426,28 @@ Download File
 ### DELETE
 
 Delete a file/directory within the user space.
+
+## /v1/fs/preview/{filename}
+
+### HEAD
+
+Generate a token for preview (this is to accommodate <video>)
+
+### GET
+
+Generate a stream for previews. The token required here must be obtained by the HEAD method to the same endpoint.
+
+## /v1/fs/zip
+
+### POST
+
+Compress the provided files in a compressed zip archive.
+
+## /v1/fs/unzip/{filename}
+
+### POST
+
+Decompress most of compressed archives (despite the name)
 
 ## /v1/fs/quota
 

@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo, useRef, useContext } from 'react';
-import { browseFs, mkdirFs, mvFs, rmFs, zipFs, unzipFs, type FSBrowse, type FileInfo, ApiError, API_BASE_URL } from './utils/api';
+import { browseFs, mkdirFs, mvFs, rmFs, zipFs, unzipFs, downloadFile, type FSBrowse, type FileInfo, ApiError, API_BASE_URL } from '../utils/api';
 import Uppy from '@uppy/core';
 import Tus from '@uppy/tus';
 import DashboardModal from '@uppy/react/dashboard-modal';
 import '@uppy/core/css/style.min.css';
 import '@uppy/dashboard/css/style.min.css';
-import { formatBytes, formatDate } from './utils/formats'
+import { formatBytes, formatDate } from '../utils/formats'
 import {
     Folder, Image, Film, Music, FileText,
     FileArchive, Binary, FileOutput, FileQuestion,
@@ -13,8 +13,8 @@ import {
     FolderPlus, Upload, Edit2, Download, Trash2,
     MoveRight, CornerLeftUp, ArchiveRestore
 } from 'lucide-react';
-import { ContextMenuContext } from './App';
-import FilePreviewModal from './components/FilePreviewModal';
+import { ContextMenuContext } from '../App';
+import FilePreviewModal from './FilePreviewModal';
 
 const humanReadableType = (type: FileInfo['type']): string => {
     switch (type) {
@@ -74,6 +74,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
     const [newFileName, setNewFileName] = useState('');
     const [isRenaming, setIsRenaming] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
     const [itemToRename, setItemToRename] = useState<string | null>(null);
     const renameInputRef = useRef<HTMLInputElement>(null);
 
@@ -81,9 +82,9 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    // Zip Context State
     const [isZipModalOpen, setIsZipModalOpen] = useState(false);
     const [zipFileName, setZipFileName] = useState('');
+    const [zipFormat, setZipFormat] = useState<"zip" | "gz" | "xz" | "bz2" | "7z">('zip');
     const [isZipping, setIsZipping] = useState(false);
     const [isUnzipping, setIsUnzipping] = useState(false);
 
@@ -432,17 +433,26 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
         setError(null);
         try {
             let finalZipName = zipFileName.trim();
-            if (!finalZipName.toLowerCase().endsWith('.zip')) {
-                finalZipName += '.zip';
+            const extensions: Record<string, string> = {
+                'zip': '.zip',
+                'gz': '.tar.gz',
+                'xz': '.tar.xz',
+                'bz2': '.tar.bz2',
+                '7z': '.7z'
+            };
+            const expectedExt = extensions[zipFormat] || '.zip';
+            if (!finalZipName.toLowerCase().endsWith(expectedExt)) {
+                finalZipName += expectedExt;
             }
             const targetPath = currentPath ? `${currentPath}/${finalZipName}` : finalZipName;
-            
+
             // Relative paths from user root requested by backend
             const itemsToZip = Array.from(selectedItems).map(item => currentPath ? `${currentPath}/${item}` : item);
-            
-            await zipFs(targetPath, itemsToZip);
+
+            await zipFs(targetPath, itemsToZip, zipFormat);
             setIsZipModalOpen(false);
             setZipFileName('');
+            setZipFormat('zip');
             setSelectedItems(new Set());
             await loadPath(currentPath);
         } catch (err) {
@@ -457,7 +467,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
         if (selectedItems.size !== 1) return;
         const item = Array.from(selectedItems)[0];
         const itemPath = currentPath ? `${currentPath}/${item}` : item;
-        
+
         setIsUnzipping(true);
         setError(null);
         try {
@@ -468,6 +478,23 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
             setError(err instanceof Error ? err.message : 'Error unzipping archive');
         } finally {
             setIsUnzipping(false);
+        }
+    };
+
+    const handleDownload = async () => {
+        if (selectedItems.size !== 1) return;
+        const item = Array.from(selectedItems)[0];
+        const itemPath = currentPath ? `${currentPath}/${item}` : item;
+
+        setIsDownloading(true);
+        setError(null);
+        try {
+            await downloadFile(itemPath);
+            setSelectedItems(new Set());
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error downloading file');
+        } finally {
+            setIsDownloading(false);
         }
     };
 
@@ -819,15 +846,17 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     const multiSelected = selectedItems.size > 1;
     const noneSelected = selectedItems.size === 0;
     const singleSelected = selectedItems.size === 1;
-    const isSingleZipSelected = singleSelected && Array.from(selectedItems)[0].toLowerCase().endsWith('.zip');
+
+    const selectedFilename = Array.from(selectedItems)[0];
+    const anchorIndex = sortedFiles.findIndex(f => (f.name === selectedFilename) && (f.type == 'zip'));
+    const isSingleZipSelected = anchorIndex >= 0
 
     return (
         <div
-            className={`bg-white dark:bg-zinc-900 rounded-2xl shadow-sm ring-1 ring-gray-900/5 p-6 md:p-8 min-h-[500px] transition-colors ${
-                isDraggingOverMain && !dragOverFolder
-                    ? 'bg-indigo-50/50 dark:bg-indigo-900/10 border-2 border-dashed border-indigo-400 dark:border-indigo-500'
-                    : 'dark:ring-white/10'
-            }`}
+            className={`bg-white dark:bg-zinc-900 rounded-2xl shadow-sm ring-1 ring-gray-900/5 p-6 md:p-8 min-h-[500px] transition-colors ${isDraggingOverMain && !dragOverFolder
+                ? 'bg-indigo-50/50 dark:bg-indigo-900/10 border-2 border-dashed border-indigo-400 dark:border-indigo-500'
+                : 'dark:ring-white/10'
+                }`}
             onContextMenu={handleContextMenu}
             onClick={handleContextMenuClick}
             onDragEnter={handleMainDragEnter}
@@ -860,7 +889,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                                 What would you like to do?
                             </p>
-                            
+
                             <div className="space-y-3">
                                 <button
                                     onClick={() => currentConflict.resolve({ type: 'resume' })}
@@ -1170,7 +1199,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Create Archive</h3>
                         </div>
                         <form onSubmit={handleZipSubmit}>
-                            <div className="mb-6">
+                            <div className="mb-4">
                                 <label htmlFor="zipName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Archive Name
                                 </label>
@@ -1179,11 +1208,29 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                     id="zipName"
                                     value={zipFileName}
                                     onChange={(e) => setZipFileName(e.target.value)}
-                                    placeholder="e.g. backup.zip"
+                                    placeholder="e.g. backup"
                                     className="w-full px-4 py-2 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block dark:bg-zinc-800 dark:border-zinc-700 dark:placeholder-gray-400 dark:text-white dark:focus:ring-indigo-500 dark:focus:border-indigo-500"
                                     disabled={isZipping}
                                     autoFocus
                                 />
+                            </div>
+                            <div className="mb-6">
+                                <label htmlFor="zipFormat" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Compression Format
+                                </label>
+                                <select
+                                    id="zipFormat"
+                                    value={zipFormat}
+                                    onChange={(e) => setZipFormat(e.target.value as "zip" | "gz" | "xz" | "bz2" | "7z")}
+                                    disabled={isZipping}
+                                    className="w-full px-4 py-2 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block dark:bg-zinc-800 dark:border-zinc-700 dark:placeholder-gray-400 dark:text-white dark:focus:ring-indigo-500 dark:focus:border-indigo-500"
+                                >
+                                    <option value="zip">.zip</option>
+                                    <option value="gz">.tar.gz</option>
+                                    <option value="xz">.tar.xz</option>
+                                    <option value="bz2">.tar.bz2</option>
+                                    <option value="7z">.7z</option>
+                                </select>
                             </div>
                             <div className="flex justify-end gap-3">
                                 <button
@@ -1191,6 +1238,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                     onClick={() => {
                                         setIsZipModalOpen(false);
                                         setZipFileName('');
+                                        setZipFormat('zip');
                                     }}
                                     disabled={isZipping}
                                     className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-700 transition-colors"
@@ -1283,10 +1331,15 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             Unzip
                         </button>
                         <button
-                            disabled={noneSelected}
+                            disabled={!singleSelected || isDownloading}
+                            onClick={handleDownload}
                             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
                         >
-                            <Download className="w-4 h-4" />
+                            {isDownloading ? (
+                                <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                                <Download className="w-4 h-4" />
+                            )}
                             Download
                         </button>
                         <button
@@ -1337,8 +1390,8 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                         >
                             <ArchiveRestore className="w-4 h-4" /> Unzip
                         </a>
-                        <a
-                            className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${!noneSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                        <a onClick={singleSelected ? handleDownload : undefined}
+                            className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${singleSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
                         >
                             <Download className="w-4 h-4" /> Download
                         </a>
@@ -1384,13 +1437,12 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                     onDrop={(e) => handleDrop(e, file)}
                                     onClick={(e) => handleRowClick(e, file, idx)}
                                     onDoubleClick={() => handleDoubleClick(file)}
-                                    className={`group transition-colors cursor-pointer ${
-                                        dragOverFolder === file.name
-                                            ? 'bg-indigo-100 dark:bg-indigo-900/40 outline-dashed outline-2 outline-indigo-400 -outline-offset-2'
-                                            : selectedItems.has(file.name)
-                                                ? 'bg-indigo-50 dark:bg-indigo-900/20'
-                                                : 'hover:bg-gray-50 dark:hover:bg-zinc-800/50'
-                                    }`}
+                                    className={`group transition-colors cursor-pointer ${dragOverFolder === file.name
+                                        ? 'bg-indigo-100 dark:bg-indigo-900/40 outline-dashed outline-2 outline-indigo-400 -outline-offset-2'
+                                        : selectedItems.has(file.name)
+                                            ? 'bg-indigo-50 dark:bg-indigo-900/20'
+                                            : 'hover:bg-gray-50 dark:hover:bg-zinc-800/50'
+                                        }`}
                                 >
                                     <td className="py-3 px-4">
                                         <div className="flex items-center gap-3">

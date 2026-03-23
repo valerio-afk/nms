@@ -224,3 +224,4 @@ class ImportPool(BaseModel):
 class ZipFile(BaseModel):
     zip_filename: str
     files: List[str]
+    format: Literal["zip","gz","xz","bz2","7z"] = Field("zip")

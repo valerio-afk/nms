@@ -151,7 +151,7 @@ If you are running a different kind of Linux distribution, you should make the n
 <details>
 <summary>Step 1: Install Necessary Packages</summary>
 
-NMS expects the following programs and system tools to be installed in your system:
+NMS expects the following programs and system tools to be installed in your system (debian-based package names):
 > * python3-full
 > * network-manager
 > * nginx
@@ -166,12 +166,15 @@ NMS expects the following programs and system tools to be installed in your syst
 > * samba
 > * nfs-kernel-server
 > * wireguard
+> * rsync
 > * unp
 > * nodejs
 > * npm
 > * git
 > * jq
 > * acl
+> * libfile-mimeinfo-perl
+> * p7zip-full
 
 You should adapt the name of these packages for your distribution.
 

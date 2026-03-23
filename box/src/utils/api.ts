@@ -30,10 +30,8 @@ export class ApiError extends Error {
     }
 }
 
-/**
- * Helper to make API requests with standardized error handling
- */
-async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+
+async function getResponse(endpoint: string, options: RequestInit = {}): Promise<Response> {
     const url = `${API_BASE_URL}${endpoint}`;
 
     const headers: Record<string, string> = {
@@ -63,14 +61,14 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
         }
         throw new ApiError(errorMessage, response.status, errorCode);
     }
-
-    // Handle case where successful response might not be JSON
-    try {
-        return await response.json();
-    } catch {
-        return {} as T; // Return empty object if json parsing fails on success
-    }
+    return response;
 }
+
+async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const response = await getResponse(endpoint, options);
+    return await response.json();
+}
+
 
 // --- Auth Endpoints ---
 
@@ -146,13 +144,14 @@ export async function rmFs(path: string): Promise<void> {
     });
 }
 
-export async function zipFs(targetPath: string, files: string[]): Promise<void> {
+export async function zipFs(targetPath: string, files: string[], format: "zip" | "gz" | "xz" | "bz2" | "7z" = "zip"): Promise<void> {
     // Assuming backend endpoint is /fs/zip to match typical routing. If it's literally /zip, we route it.
     await apiRequest('/fs/zip', {
         method: 'POST',
         body: JSON.stringify({
             zip_filename: targetPath,
-            files: files
+            files: files,
+            format: format
         })
     });
 }
@@ -197,4 +196,31 @@ export function getPreviewUrl(path: string, previewToken: string): string {
         return `${url}?token=${encodeURIComponent(previewToken)}`;
     }
     return url;
+}
+
+export async function downloadFile(path: string): Promise<void> {
+    const response = await getResponse(`/fs/item/${path}`, {
+        method: 'GET'
+    });
+
+    const disposition = response.headers.get("Content-Disposition");
+    let filename = "download";
+
+    if (disposition && disposition.includes("filename=")) {
+        filename = disposition
+            .split("filename=")[1]
+            .replace(/"/g, "");
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    window.URL.revokeObjectURL(url);
 }
