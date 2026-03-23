@@ -394,8 +394,8 @@ enable_network_manager() {
 
     # Non-interactive mode to enable NetworkManager
     if ! raspi-config nonint do_network_manager 0 >> "$LOG_FILE" 2>&1; then
-        log_error "Failed to enable NetworkManager via raspi-config"
-        return 1
+        log_warn "Failed to enable NetworkManager via raspi-config. Skipping..."
+        return 0
     else
         log_info "NetworkManager enabled successfully via raspi-config"
     fi
