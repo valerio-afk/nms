@@ -520,6 +520,7 @@ get_free_uid() {
             return 0
         fi
     done
+}
 
 
 
@@ -1041,5 +1042,5 @@ configure_nginx_nms
 # Done
 IP=$(ip -o -4 addr show up scope global | awk '{split($4,a,"/"); print a[1]; exit}')
 if [ -n "$IP" ]; then
-  log_info "Now you can use your browser and go to http://$IP"
+  log_info "Now you can use your browser and go to http://${IP}"
 fi
