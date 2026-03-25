@@ -201,6 +201,10 @@ class MvModel(BaseModel):
     old_path:str
     new_path:str
 
+class CpModel(BaseModel):
+    src:str
+    dst:str
+
 class PoolSnapshot(BaseModel):
     name:str
     ref_size:int

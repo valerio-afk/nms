@@ -34,17 +34,17 @@ def disable_all_access_services() -> None:
           )
 def get_system_services(token:dict=Depends(verify_token)) -> Dict[str,AccessService]:
     check_permission(token.get("username"), UserPermissions.CLIENT_DASHBOARD_SERVICES)
-    try:
-        return {
-            k:AccessService(
-                          service_name=s.service_names,
-                          active=s.is_active,
-                          properties= {prop:getattr(s,mtd)() for prop in s.properties if hasattr(s,mtd:=f"get_{prop}")}
-                          )
-            for k,s in CONFIG.access_services.items()
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500,detail=str(e))
+    # try:
+    return {
+        k:AccessService(
+                      service_name=s.service_names,
+                      active=s.is_active,
+                      properties= {prop:getattr(s,mtd)() for prop in s.properties if hasattr(s,mtd:=f"get_{prop}")}
+                      )
+        for k,s in CONFIG.access_services.items()
+    }
+    # except Exception as e:
+    #     raise HTTPException(status_code=500,detail=str(e))
 
 
 @services.post("/enable/{service_id}",

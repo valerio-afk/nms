@@ -114,6 +114,9 @@ class ErrorMessages(Enum):
     E_FS_ZIP = "E_FS_ZIP"
     E_FS_UNZIP = "E_FS_UNZIP"
     E_REL_PATH = "E_REL_PATH"
+    E_FS_COPY = "E_FS_COPY"
+    E_FS_MOVE = "E_FS_MOVE"
+    E_FS_MKDIR = "E_FS_MKDIR"
 
     @staticmethod
     def get_error_from_string(error_code:str,*args,**kwargs) -> str:
@@ -262,7 +265,7 @@ ERROR_MESSAGES = {
     ErrorMessages.E_POOL_SNAPSHOTS: lambda info: _("Error while retrieving the list of snapshots: %(info)s") % {'info':info},
     ErrorMessages.E_POOL_SNAPSHOT_ROLLBACK: lambda name,info: _("Error while rolling back to `%(name)s`: %(info)s") % {'info':info, 'name':name},
 
-    ErrorMessages.E_AUTH_ALREADY_CONFIG : lambda _: ("You have already an OTP credentials configured."),
+    ErrorMessages.E_AUTH_ALREADY_CONFIG : lambda : _("You have already an OTP credentials configured."),
     ErrorMessages.E_AUTH_INVALID : lambda: _("Invalid authorisation."),
     ErrorMessages.E_AUTH_EXPIRED : lambda: _("Authorisation token expired."),
     ErrorMessages.E_AUTH_REVOKED : lambda: _("Authorisation token revoked."),
@@ -326,6 +329,9 @@ ERROR_MESSAGES = {
     ErrorMessages.E_FS_NOT_FILE: lambda path: _("The provided path `%(path)s` neither exists nor is a file.") % {'path':path},
     ErrorMessages.E_FS_ZIP: lambda path,info: _("Error while zipping: `%(path)s`: %(info)s.") % {'path':path,'info':info},
     ErrorMessages.E_FS_UNZIP: lambda path,info: _("Error while unzipping: `%(path)s`: %(info)s.") % {'path':path,'info':info},
+    ErrorMessages.E_FS_COPY: lambda path,info: _("Error while copying: `%(path)s`: %(info)s.") % {'path':path,'info':info},
+    ErrorMessages.E_FS_MOVE: lambda path,info: _("Error while moving: `%(path)s`: %(info)s.") % {'path':path,'info':info},
+    ErrorMessages.E_FS_MKDIR: lambda path,info: _("Error while creating the directory `%(path)s`: %(info)s.") % {'path':path,'info':info},
 
 }
 

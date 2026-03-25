@@ -13,7 +13,7 @@ DEST_DIR="/nms"
 #IFM_REPO_URL="https://github.com/misterunknown/ifm.git"
 #IFM_REPO_DIR="/opt/ifm"
 
-PACKAGES=(
+PACKAGES_APT=(
     python3-full
     network-manager
     nginx
@@ -39,13 +39,54 @@ PACKAGES=(
     p7zip-full
 )
 
-SERVICES_TO_DISABLE=(
+PACKAGES_DNF=(
+    python3
+    python3-pip
+    NetworkManager
+    nginx
+    sudo
+    docker
+    smartmontools
+    kernel-headers
+    kernel-devel
+    zfs
+    openssh-server
+    vsftpd
+    samba
+    nfs-utils
+    wireguard-tools
+    rsync
+    nodejs
+    npm
+    git
+    jq
+    acl
+    file
+    p7zip
+    p7zip-plugins
+    perl
+)
+
+SERVICES_TO_DISABLE_APT=(
     vsftpd
     smbd
     nmbd
     rpcbind
     nfs-server
     networking
+)
+
+SERVICES_TO_DISABLE_DNF=(
+    vsftpd
+    smb
+    nmb
+    rpcbind
+    nfs-server
+    networking
+)
+
+SERVICES_TO_ENABLE=(
+  docker
 )
 
 # ----- Colour codes -----
@@ -83,9 +124,9 @@ error_exit() {
     exit 1
 }
 
-# ------- APT Wrapper
+# ------- Package Manager
 
-install_packages() {
+install_packages_apt() {
 
     local packages=("$@")
 
@@ -111,6 +152,81 @@ install_packages() {
     fi
 
     log_info "Package installation completed successfully."
+}
+
+install_packages_dnf() {
+
+    local packages=("$@")
+
+    if [[ ${#packages[@]} -eq 0 ]]; then
+        log_warn "No packages provided for installation."
+        return 0
+    fi
+
+    log_info "Adding ZFS repository"
+
+    if ! dnf install -y https://zfsonlinux.org/fedora/zfs-release-3-0$(rpm --eval "%{dist}").noarch.rpm >> "$LOG_FILE" 2>&1; then
+      error_exit "Unable to add ZFS repository."
+    fi
+
+    log_info "Installing packages: ${packages[*]}"
+    if ! dnf install -y "${packages[@]}" >> "$LOG_FILE" 2>&1; then
+        error_exit "Package installation failed."
+    fi
+
+    log_info "Package installation completed successfully."
+}
+
+install_unp_manually() {
+    local PROJECT_NAME="unp_2.0"
+    local TAR_FILE="${PROJECT_NAME}.tar.xz"
+    local DOWNLOAD_URL="http://deb.debian.org/debian/pool/main/u/unp/${TAR_FILE}"
+    local TMP_DIR="/tmp/unp"
+
+    if [[ -f /usr/local/bin/unp ]]; then
+      log_warn "${PROJECT_NAME} already installed. Skipping..."
+      return 0
+    fi
+
+    log_info "Installing ${PROJECT_NAME} (no-deb)..."
+
+    mkdir -p "$TMP_DIR"
+
+    cd "$TMP_DIR" || {
+        log_error "Failed to enter temporary directory $TMP_DIR"
+        return 1
+    }
+
+    log_info "Downloading ${PROJECT_NAME}..."
+    if ! wget --content-disposition "$DOWNLOAD_URL" >> "$LOG_FILE" 2>&1; then
+        log_error "Failed to download ${PROJECT_NAME}"
+        return 1
+    fi
+
+    # Detect extracted tar file
+
+    if [[ -z "$TAR_FILE" ]]; then
+        log_error "Downloaded archive not found"
+        return 1
+    fi
+
+    log_info "Extracting $TAR_FILE..."
+    if ! tar xf "$TAR_FILE" >> "$LOG_FILE" 2>&1; then
+        log_error "Failed to extract ${PROJECT_NAME} archive"
+        return 1
+    fi
+
+
+    mv ${TMP_DIR}/unp-2.0/unp /usr/local/bin/unp
+    chmod a+x /usr/local/bin/unp
+
+    mv ${TMP_DIR}/unp-2.0/ucat /usr/local/bin/ucat
+    chmod a+x /usr/local/bin/ucat
+
+    log_info "Cleaning up temporary installation files..."
+    rm -rf "$TMP_DIR"
+
+    log_info "${PROJECT_NAME} installed successfully"
 }
 
 add_contrib_nonfree() {
@@ -140,6 +256,7 @@ add_contrib_nonfree() {
     log_info "'contrib' and 'non-free' successfully added and package index updated."
 }
 
+
 manage_services() {
     local action="$1"   # "stop" or "disable"
     shift
@@ -164,6 +281,20 @@ manage_services() {
                     log_warn "Failed to disable $svc"
                 else
                     log_info "$svc disabled successfully"
+                fi
+            elif [[ "$action" == "enable" ]]; then
+                log_info "Enabling service: $svc"
+                if ! systemctl enable "$svc" >> "$LOG_FILE" 2>&1; then
+                    log_warn "Failed to enable $svc"
+                else
+                    log_info "$svc enabled successfully"
+                fi
+            elif [[ "$action" == "start" ]]; then
+                log_info "Starting service: $svc"
+                if ! systemctl start "$svc" >> "$LOG_FILE" 2>&1; then
+                    log_warn "Failed to start $svc"
+                else
+                    log_info "$svc started successfully"
                 fi
             else
                 log_warn "Unknown action: $action for service $svc"
@@ -353,6 +484,7 @@ clone_git_repo() {
         return 0
     fi
 
+
     # Attempt the clone
     if ! git clone "$repo_url" "$dest_dir" >> "$LOG_FILE" 2>&1; then
         log_error "Failed to clone repository $repo_url"
@@ -416,6 +548,40 @@ enable_network_manager() {
 }
 
 # Docker stuff
+detect_distro_family() {
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+
+        local like="${ID_LIKE:-}"
+        local id="${ID:-}"
+
+        case "$like" in
+            *debian*)
+                echo "apt"
+                return 0
+                ;;
+            *rhel*|*fedora*)
+                echo "rpm"
+                return 0
+                ;;
+        esac
+
+        case "$id" in
+            debian|ubuntu|raspbian)
+                echo "apt"
+                return 0
+                ;;
+            rhel|fedora|centos|rocky|almalinux)
+                echo "rpm"
+                return 0
+                ;;
+        esac
+    fi
+
+    log_error "Unknown distribution family. Cannot proceed"
+    return 1
+}
+
 install_redis_docker() {
     local container_name="redis-server"
     local image_name="redis"
@@ -529,6 +695,8 @@ get_free_uid() {
 manage_users() {
     log_info "Starting user management..."
 
+    SUDO_GROUP=$1
+
     # --- 1. www-data ---
     if id "www-data" &>/dev/null; then
         log_info "User 'www-data' already exists"
@@ -550,7 +718,7 @@ manage_users() {
     else
         log_info "Creating user 'backend' with no login and sudo group..."
         uid=$(get_free_uid)
-        if ! useradd -M -u "$uid" -s /usr/sbin/nologin -G sudo backend >> "$LOG_FILE" 2>&1; then
+        if ! useradd -M -u "$uid" -s /usr/sbin/nologin -G "${SUDO_GROUP}" backend >> "$LOG_FILE" 2>&1; then
             log_warn "Failed to create user 'backend'"
         else
             log_info "User 'backend' created successfully and added to sudo group"
@@ -566,7 +734,7 @@ manage_users() {
 
     if [[ -z "$uid1000_user" ]]; then
         log_info "No user with UID 1000 found. Creating user 'user'..."
-        if ! useradd -M -s -u 1000 /bin/bash user >> "$LOG_FILE" 2>&1; then
+        if ! useradd -M -u 1000 -s /bin/bash user >> "$LOG_FILE" 2>&1; then
             log_warn "Failed to create user 'user'"
         else
             log_info "User 'user' created successfully"
@@ -577,6 +745,12 @@ manage_users() {
             log_warn "Failed to rename $uid1000_user to 'user'"
         else
             log_info "User $uid1000_user renamed to 'user'"
+        fi
+
+         if ! groupmod -n user "$uid1000_user" >> "$LOG_FILE" 2>&1; then
+            log_warn "Failed to rename group $uid1000_user to 'user'"
+        else
+            log_info "Group $uid1000_user renamed to 'user'"
         fi
 
         log_info "Adding 'user' to group 'users'..."
@@ -797,6 +971,8 @@ install_noip_duc() {
     local DOWNLOAD_URL="https://www.noip.com/download/linux/latest"
     local TMP_DIR="/tmp/noip-install"
 
+    local OS_FAMILY=$1
+
     log_info "Installing No-IP Dynamic Update Client..."
 
     mkdir -p "$TMP_DIR"
@@ -807,14 +983,15 @@ install_noip_duc() {
     }
 
     log_info "Downloading latest No-IP package..."
-    if ! wget --content-disposition "$DOWNLOAD_URL" >> "$LOG_FILE" 2>&1; then
+    if ! wget --content-disposition --trust-server-names "$DOWNLOAD_URL" >> "$LOG_FILE" 2>&1; then
         log_error "Failed to download No-IP DUC"
         return 1
     fi
 
-    # Detect extracted tar file
-    local TAR_FILE
-    TAR_FILE=$(ls noip-duc_*.tar.gz 2>/dev/null | head -n1)
+    shopt -s nullglob
+    local files=(noip-duc_*.tar.gz)
+    TAR_FILE="${files[0]}"
+    shopt -u nullglob
 
     if [[ -z "$TAR_FILE" ]]; then
         log_error "Downloaded archive not found"
@@ -830,18 +1007,30 @@ install_noip_duc() {
     local EXTRACTED_DIR
     EXTRACTED_DIR=$(basename "$TAR_FILE" .tar.gz)
 
-    local ARCH=$(dpkg --print-architecture)
-    local DEB_FILE="$TMP_DIR/$EXTRACTED_DIR/binaries/${EXTRACTED_DIR}_${ARCH}.deb"
+    if [[ $OS_FAMILY = "apt" ]]; then
 
-    if [[ ! -f "$DEB_FILE" ]]; then
-        log_error "No-IP .deb package not found at $DEB_FILE"
-        return 1
-    fi
+      local ARCH=$(dpkg --print-architecture)
+      local DEB_FILE="$TMP_DIR/$EXTRACTED_DIR/binaries/${EXTRACTED_DIR}_${ARCH}.deb"
 
-    log_info "Installing No-IP DUC package..."
-    if ! apt-get install -y "$DEB_FILE" >> "$LOG_FILE" 2>&1; then
-        log_error "Failed to install No-IP DUC"
+      if [[ ! -f "$DEB_FILE" ]]; then
+          log_error "No-IP .deb package not found at $DEB_FILE"
+          return 1
+      fi
+
+      log_info "Installing No-IP DUC package..."
+      if ! apt-get install -y "$DEB_FILE" >> "$LOG_FILE" 2>&1; then
+          log_error "Failed to install No-IP DUC"
+          return 1
+      fi
+    else
+      local ARCH=$(rpm --eval '%{_arch}')
+      local MUSL_BASE_FILENAME="$TMP_DIR/$EXTRACTED_DIR/binaries/${EXTRACTED_DIR}_${ARCH}-musl"
+      if ! gunzip "${MUSL_BASE_FILENAME}.gz"  >> "$LOG_FILE" 2>&1; then
+        log_error "Unable to find no-ip statically linked binary file ${MUSL_BASE_FILENAME}.gz"
         return 1
+      fi
+      mv ${MUSL_BASE_FILENAME} /usr/local/bin/noip-duc
+      chmod a+x /usr/local/bin/noip-duc
     fi
 
     log_info "Cleaning up temporary installation files..."
@@ -851,8 +1040,21 @@ install_noip_duc() {
 }
 
 configure_nginx_nms() {
-    local NGINX_CONF="/etc/nginx/sites-available/nms"
+    local OS_FAMILY=$1
+
+    local NGINX_CONF
     local NGINX_ENABLED="/etc/nginx/sites-enabled/nms"
+
+    # Select config path based on distro family
+    if [[ "$OS_FAMILY" == "rpm" ]]; then
+        NGINX_CONF="/etc/nginx/conf.d/nms"
+        setsebool -P httpd_can_network_connect 1
+
+        ln -s /etc/nginx/conf.d /etc/nginx/sites-enabled/
+
+    else
+        NGINX_CONF="/etc/nginx/sites-available/nms"
+    fi
 
     log_info "Configuring nginx for NMS..."
 
@@ -885,7 +1087,7 @@ server
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-ForwardedProto $scheme;
+        proxy_set_header X-Forwarded-Proto $scheme;
 
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -906,14 +1108,10 @@ server
 }
 EOF
 
-    log_info "Removing default site from sites-enabled if it exists..."
-    if [[ -f /etc/nginx/sites-enabled/default ]]; then
-        rm -f /etc/nginx/sites-enabled/default >> "$LOG_FILE" 2>&1
-        log_info "Default site removed"
+    if [[ "$OS_FAMILY" != "rpm" ]]; then
+      log_info "Enabling NMS site..."
+      ln -sf "$NGINX_CONF" "$NGINX_ENABLED"
     fi
-
-    log_info "Enabling NMS site..."
-    ln -sf "$NGINX_CONF" "$NGINX_ENABLED"
 
     log_info "Testing nginx configuration..."
     if nginx -t >> "$LOG_FILE" 2>&1; then
@@ -929,6 +1127,13 @@ EOF
     else
         log_error "Failed to restart nginx"
         return 1
+    fi
+
+    if command -v firewall-cmd &>/dev/null; then
+      log_warn "Adding HTTP (port 80) as default service in the firewall"
+      firewall-cmd --add-service=http
+      firewall-cmd --permanent --add-service=http
+      firewall-cmd --reload
     fi
 }
 
@@ -971,67 +1176,100 @@ build_box_app() {
         return 1
     fi
 
+    if command -v semanage &>/dev/null; then
+      log_warn "Configuring SELinux for /nms/box/dist"
+      semanage fcontext -a -t httpd_sys_content_t "/nms/box/dist(/.*)?"
+      restorecon -Rv /nms/box/dist
+    fi
+
     log_info "Box build completed successfully"
 }
 
 
 
 # Check if the script is run by root
+
 if [[ "$EUID" -ne 0 ]]; then
     error_exit "This script must be run as root."
 fi
 
-# Step 1 --- Update source.list
-add_contrib_nonfree
+# Step 1 --- Check & Configuring OS
 
-# Step 2 --- Install packages
-install_packages "${PACKAGES[@]}"
+family=$(detect_distro_family)
+SUDO_GROUP="sudo"
+if [[ "$family" == "apt" ]]; then
+    log_info "Debian-like distro found - Using APT"
+
+    add_contrib_nonfree
+    install_packages_apt "${PACKAGES_APT[@]}"
+
+elif [[ "$family" == "rpm" ]]; then
+    log_info "RedHat-like distro found - Using DNF"
+    install_packages_dnf "${PACKAGES_DNF[@]}"
+    install_unp_manually
+    SUDO_GROUP="wheel"
+else
+  error_exit "Unable to determine your linux distribution. Please, perform manual installation."
+fi
+
+# Step 2 --- Adding ZFS kernel module
+
 modprobe zfs
+if [[ "$family" == "rpm" ]]; then
+  echo zfs > /etc/modules-load.d/zfs.conf
+fi
 
 # Step 3 --- Disable systemctl services
-manage_services stop "${SERVICES_TO_DISABLE[@]}"
-manage_services disable "${SERVICES_TO_DISABLE[@]}"
+if [[ "$family" == "apt" ]]; then
+  manage_services stop "${SERVICES_TO_DISABLE_APT[@]}"
+  manage_services disable "${SERVICES_TO_DISABLE_APT[@]}"
+elif [[ "$family" == "rpm" ]]; then
+  manage_services stop "${SERVICES_TO_DISABLE_DNF[@]}"
+  manage_services disable "${SERVICES_TO_DISABLE_DNF[@]}"
 
-# Step 3.5 --- Configure network manager
+  manage_services enable "${SERVICES_TO_ENABLE[@]}"
+  manage_services start "${SERVICES_TO_ENABLE[@]}"
+fi
+
+# Step 4 --- Configure network manager
 enable_network_manager
 
-# Step 4 --- Create python virtual environment
+# Step 5 --- Create python virtual environment
 setup_python_venv "$PYTHON_VENV_PATH"
 
-# Step 5 --- Cloning NMS git repository
+# Step 6 --- Cloning NMS git repository
 if download_latest_release "${REPOSITORY}"; then
   log_info "Latest release of NMS downloaded and installed successfully"
 else
   clone_git_repo "$REPO_URL" "$DEST_DIR"
 fi
 
+build_box_app "/nms/box"
+
 # Step 7 --- Install redis
 install_redis_docker
 
-# Step 8 ---
-
-#Step 9 --- Configure users
-manage_users
+#Step 8 --- Configure users
+manage_users "${SUDO_GROUP}"
 set_repo_permissions_wwwdata "$DEST_DIR"
 add_nopasswd_sudo "backend"
-#set_nms_json_permissions "$DEST_DIR"
 
-#Step 10 --- Python configuration
+#Step 9 --- Python configuration
 install_requirements "$DEST_DIR" "$PYTHON_VENV_PATH"
 install_editable_package "$DEST_DIR/nms_shared" "$PYTHON_VENV_PATH"
 
-#Step 11 --- Systemctl
+#Step 10 --- Systemctl
 create_backend_service "$DEST_DIR" "$PYTHON_VENV_PATH"
 create_frontend_service "$DEST_DIR" "$PYTHON_VENV_PATH"
 
-#Step 12 --- Wireguard configuration
+#Step 11 --- Wireguard configuration
 configure_wireguard
 
-#Step 13 --- Noip dynamic updater script
-install_noip_duc
+#Step 12 --- Noip dynamic updater script
+install_noip_duc "$family"
 
-#Step 14 --- Configure nginx as a reverse proxy
-configure_nginx_nms
+#Step 13 --- Configure nginx as a reverse proxy
+configure_nginx_nms $family
 
 # Done
 IP=$(ip -o -4 addr show up scope global | awk '{split($4,a,"/"); print a[1]; exit}')

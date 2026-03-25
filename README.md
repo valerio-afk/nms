@@ -1,5 +1,7 @@
 # NMS - NAS Management System
 
+![logo.png](images/logo.png)
+
 ![Python](https://img.shields.io/badge/python-3.14-blue)
 ![Platform](https://img.shields.io/badge/platform-linux-lightgrey)
 ![License](https://img.shields.io/badge/license-GPLv3-green)
@@ -117,16 +119,18 @@ It is required you have Linux installed. This software will not work on Windows.
 > 
 > NMS performs system-level changes (users, services, permissions).
 > For this reason, it is strongly recommended to install it on:
-> * A clean Linux installation (debian-based is advised)
-> * A dedicated machine 
+> * A clean Linux installation (debian-based or redhat-based is advised)
+> * A dedicated machine (e.g. Raspberry Pi) 
 > * Or a virtual machine
 > 
 >This avoids conflicts with existing services and configurations.
 
 ### ️🚀 Quick Start
 
-NMS was conceived to run on a Raspberry Pi, but the guided installation script will work in any debian-based distribution.
-This is because NMS was tested on Debian running on a virtual machine.
+The installation script has been tested to work on:
+* Raspberry Pi (raspbian)
+* Debian (so it should work in any debian-based distro)
+* Fedora (so it should work in any debian-based distro)
 
 Simply run the following line on the terminal:
 
@@ -134,7 +138,10 @@ Simply run the following line on the terminal:
 $ curl -fsSL https://raw.githubusercontent.com/valerio-afk/nms/refs/heads/main/nms_sysconf.sh | sudo bash
 ```
 
-This operation will take some time (about 5 minutes), at the end of which you should get your system up and running.
+This operation will take some time, at the end of which you should get your system up and running. Some tested installation times:
+ * Debian (Virtual Box): about 5 minutes.
+ * Fedora (Virtual Box): about 7 minutes.
+ * Raspberry Pi 4 Model b: about 45 minutes.
 
 > ⚠️
 > 
@@ -188,8 +195,14 @@ $ sudo modprobe zfs
 </details>
 
 <details>
-<summary>Step 2 [Optional]: Disable Installed Services</summary>
+<summary>Step 2: Setup Installed Services</summary>
+
 `systemd` services for remote access will automatically run. You may disable them for the time being with the following commands:
+
+>⚠️ **Important Note**
+> 
+> In some distros, `smbd.service` is named `smb.service`. Likewise, `nmbd.service` is called `nmb.service`. Adapt the commands below accordingly if necessary.  
+
 
 ```sh
 $ sudo systemctl stop vsftpd
@@ -204,6 +217,14 @@ $ sudo systemctl disable nmbd
 $ sudo systemctl disable rpcbind
 $ sudo systemctl disable nfs-server
 ```
+
+In some systems, `docker` may not be enabled once installed. Run the following commands to enable it.
+
+```sh
+$ sudo systemctl enable docker
+$ sudo systemctl start docker
+```
+
 </details>
 
 <details>

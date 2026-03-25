@@ -1,9 +1,10 @@
 from PIL import Image
 from backend_server.utils.cmdl import Chown, Chmod, LocalCommandLineTransaction, LS, Stat, MimeType, Mkdir, Move, \
-    Unpack, TarArchive, SevenZip
+    Unpack, TarArchive, SevenZip, Copy
 from backend_server.utils.cmdl import RemoveFile, Touch, SetfACL, Zip
 from backend_server.utils.config import CONFIG
-from backend_server.utils.responses import ErrorMessage, UserProfile, FileInfo, FSBrowse, MkDirModel, MvModel, Quota
+from backend_server.utils.responses import ErrorMessage, UserProfile, FileInfo, FSBrowse, MkDirModel, MvModel, Quota, \
+    CpModel
 from backend_server.utils.responses import ZipFile
 from backend_server.v1.auth import verify_token_factory, check_permission, create_token, token_verification
 from datetime import datetime,timedelta, UTC
@@ -337,11 +338,11 @@ def fs_mkdir(data:MkDirModel,token:dict=Depends(verify_token)) -> None:
     ]
 
     trans = LocalCommandLineTransaction(*cmds)
-
     out = trans.run()
 
     if (not trans.success):
-        raise HTTPException(status_code=400)
+        errors = "\n ".join([x["stderr"] for x in out])
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_FS_MKDIR.name,params=[new_dir,errors]))
 
     CONFIG.info(f"New directory {p} created by {user.username}")
 
@@ -360,10 +361,54 @@ def fs_mv(data:MvModel,token:dict=Depends(verify_token)) -> None:
     out = Move(str(old),str(new),sudo=True).execute()
 
     if (out.returncode != 0):
-        raise HTTPException(status_code=400)
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_FS_COPY.name,params=[old,out.stderr]))
+
 
     CONFIG.info(f"File moved {old} -> {new} by {user.username}")
 
+
+@fs.post("/cp",summary="Copy a file/directory within the user space.")
+def fs_cp(data:CpModel,token:dict=Depends(verify_token)) -> None:
+    check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
+    user = CONFIG.get_user(token.get("username", None))
+
+    if (not user):
+        raise HTTPException(status_code=401)
+
+    src = check_path_jail(user, data.src)
+    dst = check_path_jail(user, data.dst)
+
+    file_info = get_file_info(str(src))
+    recursive = file_info.type == "dir"
+
+    out = Copy(str(src),str(dst),recursive=recursive,sudo=True).execute()
+
+    if (out.returncode != 0):
+        raise HTTPException(status_code=400)
+
+    _,last_part = os.path.split(src)
+
+    flags = ['-R'] if recursive else []
+
+    dst_full_path = str(dst.joinpath(last_part))
+
+    cmds = [
+        Chown(user.username, user.username, dst_full_path,flags=flags, sudo=True),
+        Chmod(dst_full_path, "700",flags=flags, sudo=True),
+        SetfACL("backend", dst_full_path, mask="rwx",flags=flags, sudo=True),
+    ]
+
+    if (recursive):
+        cmds.append(SetfACL("backend", dst_full_path, mask="rwx", flags=flags, recursive=True, sudo=True))
+
+    trans = LocalCommandLineTransaction(*cmds)
+    output = trans.run()
+
+    if (not trans.success):
+        errors = "\n ".join([x["stderr"] for x in output])
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_FS_COPY.name,params=[src,errors]))
+
+    CONFIG.info(f"File {src} copied {dst} by {user.username}")
 
 @fs.post("/upload",summary="Initiate an upload session via TUS protocol")
 def fs_upload(request:Request, token:dict=Depends(verify_token)) -> Response:
@@ -815,8 +860,6 @@ def unzip(filename: str, token:dict=Depends(verify_token)) -> None:
     if (not trans.success):
         errors = "\n ".join([x["stderr"] for x in output])
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_FS_UNZIP.name, params=[fname, errors]))
-
-
 
 
 

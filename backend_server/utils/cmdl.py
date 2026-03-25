@@ -2064,6 +2064,37 @@ class Move(RevertibleCommandLine):
             serialisation.get("dest", None),
         )
 
+class Copy(CommandLine):
+    def __init__(this,src:str,dest:str,recursive:bool=False,**kwargs):
+        cmd = ['cp']
+
+        if (recursive):
+            cmd.append("-r")
+
+        cmd.extend([src,dest])
+
+        this._src = src
+        this._dest = dest
+        this._recursive = recursive
+
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['src'] = this._src
+        d['dest'] = this._dest
+        d['recursive'] = this._recursive
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return Copy(
+            serialisation.get("src", None),
+            serialisation.get("dest", None),
+            serialisation.get("recursive",False),
+        )
+
 
 
 class RemoveFile(CommandLine):
@@ -2354,3 +2385,4 @@ class SevenZip(CommandLine): #Cannot call this class 7Zip - you know
             serialisation.get('files', []),
             serialisation.get('compression_level', True),
         )
+

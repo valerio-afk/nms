@@ -1,6 +1,8 @@
+
 from backend_server.utils.cmdl import Chown, LocalCommandLineTransaction, Groups, ZPoolList, GetEntPasswd, ZFSSnapshot
 from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet,  ZFSGetQuota, Chmod, ZFSRollback, ZFSDestroy
 from backend_server.utils.cmdl import UserAdd, GetUserUID
+from backend_server.utils.enums import DistroFamilies
 from backend_server.utils.logger import Logger
 from backend_server.utils.responses import ErrorMessage, UserProfile, Quota
 from backend_server.utils.services import SystemService
@@ -133,6 +135,33 @@ def create_system_user(username: str, permissions: List[str], sudo: bool = False
 
     return int(uid.stdout)
 
+
+
+def detect_distro_family() -> DistroFamilies:
+    os_release = {}
+
+    try:
+        with open("/etc/os-release","r") as f:
+            for line in f:
+                line = line.strip()
+                if not line or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                os_release[key] = value.strip('"')
+    except FileNotFoundError:
+        return DistroFamilies.UNK
+
+    id_like = os_release.get("ID_LIKE", "").lower()
+    distro_id = os_release.get("ID", "").lower()
+
+    # First try ID_LIKE
+    if (("debian" in id_like) or (distro_id in ("debian", "ubuntu", "raspbian"))):
+        return DistroFamilies.DEB
+    if any(x in id_like for x in ("rhel", "fedora")) or (distro_id in ("rhel", "fedora", "centos", "rocky", "almalinux")):
+        return DistroFamilies.RH
+
+    return DistroFamilies.UNK
+
 class NMSConfig(Logger):
     def __new__(cls):
         if not hasattr(cls, 'instance'):
@@ -145,6 +174,7 @@ class NMSConfig(Logger):
         this._cfg = {}
         this._tmp_secret = {}
         this._uploads={}
+        this._distro = detect_distro_family()
 
         try:
             this.load_configuration_file()
@@ -174,6 +204,7 @@ class NMSConfig(Logger):
                 cls = getattr(module,f"{service.upper()}Service")
                 arguments = args.copy()
                 arguments['mountpoint'] = this.mountpoint
+                arguments['os'] = this.distro_family
                 this._access_services[service] = cls(**arguments)
             except AttributeError as e:
                 ... #service not implemented yet
@@ -190,6 +221,10 @@ class NMSConfig(Logger):
     @property
     def config_filename(this) -> str:
         return this._config_file
+
+    @property
+    def distro_family(this) -> DistroFamilies:
+        return this._distro
 
     # AUTH/OTP PROPERTIES
 
@@ -466,6 +501,8 @@ class NMSConfig(Logger):
     def create_default_config_file(this) -> None:
         this.info(f"Creating default configuration file")
 
+        daemon_suffix = "d" if this.distro_family == DistroFamilies.DEB else ""
+
         ddns_def = {
             "enabled": False,
             "username": None,
@@ -506,7 +543,7 @@ class NMSConfig(Logger):
                             "service_name": "vsftpd.service"
                         },
                         "nfs": {"service_name":["rpcbind.service","nfs-server.service"]},
-                        "smb": {"service_name":["smbd.service","nmbd.service"]},
+                        "smb": {"service_name":[f"smb{daemon_suffix}.service",f"nmb{daemon_suffix}.service"]},
                         'web': {
                             "service_name": "nginx.service"
                         }

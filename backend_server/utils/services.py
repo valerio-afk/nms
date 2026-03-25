@@ -3,6 +3,7 @@ from backend_server.utils.cmdl import ChPasswd, SystemCtlUnmask, SystemCtlEnable
 from backend_server.utils.cmdl import  Touch, Chmod, UserModAddGroup, GPasswdRemoveGroup, LocalCommandLineTransaction
 from backend_server.utils.cmdl import SystemCtlIsActive, ApplyPatch,  GetEntShadow, UserModChangeShell, UserDel
 from backend_server.utils.cmdl import SystemCtlMask, SystemCtlStop, ExportfsRA, SMBPasswd, Cat, SystemCtlRestart
+from backend_server.utils.enums import DistroFamilies
 from fastapi import HTTPException
 from nms_shared.enums import UserPermissions
 from nms_shared.msg import ErrorMessages
@@ -540,9 +541,16 @@ class SMBService(SystemService):
 #
 class WEBService(SystemService):
     NGINX_BLOCKS = ['/box','/api/']
+    CONF_DEB = '/etc/nginx/sites-enabled/nms'
+    CONF_RH = '/etc/nginx/conf.d/nms'
 
     def __init__(this,*args,**kwargs):
-        super().__init__(*args,config_file='/etc/nginx/sites-available/nms',**kwargs)
+        conf = WEBService.CONF_DEB
+
+        if (kwargs.get('os',DistroFamilies.DEB) == DistroFamilies.RH):
+            conf = WEBService.CONF_RH
+
+        super().__init__(*args,config_file=conf,**kwargs)
 
     def _read_config_file(this) -> List[str]:
         c = Cat(this.config_file,sudo=True).execute()
