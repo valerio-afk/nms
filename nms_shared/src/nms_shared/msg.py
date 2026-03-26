@@ -72,6 +72,7 @@ class ErrorMessages(Enum):
     E_ACCESS_DISABLED = "E_ACCESS_DISABLED"
     E_ACCESS_DISABLING = "E_ACCESS_DISABLING"
     E_ACCESS_SERV_UNK = "E_ACCESS_SERV_UNK"
+    E_ACCESS_PROP = "E_ACCESS_PROP"
 
     E_NET_CHANGE_STATE = "E_NET_CHANGE_STATE"
     E_NET_CONNECTION_STATUS = "E_NET_CONNECTION_STATUS"
@@ -280,10 +281,11 @@ ERROR_MESSAGES = {
 
     ErrorMessages.E_APT_GET : lambda info = None: _("Unable to get system updates: %(info)s") % {'info': info or ErrorMessages.fallback_message()},
 
-    ErrorMessages.E_ACCESS_ENABLED : lambda service,info: _("Error while enabling %(service)s: %(info)s)") % {'service':service,'info': info},
-    ErrorMessages.E_ACCESS_DISABLED : lambda service,info: _("Error while disabling %(service)s: %(info)s)") % {'service':service,'info': info},
+    ErrorMessages.E_ACCESS_ENABLED : lambda service,info: _("Error while enabling %(service)s: %(info)s") % {'service':service,'info': info},
+    ErrorMessages.E_ACCESS_DISABLED : lambda service,info: _("Error while disabling %(service)s: %(info)s") % {'service':service,'info': info},
     ErrorMessages.E_ACCESS_DISABLING : lambda service,info: _("Unable to disable %(service)s. Please, disable it manually.") % {'service':service},
     ErrorMessages.E_ACCESS_SERV_UNK: lambda service: _("Access service %(service)s not recognised.") % {'service':service},
+    ErrorMessages.E_ACCESS_PROP: lambda prop,info: _("Error while changing the property `%(prop)s`: %(info)s") % {'prop':prop,'info':info},
 
     ErrorMessages.E_NET_CHANGE_STATE : lambda iface,info : _("Error while changing the state of the network interface %(iface)s: %(info)s") % {'info':info,'iface':iface},
     ErrorMessages.E_NET_CONNECTION_STATUS : lambda iface,info : _("Error while retrieving the connection status for %(iface)s: %(info)s") % {'info':info,'iface':iface},

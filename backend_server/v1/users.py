@@ -170,7 +170,7 @@ def sudoers(data:SudoData,token:dict=Depends(verify_token)) -> dict:
         create_system_user(data.username,u.permissions,add_sudo)
 
     else:
-        cmd = UserModAddGroup(data.username,"sudo")  if (data.sudo) else GPasswdRemoveGroup(data.username,"sudo")
+        cmd = UserModAddGroup(data.username,CONFIG.sudo_group)  if (data.sudo) else GPasswdRemoveGroup(data.username,CONFIG.sudo_group)
 
         output = cmd.execute()
 

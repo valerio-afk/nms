@@ -185,12 +185,30 @@ NMS expects the following programs and system tools to be installed in your syst
 
 You should adapt the name of these packages for your distribution.
 
-Under Debian, zfs compiles a kernel modules and it is required you install the header of the kernel matching the version of the Linux kernel you are running.
+OpenZFS compiles a kernel modules and it is required you install the header of the kernel matching the version of the Linux kernel you are running.
+
+
+> ⚠️ **Important Note**
+> 
+> In some distros, like debian and fedora, OpenZFS is availble in non-contrib repositories.
+
+
+> ⚠️ **Important Note**
+>
+> The package `unp` seems to be available on debian only. You can download the tarball from [here](http://deb.debian.org/debian/pool/main/u/unp/)
+> You will fine two perl scripts: `unp` and `ucat`. Copy them in `/usr/local/bin` (or any other directory in $PATH) and give execution permissions to all (`a+x`).
+
 
 At the end of this process, you need to load the `zfs` module:
 
 ```sh
 $ sudo modprobe zfs
+```
+
+In some system, you need to add the module `zfs` un the list of modules to load. You may do this with the following command:
+
+```sh
+# echo zfs > /etc/modules-load.d/zfs.conf
 ```
 </details>
 
@@ -293,6 +311,18 @@ Both backend and frontend make use of a shared library. Install this too:
 $ sudo /opt/python3/bin/pip install -e /nms/nms_shared
 ```
 
+Lastly, we need to compile the web app (Box)[#-Box] with `npm` as follows:
+
+```sh
+$ cd /nms/box
+$ npm run build
+```
+
+If you are using `SELinux`, you need to enable box to become a directory that can be served through http:
+```sh
+$ sudo semanage fcontext -a -t httpd_sys_content_t "/nms/box/dist(/.*)?"
+$ sudo restorecon -Rv /nms/box/dist
+```
 </details>
 
 <details>
@@ -476,11 +506,18 @@ $ sudo systemctl daemon-reload
 </details>
 
 <details>
-<summary>Step 9 [Optional]: Reverse Proxy</summary>
+<summary>Step 9: Setup the Reverse Proxy</summary>
 
 `nginx` is a web server that also acts as reverse proxy. As of now, you can access the NMS locally by visiting `http://localhost:8080`.
 
 To access it remotely (still from your local network), you need to configure `nginx` as a reverse proxy as follows:
+
+> ⚠️ **Important Note**
+> 
+> In some systems, the directories `sites-available` and `sites-enabled` don't exist. You can replace `sites-available` with `conf.d` and create a symbolic link to `sites-enabled` as follows
+> ```shell
+> $ sudo ln -s /etc/nginx/conf.d /etc/nginx/sites-enabled
+> ```
 
 ```sh
 cat <<'EOF' | sudo tee /etc/nginx/sites-available/nms 
@@ -532,7 +569,7 @@ server
 EOF
 ```
 
-Now remove the default configuration:
+Now remove the default configuration (if any):
 
 ```sh
 $ sudo rm -f /etc/nginx/sites-enabled/default
@@ -548,6 +585,16 @@ And, lastly, restart `nginx` and you should be good to go:
 $ sudo systemctl restart nginx
 ``` 
 </details>
+
+> ⚠️ **Important Note**
+> 
+> If you are using a firewall, like `firewall-cmd`, you need to enable the service http as follows
+> ```shell
+> $ sudo firewall-cmd --add-service=http
+> $ sudo firewall-cmd --permanent --add-service=http
+> $ sudo firewall-cmd --reload
+> ```
+
 
 ---
 

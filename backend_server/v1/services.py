@@ -64,6 +64,8 @@ async def enable_access_service(service_id: str, request: Request,token:dict=Dep
         else:
             raise Exception()
 
+    except HTTPException as http_e:
+        raise http_e
     except Exception as e:
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_ACCESS_ENABLED.name,params=[service_id.upper(),str(e)]))
 
@@ -81,7 +83,8 @@ async def update_access_service(service_id: str, request: Request, token:dict=De
         CONFIG.info(f"Access service configuration for {service_id} changed: {data}")
 
         return {"detail": SuccessMessage(code=SuccessMessages.S_ACCESS_UPDATED.name, params=[service_id.upper()])}
-
+    except HTTPException as http_e:
+        raise http_e
     except Exception as e:
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_ACCESS_UPDATED.name,params=[service_id.upper(),str(e)]))
 
@@ -100,6 +103,8 @@ async def disable_access_service(service_id: str, request: Request,token:dict=De
             return {"detail":SuccessMessage(code=SuccessMessages.S_ACCESS_DISABLED.name,params=[service_id.upper()])}
         else:
             raise Exception()
+    except HTTPException as http_e:
+        raise http_e
     except Exception as e:
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_ACCESS_DISABLED.name,params=[service_id.upper(),str(e)]))
 

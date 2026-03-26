@@ -100,12 +100,14 @@ def collapse_permissions(user_permissions:List[str], all_permissions:List[str]) 
     return sorted(set(result))
 
 def create_system_user(username: str, permissions: List[str], sudo: bool = False) -> int:
-    def_groups = ['plugdev', 'users', 'netdev']
+    def_groups = ['users']
+    if (CONFIG.distro_family == DistroFamilies.DEB):
+        def_groups.extend(['plugdev', 'netdev'])
 
     if (UserPermissions.SERVICES_SMB_ACCESS.name in permissions):
         def_groups.append('sambashare')
     if (sudo):
-        def_groups.append('sudo')
+        def_groups.append(CONFIG.sudo_group)
 
     allow_login = UserPermissions.SERVICES_SSH_ACCESS.name in permissions
     home_dir = os.path.join(CONFIG.mountpoint, username) if CONFIG.mountpoint is not None else None
@@ -225,6 +227,12 @@ class NMSConfig(Logger):
     @property
     def distro_family(this) -> DistroFamilies:
         return this._distro
+
+    @property
+    def sudo_group(this) -> str:
+        if (this.distro_family == DistroFamilies.DEB):
+            return "sudo"
+        return "wheel"
 
     # AUTH/OTP PROPERTIES
 
@@ -501,7 +509,8 @@ class NMSConfig(Logger):
     def create_default_config_file(this) -> None:
         this.info(f"Creating default configuration file")
 
-        daemon_suffix = "d" if this.distro_family == DistroFamilies.DEB else ""
+        smb_daemon_suffix = "d" if this.distro_family == DistroFamilies.DEB else ""
+        ssh_daemon_suffix = "d" if this.distro_family == DistroFamilies.RH else ""
 
         ddns_def = {
             "enabled": False,
@@ -537,13 +546,13 @@ class NMSConfig(Logger):
                 "services":
                     {
                         "ssh": {
-                            "service_name": "ssh.service",
+                            "service_name": f"ssh{ssh_daemon_suffix}.service",
                         },
                         "ftp": {
                             "service_name": "vsftpd.service"
                         },
                         "nfs": {"service_name":["rpcbind.service","nfs-server.service"]},
-                        "smb": {"service_name":[f"smb{daemon_suffix}.service",f"nmb{daemon_suffix}.service"]},
+                        "smb": {"service_name":[f"smb{smb_daemon_suffix}.service",f"nmb{smb_daemon_suffix}.service"]},
                         'web': {
                             "service_name": "nginx.service"
                         }
@@ -635,7 +644,7 @@ class NMSConfig(Logger):
             output = cmd.execute()
 
             if (output.returncode == 0):
-                sudo = "sudo" in output.stdout.strip()
+                sudo = this.sudo_group in output.stdout.strip()
 
             activation_token = None
 
@@ -761,12 +770,21 @@ class NMSConfig(Logger):
                 raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name,params=[username]))
 
             this._cfg["users"][username]["otp_secret"] = secret
+            del this._tmp_secret[username]
         else:
             if (this.is_otp_configured):
                 raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_AUTH_ALREADY_CONFIG.name))
 
-            username = list(this._cfg.get("users",{}).keys())[0]
+            for u,d in this._cfg.get("users",{}).items():
+                if ((len(perms:=d.get("permissions",[]))>0) and perms[0]=="*"):
+                    username = u
+
+            if (username is None):
+                raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name,params=['admin user']))
+
             this._cfg["users"][username]["otp_secret"] = secret
+            del this._tmp_secret[None]
+
 
         this.flush_config()
         return username

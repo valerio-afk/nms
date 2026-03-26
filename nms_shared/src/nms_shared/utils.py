@@ -36,15 +36,17 @@ def setup_logger(name: str, level=logging.INFO) -> Logger:
     logger.propagate = False
     return logger
 
-def read_lines_from_file(path,):
+def read_lines_from_file(path:str) -> List[str]:
     return Path(path).read_text(encoding="utf-8", errors="surrogateescape").splitlines(keepends=True)
 
 
-def make_diff(original_filename,modified_lines):
+def make_diff_from_file(original_filename:str, modified_lines:List[str]) -> str:
     orig_lines = read_lines_from_file(original_filename)
+    return make_diff(original_filename,orig_lines, modified_lines)
 
+def make_diff(original_filename:str,original_lines:List[str], modified_lines:List[str]) -> str:
     diff_iter = difflib.unified_diff(
-        orig_lines,
+        original_lines,
         modified_lines,
         fromfile=original_filename,
         tofile=original_filename,

@@ -1047,11 +1047,8 @@ configure_nginx_nms() {
 
     # Select config path based on distro family
     if [[ "$OS_FAMILY" == "rpm" ]]; then
-        NGINX_CONF="/etc/nginx/conf.d/nms"
+        NGINX_CONF="/etc/nginx/conf.d/nms.conf"
         setsebool -P httpd_can_network_connect 1
-
-        ln -s /etc/nginx/conf.d /etc/nginx/sites-enabled/
-
     else
         NGINX_CONF="/etc/nginx/sites-available/nms"
     fi
@@ -1122,6 +1119,8 @@ EOF
     fi
 
     log_info "Restarting nginx..."
+    manage_services enable nginx
+
     if systemctl restart nginx >> "$LOG_FILE" 2>&1; then
         log_info "Nginx restarted successfully"
     else

@@ -1,13 +1,15 @@
 from .responses import ErrorMessage
-from backend_server.utils.cmdl import ChPasswd, SystemCtlUnmask, SystemCtlEnable, SystemCtlStart, SystemCtlDisable
-from backend_server.utils.cmdl import  Touch, Chmod, UserModAddGroup, GPasswdRemoveGroup, LocalCommandLineTransaction
+from backend_server.utils.cmdl import ChPasswd, SystemCtlUnmask, SystemCtlEnable, SystemCtlStart, SystemCtlDisable, \
+    SELinuxSetBool
+from backend_server.utils.cmdl import SELinuxManagePort, Firewall, CommandLine
+from backend_server.utils.cmdl import Touch, Chmod, UserModAddGroup, GPasswdRemoveGroup, LocalCommandLineTransaction
 from backend_server.utils.cmdl import SystemCtlIsActive, ApplyPatch,  GetEntShadow, UserModChangeShell, UserDel
 from backend_server.utils.cmdl import SystemCtlMask, SystemCtlStop, ExportfsRA, SMBPasswd, Cat, SystemCtlRestart
 from backend_server.utils.enums import DistroFamilies
 from fastapi import HTTPException
 from nms_shared.enums import UserPermissions
 from nms_shared.msg import ErrorMessages
-from nms_shared.utils import make_diff, read_lines_from_file
+from nms_shared.utils import make_diff_from_file, read_lines_from_file, make_diff
 from pathlib import Path
 from typing import Optional, Callable, List, Any, Self
 import configparser
@@ -27,6 +29,7 @@ class SystemService:
         this._change_hooks = {}
         this._pre_start_hooks = []
         this._permission_hook:Optional[UserPermissions] = None
+        this._os_family = kwargs.get('os', DistroFamilies.DEB)
 
     def add_change_hook(this,property:str,callback:Callable[[Self],None]) -> None:
         hooks = this._change_hooks.get(property,[])
@@ -53,6 +56,10 @@ class SystemService:
         this._pre_start_hooks.append(callback)
 
     @property
+    def os_family(this) -> DistroFamilies:
+        return this._os_family
+
+    @property
     def service_names(this) -> str:
         return this._service_name
 
@@ -60,9 +67,13 @@ class SystemService:
     def config_file(this) -> str:
         return this._config_file
 
+    @config_file.setter
+    def config_file(this,new_value:str)->None:
+        this._config_file = new_value
+
     @property
     def properties(this) -> List[str]:
-        return [k for k in vars(this.__class__).get("__annotations__",{}).keys()]
+        return [k for k in this.__class__.__annotations__.keys()]
 
     def get(this,property:str) -> Any:
         return getattr(this,f"get_{property}")()
@@ -164,8 +175,10 @@ class SSHService(SystemService):
     def get_port(this) -> int:
         port = 22  # default
 
-        with open(this.config_file, "r") as f:
-            for line in f:
+        cmd = Cat(this.config_file,sudo=True).execute()
+
+        if (cmd.returncode == 0):
+            for line in cmd.stdout.splitlines():
                 line = line.strip()
 
                 if not line or line.startswith("#"):
@@ -180,12 +193,23 @@ class SSHService(SystemService):
                         port = int(parts[1])
                     except ValueError:
                         pass  # ignore malformed port entries
+        else:
+            raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_READ_FILE.name,params=[this.config_file]))
 
         return port
 
 
     def set_port(this,new_port) -> None:
-        orig_lines = read_lines_from_file(this.config_file)
+        old_port = this.get("port")
+
+        cmd = Cat(this.config_file, sudo=True).execute()
+
+        if (cmd.returncode == 0):
+            orig_lines = cmd.stdout.splitlines(keepends=True)
+        else:
+            raise HTTPException(status_code=500,
+                                detail=ErrorMessage(code=ErrorMessages.E_READ_FILE.name, params=[this.config_file]))
+
         mod_lines = orig_lines.copy()
         found = False
 
@@ -203,16 +227,54 @@ class SSHService(SystemService):
                 mod_lines[-1] = mod_lines[-1] + "\n"
             mod_lines.append(new_port_string)
 
-        patch_text = make_diff(this.config_file, mod_lines)
+        patch_text = make_diff(this.config_file,orig_lines, mod_lines)
 
         patch_fname = os.path.join(tempfile.gettempdir(),f"sshd_config.patch")
         Path(patch_fname).write_text(patch_text, encoding="utf-8", errors="surrogateescape")
 
-        cmd = ApplyPatch(patch_fname,this.config_file,sudo=True)
-        trans = LocalCommandLineTransaction(cmd)
+        cmds:List[CommandLine] = [ApplyPatch(patch_fname,this.config_file)]
 
-        trans.run()
-        os.remove(patch_fname)
+        if (this.os_family == DistroFamilies.RH):
+
+            if (old_port != 22):
+                cmds.append(SELinuxManagePort(
+                    action = SELinuxManagePort.SEManagePortAction.REMOVE,
+                    type = "ssh_port_t",
+                    port = old_port,
+                ))
+
+            cmds.append(
+                SELinuxManagePort(
+                    action = SELinuxManagePort.SEManagePortAction.ADD,
+                    type = "ssh_port_t",
+                    port = new_port
+                )
+            )
+
+            firewall_cmd = Firewall(Firewall.FirewallAction.STATE,sudo=True).execute()
+            if ((firewall_cmd.returncode == 0) and (firewall_cmd.stdout.strip() == "running")):
+                cmds.extend([
+                    Firewall(
+                        Firewall.FirewallAction.ADD_PORT,
+                        port = new_port
+                    ),
+                    Firewall(
+                        Firewall.FirewallAction.REMOVE_PORT,
+                        port=old_port
+                    ),
+                    Firewall(Firewall.FirewallAction.RELOAD)
+                ])
+
+
+
+        trans = LocalCommandLineTransaction(*cmds,privileged=True)
+        out = trans.run()
+
+        # os.remove(patch_fname)
+
+        if (not trans.success):
+            error = "\n".join([o['stderr'] for o in out])
+            raise HTTPException(500,detail=ErrorMessage(code=ErrorMessages.E_ACCESS_PROP.value,params=["port",error]))
 
 
     def set_password(this,username:str,new_password:str) -> None:
@@ -270,6 +332,11 @@ class SSHService(SystemService):
 class FTPService(SystemService):
     USERLIST_FILE = "/etc/vsftpd.userlist"
 
+    CONF_DEB = '/etc/vsftpd.conf'
+    CONF_RH = '/etc/vsftpd/vsftpd.conf'
+
+    PASV_PORTS = (30000,31000)
+
     default_configuration={
         "anonymous_enable":"NO",
         "local_enable": "YES",
@@ -279,16 +346,33 @@ class FTPService(SystemService):
         "userlist_enable": "YES",
         "userlist_file": USERLIST_FILE,
         "userlist_deny": "NO",
-        "utf8_filesystem":"YES",
         "chroot_list_enable":"NO",
+        "pasv_min_port": str(PASV_PORTS[0]),
+        "pasv_max_port": str(PASV_PORTS[1]),
+        "pasv_enable": "YES",
     }
     def __init__(this,service_name, **kwargs):
-        super().__init__(service_name,config_file="/etc/vsftpd.conf",**kwargs)
+        super().__init__(service_name,**kwargs)
+
+        match(this.os_family):
+            case DistroFamilies.RH:
+                conf = FTPService.CONF_RH
+            case _:
+                conf = FTPService.CONF_DEB
+
+        this.config_file = conf
+
         this._permission_hook = UserPermissions.SERVICES_FTP_ACCESS
 
     def _patch_configuration(this) -> None:
         cfg = FTPService.default_configuration.copy()
-        orig_lines = read_lines_from_file(this.config_file)
+        cmd = Cat(this.config_file,sudo=True).execute()
+
+        if (cmd.returncode != 0):
+            raise HTTPException(status_code=500,
+                                detail=ErrorMessage(code=ErrorMessages.E_ACCESS_ENABLED.name, params=['FTP',cmd.stderr]))
+
+        orig_lines = cmd.stdout.splitlines(keepends=True)
         mod_lines = orig_lines.copy()
 
         edited = False
@@ -313,7 +397,7 @@ class FTPService(SystemService):
                 mod_lines.append(f"{k}={v}\n")
 
         if (edited):
-            patch_text = make_diff(this.config_file, mod_lines)
+            patch_text = make_diff(this.config_file, orig_lines, mod_lines)
 
             patch_fname = os.path.join(tempfile.gettempdir(), f"vsftpd.patch")
             Path(patch_fname).write_text(patch_text, encoding="utf-8", errors="surrogateescape")
@@ -321,15 +405,71 @@ class FTPService(SystemService):
             cmd = ApplyPatch(patch_fname, this.config_file, sudo=True)
             trans = LocalCommandLineTransaction(cmd)
 
-            trans.run()
+            out = trans.run()
             os.remove(patch_fname)
+
+            if (not trans.success):
+                error = "\n".join([o['stderr'] for o in out])
+                raise HTTPException(500,
+                                    detail=ErrorMessage(code=ErrorMessages.E_ACCESS_PROP.value, params=["port", error]))
+
+
+    def _setup_firewall(this):
+        firewall_cmd = Firewall(Firewall.FirewallAction.STATE, sudo=True).execute()
+        if ((firewall_cmd.returncode == 0) and (firewall_cmd.stdout.strip() == "running")):
+            cmds = [
+                Firewall(
+                    Firewall.FirewallAction.ADD_SERVICE,
+                    service="ftp"
+                ),
+                Firewall(
+                    Firewall.FirewallAction.ADD_PORT,
+                    port=FTPService.PASV_PORTS
+                ),
+                Firewall(Firewall.FirewallAction.RELOAD),
+                SELinuxSetBool("ftpd_full_access",True),
+                SELinuxSetBool("ftpd_use_passive_mode", True),
+            ]
+
+            trans = LocalCommandLineTransaction(*cmds,privileged=True)
+            out = trans.run()
+
+            if (not trans.success):
+                error = "\n".join([o['stderr'] for o in out])
+                raise HTTPException(500,detail=ErrorMessage(code=ErrorMessages.E_ACCESS_ENABLED.name,params=["FTP",error]))
+
+    def _unsetup_firewall(this):
+        firewall_cmd = Firewall(Firewall.FirewallAction.STATE, sudo=True).execute()
+        if ((firewall_cmd.returncode == 0) and (firewall_cmd.stdout.strip() == "running")):
+            cmds = [
+                Firewall(
+                    Firewall.FirewallAction.REMOVE_SERVICE,
+                    service="ftp"
+                ),
+                Firewall(
+                    Firewall.FirewallAction.REMOVE_PORT,
+                    port=FTPService.PASV_PORTS
+                ),
+                Firewall(Firewall.FirewallAction.RELOAD),
+                SELinuxSetBool("ftpd_full_access", False),
+                SELinuxSetBool("ftpd_use_passive_mode", False),
+            ]
+
+            trans = LocalCommandLineTransaction(*cmds,privileged=True)
+            out = trans.run()
+
+            if (not trans.success):
+                error = "\n".join([o['stderr'] for o in out])
+                raise HTTPException(500,detail=ErrorMessage(code=ErrorMessages.E_ACCESS_DISABLED.name,params=["FTP",error]))
 
     def enable(this,*args,**kwargs) -> None:
         this._patch_configuration()
+        this._setup_firewall()
         this.start()
 
     def disable(this,*args,**kwargs) -> None:
         this.stop()
+        this._unsetup_firewall()
 
     def _touch_userlist_file(this) -> None:
         if (not os.path.exists(FTPService.USERLIST_FILE)):
@@ -427,7 +567,7 @@ class NFSService(SystemService):
         else:
             new_exports.append(new_line)
 
-        patch_text = make_diff(this.config_file, new_exports)
+        patch_text = make_diff_from_file(this.config_file, new_exports)
 
         patch_fname = os.path.join(tempfile.gettempdir(), f"exports.patch")
         Path(patch_fname).write_text(patch_text, encoding="utf-8", errors="surrogateescape")
@@ -489,7 +629,7 @@ class SMBService(SystemService):
 
         modified_lines = modified_file.splitlines(keepends=True)
 
-        patch_text = make_diff(this.config_file, modified_lines)
+        patch_text = make_diff_from_file(this.config_file, modified_lines)
 
         patch_fname = os.path.join(tempfile.gettempdir(), f"smb.conf.patch")
         Path(patch_fname).write_text(patch_text, encoding="utf-8", errors="surrogateescape")
@@ -542,15 +682,20 @@ class SMBService(SystemService):
 class WEBService(SystemService):
     NGINX_BLOCKS = ['/box','/api/']
     CONF_DEB = '/etc/nginx/sites-enabled/nms'
-    CONF_RH = '/etc/nginx/conf.d/nms'
+    CONF_RH = '/etc/nginx/conf.d/nms.conf'
 
     def __init__(this,*args,**kwargs):
-        conf = WEBService.CONF_DEB
+        super().__init__(*args,**kwargs)
 
-        if (kwargs.get('os',DistroFamilies.DEB) == DistroFamilies.RH):
-            conf = WEBService.CONF_RH
+        match(this.os_family):
+            case DistroFamilies.RH:
+                conf = WEBService.CONF_RH
+            case _:
+                conf = WEBService.CONF_DEB
 
-        super().__init__(*args,config_file=conf,**kwargs)
+        this.config_file = conf
+
+
 
     def _read_config_file(this) -> List[str]:
         c = Cat(this.config_file,sudo=True).execute()
@@ -565,7 +710,7 @@ class WEBService(SystemService):
         return c.stdout.splitlines(keepends=True)
 
     def _apply_patch(this, new_config:List[str]) -> None:
-        patch_text = make_diff(this.config_file, new_config)
+        patch_text = make_diff_from_file(this.config_file, new_config)
 
         patch_fname = os.path.join(tempfile.gettempdir(), f"nms_nginx.patch")
         Path(patch_fname).write_text(patch_text, encoding="utf-8", errors="surrogateescape")

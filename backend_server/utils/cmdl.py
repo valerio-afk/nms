@@ -1,13 +1,15 @@
 from abc import abstractmethod, ABC
+from backend_server.utils.enums import TransportProtocol
 from enum import Enum
 from subprocess import CompletedProcess
 from tempfile import gettempdir
-from typing import Optional, List, Dict, Any, Union, Literal
+from typing import Optional, List, Dict, Any, Union, Literal, Tuple
 import json
 import os
 import socket
 import subprocess
 import time
+
 
 
 class CommandLine(ABC):
@@ -2386,3 +2388,184 @@ class SevenZip(CommandLine): #Cannot call this class 7Zip - you know
             serialisation.get('compression_level', True),
         )
 
+
+
+class SELinuxManage(RevertibleCommandLine):
+    def __init__(this,subcommand:str,**kwargs):
+        cmd = ['semanage',subcommand]
+        super().__init__(cmd,**kwargs)
+
+        this._subcommand = subcommand
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['subcommand'] = this._subcommand
+
+        return d
+
+class SELinuxManagePort(SELinuxManage):
+    class SEManagePortAction(Enum):
+        ADD='-a'
+        REMOVE='-d'
+        EDIT='-m'
+
+    def __init__(this,
+                 action:SEManagePortAction,
+                 type:str,
+                 port:int,
+                 old_port:Optional[int]=None,
+                 protocol: TransportProtocol = TransportProtocol.TCP,
+                 **kwargs):
+
+
+
+        this._action = action
+        this._type = type
+        this._port = port
+        this._protocol = protocol
+        this._old_port = old_port
+
+        cmd = [
+            action.value,
+            "-t", type,
+            "-p", protocol.value, str(port),
+        ]
+
+        # if (old_port is not None):
+        #     rev_cmd = ['semanage', 'port',   action.value,  "-t", type,"-p", protocol.value, str(old_port)]
+        # else:
+        # TODO : to fix revert cmd
+        rev_cmd = ['ls'] # something that has no effect
+
+        super().__init__("port",revert_command=rev_cmd, **kwargs)
+
+        this.append(cmd)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['action'] = this._action
+        d['type'] = this._type
+        d['port'] = this._port
+        d['old_port'] = this._old_port
+        d['protocol'] = this._protocol
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return SELinuxManagePort(
+            serialisation.get("action", None),
+            serialisation.get('type', None),
+            serialisation.get('port', None),
+            serialisation.get('old_port', None),
+            serialisation.get('protocol', True)
+        )
+
+class SELinuxSetBool(RevertibleCommandLine):
+    def __init__(this,property:str,value:bool,permanent:bool=True,**kwargs):
+        cmd = ['setsebool']
+
+        if (permanent):
+            cmd.append('-P')
+
+        cmd.append(property)
+
+        revert_cmd = cmd.copy()
+
+        cmd.append("1" if value else "0")
+        revert_cmd.append("1" if not value else "0")
+
+        super().__init__(cmd,revert_cmd,**kwargs)
+
+        this._property = property
+        this._value = value
+        this._permanent = permanent
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['property'] = this._property
+        d['value'] = this._value
+        d['permanent'] = this._permanent
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return SELinuxSetBool(
+            serialisation.get("property", None),
+            serialisation.get("value", None),
+            serialisation.get("permanent", True),
+        )
+
+
+
+class Firewall(RevertibleCommandLine):
+    class FirewallAction(Enum):
+        ADD_PORT='--add-port'
+        REMOVE_PORT='--remove-port'
+        ADD_SERVICE = '--add-service'
+        REMOVE_SERVICE = '--remove-service'
+        RELOAD='--reload'
+        STATE = '--state'
+
+    def __init__(this,
+                 action:FirewallAction,
+                 port:Optional[Union[int|Tuple[int,int]]] = None,
+                 service:Optional[str] = None,
+                 protocol: TransportProtocol = TransportProtocol.TCP,
+                 permanent:bool=True,
+                 **kwargs):
+        cmd = ['firewall-cmd']
+
+        port_configuration = f"{port[0]}-{port[1]}" if isinstance(port, tuple) else port
+        rev_cmd = ['ls']  # inert
+
+        if (action in [Firewall.FirewallAction.RELOAD, Firewall.FirewallAction.STATE]):
+            cmd.append(action.value)
+        else:
+
+            if (action in [Firewall.FirewallAction.ADD_PORT, Firewall.FirewallAction.REMOVE_PORT]):
+                cmd.append(f"{action.value}={port_configuration}/{protocol.value}")
+                match(action):
+                    case Firewall.FirewallAction.ADD_PORT:
+                        rev_cmd = ['firewall-cmd',f"{Firewall.FirewallAction.REMOVE_PORT.value}={port_configuration}/{protocol.value}"]
+                    case Firewall.FirewallAction.REMOVE_PORT:
+                        rev_cmd = ['firewall-cmd',
+                                   f"{Firewall.FirewallAction.ADD_PORT.value}={port_configuration}/{protocol.value}"]
+            elif (action in [Firewall.FirewallAction.ADD_SERVICE, Firewall.FirewallAction.REMOVE_SERVICE]):
+                cmd.append(f"{action.value}={service}")
+                match(action):
+                    case Firewall.FirewallAction.ADD_SERVICE:
+                        rev_cmd = ['firewall-cmd',f"{Firewall.FirewallAction.REMOVE_SERVICE.value}={service}"]
+                    case Firewall.FirewallAction.REMOVE_SERVICE:
+                        rev_cmd = ['firewall-cmd',f"{Firewall.FirewallAction.ADD_SERVICE.value}={service}"]
+
+            if (permanent):
+                cmd.append("--permanent")
+                if (len(rev_cmd) > 1): # more than ls
+                    rev_cmd.append("--permanent")
+
+        this._action = action
+        this._port = port
+        this._protocol = protocol
+        this._permanent = permanent
+
+        super().__init__(cmd,rev_cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['action'] = this._action
+        d['port'] = this._port
+        d['protocol'] = this._protocol
+        d['permanent'] = this._permanent
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return Firewall(
+            serialisation.get("action", None),
+            serialisation.get('port', None),
+            serialisation.get('protocol', None),
+            serialisation.get('permanent', True)
+        )
