@@ -227,8 +227,8 @@ ERROR_MESSAGES = {
     ErrorMessages.E_READ_FILE : lambda f,info : _("Unable to read the file %(file)s: %(info)s") % {"file":f,'info':info},
     ErrorMessages.E_REL_PATH : lambda path1, path2: _("Path `%(path1)s is not relative to `%(path2)s`") % {"path1":path1, 'path2':path2},
     ErrorMessages.E_SELINUX_PORT: lambda info : _("Error while obtaining system information on ports: %(info)s") % {"info":info},
-    ErrorMessages.E_SYSTEMD_START: lambda services,info : _("Error while starting the system service(s) %(services): %(info)s") % {"info":info,'services':services},
-    ErrorMessages.E_SYSTEMD_STOP: lambda services,info : _("Error while stopping the system service(s) %(services): %(info)s") % {"info":info,'services':services},
+    ErrorMessages.E_SYSTEMD_START: lambda services,info : _("Error while starting the system service(s) %(services)s: %(info)s") % {"info":info,'services':services},
+    ErrorMessages.E_SYSTEMD_STOP: lambda services,info : _("Error while stopping the system service(s) %(services)s: %(info)s") % {"info":info,'services':services},
 
     ErrorMessages.E_POOL_ALREADY_CONF : lambda: _("The disk array is already configured."),
     ErrorMessages.E_POOL_NO_CONF : lambda: _("Disk array not configured yet."),
