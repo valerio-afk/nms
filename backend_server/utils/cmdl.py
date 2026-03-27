@@ -1,9 +1,9 @@
 from abc import abstractmethod, ABC
-from backend_server.utils.enums import TransportProtocol
+from backend_server.utils.inet import TransportProtocol, GenericTransportPort
 from enum import Enum
 from subprocess import CompletedProcess
 from tempfile import gettempdir
-from typing import Optional, List, Dict, Any, Union, Literal, Tuple
+from typing import Optional, List, Dict, Any, Union, Literal
 import json
 import os
 import socket
@@ -2404,20 +2404,19 @@ class SELinuxManage(RevertibleCommandLine):
         return d
 
 class SELinuxManagePort(SELinuxManage):
-    class SEManagePortAction(Enum):
+    class SEManagePortActions(Enum):
         ADD='-a'
         REMOVE='-d'
         EDIT='-m'
+        LIST='-l'
 
     def __init__(this,
-                 action:SEManagePortAction,
-                 type:str,
-                 port:int,
+                 action:SEManagePortActions,
+                 type:Optional[str] = None,
+                 port:Optional[int] = None,
                  old_port:Optional[int]=None,
                  protocol: TransportProtocol = TransportProtocol.TCP,
                  **kwargs):
-
-
 
         this._action = action
         this._type = type
@@ -2425,17 +2424,41 @@ class SELinuxManagePort(SELinuxManage):
         this._protocol = protocol
         this._old_port = old_port
 
-        cmd = [
-            action.value,
-            "-t", type,
-            "-p", protocol.value, str(port),
-        ]
+        cmd = [action.value]
+        rev_cmd = ['ls']  # something that has no effect
 
-        # if (old_port is not None):
-        #     rev_cmd = ['semanage', 'port',   action.value,  "-t", type,"-p", protocol.value, str(old_port)]
-        # else:
-        # TODO : to fix revert cmd
-        rev_cmd = ['ls'] # something that has no effect
+        if (action == SELinuxManagePort.SEManagePortActions.LIST):
+            cmd.append("--noheading")
+        else:
+            cmd += [
+                "-t", type,
+                "-p", protocol.value, str(port),
+            ]
+
+            match (action):
+                case SELinuxManagePort.SEManagePortActions.ADD:
+                    rev_cmd = ['semanage',
+                               'port',
+                               SELinuxManagePort.SEManagePortActions.REMOVE.value,
+                               "-t", type,
+                               "-p", protocol.value,
+                               str(port)]
+                case SELinuxManagePort.SEManagePortActions.REMOVE:
+                    rev_cmd = ['semanage',
+                               'port',
+                               SELinuxManagePort.SEManagePortActions.ADD.value,
+                               "-t", type,
+                               "-p",protocol.value,
+                               str(port)]
+                case SELinuxManagePort.SEManagePortActions.EDIT:
+                    if (old_port is not None):
+                        rev_cmd = ['semanage',
+                                   'port',
+                                   SELinuxManagePort.SEManagePortActions.EDIT.value,
+                                   "-t", type,
+                                   "-p",protocol.value,
+                                   str(old_port)]
+
 
         super().__init__("port",revert_command=rev_cmd, **kwargs)
 
@@ -2459,6 +2482,86 @@ class SELinuxManagePort(SELinuxManage):
             serialisation.get('port', None),
             serialisation.get('old_port', None),
             serialisation.get('protocol', True)
+        )
+
+class SELinuxManageContext(SELinuxManage):
+    class SELinuxManageContextActions(Enum):
+        ADD='-a'
+        REMOVE='-d'
+        LIST='-l'
+
+    def __init__(this,
+                 action:SELinuxManageContextActions,
+                 type:Optional[str] = None,
+                 file_spec:Optional[str] = None,
+                 **kwargs):
+
+        this._action = action
+        this._type = type
+        this._file_spec = file_spec
+
+        cmd = [action.value]
+        rev_cmd = ['ls']  # something that has no effect
+
+        if (action == SELinuxManagePort.SEManagePortActions.LIST):
+            cmd.append("--noheading")
+        else:
+            cmd += ["-t", type,file_spec]
+
+        match (action):
+            case SELinuxManagePort.SEManagePortActions.ADD:
+                rev_cmd = ['semanage',
+                           'port',
+                           SELinuxManagePort.SEManagePortActions.REMOVE.value,
+                           "-t", type,
+                           file_spec]
+            case SELinuxManagePort.SEManagePortActions.REMOVE:
+                rev_cmd = ['semanage',
+                           'port',
+                           SELinuxManagePort.SEManagePortActions.ADD.value,
+                           "-t", type,
+                           file_spec]
+
+        super().__init__("fcontext",revert_command=rev_cmd, **kwargs)
+
+        this.append(cmd)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['action'] = this._action
+        d['type'] = this._type
+        d['file_spec'] = this._file_spec
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return SELinuxManagePort(
+            serialisation.get("action", None),
+            serialisation.get('type', None),
+            serialisation.get('file_spec', None),
+        )
+
+class RestoreContext(CommandLine):
+    def __init__(this,recursive:bool=True,**kwargs):
+        cmd = ['restorecon']
+        if (recursive):
+            cmd.append('-R')
+
+        this._recursive = recursive
+
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['recursive'] = this._recursive
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return SELinuxManagePort(
+            serialisation.get("recursive", True),
         )
 
 class SELinuxSetBool(RevertibleCommandLine):
@@ -2510,14 +2613,14 @@ class Firewall(RevertibleCommandLine):
 
     def __init__(this,
                  action:FirewallAction,
-                 port:Optional[Union[int|Tuple[int,int]]] = None,
+                 port:Optional[GenericTransportPort] = None,
                  service:Optional[str] = None,
                  protocol: TransportProtocol = TransportProtocol.TCP,
                  permanent:bool=True,
                  **kwargs):
         cmd = ['firewall-cmd']
 
-        port_configuration = f"{port[0]}-{port[1]}" if isinstance(port, tuple) else port
+        port_configuration = str(port)
         rev_cmd = ['ls']  # inert
 
         if (action in [Firewall.FirewallAction.RELOAD, Firewall.FirewallAction.STATE]):

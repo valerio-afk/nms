@@ -1,17 +1,17 @@
 from .responses import ErrorMessage
 from backend_server.utils.cmdl import ChPasswd, SystemCtlUnmask, SystemCtlEnable, SystemCtlStart, SystemCtlDisable, \
-    SELinuxSetBool
+    SELinuxSetBool, SELinuxManageContext, RestoreContext
 from backend_server.utils.cmdl import SELinuxManagePort, Firewall, CommandLine
 from backend_server.utils.cmdl import Touch, Chmod, UserModAddGroup, GPasswdRemoveGroup, LocalCommandLineTransaction
 from backend_server.utils.cmdl import SystemCtlIsActive, ApplyPatch,  GetEntShadow, UserModChangeShell, UserDel
 from backend_server.utils.cmdl import SystemCtlMask, SystemCtlStop, ExportfsRA, SMBPasswd, Cat, SystemCtlRestart
-from backend_server.utils.enums import DistroFamilies
+from backend_server.utils.inet import DistroFamilies, PortRange, GenericTransportPort, str2port, TransportProtocol
 from fastapi import HTTPException
 from nms_shared.enums import UserPermissions
 from nms_shared.msg import ErrorMessages
 from nms_shared.utils import make_diff_from_file, read_lines_from_file, make_diff
 from pathlib import Path
-from typing import Optional, Callable, List, Any, Self
+from typing import Optional, Callable, List, Any, Self, Tuple
 import configparser
 import io
 import os.path
@@ -238,14 +238,14 @@ class SSHService(SystemService):
 
             if (old_port != 22):
                 cmds.append(SELinuxManagePort(
-                    action = SELinuxManagePort.SEManagePortAction.REMOVE,
+                    action = SELinuxManagePort.SEManagePortActions.REMOVE,
                     type = "ssh_port_t",
                     port = old_port,
                 ))
 
             cmds.append(
                 SELinuxManagePort(
-                    action = SELinuxManagePort.SEManagePortAction.ADD,
+                    action = SELinuxManagePort.SEManagePortActions.ADD,
                     type = "ssh_port_t",
                     port = new_port
                 )
@@ -335,7 +335,7 @@ class FTPService(SystemService):
     CONF_DEB = '/etc/vsftpd.conf'
     CONF_RH = '/etc/vsftpd/vsftpd.conf'
 
-    PASV_PORTS = (30000,31000)
+    PASV_PORTS = PortRange(30000,31000)
 
     default_configuration={
         "anonymous_enable":"NO",
@@ -347,8 +347,8 @@ class FTPService(SystemService):
         "userlist_file": USERLIST_FILE,
         "userlist_deny": "NO",
         "chroot_list_enable":"NO",
-        "pasv_min_port": str(PASV_PORTS[0]),
-        "pasv_max_port": str(PASV_PORTS[1]),
+        "pasv_min_port": str(PASV_PORTS.port_min),
+        "pasv_max_port": str(PASV_PORTS.port_min),
         "pasv_enable": "YES",
     }
     def __init__(this,service_name, **kwargs):
@@ -619,6 +619,7 @@ class SMBService(SystemService):
 
         config[SMBService.SECTION] = {
             'path': this.mountpoint,
+            'valid users': "@sambashare"
         }
 
         new_output = io.StringIO()
@@ -651,7 +652,7 @@ class SMBService(SystemService):
         trans.run()
 
     def disable_user(this,username) -> None:
-        cmd = SMBPasswd(username=username, flag=SMBPasswd.Flags.ENABLE)
+        cmd = SMBPasswd(username=username, flag=SMBPasswd.Flags.DISABLE)
         trans = LocalCommandLineTransaction(cmd)
         trans.run()
 
@@ -660,14 +661,72 @@ class SMBService(SystemService):
         trans = LocalCommandLineTransaction(cmd)
         trans.run()
 
+    @staticmethod
+    def _get_ports() -> List[Tuple[str,GenericTransportPort]]:
+        suffix = "d_port_t"
+        selinux_types = ['smb'+suffix,'nmb'+suffix]
 
+        cmd = SELinuxManagePort(SELinuxManagePort.SEManagePortActions.LIST, sudo=True).execute()
+
+        if (cmd.returncode != 0):
+            raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_SELINUX_PORT.name,params=[cmd.stderr]))
+
+        regex = re.compile(r"^[a-zA-Z0-9_]+[ ]+(tcp|udp)[ ]+(.*)$",re.IGNORECASE)
+
+        ports = []
+        for l in cmd.stdout.splitlines():
+            for type in selinux_types:
+                if (type in l):
+                    match = regex.match(l)
+
+                    if (match is not None):
+                        proto = match.group(1)
+                        port = match.group(2)
+
+                        for p in port.split(","):
+                            ports.append((proto,str2port(p)))
+
+        return ports
+
+    def _setup_firewall(this,remove:bool=False) -> None:
+        firewall_cmd = Firewall(Firewall.FirewallAction.STATE, sudo=True).execute()
+        if ((firewall_cmd.returncode != 0) or (firewall_cmd.stdout.strip() != "running")):
+            return
+
+        ports = SMBService._get_ports()
+
+        firewall_action = Firewall.FirewallAction.REMOVE_PORT if remove else Firewall.FirewallAction.ADD_PORT
+        selinux_action = SELinuxManageContext.SELinuxManageContextActions.REMOVE if remove else SELinuxManageContext.SELinuxManageContextActions.ADD
+
+        cmds = [ Firewall(firewall_action,p[1],protocol=TransportProtocol(p[0])) for p in ports ]
+        cmds.extend([
+            Firewall(Firewall.FirewallAction.RELOAD),
+            SELinuxManageContext(selinux_action,"home_root_t",this.mountpoint),
+            SELinuxManageContext(selinux_action, "user_home_dir_t", f"{this.mountpoint}/(.*)"),
+            SELinuxManageContext(selinux_action, "user_home_t", f"{this.mountpoint}/(.*)(/.*)+"),
+            RestoreContext(),
+            SELinuxSetBool("samba_enable_home_dirs",not remove)
+        ])
+
+        trans = LocalCommandLineTransaction(*cmds,privileged=True)
+        out = trans.run()
+
+        if (not trans.success):
+            errors = "\n".join([o['stderr'] for o in out])
+            error_code = ErrorMessages.E_ACCESS_DISABLED if remove else ErrorMessages.E_ACCESS_ENABLED
+            raise HTTPException(status_code=500, detail=ErrorMessage(code=error_code.name, params=['SMB', errors]))
+
+    def _unsetup_firewall(this) -> None:
+        this._setup_firewall(True)
 
     def enable(this,**kwargs) -> None:
         this._patch_configuration()
+        this._setup_firewall()
         this.start()
 
     def disable(this,**kwargs) -> None:
         this.stop()
+        this._unsetup_firewall()
 
     def permission_granted(this, username: str) -> None:
         UserModAddGroup(username,"sambashare").execute()

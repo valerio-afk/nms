@@ -2,7 +2,7 @@
 from backend_server.utils.cmdl import Chown, LocalCommandLineTransaction, Groups, ZPoolList, GetEntPasswd, ZFSSnapshot
 from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet,  ZFSGetQuota, Chmod, ZFSRollback, ZFSDestroy
 from backend_server.utils.cmdl import UserAdd, GetUserUID
-from backend_server.utils.enums import DistroFamilies
+from backend_server.utils.inet import DistroFamilies
 from backend_server.utils.logger import Logger
 from backend_server.utils.responses import ErrorMessage, UserProfile, Quota
 from backend_server.utils.services import SystemService
