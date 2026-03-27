@@ -1,9 +1,11 @@
 from backend_server.utils.cmdl import Shutdown, Reboot, SystemCtlRestart, LocalCommandLineTransaction, JournalCtl
 from backend_server.utils.cmdl import TarArchive
 from backend_server.utils.config import CONFIG
+from backend_server.utils.inet import DistroFamilies
 from backend_server.utils.responses import BackendProperty, BackgroundTask, ErrorMessage
 from backend_server.utils.scheduler import SCHEDULER
-from backend_server.utils.threads import AptGetUpdateThread, AptGetUpgradeThread, NMSUpdate
+from backend_server.utils.threads import AptGetUpdateThread, AptGetUpgradeThread, NMSUpdate, DNFCheckUpdateThread, \
+    DNFUpgradeThread
 from backend_server.v1.auth import verify_token_factory, UserPermissions, check_permission
 from backend_server.v1.net import net_counter
 from collections import OrderedDict
@@ -150,14 +152,25 @@ def restart_systemd_services(token:dict=Depends(verify_token)) -> None:
             )
 def apt_get(action:AptGetActions,token:dict=Depends(verify_token)) -> BackgroundTask:
     check_permission(username:=token.get("username"), UserPermissions.SYS_ADMIN_UPDATES)
+
+    match (CONFIG.distro_family):
+        case DistroFamilies.DEB:
+            update_thread = AptGetUpdateThread
+            upgrade_thread = AptGetUpgradeThread
+        case DistroFamilies.RH:
+            update_thread = DNFCheckUpdateThread
+            upgrade_thread = DNFUpgradeThread
+        case _:
+            raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_APT_UNK.name))
+
     match (action):
         case AptGetActions.update:
-            task = AptGetUpdateThread()
+            task = update_thread()
             task_id = SCHEDULER.schedule(task)
             CONFIG.last_apt = int(datetime.datetime.now().timestamp())
             log_action="update"
         case AptGetActions.upgrade:
-            task = AptGetUpgradeThread()
+            task = upgrade_thread()
             task_id = SCHEDULER.schedule(task)
             log_action = "upgrade"
 

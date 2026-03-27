@@ -14,6 +14,8 @@ class ErrorMessages(Enum):
     E_UNKNOWN_METHOD = "E_UNKNOWN_METHOD"
     E_READ_FILE = "E_READ_FILE"
     E_SELINUX_PORT = "E_SELINUX_PORT"
+    E_SYSTEMD_START = "E_SYSTEMD_START"
+    E_SYSTEMD_STOP = "E_SYSTEMD_STOP"
 
     E_POOL_ALREADY_CONF = "E_POOL_ALREADY_CONF"
     E_POOL_NO_CONF = "E_POOL_NO_CONF"
@@ -68,6 +70,7 @@ class ErrorMessages(Enum):
     E_FS_CH_PERM =  "E_FS_CH_PERM"
 
     E_APT_GET = "E_APT_GET"
+    E_APT_UNK = "E_APT_UNK"
 
     E_ACCESS_ENABLED = "E_ACCESS_ENABLED"
     E_ACCESS_DISABLED = "E_ACCESS_DISABLED"
@@ -224,6 +227,8 @@ ERROR_MESSAGES = {
     ErrorMessages.E_READ_FILE : lambda f,info : _("Unable to read the file %(file)s: %(info)s") % {"file":f,'info':info},
     ErrorMessages.E_REL_PATH : lambda path1, path2: _("Path `%(path1)s is not relative to `%(path2)s`") % {"path1":path1, 'path2':path2},
     ErrorMessages.E_SELINUX_PORT: lambda info : _("Error while obtaining system information on ports: %(info)s") % {"info":info},
+    ErrorMessages.E_SYSTEMD_START: lambda services,info : _("Error while starting the system service(s) %(services): %(info)s") % {"info":info,'services':services},
+    ErrorMessages.E_SYSTEMD_STOP: lambda services,info : _("Error while stopping the system service(s) %(services): %(info)s") % {"info":info,'services':services},
 
     ErrorMessages.E_POOL_ALREADY_CONF : lambda: _("The disk array is already configured."),
     ErrorMessages.E_POOL_NO_CONF : lambda: _("Disk array not configured yet."),
@@ -282,6 +287,7 @@ ERROR_MESSAGES = {
     ErrorMessages.E_FS_CH_PERM : lambda path, info: _("Unable to change permissions for %(path)s: %(info)s") % {'path':path,'info': info},
 
     ErrorMessages.E_APT_GET : lambda info = None: _("Unable to get system updates: %(info)s") % {'info': info or ErrorMessages.fallback_message()},
+    ErrorMessages.E_APT_UNK : lambda : _("Unable to update your current system. You may do so manually by accessing it via SSH."),
 
     ErrorMessages.E_ACCESS_ENABLED : lambda service,info: _("Error while enabling %(service)s: %(info)s") % {'service':service,'info': info},
     ErrorMessages.E_ACCESS_DISABLED : lambda service,info: _("Error while disabling %(service)s: %(info)s") % {'service':service,'info': info},

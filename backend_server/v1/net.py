@@ -1,6 +1,7 @@
-from backend_server.utils.cmdl import NMCLIConnection, NMCLIDevice, LocalCommandLineTransaction
+from backend_server.utils.cmdl import NMCLIConnection, NMCLIDevice, LocalCommandLineTransaction, Firewall
 from backend_server.utils.cmdl import SystemCtlStart, SystemCtlStop, SystemCtlRestart, SystemCtlIsActive
 from backend_server.utils.config import CONFIG
+from backend_server.utils.inet import TransportProtocol, SinglePort
 from backend_server.utils.responses import DDNSDefaultProviderConfiguration, DDNSProvider
 from backend_server.utils.responses import NetCounter, NetworkInterface, IPv4, IPv6, ErrorMessage, InterfaceType
 from backend_server.utils.responses import WifiNetwork, WifiConnect, SuccessMessage, VPNServerConf, VPNPeer
@@ -126,7 +127,7 @@ def get_peers() -> List[Tuple[str,str]]:
 def vpn_assign_ip() -> Optional[str]:
     used_ips = [ipaddress.IPv4Interface(ip) for _,ip in get_peers()]
     wg_conf = read_wireguard_config_file()
-    used_ips.append(ipaddress.IPv4Interface(wg_conf.get("interface","address")))
+    used_ips.append(ipaddress.IPv4Interface(wg_conf.get("Interface","address")))
 
     network = used_ips[0].network
 
@@ -516,6 +517,7 @@ def net_vpn_config(config:VPNServerConf,token:dict=Depends(verify_token)) -> dic
 
     SystemCtlRestart(CONFIG.vpn_service).execute()
 
+
     CONFIG.info(f"""VPN configuration changed by {username}:
 \tIP: {config.address}
 \tNetmask: {config.netmask}
@@ -533,9 +535,20 @@ def net_iface_action(action:IFaceAction,token:dict=Depends(verify_token)) -> Non
         case IFaceAction.UP:
             cmd = SystemCtlStart(vpn_service)
             log_action="enabled"
+            firewall_action = Firewall.FirewallAction.ADD_PORT
         case IFaceAction.DOWN:
             cmd = SystemCtlStop(vpn_service)
             log_action="disabled"
+            firewall_action = Firewall.FirewallAction.REMOVE_PORT
+
+    firewall_cmd = Firewall(Firewall.FirewallAction.STATE, sudo=True).execute()
+    if ((firewall_cmd.returncode == 0) and (firewall_cmd.stdout.strip() == "running")):
+        firewall_cmds = [
+            Firewall(firewall_action, SinglePort(51820), protocol=TransportProtocol.UDP),
+            Firewall(Firewall.FirewallAction.RELOAD)
+        ]
+
+        LocalCommandLineTransaction(*firewall_cmds, privileged=True).run()
 
     output = cmd.execute()
 

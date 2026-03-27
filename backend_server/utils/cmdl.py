@@ -1604,7 +1604,7 @@ class WipeFS(CommandLine):
         return WipeFS(serialisation.get("dev", None), serialisation.get("all", True))
 
 class APTGet(CommandLine):
-    def __init__(this,subcommand,flags=None):
+    def __init__(this,subcommand,flags=None,**kwargs):
         cmd = ['apt-get']
 
         if (flags is not None):
@@ -1612,7 +1612,9 @@ class APTGet(CommandLine):
 
         cmd.append(subcommand)
 
-        super().__init__(cmd,sudo=True)
+        kwargs.setdefault('sudo',True)
+
+        super().__init__(cmd,**kwargs)
         this._subcommand = subcommand
         this._flags = flags
 
@@ -2543,24 +2545,29 @@ class SELinuxManageContext(SELinuxManage):
         )
 
 class RestoreContext(CommandLine):
-    def __init__(this,recursive:bool=True,**kwargs):
+    def __init__(this,path:str,recursive:bool=True,**kwargs):
         cmd = ['restorecon']
         if (recursive):
             cmd.append('-R')
 
+        cmd.append(path)
+
+        this._path = path
         this._recursive = recursive
 
         super().__init__(cmd,**kwargs)
 
     def to_dict(this):
         d = super().to_dict()
+        d['path'] = this._path
         d['recursive'] = this._recursive
 
         return d
 
     @staticmethod
     def from_dict(serialisation):
-        return SELinuxManagePort(
+        return RestoreContext(
+            serialisation.get("path", None),
             serialisation.get("recursive", True),
         )
 
@@ -2672,3 +2679,32 @@ class Firewall(RevertibleCommandLine):
             serialisation.get('protocol', None),
             serialisation.get('permanent', True)
         )
+
+
+class DNF(CommandLine):
+    def __init__(this,subcommand:str,**kwargs):
+        kwargs.setdefault("sudo",True)
+        super().__init__(['dnf',subcommand],**kwargs)
+
+class DNFCheckUpdate(DNF):
+    def __init__(this,**kwargs):
+        super().__init__("check-update",**kwargs)
+
+    def to_dict(this):
+        return {}
+
+    @staticmethod
+    def from_dict(serialisation):
+        return DNFCheckUpdate()
+
+class DNFUpgrade(DNF):
+    def __init__(this,**kwargs):
+        super().__init__("upgrade",**kwargs)
+        this.append(['--refresh','-y'])
+
+    def to_dict(this):
+        return {}
+
+    @staticmethod
+    def from_dict(serialisation):
+        return DNFUpgrade()

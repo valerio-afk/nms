@@ -6,7 +6,14 @@
 
 <form action="{{ url_for('main.change_access_settings',service='nfs') }}" method="POST" class="disable-on-submit">
     {{ form.hidden_tag() }}
-
+{#
+    <div class="mb-3 row">
+      <div class="col-sm-4 col-form-label">{{ form.domain.label }}</div>
+      <div class="col-sm-8">
+        {{ form.domain(class="form-control") }}
+      </div>
+    </div>
+#}
     <div class="mb-3 row">
       <div class="col-sm-4 col-form-label">{{ form.ip.label }}</div>
       <div class="col-sm-8">
@@ -43,7 +50,8 @@
 
 <div class="mt-4">
     <h4>{{  _("Connecting using %(service)s",service="NFS") }}</h4>
-    <div class="accordion" id="nfs_explanations">
+    {{ _("To make NFS mount effectively working, user ids (UIDs) must match in both ends (e.g. here and remote device).") }}
+    <div class="accordion mt-3" id="nfs_explanations">
         <div class="accordion-item">
             <h2 class="accordion-header">
                 <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#linux" aria-expanded="true" aria-controls="linux">
@@ -66,7 +74,7 @@
                             <code>$ sudo mkdir /media/nms</code>
                         </li>
                         <li>{{ _("Type the following command") }} <br/>
-                            <code>$ sudo mount -t nfs <strong>IP</strong>:{{ mountpoint }} /media/nms</code>
+                            <code>$ sudo mount -t nfs4 <strong>IP</strong>:/ /media/nms</code>
                         </li>
                         <li>{{ _("You should replace %(st_code)sIP%(e_code)s with the IP address you can find in the Network tab.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
                         <li>{{ _("Adapt %(st_code)s/media/nms%(e_code)s as per step (%(step)i) if you used a different setup.",st_code="<code>"|safe,e_code="</code>"|safe,step=3) }}</li>
@@ -89,7 +97,7 @@
                             <code>$ sudo mkdir /Volumes/nms</code>
                         </li>
                         <li>{{ _("Type the following command") }} <br/>
-                            <code>$ sudo mount -t nfs -o resvport <strong>IP</strong>:{{ mountpoint }} /Volumes/nms</code>
+                            <code>$ sudo mount -t nfs4 -o resvport <strong>IP</strong>:/ /Volumes/nms</code>
                         </li>
                         <li>{{ _("You should replace %(st_code)sIP%(e_code)s with the IP address you can find in the Network tab.",st_code="<code>"|safe,e_code="</code>"|safe) }}</li>
                         <li>{{ _("Adapt %(st_code)s/media/nms%(e_code)s as per step (%(step)i) if you used a different setup.",st_code="<code>"|safe,e_code="</code>"|safe,step=2) }}</li>

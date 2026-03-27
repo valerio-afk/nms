@@ -128,6 +128,7 @@ class FTPServiceForm(AccessServiceForm):
 
 
 class NFSServiceForm(AccessServiceForm):
+    # domain = StringField(_("Domain"), validators=[DataRequired()])
     ip = StringField(_("Hostname"),validators=[DataRequired()])
 
 class SMBServiceForm(AccessServiceForm):

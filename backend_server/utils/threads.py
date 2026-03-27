@@ -4,8 +4,8 @@ from string import Template
 from nms_shared.enums import RequestMethod
 from nms_shared.disks import Disk
 from nms_shared.threads import NMSThread
-from backend_server.utils.cmdl import ZPoolStatus, APTGetUpdate, APTGetUpgrade, TarArchive, Chown, Chmod, \
-    LocalCommandLineTransaction, NPMRun
+from backend_server.utils.cmdl import ZPoolStatus, APTGetUpdate, APTGetUpgrade, TarArchive, Chown, Chmod
+from backend_server.utils.cmdl import LocalCommandLineTransaction, NPMRun, DNFCheckUpdate, DNFUpgrade
 from nms_shared import ErrorMessages, SuccessMessages
 from backend_server.utils.responses import ErrorMessage, SuccessMessage
 from fastapi import HTTPException
@@ -132,7 +132,7 @@ class PoolExpansionStatus(NMSThread):
             status = get_array_expansion_status()
 
             if (status.progress is None) and (status.eta is None):
-                raise Exception(ErrorMessage.get_error(ErrorMessage.E_POOL_EXPAND_INFO, this._device))
+                raise Exception(ErrorMessage.get_error(ErrorMessages.E_POOL_EXPAND_INFO, this._device))
             else:
                 if (status.eta is not None):
                     this._eta = status.eta
@@ -175,7 +175,9 @@ class AptGetUpdateThread(NMSThread):
 
         except Exception as e:
             raise HTTPException(status_code=500,
-                                detail=ErrorMessage(code=ErrorMessage.E_APT_GET.name, params=[str(e)]))
+                                detail=ErrorMessage(code=ErrorMessages.E_APT_GET.name, params=[str(e)]))
+
+
 
 class AptGetUpgradeThread(NMSThread):
 
@@ -199,7 +201,45 @@ class AptGetUpgradeThread(NMSThread):
 
         except Exception as e:
             raise HTTPException(status_code=500,
-                                detail=ErrorMessage(code=ErrorMessage.E_APT_GET.name, params=[str(e)]))
+                                detail=ErrorMessage(code=ErrorMessages.E_APT_GET.name, params=[str(e)]))
+
+
+class DNFCheckUpdateThread(NMSThread):
+    def run(this) -> None:
+        from backend_server.utils.config import CONFIG
+        try:
+
+            cmd = DNFCheckUpdate() # this comamnd returns !=0 if there are updates (is it always 100?) - better not to check
+            process = cmd.execute()
+
+            pattern = re.compile(r"^(.*?)[\s]+(.*)$")
+            updates = [ m.group(1) for l in process.stdout.splitlines() if (m:=pattern.match(l)) is not None ]
+
+            CONFIG.system_updates = updates
+            CONFIG.flush_config()
+
+        except Exception as e:
+            raise HTTPException(status_code=500,
+                                detail=ErrorMessage(code=ErrorMessages.E_APT_GET.name, params=[str(e)]))
+
+
+class DNFUpgradeThread(NMSThread):
+
+    def run(this) -> None:
+        from backend_server.utils.config import CONFIG
+        try:
+            cmd = DNFUpgrade()
+            process = cmd.execute()
+
+            if (process.returncode != 0):
+                raise Exception(process.stderr)
+
+            CONFIG.system_updates = []
+            CONFIG.flush_config()
+
+        except Exception as e:
+            raise HTTPException(status_code=500,
+                                detail=ErrorMessage(code=ErrorMessages.E_APT_GET.name, params=[str(e)]))
 
 class NMSUpdate(NMSThread):
     def __init__(this, callback:Callable):

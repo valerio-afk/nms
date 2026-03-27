@@ -1,7 +1,7 @@
 from .responses import ErrorMessage
-from backend_server.utils.cmdl import ChPasswd, SystemCtlUnmask, SystemCtlEnable, SystemCtlStart, SystemCtlDisable, \
-    SELinuxSetBool, SELinuxManageContext, RestoreContext
-from backend_server.utils.cmdl import SELinuxManagePort, Firewall, CommandLine
+from backend_server.utils.cmdl import ChPasswd, SystemCtlUnmask, SystemCtlEnable, SystemCtlStart, SystemCtlDisable
+from backend_server.utils.cmdl import RestoreContext
+from backend_server.utils.cmdl import SELinuxManagePort, Firewall, CommandLine, SELinuxSetBool, SELinuxManageContext
 from backend_server.utils.cmdl import Touch, Chmod, UserModAddGroup, GPasswdRemoveGroup, LocalCommandLineTransaction
 from backend_server.utils.cmdl import SystemCtlIsActive, ApplyPatch,  GetEntShadow, UserModChangeShell, UserDel
 from backend_server.utils.cmdl import SystemCtlMask, SystemCtlStop, ExportfsRA, SMBPasswd, Cat, SystemCtlRestart
@@ -129,7 +129,9 @@ class SystemService:
         results = trans.run()
 
         if (not trans.success):
-            raise Exception(f"The service(s) `{', '.join(names)}` could not be started: {[x.get('stderr', '') for x in results]}")
+            services = ', '.join(names)
+            errors = "\n".join([o['stderr'] for o in results])
+            raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_SYSTEMD_START.name,params=[services,errors]))
 
     def stop(this) -> None:
         names = this.service_names
@@ -150,7 +152,11 @@ class SystemService:
         results = trans.run()
 
         if (not trans.success):
-            raise Exception(f"The service(s) `{', '.join(names)}` could not be stopped: {[x.get('stderr', '') for x in results]}")
+            if (not trans.success):
+                services = ', '.join(names)
+                errors = "\n".join([o['stderr'] for o in results])
+                raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_SYSTEMD_STOP.name,
+                                                                         params=[services, errors]))
 
     def permission_granted(this,username:str) -> None:
         ...
@@ -515,7 +521,10 @@ class FTPService(SystemService):
 
 class NFSService(SystemService):
     ip:str
-    default_options = ['rw','sync','no_subtree_check','all_squash']
+    domain:str
+    default_options = ['rw','sync','fsid=0']
+
+    IDMAPD_CONFIG = "/etc/idmapd.conf"
 
     def __init__(this,service_name:str,mountpoint:Optional[str]=None,**kwargs):
         super().__init__(service_name,"/etc/exports",**kwargs)
@@ -546,16 +555,12 @@ class NFSService(SystemService):
 
     def set_ip(this,hostname) -> None:
         if (this.mountpoint is None):
-            raise Exception("You cannot activate this service if you don't set up a new disk array")
+            raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_NO_CONF.name))
 
         exports = read_lines_from_file(this.config_file)
         new_exports = exports.copy()
 
         options = NFSService.default_options.copy()
-        options.extend([
-            f"anonuid={this.uid}",
-            f"anongid={this.gid}"
-        ])
 
         new_line = f"{this.mountpoint}\t{hostname}({','.join(options)})\n"
 
@@ -578,8 +583,79 @@ class NFSService(SystemService):
         trans.run()
         os.remove(patch_fname)
 
-    def enable(this,ip,**kwargs) -> None:
+    def get_domain(this) -> Optional[str]:
+        idmapd = read_lines_from_file(NFSService.IDMAPD_CONFIG)
+
+        domain = None
+
+        regex = re.compile(r"\s*[#]?\s*domain\s+=\s+(.*)",re.IGNORECASE)
+
+        for l in idmapd:
+            if (match := regex.match(l)):
+                domain = match.group(1).strip()
+                break
+
+        return domain
+
+    def set_domain(this,domain) -> None:
+        if (this.mountpoint is None):
+            raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_POOL_NO_CONF.name))
+
+        config = configparser.ConfigParser()
+        config.read(NFSService.IDMAPD_CONFIG)
+
+        config["General"] = {
+            'Domain': domain,        }
+
+        new_output = io.StringIO()
+        config.write(new_output)
+
+        modified_file = new_output.getvalue()
+        new_output.close()
+
+        modified_lines = modified_file.splitlines(keepends=True)
+
+        patch_text = make_diff_from_file(NFSService.IDMAPD_CONFIG, modified_lines)
+
+        patch_fname = os.path.join(tempfile.gettempdir(), f"idmapd.conf.patch")
+        Path(patch_fname).write_text(patch_text, encoding="utf-8", errors="surrogateescape")
+
+        cmd = ApplyPatch(patch_fname, NFSService.IDMAPD_CONFIG, sudo=True)
+        trans = LocalCommandLineTransaction(cmd)
+
+        trans.run()
+        os.remove(patch_fname)
+
+    def _setup_firewall(this,remove:bool=False) -> None:
+        firewall_cmd = Firewall(Firewall.FirewallAction.STATE, sudo=True).execute()
+        if ((firewall_cmd.returncode != 0) or (firewall_cmd.stdout.strip() != "running")):
+            return
+
+        firewall_action = Firewall.FirewallAction.REMOVE_SERVICE if remove else Firewall.FirewallAction.ADD_SERVICE
+        cmds = [
+            Firewall(firewall_action,service="nfs",permanent=True),
+            Firewall(Firewall.FirewallAction.RELOAD),
+            RestoreContext(this.mountpoint),
+            SELinuxSetBool("nfs_export_all_rw",not remove),
+            SELinuxSetBool("nfs_export_all_ro", False),
+            SELinuxSetBool("use_nfs_home_dirs", not remove),
+        ]
+
+        trans = LocalCommandLineTransaction(*cmds,privileged=True)
+        out = trans.run()
+
+        if (not trans.success):
+            errors = "\n".join([o['stderr'] for o in out])
+            error_code = ErrorMessages.E_ACCESS_DISABLED if remove else ErrorMessages.E_ACCESS_ENABLED
+            raise HTTPException(status_code=500, detail=ErrorMessage(code=error_code.name, params=['NFS', errors]))
+
+    def _unsetup_firewall(this) -> None:
+        this._setup_firewall(True)
+
+    def enable(this,ip:str,domain:Optional[str]=None,**kwargs) -> None:
         this.set("ip",ip)
+        # this.set("domain",domain)
+        this._setup_firewall()
         this.start()
 
     def start(this) -> None:
@@ -590,10 +666,11 @@ class NFSService(SystemService):
 
     def disable(this,*args,**kwargs) -> None:
         this.stop()
+        this._unsetup_firewall()
 
-    def update(this,ip,**kwargs) -> None:
+    def update(this,ip,domain,**kwargs) -> None:
         this.disable()
-        this.enable(ip,**kwargs)
+        this.enable(ip,domain,**kwargs)
 
 
 class SMBService(SystemService):
@@ -612,14 +689,15 @@ class SMBService(SystemService):
 
     def _patch_configuration(this) -> None:
         if (this.mountpoint is None):
-            raise Exception("You cannot activate this service if you don't set up a new disk array")
+            raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_POOL_NO_CONF.name))
 
         config = configparser.ConfigParser()
         config.read(this.config_file)
 
         config[SMBService.SECTION] = {
             'path': this.mountpoint,
-            'valid users': "@sambashare"
+            'valid users': "@sambashare",
+            'writable': "yes"
         }
 
         new_output = io.StringIO()
@@ -704,7 +782,7 @@ class SMBService(SystemService):
             SELinuxManageContext(selinux_action,"home_root_t",this.mountpoint),
             SELinuxManageContext(selinux_action, "user_home_dir_t", f"{this.mountpoint}/(.*)"),
             SELinuxManageContext(selinux_action, "user_home_t", f"{this.mountpoint}/(.*)(/.*)+"),
-            RestoreContext(),
+            RestoreContext(this.mountpoint),
             SELinuxSetBool("samba_enable_home_dirs",not remove)
         ])
 
