@@ -16,8 +16,10 @@
     "@uppy/react": "^5.2.0",
     "@uppy/status-bar": "^5.1.0",
     "@uppy/tus": "^5.1.1",
+    "i18next": "^26.0.1",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "react-i18next": "^17.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

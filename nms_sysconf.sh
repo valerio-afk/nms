@@ -1093,20 +1093,23 @@ server
 
     location /box
     {
-      return 301 /box/;
+      rewrite ^/box$ /box/ permanent;
     }
 
     location /box/
     {
       alias /nms/box/dist/;
-      try_files $uri $uri/ /index.html;
+      index index.html;
+      try_files $uri $uri/ /box/index.html;
     }
+
 
 }
 EOF
 
     if [[ "$OS_FAMILY" != "rpm" ]]; then
       log_info "Enabling NMS site..."
+      rm -f "/etc/nginx/sites-enabled/default"
       ln -sf "$NGINX_CONF" "$NGINX_ENABLED"
     fi
 

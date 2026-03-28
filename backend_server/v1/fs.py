@@ -376,30 +376,42 @@ def fs_cp(data:CpModel,token:dict=Depends(verify_token)) -> None:
         raise HTTPException(status_code=401)
 
     src = check_path_jail(user, data.src)
-    dst = check_path_jail(user, data.dst)
+    dst = check_path_jail(user, data.dst,stat_last=False)
 
     file_info = get_file_info(str(src))
     recursive = file_info.type == "dir"
+
+    path_root,ext = os.path.splitext(dst)
+
+    idx=1
+
+    unique = False
+
+    while not unique:
+        cmd = Stat(dst_full_path:=str(dst),sudo=True).execute()
+        if (cmd.returncode == 0):
+            dst = Path(f"{path_root}({idx}){ext}")
+            idx+=1
+        else:
+            unique = True
 
     out = Copy(str(src),str(dst),recursive=recursive,sudo=True).execute()
 
     if (out.returncode != 0):
         raise HTTPException(status_code=400)
 
-    _,last_part = os.path.split(src)
 
     flags = ['-R'] if recursive else []
 
-    dst_full_path = str(dst.joinpath(last_part))
 
     cmds = [
         Chown(user.username, user.username, dst_full_path,flags=flags, sudo=True),
         Chmod(dst_full_path, "700",flags=flags, sudo=True),
-        SetfACL("backend", dst_full_path, mask="rwx",flags=flags, sudo=True),
+        SetfACL("backend", dst_full_path, mask="rwx", sudo=True),
     ]
 
     if (recursive):
-        cmds.append(SetfACL("backend", dst_full_path, mask="rwx", flags=flags, recursive=True, sudo=True))
+        cmds.append(SetfACL("backend", dst_full_path, mask="rwx", recursive=True, sudo=True))
 
     trans = LocalCommandLineTransaction(*cmds)
     output = trans.run()

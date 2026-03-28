@@ -393,6 +393,12 @@ Create a new directory within the user space.
 
 Rename or move a file/directory within the user space.
 
+## /v1/fs/cp
+
+### POST
+
+Copy a file/directory within the user space.
+
 ## /v1/fs/upload
 
 ### POST

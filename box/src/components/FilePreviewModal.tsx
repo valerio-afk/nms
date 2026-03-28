@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, AlertCircle, Music } from 'lucide-react';
 import { getChecksum, getPreviewToken, getPreviewUrl, type FileInfo } from '../utils/api';
 import { formatBytes } from '../utils/formats';
+import { useTranslation } from 'react-i18next';
 
 interface FilePreviewModalProps {
     isOpen: boolean;
@@ -11,6 +12,7 @@ interface FilePreviewModalProps {
 }
 
 export default function FilePreviewModal({ isOpen, onClose, file, currentPath }: FilePreviewModalProps) {
+    const { t } = useTranslation();
     const [checksum, setChecksum] = useState<string | null>(null);
     const [previewContent, setPreviewContent] = useState<{ type: 'text' | 'image' | 'video' | 'audio' | 'pdf' | 'error' | 'unsupported', data?: string | null }>({ type: 'unsupported' });
     const [loadingPreview, setLoadingPreview] = useState(false);
@@ -22,7 +24,7 @@ export default function FilePreviewModal({ isOpen, onClose, file, currentPath }:
             const fullPath = currentPath ? `${currentPath}/${file.name}` : file.name;
 
             // Reset states
-            setChecksum('calculating...');
+            setChecksum(t('preview.calculating'));
             setPreviewContent({ type: 'unsupported' });
             setLoadingPreview(true);
 
@@ -84,7 +86,7 @@ export default function FilePreviewModal({ isOpen, onClose, file, currentPath }:
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-zinc-800">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate pr-4">
-                        Preview: {file.name}
+                        {t('preview.title')}: {file.name}
                     </h3>
                     <button
                         onClick={onClose}
@@ -99,7 +101,7 @@ export default function FilePreviewModal({ isOpen, onClose, file, currentPath }:
                     {loadingPreview ? (
                         <div className="flex flex-col items-center text-gray-500 dark:text-gray-400">
                             <div className="w-8 h-8 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mb-4" />
-                            <p>Loading preview...</p>
+                            <p>{t('preview.loading', 'Loading preview...')}</p>
                         </div>
                     ) : previewContent.type === 'image' && previewContent.data ? (
                         <img
@@ -143,7 +145,7 @@ export default function FilePreviewModal({ isOpen, onClose, file, currentPath }:
                     ) : (
                         <div className="flex flex-col items-center text-gray-500 dark:text-gray-400">
                             <AlertCircle className="w-12 h-12 mb-3 opacity-50" />
-                            <p>Preview not available</p>
+                            <p>{t('preview.not_available')}</p>
                         </div>
                     )}
                 </div>
@@ -151,15 +153,15 @@ export default function FilePreviewModal({ isOpen, onClose, file, currentPath }:
                 {/* Info Footer */}
                 <div className="p-4 bg-white dark:bg-zinc-900 border-t border-gray-200 dark:border-zinc-800 rounded-b-xl flex flex-col gap-2 text-sm">
                     <div className="grid grid-cols-[100px_1fr] gap-x-4 items-center">
-                        <span className="font-semibold text-gray-600 dark:text-gray-400">Location:</span>
+                        <span className="font-semibold text-gray-600 dark:text-gray-400">{t('preview.path')}:</span>
                         <span className="text-gray-900 dark:text-gray-100 truncate">{fullPath}</span>
                     </div>
                     <div className="grid grid-cols-[100px_1fr] gap-x-4 items-center">
-                        <span className="font-semibold text-gray-600 dark:text-gray-400">Size:</span>
+                        <span className="font-semibold text-gray-600 dark:text-gray-400">{t('preview.size')}:</span>
                         <span className="text-gray-900 dark:text-gray-100">{formatBytes(file.size || 0)}</span>
                     </div>
                     <div className="grid grid-cols-[100px_1fr] gap-x-4 items-start">
-                        <span className="font-semibold text-gray-600 dark:text-gray-400 mt-0.5">Checksum (MD5):</span>
+                        <span className="font-semibold text-gray-600 dark:text-gray-400 mt-0.5">{t('preview.checksum')}:</span>
                         <span className="text-gray-900 dark:text-gray-100 font-mono text-xs break-all bg-gray-100 dark:bg-zinc-800 px-2 py-1 rounded">
                             {checksum}
                         </span>

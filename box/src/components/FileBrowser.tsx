@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useContext } from 'react';
-import { browseFs, mkdirFs, mvFs, rmFs, zipFs, unzipFs, downloadFile, type FSBrowse, type FileInfo, ApiError, API_BASE_URL } from '../utils/api';
+import { browseFs, mkdirFs, mvFs, cpFs, rmFs, zipFs, unzipFs, downloadFile, type FSBrowse, type FileInfo, ApiError, API_BASE_URL } from '../utils/api';
 import Uppy from '@uppy/core';
 import Tus from '@uppy/tus';
 import DashboardModal from '@uppy/react/dashboard-modal';
@@ -11,23 +11,24 @@ import {
     FileArchive, Binary, FileOutput, FileQuestion,
     ChevronRight, ArrowUp, ArrowDown, ShieldAlert,
     FolderPlus, Upload, Edit2, Download, Trash2,
-    MoveRight, CornerLeftUp, ArchiveRestore
+    MoveRight, CornerLeftUp, ArchiveRestore, Copy, Sparkles
 } from 'lucide-react';
 import { ContextMenuContext } from '../App';
 import FilePreviewModal from './FilePreviewModal';
+import { useTranslation, Trans } from 'react-i18next';
 
-const humanReadableType = (type: FileInfo['type']): string => {
+const humanReadableType = (type: FileInfo['type'], t: any): string => {
     switch (type) {
-        case 'dir': return 'Folder';
-        case 'image': return 'Image';
-        case 'video': return 'Video';
-        case 'audio': return 'Audio';
-        case 'text': return 'Text Document';
-        case 'zip': return 'Archive';
-        case 'bin': return 'Binary';
-        case 'pdf': return 'PDF Document';
+        case 'dir': return t('browser.types.dir');
+        case 'image': return t('browser.types.image');
+        case 'video': return t('browser.types.video');
+        case 'audio': return t('browser.types.audio');
+        case 'text': return t('browser.types.text');
+        case 'zip': return t('browser.types.zip');
+        case 'bin': return t('browser.types.bin');
+        case 'pdf': return t('browser.types.pdf');
         case 'unk':
-        default: return 'Unknown';
+        default: return t('browser.types.unk');
     }
 };
 
@@ -54,6 +55,7 @@ export interface FileBrowserProps {
 }
 
 export default function FileBrowser({ onAuthError }: FileBrowserProps) {
+    const { t } = useTranslation();
     const { ctxMenuPosition, setCtxMenuPosition, handleContextMenuClick } = useContext(ContextMenuContext);
     const [currentPath, setCurrentPath] = useState<string>('');
     const [browseData, setBrowseData] = useState<FSBrowse | null>(null);
@@ -91,6 +93,11 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     // Move Modal (Directory Picker) State
     const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
     const [isMoving, setIsMoving] = useState(false);
+
+    // Copy Modal State
+    const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
+    const [isCopying, setIsCopying] = useState(false);
+
     const [pickerPath, setPickerPath] = useState('');
     const [pickerData, setPickerData] = useState<FSBrowse | null>(null);
     const [pickerLoading, setPickerLoading] = useState(false);
@@ -271,9 +278,16 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
             } else if (sortField === 'size') {
                 diff = (a.size ?? 0) - (b.size ?? 0);
             } else if (sortField === 'type') {
-                const typeA = humanReadableType(a.type);
-                const typeB = humanReadableType(b.type);
-                diff = typeA.localeCompare(typeB);
+                if (a.type === 'dir' && b.type !== 'dir') {
+                    diff = -1;
+                } else if (a.type !== 'dir' && b.type === 'dir') {
+                    diff = 1;
+                } else {
+                    const typeA = humanReadableType(a.type, t);
+                    const typeB = humanReadableType(b.type, t);
+                    diff = typeA.localeCompare(typeB);
+                }
+
                 if (diff === 0) {
                     diff = a.name.localeCompare(b.name);
                 }
@@ -284,7 +298,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
         });
     }, [browseData, sortField, sortDirection]);
 
-    const loadPath = async (path: string) => {
+    const loadPath = async (path: string, updateUrl = true) => {
         setLoading(true);
         setError(null);
         setAccessRestricted(false);
@@ -295,6 +309,17 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
             const data = await browseFs(path);
             setBrowseData(data);
             setCurrentPath(path);
+
+            if (updateUrl) {
+                const url = new URL(window.location.href);
+                // Clean up query param if it exists
+                url.searchParams.delete('path');
+                // Set the path in the URL pathname relative to basePath
+                const basePath = import.meta.env.BASE_URL || '/';
+                const encodedPath = path ? path.split('/').map(encodeURIComponent).join('/') : '';
+                url.pathname = basePath + encodedPath;
+                window.history.pushState({}, '', url);
+            }
         } catch (err) {
             if (err instanceof ApiError) {
                 if (err.status === 401) {
@@ -333,15 +358,48 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     };
 
     useEffect(() => {
-        loadPath('');
+        const getUrlPath = () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const queryPath = urlParams.get('path');
+            if (queryPath) return queryPath;
+
+            let pathname = window.location.pathname;
+            const basePath = import.meta.env.BASE_URL || '/';
+
+            if (pathname.startsWith(basePath)) {
+                pathname = pathname.slice(basePath.length);
+            } else if (basePath !== '/' && pathname === basePath.slice(0, -1)) {
+                pathname = '';
+            } else if (pathname.startsWith('/')) {
+                pathname = pathname.substring(1);
+            }
+
+            if (pathname.endsWith('/')) {
+                pathname = pathname.slice(0, -1);
+            }
+            return pathname ? pathname.split('/').map(decodeURIComponent).join('/') : '';
+        };
+
+        const initialPath = getUrlPath();
+        loadPath(initialPath, false);
+
+        const handlePopState = () => {
+            const path = getUrlPath();
+            if (path !== currentPathRef.current) {
+                loadPath(path, false);
+            }
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
     }, []);
 
     // Load picker root when modal opens
     useEffect(() => {
-        if (isMoveModalOpen) {
+        if (isMoveModalOpen || isCopyModalOpen) {
             loadPickerPath(currentPath);
         }
-    }, [isMoveModalOpen, currentPath]);
+    }, [isMoveModalOpen, isCopyModalOpen, currentPath]);
 
     // Focus input when modal opens
     useEffect(() => {
@@ -498,6 +556,34 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
         }
     };
 
+    const handleCopySubmit = async () => {
+        if (selectedItems.size === 0) return;
+
+        setIsCopying(true);
+        setError(null);
+        try {
+            const itemsToCopy = Array.from(selectedItems);
+
+            await Promise.all(itemsToCopy.map(item => {
+                const src = currentPath ? `${currentPath}/${item}` : item;
+                const dst = pickerPath ? `${pickerPath}/${item}` : item;
+
+                return cpFs(src, dst);
+            }));
+
+            setIsCopyModalOpen(false);
+            setSelectedItems(new Set());
+            setLastSelectedAnchor(null);
+            await loadPath(currentPath);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error copying files');
+            await loadPath(currentPath);
+            setIsCopyModalOpen(false);
+        } finally {
+            setIsCopying(false);
+        }
+    };
+
     const handleMoveSubmit = async () => {
         if (selectedItems.size === 0) return;
 
@@ -537,7 +623,15 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
         setIsRenameModalOpen(true);
     };
 
+    const isAnyModalOpen = isCreateFolderModalOpen || isRenameModalOpen || isDeleteModalOpen ||
+        isZipModalOpen || isMoveModalOpen || isCopyModalOpen || isPreviewModalOpen ||
+        isUploadModalOpen || !!currentConflict;
+
     const handleDragStart = (e: React.DragEvent, fileName: string) => {
+        if (isAnyModalOpen) {
+            e.preventDefault();
+            return;
+        }
         setDraggedItem(fileName);
         let itemsToDrag = Array.from(selectedItems.has(fileName) ? selectedItems : [fileName]);
         if (!selectedItems.has(fileName)) {
@@ -548,6 +642,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     };
 
     const handleMainDragEnter = (e: React.DragEvent) => {
+        if (isAnyModalOpen) return;
         e.preventDefault();
         e.stopPropagation();
         if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
@@ -556,6 +651,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     };
 
     const handleMainDragLeave = (e: React.DragEvent) => {
+        if (isAnyModalOpen) return;
         e.preventDefault();
         e.stopPropagation();
         const rect = e.currentTarget.getBoundingClientRect();
@@ -569,6 +665,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     };
 
     const handleMainDragOver = (e: React.DragEvent) => {
+        if (isAnyModalOpen) return;
         e.preventDefault();
         if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
             e.dataTransfer.dropEffect = 'copy';
@@ -576,6 +673,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     };
 
     const handleMainDrop = (e: React.DragEvent) => {
+        if (isAnyModalOpen) return;
         e.preventDefault();
         e.stopPropagation();
         setIsDraggingOverMain(false);
@@ -597,6 +695,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     };
 
     const handleFolderDragEnter = (e: React.DragEvent, targetName: string) => {
+        if (isAnyModalOpen) return;
         e.preventDefault();
         e.stopPropagation();
         if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
@@ -605,6 +704,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     };
 
     const handleFolderDragLeave = (e: React.DragEvent, targetName: string) => {
+        if (isAnyModalOpen) return;
         e.preventDefault();
         e.stopPropagation();
         const rect = e.currentTarget.getBoundingClientRect();
@@ -618,6 +718,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     };
 
     const handleDragOver = (e: React.DragEvent, targetName?: string) => {
+        if (isAnyModalOpen) return;
         e.preventDefault();
         e.stopPropagation();
         if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
@@ -631,6 +732,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     };
 
     const handleDrop = async (e: React.DragEvent, targetFile: FileInfo) => {
+        if (isAnyModalOpen) return;
         e.preventDefault();
         e.stopPropagation();
         setIsDraggingOverMain(false);
@@ -827,9 +929,9 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                 <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-6">
                     <ShieldAlert className="w-8 h-8 text-red-600 dark:text-red-400" />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Access Restricted</h2>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{t('browser.access_restricted')}</h2>
                 <p className="text-gray-500 dark:text-gray-400 mb-8 max-w-md">
-                    You do not have permission to view the contents of this directory.
+                    {t('browser.no_permission')}
                 </p>
                 <button
                     onClick={() => {
@@ -837,7 +939,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                     }}
                     className="px-6 py-2.5 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors"
                 >
-                    Go Back
+                    {t('browser.go_back')}
                 </button>
             </div>
         );
@@ -880,14 +982,16 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             <div className="w-10 h-10 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
                                 <ShieldAlert className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
                             </div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">File Already Exists</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('browser.conflict.title')}</h3>
                         </div>
                         <div className="mb-6">
                             <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                A file named <strong className="text-gray-900 dark:text-gray-100 break-all">{currentConflict.file.name}</strong> already exists in this folder.
+                                <Trans i18nKey="browser.conflict.desc" values={{ name: currentConflict.file.name }}>
+                                    A file named <strong className="text-gray-900 dark:text-gray-100 break-all">{currentConflict.file.name}</strong> already exists in this folder.
+                                </Trans>
                             </p>
                             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                                What would you like to do?
+                                {t('browser.conflict.prompt')}
                             </p>
 
                             <div className="space-y-3">
@@ -895,19 +999,19 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                     onClick={() => currentConflict.resolve({ type: 'resume' })}
                                     className="w-full px-4 py-2 text-sm font-medium text-left text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
                                 >
-                                    <strong>Resume Upload</strong>
-                                    <span className="block text-xs font-normal text-gray-500 dark:text-gray-400">Continue the upload (append or resume if supported)</span>
+                                    <strong>{t('browser.conflict.resume')}</strong>
+                                    <span className="block text-xs font-normal text-gray-500 dark:text-gray-400">{t('browser.conflict.resume_desc')}</span>
                                 </button>
                                 <button
                                     onClick={() => currentConflict.resolve({ type: 'overwrite' })}
                                     className="w-full px-4 py-2 text-sm font-medium text-left text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 dark:bg-zinc-800 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors"
                                 >
-                                    <strong>Overwrite File</strong>
-                                    <span className="block text-xs font-normal text-red-500/80 dark:text-red-400/80">Delete the existing file and upload this one</span>
+                                    <strong>{t('browser.conflict.overwrite')}</strong>
+                                    <span className="block text-xs font-normal text-red-500/80 dark:text-red-400/80">{t('browser.conflict.overwrite_desc')}</span>
                                 </button>
                                 <div className="p-3 border border-gray-200 dark:border-zinc-700 rounded-lg">
                                     <label htmlFor="conflictRename" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Rename New File
+                                        {t('browser.conflict.rename_label')}
                                     </label>
                                     <div className="flex gap-2">
                                         <input
@@ -915,7 +1019,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                             id="conflictRename"
                                             value={conflictNewName}
                                             onChange={(e) => setConflictNewName(e.target.value)}
-                                            placeholder="Enter new filename"
+                                            placeholder={t('browser.conflict.rename_placeholder')}
                                             className="flex-1 px-3 py-1.5 text-sm bg-gray-50 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700 dark:placeholder-gray-400 dark:text-white"
                                         />
                                         <button
@@ -923,7 +1027,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                             disabled={!conflictNewName.trim() || conflictNewName.trim() === currentConflict.file.name}
                                             className="px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
                                         >
-                                            Rename
+                                            {t('browser.conflict.rename_btn')}
                                         </button>
                                     </div>
                                 </div>
@@ -940,12 +1044,12 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
                                 <FolderPlus className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                             </div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Create New Folder</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('browser.create_folder.title')}</h3>
                         </div>
                         <form onSubmit={handleCreateFolder}>
                             <div className="mb-6">
                                 <label htmlFor="folderName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Folder Name
+                                    {t('browser.create_folder.label')}
                                 </label>
                                 <input
                                     ref={folderInputRef}
@@ -953,7 +1057,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                     id="folderName"
                                     value={newFolderName}
                                     onChange={(e) => setNewFolderName(e.target.value)}
-                                    placeholder="e.g. New Project"
+                                    placeholder={t('browser.create_folder.placeholder')}
                                     className="w-full px-4 py-2 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block dark:bg-zinc-800 dark:border-zinc-700 dark:placeholder-gray-400 dark:text-white dark:focus:ring-indigo-500 dark:focus:border-indigo-500"
                                     disabled={isCreatingFolder}
                                     autoFocus
@@ -969,7 +1073,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                     disabled={isCreatingFolder}
                                     className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-700 transition-colors"
                                 >
-                                    Cancel
+                                    {t('browser.create_folder.cancel')}
                                 </button>
                                 <button
                                     type="submit"
@@ -979,10 +1083,10 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                     {isCreatingFolder ? (
                                         <>
                                             <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                            Creating...
+                                            {t('browser.create_folder.creating')}
                                         </>
                                     ) : (
-                                        'Create'
+                                        t('browser.create_folder.create')
                                     )}
                                 </button>
                             </div>
@@ -998,12 +1102,12 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
                                 <Edit2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                             </div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Rename Item</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('browser.rename.title')}</h3>
                         </div>
                         <form onSubmit={handleRename}>
                             <div className="mb-6">
                                 <label htmlFor="fileName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    New Name
+                                    {t('browser.rename.label')}
                                 </label>
                                 <input
                                     ref={renameInputRef}
@@ -1027,7 +1131,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                     disabled={isRenaming}
                                     className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-700 transition-colors"
                                 >
-                                    Cancel
+                                    {t('browser.rename.cancel')}
                                 </button>
                                 <button
                                     type="submit"
@@ -1037,10 +1141,10 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                     {isRenaming ? (
                                         <>
                                             <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                            Renaming...
+                                            {t('browser.rename.renaming')}
                                         </>
                                     ) : (
-                                        'Rename'
+                                        t('browser.rename.rename_btn')
                                     )}
                                 </button>
                             </div>
@@ -1056,14 +1160,14 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
                                 <Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" />
                             </div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Confirm Deletion</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('browser.delete.title')}</h3>
                         </div>
 
                         <div className="mb-6">
                             <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
-                                Are you sure you want to delete the following item{selectedItems.size > 1 ? 's' : ''}?
+                                {selectedItems.size > 1 ? t('browser.delete.desc_multi') : t('browser.delete.desc_single')}
                                 <strong className="block mt-2 text-red-600 dark:text-red-400">
-                                    This action is permanent and there is no way to recover these files.
+                                    {t('browser.delete.warning')}
                                 </strong>
                             </p>
 
@@ -1083,7 +1187,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                 disabled={isDeleting}
                                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-700 transition-colors"
                             >
-                                Cancel
+                                {t('browser.delete.cancel')}
                             </button>
                             <button
                                 onClick={handleDelete}
@@ -1093,10 +1197,93 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                 {isDeleting ? (
                                     <>
                                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                        Deleting...
+                                        {t('browser.delete.deleting')}
                                     </>
                                 ) : (
-                                    'Delete'
+                                    t('browser.delete.delete_btn')
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isCopyModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 dark:bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl ring-1 ring-gray-900/5 dark:ring-white/10 w-full max-w-lg p-6 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                                <Copy className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('browser.copy.title')}</h3>
+                        </div>
+
+                        <div className="mb-6">
+                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 truncate">
+                                {t('browser.move.current', { path: pickerPath || '/ (Root)' })}
+                            </p>
+
+                            <div className="h-64 overflow-y-auto bg-gray-50 dark:bg-zinc-800/50 rounded-lg border border-gray-200 dark:border-zinc-700">
+                                {pickerLoading && !pickerData ? (
+                                    <div className="flex items-center justify-center h-full text-sm text-gray-500">{t('browser.move.loading')}</div>
+                                ) : (
+                                    <ul className="text-sm font-medium">
+                                        <li
+                                            onClick={() => {
+                                                if (!pickerPath) return; // At root
+                                                const parts = pickerPath.split('/');
+                                                parts.pop();
+                                                loadPickerPath(parts.join('/'));
+                                            }}
+                                            className={`flex items-center gap-2 px-4 py-2 hover:bg-gray-100 dark:hover:bg-zinc-700 cursor-pointer text-gray-600 dark:text-gray-300 ${!pickerPath ? 'opacity-50 cursor-not-allowed hidden' : ''}`}
+                                        >
+                                            <CornerLeftUp className="w-4 h-4" />
+                                            {t('browser.move.parent')}
+                                        </li>
+
+                                        {pickerData?.files.length === 0 ? (
+                                            <li className="px-4 py-4 text-center text-gray-500 dark:text-gray-400">{t('browser.move.empty')}</li>
+                                        ) : (
+                                            pickerData?.files.map((dir, idx) => (
+                                                <li
+                                                    key={idx}
+                                                    onClick={() => {
+                                                        const nextPath = pickerPath ? `${pickerPath}/${dir.name}` : dir.name;
+                                                        loadPickerPath(nextPath);
+                                                    }}
+                                                    className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 dark:hover:bg-zinc-700 cursor-pointer text-gray-700 dark:text-gray-200"
+                                                >
+                                                    <Folder className="w-4 h-4 text-blue-500 fill-blue-500/20" />
+                                                    {dir.name}
+                                                </li>
+                                            ))
+                                        )}
+                                    </ul>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setIsCopyModalOpen(false)}
+                                disabled={isCopying}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-700 transition-colors"
+                            >
+                                {t('browser.copy.cancel')}
+                            </button>
+                            <button
+                                onClick={handleCopySubmit}
+                                disabled={isCopying}
+                                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 dark:focus:ring-offset-zinc-900 transition-colors flex items-center gap-2"
+                            >
+                                {isCopying ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        {t('browser.copy.copying')}
+                                    </>
+                                ) : (
+                                    t('browser.copy.copy_btn')
                                 )}
                             </button>
                         </div>
@@ -1111,17 +1298,17 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
                                 <MoveRight className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                             </div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Select Destination</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('browser.move.title')}</h3>
                         </div>
 
                         <div className="mb-6">
                             <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 truncate">
-                                Current selection: {pickerPath || '/ (Root)'}
+                                {t('browser.move.current', { path: pickerPath || '/ (Root)' })}
                             </p>
 
                             <div className="h-64 overflow-y-auto bg-gray-50 dark:bg-zinc-800/50 rounded-lg border border-gray-200 dark:border-zinc-700">
                                 {pickerLoading && !pickerData ? (
-                                    <div className="flex items-center justify-center h-full text-sm text-gray-500">Loading...</div>
+                                    <div className="flex items-center justify-center h-full text-sm text-gray-500">{t('browser.move.loading')}</div>
                                 ) : (
                                     <ul className="text-sm font-medium">
                                         {/* Parent directory navigation item */}
@@ -1135,12 +1322,12 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                             className={`flex items-center gap-2 px-4 py-2 hover:bg-gray-100 dark:hover:bg-zinc-700 cursor-pointer text-gray-600 dark:text-gray-300 ${!pickerPath ? 'opacity-50 cursor-not-allowed hidden' : ''}`}
                                         >
                                             <CornerLeftUp className="w-4 h-4" />
-                                            .. (Parent Directory)
+                                            {t('browser.move.parent')}
                                         </li>
 
                                         {/* Available directories */}
                                         {pickerData?.files.length === 0 ? (
-                                            <li className="px-4 py-4 text-center text-gray-500 dark:text-gray-400">No directories found.</li>
+                                            <li className="px-4 py-4 text-center text-gray-500 dark:text-gray-400">{t('browser.move.empty')}</li>
                                         ) : (
                                             pickerData?.files.map((dir, idx) => (
                                                 <li
@@ -1168,7 +1355,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                 disabled={isMoving}
                                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-700 transition-colors"
                             >
-                                Cancel
+                                {t('browser.move.cancel')}
                             </button>
                             <button
                                 onClick={handleMoveSubmit}
@@ -1178,10 +1365,10 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                 {isMoving ? (
                                     <>
                                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                        Moving...
+                                        {t('browser.move.moving')}
                                     </>
                                 ) : (
-                                    'Move Here'
+                                    t('browser.move.move_btn')
                                 )}
                             </button>
                         </div>
@@ -1196,19 +1383,19 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
                                 <FileArchive className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                             </div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Create Archive</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('browser.zip.title')}</h3>
                         </div>
                         <form onSubmit={handleZipSubmit}>
                             <div className="mb-4">
                                 <label htmlFor="zipName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Archive Name
+                                    {t('browser.zip.label_name')}
                                 </label>
                                 <input
                                     type="text"
                                     id="zipName"
                                     value={zipFileName}
                                     onChange={(e) => setZipFileName(e.target.value)}
-                                    placeholder="e.g. backup"
+                                    placeholder={t('browser.zip.placeholder')}
                                     className="w-full px-4 py-2 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block dark:bg-zinc-800 dark:border-zinc-700 dark:placeholder-gray-400 dark:text-white dark:focus:ring-indigo-500 dark:focus:border-indigo-500"
                                     disabled={isZipping}
                                     autoFocus
@@ -1216,7 +1403,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             </div>
                             <div className="mb-6">
                                 <label htmlFor="zipFormat" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Compression Format
+                                    {t('browser.zip.label_format')}
                                 </label>
                                 <select
                                     id="zipFormat"
@@ -1243,7 +1430,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                     disabled={isZipping}
                                     className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-700 transition-colors"
                                 >
-                                    Cancel
+                                    {t('browser.zip.cancel')}
                                 </button>
                                 <button
                                     type="submit"
@@ -1253,10 +1440,10 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                     {isZipping ? (
                                         <>
                                             <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                            Zipping...
+                                            {t('browser.zip.zipping')}
                                         </>
                                     ) : (
-                                        'Zip'
+                                        t('browser.zip.zip_btn')
                                     )}
                                 </button>
                             </div>
@@ -1284,7 +1471,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
                         >
                             <FolderPlus className="w-4 h-4" />
-                            Create Folder
+                            {t('browser.toolbar.create_folder')}
                         </button>
                         <button
                             onClick={() => setIsUploadModalOpen(true)}
@@ -1292,7 +1479,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
                         >
                             <Upload className="w-4 h-4" />
-                            Upload file
+                            {t('browser.toolbar.upload')}
                         </button>
                         <button
                             disabled={!singleSelected}
@@ -1300,7 +1487,15 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
                         >
                             <Edit2 className="w-4 h-4" />
-                            Rename
+                            {t('browser.toolbar.rename')}
+                        </button>
+                        <button
+                            disabled={noneSelected}
+                            onClick={() => setIsCopyModalOpen(true)}
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                        >
+                            <Copy className="w-4 h-4" />
+                            {t('browser.toolbar.copy')}
                         </button>
                         <button
                             disabled={noneSelected}
@@ -1308,7 +1503,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
                         >
                             <MoveRight className="w-4 h-4" />
-                            Move
+                            {t('browser.toolbar.move')}
                         </button>
                         <button
                             disabled={noneSelected}
@@ -1316,7 +1511,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
                         >
                             <FileArchive className="w-4 h-4" />
-                            Zip
+                            {t('browser.toolbar.zip')}
                         </button>
                         <button
                             disabled={!isSingleZipSelected || isUnzipping}
@@ -1328,7 +1523,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             ) : (
                                 <ArchiveRestore className="w-4 h-4" />
                             )}
-                            Unzip
+                            {t('browser.toolbar.unzip')}
                         </button>
                         <button
                             disabled={!singleSelected || isDownloading}
@@ -1340,7 +1535,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             ) : (
                                 <Download className="w-4 h-4" />
                             )}
-                            Download
+                            {t('browser.toolbar.download')}
                         </button>
                         <button
                             disabled={noneSelected}
@@ -1348,7 +1543,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors"
                         >
                             <Trash2 className="w-4 h-4" />
-                            Delete
+                            {t('browser.toolbar.delete')}
                         </button>
                     </div>
                 </>
@@ -1370,53 +1565,59 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             onClick={singleSelected ? openRenameModal : undefined}
                             className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${singleSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
                         >
-                            <Edit2 className="w-4 h-4" /> Rename
+                            <Edit2 className="w-4 h-4" /> {t('browser.toolbar.rename')}
+                        </a>
+                        <a
+                            onClick={noneSelected ? undefined : () => setIsCopyModalOpen(true)}
+                            className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${!noneSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                        >
+                            <Copy className="w-4 h-4" /> {t('browser.toolbar.copy')}
                         </a>
                         <a
                             onClick={noneSelected ? undefined : () => setIsMoveModalOpen(true)}
                             className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${!noneSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
                         >
-                            <MoveRight className="w-4 h-4" />Move
+                            <MoveRight className="w-4 h-4" />{t('browser.toolbar.move')}
                         </a>
                         <a
                             onClick={noneSelected ? undefined : () => setIsZipModalOpen(true)}
                             className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${!noneSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
                         >
-                            <FileArchive className="w-4 h-4" /> Zip
+                            <FileArchive className="w-4 h-4" /> {t('browser.toolbar.zip')}
                         </a>
                         <a
                             onClick={!isSingleZipSelected ? undefined : handleUnzip}
                             className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${isSingleZipSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
                         >
-                            <ArchiveRestore className="w-4 h-4" /> Unzip
+                            <ArchiveRestore className="w-4 h-4" /> {t('browser.toolbar.unzip')}
                         </a>
                         <a onClick={singleSelected ? handleDownload : undefined}
                             className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${singleSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
                         >
-                            <Download className="w-4 h-4" /> Download
+                            <Download className="w-4 h-4" /> {t('browser.toolbar.download')}
                         </a>
                         <div className="h-px bg-slate-200 my-1"></div>
                         <a
                             onClick={noneSelected ? undefined : () => setIsDeleteModalOpen(true)}
                             className={`flex items-center gap-2 px-4 py-2 text-sm rounded-md text-red-500 hover:bg-red-100 ${!noneSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
-                            <Trash2 className="w-4 h-4" /> Delete
+                            <Trash2 className="w-4 h-4" /> {t('browser.toolbar.delete')}
                         </a>
                     </div>
                 )}
                 <table className="w-full text-left text-sm whitespace-nowrap">
                     <thead className="text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-zinc-800">
                         <tr>
-                            <SortHeader field="name" label="Name" />
-                            <SortHeader field="size" label="Size" align="right" />
-                            <SortHeader field="type" label="Type" />
-                            <SortHeader field="date" label="Date Modified" align="right" />
+                            <SortHeader field="name" label={t('browser.table.name')} />
+                            <SortHeader field="size" label={t('browser.table.size')} align="right" />
+                            <SortHeader field="type" label={t('browser.table.type')} />
+                            <SortHeader field="date" label={t('browser.table.date')} align="right" />
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
                         {loading && !browseData ? (
                             <tr>
                                 <td colSpan={4} className="py-8 text-center text-gray-500">
-                                    Loading...
+                                    {t('browser.table.loading')}
                                 </td>
                             </tr>
                         ) : browseData?.files.length === 0 ? (
@@ -1447,16 +1648,22 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                     <td className="py-3 px-4">
                                         <div className="flex items-center gap-3">
                                             <FileIcon type={file.type} />
+                                            {(Date.now() / 1000 - file.creation_time) < 300 && (
+                                                <span title="New" className="flex items-center">
+                                                    <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+                                                </span>
+                                            )}
                                             <span className={`font-medium ${file.type === 'dir' ? 'text-gray-900 dark:text-gray-100' : 'text-gray-700 dark:text-gray-300'}`}>
                                                 {file.name}
                                             </span>
+
                                         </div>
                                     </td>
                                     <td className="py-3 px-4 text-right text-gray-500 dark:text-gray-400 tabular-nums">
                                         {file.type !== 'dir' ? formatBytes(file.size) : '--'}
                                     </td>
                                     <td className="py-3 px-4 text-left text-gray-500 dark:text-gray-400">
-                                        {humanReadableType(file.type)}
+                                        {humanReadableType(file.type, t)}
                                     </td>
                                     <td className="py-3 px-4 text-right text-gray-500 dark:text-gray-400 tabular-nums">
                                         {formatDate(file.creation_time)}

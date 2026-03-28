@@ -1,4 +1,4 @@
-import {formatBytes} from '../utils/formats'
+import { formatBytes } from '../utils/formats';
 
 interface StorageBarProps {
   used: number; // e.g., 10
@@ -11,8 +11,8 @@ const StorageBar = ({ used, total }: StorageBarProps) => {
   return (
     <div className="w-full max-w-md">
       <div className="flex justify-between mb-1 text-sm font-medium text-gray-700 dark:text-white">
-        <span>{formatBytes(used)} used</span>
-        <span>{formatBytes(total)} total</span>
+        <span>{formatBytes(used)}</span>
+        <span>{formatBytes(total)}</span>
       </div>
       <div className="w-full h-4 bg-gray-200  dark:bg-slate-700 rounded-full overflow-hidden">
         <div

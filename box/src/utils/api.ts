@@ -138,6 +138,16 @@ export async function mvFs(oldPath: string, newPath: string): Promise<void> {
     });
 }
 
+export async function cpFs(src: string, dst: string): Promise<void> {
+    await apiRequest('/fs/cp', {
+        method: 'POST',
+        body: JSON.stringify({
+            src: src,
+            dst: dst
+        })
+    });
+}
+
 export async function rmFs(path: string): Promise<void> {
     await apiRequest(`/fs/item/${path}`, {
         method: 'DELETE'

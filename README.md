@@ -37,21 +37,27 @@ Despite its rich feature set, getting started is straightforward and requires mi
 
 ## Table of Contents
 - [⚙️ How It Works](#-how-it-works)
-  - [📁 Installation Structure](#-installation-structure)
-  - [🔧 Services](#-services)
-  - [👥 User Integration](#-user-integration)
-  - [🔐 Security Model](#-security-model)
+   * [📁 Installation Structure](#-installation-structure)
+   * [🔧 Services](#-services)
+   * [👥 User Integration](#-user-integration)
+   * [🔐 Security Model](#-security-model)
 - [🧰 Install](#-install)
-  - [️🚀 Quick Start](#-quick-start)
-  - [👩‍💻 Manual Installation](#-manual-installation)
+   * [️🚀 Quick Start](#-quick-start)
+   * [👩‍💻 Manual Installation](#-manual-installation)
 - [🏁 Onboarding](#-onboarding)
 - [☺️ Enjoy](#-enjoy)
-  - [🖴 Disk Management](#-disk-management)
-  - [🔗 Network](#-network)
-  - [👥 Users](#-users)
-  - [📺 Remote Access](#-remote-access)
-  - [⚙️ Advanced](#-advanced)
+   * [🖴 Disk Management](#-disk-management)
+   * [🔗 Network](#-network)
+   * [👥 Users](#-users)
+   * [📺 Remote Access](#-remote-access)
+   * [⚙️ Advanced](#-advanced)
 - [🖴 Creation of a Disk Array](#-creation-of-a-disk-array)
+- [📦 Box](#-box)
+   * [🤔 Why not use an off-the-shelf solution?](#-why-not-use-an-off-the-shelf-solution)
+   * [🎯 Summary](#-summary)
+   * [🗒️ Notes](#-notes)
+- [🛡 VPN & Remote Access](#-vpn-remote-access)
+   * [⚙️ Port Forwarding (Generic Steps)](#-port-forwarding-generic-steps)
 - [🤝 Contributing](#-contributing)
 - [🔮 Future Plans](#-future-plans)
 - [⚠️ Disclaimer](#-disclaimer)
@@ -143,7 +149,7 @@ This operation will take some time, at the end of which you should get your syst
  * Fedora (Virtual Box): about 7 minutes.
  * Raspberry Pi 4 Model b: about 45 minutes.
 
-> ⚠️
+> ⚠️ **Important Note**
 > 
 > By running this command, you accept the terms of the CDDL license required for OpenZFS. For more information, [please visit this page](https://en.wikipedia.org/wiki/Common_Development_and_Distribution_License). 
 
@@ -158,7 +164,8 @@ If you are running a different kind of Linux distribution, you should make the n
 <details>
 <summary>Step 1: Install Necessary Packages</summary>
 
-NMS expects the following programs and system tools to be installed in your system (debian-based package names):
+NMS expects the following programs and system tools to be installed in your system:
+> #### Debian-based package names:
 > * python3-full
 > * network-manager
 > * nginx
@@ -182,6 +189,33 @@ NMS expects the following programs and system tools to be installed in your syst
 > * acl
 > * libfile-mimeinfo-perl
 > * p7zip-full
+
+> #### RedHat-based package names:
+> * python3
+> * python3-pip
+> * NetworkManager
+> * nginx
+> * sudo
+> * docker
+> * smartmontools
+> * kernel-headers
+> * kernel-devel
+> * zfs
+> * openssh-server
+> * vsftpd
+> * samba
+> * nfs-utils
+> * wireguard-tools
+> * rsync
+> * nodejs
+> * npm
+> * git
+> * jq
+> * acl
+> * file
+> * p7zip
+> * p7zip-plugins
+> * perl
 
 You should adapt the name of these packages for your distribution.
 
@@ -208,7 +242,7 @@ $ sudo modprobe zfs
 In some system, you need to add the module `zfs` un the list of modules to load. You may do this with the following command:
 
 ```sh
-# echo zfs > /etc/modules-load.d/zfs.conf
+$ echo zfs | sudo tee /etc/modules-load.d/zfs.conf
 ```
 </details>
 
@@ -311,7 +345,7 @@ Both backend and frontend make use of a shared library. Install this too:
 $ sudo /opt/python3/bin/pip install -e /nms/nms_shared
 ```
 
-Lastly, we need to compile the web app (Box)[#-Box] with `npm` as follows:
+Lastly, we need to compile the web app [📦 Box](#-box) with `npm` as follows:
 
 ```sh
 $ cd /nms/box
@@ -358,6 +392,10 @@ If you don't get an error, you may proceed next. Otherwise, create this user wit
 ```sh
 $ sudo useradd -M -r -s /usr/sbin/nologin www-data
 ```
+
+> ⚠️ **Important Note**
+> 
+> The following `backend` user requires `sudo`. In some system, this is achieved by adding a user to the `sudo` group. In others, you need to add the user to the `wheel` group. Adapt the following commands accordingly.
 
 Now, create a user for the backend:
 ```sh
@@ -506,7 +544,7 @@ $ sudo systemctl daemon-reload
 </details>
 
 <details>
-<summary>Step 9: Setup the Reverse Proxy</summary>
+<summary>Step 10: Setup the Reverse Proxy</summary>
 
 `nginx` is a web server that also acts as reverse proxy. As of now, you can access the NMS locally by visiting `http://localhost:8080`.
 
@@ -525,6 +563,7 @@ server
 {
     listen 80;
     server_name _;
+    client_max_body_size 10M;
 
     location /
     {
@@ -547,7 +586,7 @@ server
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-ForwardedProto $scheme;
+        proxy_set_header X-Forwarded-Proto $scheme;
 
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -556,13 +595,14 @@ server
 
     location /box
     {
-      return 301 /box/;
+      rewrite ^/box$ /box/ permanent;
     }
 
     location /box/
     {
       alias /nms/box/dist/;
-      try_files $uri $uri/ /index.html;
+      index index.html;
+      try_files $uri $uri/ /box/index.html;
     }
 
 }
@@ -584,16 +624,20 @@ And, lastly, restart `nginx` and you should be good to go:
 ```sh
 $ sudo systemctl restart nginx
 ``` 
-</details>
 
 > ⚠️ **Important Note**
 > 
-> If you are using a firewall, like `firewall-cmd`, you need to enable the service http as follows
+> If you are using a firewall, like `firewall-cmd`, you need to enable the `http` service as follows
 > ```shell
 > $ sudo firewall-cmd --add-service=http
 > $ sudo firewall-cmd --permanent --add-service=http
 > $ sudo firewall-cmd --reload
 > ```
+
+🚀 **Well done.** You can now follow the [Onboarding](#-onboarding) steps to start configuring your NMS installation. 
+</details>
+
+
 
 
 ---
@@ -735,7 +779,9 @@ When creating a disk array, you can choose to enable the following options
 
 ## 📦 Box
 
-MS includes a built-in **lightweight web-based file browser**.
+![logo.svg](box/public/logo.svg)
+
+NMS includes a built-in **lightweight web-based file browser**.
 
 If you have used services like Dropbox, OneDrive, or Google Drive, the concept should feel familiar.
 

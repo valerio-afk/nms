@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { verifyOtpLogin, ApiError } from './utils/api';
 import OtpInputs from './components/OtpInputs';
+import { useTranslation } from 'react-i18next';
 
 // Utility for neat tailwind class merging if needed
 function cn(...inputs: (string | undefined | null | false)[]) {
@@ -16,6 +17,7 @@ interface LoginProps {
 }
 
 export default function Login({ onLoginSuccess, initialError }: LoginProps) {
+    const { t } = useTranslation();
     const [otp, setOtp] = useState<string[]>(Array(6).fill(''));
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(initialError || null);
@@ -95,7 +97,7 @@ export default function Login({ onLoginSuccess, initialError }: LoginProps) {
 
         const otpString = otp.join('');
         if (otpString.length !== 6) {
-            setError('Please enter all 6 digits.');
+            setError(t('login.invalid_otp'));
             return;
         }
 
@@ -111,9 +113,9 @@ export default function Login({ onLoginSuccess, initialError }: LoginProps) {
             if (err instanceof ApiError) {
                 if (err.status === 403) {
                     if (err.code === 'E_AUTH_INVALID') {
-                        setError('Invalid authentication');
+                        setError(t('app.invalid_auth'));
                     } else if (err.code === 'E_AUTH_EXPIRED' || err.code === 'E_AUTH_REVOKED') {
-                        setError("You've been logged out");
+                        setError(t('app.logged_out_msg'));
                     } else {
                         setError(err.message);
                     }
@@ -123,7 +125,7 @@ export default function Login({ onLoginSuccess, initialError }: LoginProps) {
             } else if (err instanceof Error) {
                 setError(err.message);
             } else {
-                setError('An error occurred during verification.');
+                setError(t('login.network_error'));
             }
         } finally {
             setLoading(false);
@@ -142,10 +144,10 @@ export default function Login({ onLoginSuccess, initialError }: LoginProps) {
                         <LogIn className="h-8 w-8 text-indigo-600 dark:text-indigo-400" aria-hidden="true" />
                     </div>
                     <h2 className="mt-6 text-center text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white">
-                        Secure Login
+                        {t('login.secure_access')}
                     </h2>
                     <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-                        Enter the 6-digit one-time password to access your Box.
+                        {t('login.subtitle')}
                     </p>
                 </div>
 
@@ -198,10 +200,10 @@ export default function Login({ onLoginSuccess, initialError }: LoginProps) {
                             {loading ? (
                                 <span className="flex items-center gap-2">
                                     <Loader2 className="w-5 h-5 animate-spin" />
-                                    Verifying...
+                                    {t('login.verifying')}
                                 </span>
                             ) : (
-                                "Login"
+                                t('login.verify_btn')
                             )}
                         </button>
                     </div>
