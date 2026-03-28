@@ -1,6 +1,5 @@
 from .v1.api import v1
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from .utils.responses import ErrorMessage
 from contextlib import asynccontextmanager
