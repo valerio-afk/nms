@@ -285,7 +285,7 @@ class NMSUpdate(NMSThread):
         cwd = os.getcwd()
 
         cmds = [
-            TarArchive(cwd,tmp_path,action=TarArchive.TarAction.EXTRACT),
+            TarArchive(cwd,tmp_path,action=TarArchive.TarAction.EXTRACT,strip_components=1),
             NPMRun("build",cwd=os.path.join(cwd,"box")),
             Chown("root","www-data",cwd,['-R']),
             Chmod(CONFIG.config_filename, "600"),

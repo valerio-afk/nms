@@ -2166,6 +2166,7 @@ class TarArchive(CommandLine):
                  compression:Optional[TarCompression]=TarCompression.AUTO,
                  files:Optional[List[str]] = None,
                  exclude:Optional[List[str]]=None,
+                 strip_components:Optional[int]=None,
                  **kwargs):
 
         this._path = path
@@ -2187,6 +2188,9 @@ class TarArchive(CommandLine):
                 cmd.append(".")
             case TarArchive.TarAction.CREATE:
                 cmd.extend(files)
+
+                if (strip_components is not None):
+                    cmd.append(f"--strip-components={strip_components}")
 
         super().__init__(cmd,**kwargs)
 
