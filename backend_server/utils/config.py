@@ -29,6 +29,8 @@ import uuid
 SECRET_KEY = os.environ.get("NMS_SECRET_KEY")
 
 def _create_token(username: str, purpose: str, duration: int) -> Tuple[str, float]:
+    duration = min(duration,60*24*3) # duration always capped to 3 days
+
     released = datetime.now(pytz.timezone("UTC"))
     expire = released + timedelta(minutes=duration)
     expire_timestamp = expire.timestamp()
@@ -172,6 +174,10 @@ class NMSConfig(Logger):
 
     def __init__(this, config_file:str='nms.json'):
         super().__init__()
+
+        if (SECRET_KEY is None):
+            raise Exception("Invalid secret key. Please provide a secret key as environmental variable NMS_SECRET_KEY.")
+
         this._config_file = config_file
         this._cfg = {}
         this._tmp_secret = {}
@@ -652,7 +658,7 @@ class NMSConfig(Logger):
                 activation_token,exp_time = _create_token(
                     username=username,
                     purpose="first_login",
-                    duration=525600000 #about 1000 years in minutes
+                    duration=60*24 #about 1 day
                 )
                 this.add_issued_token(activation_token,exp_time)
 
@@ -1008,7 +1014,6 @@ class NMSConfig(Logger):
         this._cfg['ddns'][provider]['enabled'] = enabled
 
     def ddns_config_set(this,provider:str,username:Optional[str],password:str) -> None:
-        SECRET_KEY = os.environ.get("NMS_SECRET_KEY")
         digest = hashlib.sha256(SECRET_KEY.encode()).digest()
         fernet_key = base64.urlsafe_b64encode(digest)
 
@@ -1050,7 +1055,6 @@ class NMSConfig(Logger):
             username = this._cfg['ddns'][provider]['username']
             password = this._cfg['ddns'][provider]['password']
 
-            SECRET_KEY = os.environ.get("NMS_SECRET_KEY")
             digest = hashlib.sha256(SECRET_KEY.encode()).digest()
             fernet_key = base64.urlsafe_b64encode(digest)
 

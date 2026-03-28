@@ -686,8 +686,8 @@ msgid "Superuser"
 msgstr ""
 
 #: frontend/templates/card.account_admin.html:111
-msgid "Provide the link above to the new user to activate their account."
-msgstr "Dai questo link al nuovo utente per attivare il loro account."
+msgid "Provide the link above to the new user to activate their account. This token is valid for 24 hours."
+msgstr "Dai questo link al nuovo utente per attivare il loro account. Il token è valido per 24 ore."
 
 #: frontend/templates/card.account_admin.html:118
 msgid "Reset login credentials"

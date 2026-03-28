@@ -31,10 +31,10 @@
                 <div class="col-sm-2"><button type="submit" class="btn btn-success"><i class="bi bi-send-fill"></i></button></div>
         </div>
         <div class="row">
-         <p class="text-muted">
-             {{ _("This user will be renamed according to the system user selected. This may cause the user to be logged out.") }}
-         </p>
-    </div>
+             <p class="text-muted">
+                 {{ _("This user will be renamed according to the system user selected. This may cause the user to be logged out.") }}
+             </p>
+        </div>
     </form>
 {% else %}
 
@@ -108,7 +108,7 @@
 </div>
 
 <div class="row mb-3">
-    <div class="col-sm-12 form-text">{{ _("Provide the link above to the new user to activate their account.") }}</div>
+    <div class="col-sm-12 form-text">{{ _("Provide the link above to the new user to activate their account. This token is valid for 24 hours.") }}</div>
 </div>
 {% else %}
 <form method="POST" class="disable-on-submit" action="{{ url_for('main.reset_otp') }}">

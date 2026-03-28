@@ -80,7 +80,7 @@ async def update_access_service(service_id: str, request: Request, token:dict=De
         service = CONFIG.access_services[service_id]
         service.update(**data)
 
-        CONFIG.info(f"Access service configuration for {service_id} changed: {data}")
+        CONFIG.info(f"Access service configuration for {service_id} changed by {username}: {data}")
 
         return {"detail": SuccessMessage(code=SuccessMessages.S_ACCESS_UPDATED.name, params=[service_id.upper()])}
     except HTTPException as http_e:

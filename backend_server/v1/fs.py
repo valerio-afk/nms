@@ -46,7 +46,7 @@ def check_path_jail(user:UserProfile,path:str,stat_last:bool=True) -> Path:
     requested_path = home.joinpath(path).resolve()
 
     if (not requested_path.is_relative_to(home)):
-        HTTPException(status_code=401)
+        raise HTTPException(status_code=401)
 
     current = Path(user.home_dir)
 

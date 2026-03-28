@@ -22,14 +22,6 @@ async def automount(app:FastAPI):
 
 app = FastAPI(lifespan=automount,root_path="/api")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 app.include_router(v1)
 
 

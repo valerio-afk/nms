@@ -31,7 +31,10 @@ def get_user(token:dict=Depends(verify_token)) -> Optional[UserProfile]:
     return CONFIG.get_user(token.get("username"))
 
 @users.get("/get/sys",response_model=List[str],summary="Get the list of system usernames that have not been associated to other user")
-def get_available_system_users():
+def get_available_system_users(token:dict=Depends(verify_token)):
+    username = token.get("username")
+    check_permission(username, UserPermissions.USERS_ACCOUNT_MANAGE)
+
     nms_users = CONFIG.users
     used_uid = [uid for x in nms_users if (uid:=x.uid) is not None]
 
@@ -92,7 +95,7 @@ def set_username(data:ChangeUsernameData,token:dict=Depends(verify_token)) -> di
     if (len(out) == 0):
         u = CONFIG.get_user(data.old_username)
         if (u is None):
-            HTTPException(status_code=500,
+            raise HTTPException(status_code=500,
                           detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name, params=[data.username]))
 
         create_system_user(data.new_username, u.permissions, u.sudo)
@@ -164,7 +167,7 @@ def sudoers(data:SudoData,token:dict=Depends(verify_token)) -> dict:
     if (len(out)==0):
         u = CONFIG.get_user(data.username)
         if (u is None):
-            HTTPException(status_code=500,
+            raise HTTPException(status_code=500,
                           detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name, params=[data.username]))
 
         create_system_user(data.username,u.permissions,add_sudo)
@@ -175,7 +178,7 @@ def sudoers(data:SudoData,token:dict=Depends(verify_token)) -> dict:
         output = cmd.execute()
 
         if (output.returncode != 0):
-            HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_USER_SUDO.name,params=[output.stderr]))
+            raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_USER_SUDO.name,params=[output.stderr]))
 
     CONFIG.warning(f"Superuser status changed for {data.username} by {username}: {'Yes' if add_sudo else 'No'}")
 

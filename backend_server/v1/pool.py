@@ -533,6 +533,7 @@ def pool_get_property(prop:PoolProperties,token:dict=Depends(verify_token)) -> O
             case PoolProperties.pool_list:
                 return BackendProperty(property=prop.value, value=get_importable_pools())
             case PoolProperties.encryption_key:
+                check_permission(token.get("username"), UserPermissions.POOL_CONF_CREATE)
                 return BackendProperty(property=prop.value, value=get_tank_key())
             case PoolProperties.status_id:
                 return BackendProperty(property=prop.value, value=get_pool_status_id())
