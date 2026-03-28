@@ -2183,14 +2183,13 @@ class TarArchive(CommandLine):
             for e in exclude:
                 cmd.append(f"--exclude={e}")
 
-        match (action):
-            case TarArchive.TarAction.EXTRACT:
-                cmd.append(".")
-            case TarArchive.TarAction.CREATE:
-                cmd.extend(files)
+        if (files is not None):
+            cmd.extend(files)
 
-                if (strip_components is not None):
-                    cmd.append(f"--strip-components={strip_components}")
+        if (action== TarArchive.TarAction.EXTRACT):
+            if (strip_components is not None):
+                cmd.append(f"--strip-components={strip_components}")
+
 
         super().__init__(cmd,**kwargs)
 

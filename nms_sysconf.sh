@@ -869,7 +869,7 @@ Group=www-data
 WorkingDirectory=$app_dir
 Environment="PATH=$venv_path/bin:$PATH"
 Environment="NMS_SECRET_KEY=$NMS_SECRET_KEY"
-ExecStart=$venv_path/bin/uvicorn frontend.app:frontend_app --host 127.0.0.1 --port 8080 --reload --log-config logging.yaml
+ExecStart=$venv_path/bin/uvicorn frontend.app:frontend_app --host 127.0.0.1 --port 8080 --log-config logging.yaml
 Restart=always
 RestartSec=5
 
@@ -908,7 +908,7 @@ Group=backend
 WorkingDirectory=$app_dir
 Environment="PATH=$venv_path/bin:$PATH"
 Environment="NMS_SECRET_KEY=$NMS_SECRET_KEY"
-ExecStart=$venv_path/bin/uvicorn backend_server.backend:app --host 127.0.0.1 --port 8081 --reload --log-config logging.yaml
+ExecStart=$venv_path/bin/uvicorn backend_server.backend:app --host 127.0.0.1 --port 8081 --log-config logging.yaml
 Restart=always
 RestartSec=5
 
