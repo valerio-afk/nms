@@ -1,11 +1,11 @@
 from backend_server.utils.cmdl import Shutdown, Reboot, SystemCtlRestart, LocalCommandLineTransaction, JournalCtl
-from backend_server.utils.cmdl import TarArchive
+from backend_server.utils.cmdl import TarArchive, LS
 from backend_server.utils.config import CONFIG
 from backend_server.utils.inet import DistroFamilies
 from backend_server.utils.responses import BackendProperty, BackgroundTask, ErrorMessage
 from backend_server.utils.scheduler import SCHEDULER
-from backend_server.utils.threads import AptGetUpdateThread, AptGetUpgradeThread, NMSUpdate, DNFCheckUpdateThread, \
-    DNFUpgradeThread
+from backend_server.utils.threads import AptGetUpdateThread, AptGetUpgradeThread, NMSUpdate, DNFCheckUpdateThread
+from backend_server.utils.threads import DNFUpgradeThread
 from backend_server.v1.auth import verify_token_factory, UserPermissions, check_permission
 from backend_server.v1.net import net_counter
 from collections import OrderedDict
@@ -298,11 +298,15 @@ def make_tarball(token:dict=Depends(verify_token)) -> None:
 
     pwd = os.getcwd()
 
+    ls = LS(pwd).execute()
+
     cmd = TarArchive(
         pwd,
         f"nms-{version}.tar.xz",
         action=TarArchive.TarAction.CREATE,
         compression=TarArchive.TarCompression.XZ,
+        files=ls.stdout.splitlines(),
+        cwd = pwd,
         exclude=[
             ".idea",
             "box/dist",
