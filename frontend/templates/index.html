@@ -15,6 +15,7 @@
   {% endfor %}
   <script src="{{ url_for('static', filename='morphdom/dist/morphdom-umd.min.js') }}"></script>
   <script src="{{ url_for('static', filename='refresher.js') }}"></script>
+  <script src="{{ url_for('static', filename='notification.js') }}"></script>
   <script src="{{ url_for('static', filename='showdown/dist/showdown.min.js') }}"></script>
   <script src="{{ url_for('static', filename='nl2br.js') }}"></script>
   <script src="{{ url_for('static', filename='form-controls.js') }}"></script>
@@ -81,11 +82,17 @@
 
         <a href="{{ url_for('main.user_account') }}" class="fs-6 text-decoration-none text-reset ms-3">
 
-          <div class="avatar-initials d-inline-flex
-                    justify-content-center align-items-center
-                    rounded-circle text-dark border shadow-sm p-1 bg-light"
-                    >
-                    {{ current_user.initials }}
+          <div class="position-relative d-inline-block">
+            <div class="d-inline-flex
+                        justify-content-center align-items-center
+                        rounded-circle text-dark border shadow-sm p-1 bg-light"
+            >
+              {{ current_user.initials }}
+            </div>
+
+            {% set notification_count = 0 %}
+            {% include "badge.notifications.html" %}
+
           </div>
       </a>
 
@@ -128,7 +135,10 @@
   {% include "modal.confirm.html" %}
   {% include "toast.copy_clipboard.html" %}
 
+
+
   <script nonce="{{ csp_nonce }}">
+    GlobalRefresher.register("user-badge-notifications","{{ url_for('main.async_notification_number') }}");
     GlobalRefresher.start();
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
     const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))

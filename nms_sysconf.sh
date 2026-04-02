@@ -37,6 +37,8 @@ PACKAGES_APT=(
     acl
     libfile-mimeinfo-perl
     p7zip-full
+    mailutils
+    postfix
 )
 
 PACKAGES_DNF=(
@@ -65,6 +67,8 @@ PACKAGES_DNF=(
     p7zip
     p7zip-plugins
     perl
+    postfix
+    mailx
 )
 
 SERVICES_TO_DISABLE_APT=(
@@ -141,6 +145,10 @@ install_packages_apt() {
     fi
 
     echo "zfs-dkms zfs-dkms/note-incompatible-licenses note" | debconf-set-selections
+    debconf-set-selections <<EOF
+postfix postfix/main_mailer_type select Local only
+postfix postfix/mailname string localhost
+EOF
 
     log_warn "By installing this software, you are accepting the terms of CDDL license of ZFS and related tools."
     DEBIAN_FRONTEND=noninteractive

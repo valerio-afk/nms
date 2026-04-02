@@ -1,17 +1,23 @@
+import datetime
+import subprocess
 from .auth import check_permission
+from backend_server.utils.cmdl import LocalCommandLineTransaction, UserModAddGroup, GPasswdRemoveGroup, Stat, Cat
 from backend_server.utils.cmdl import RSync, Chown, Mkdir, UserDel, GroupModChangeGroupName, GetEntShadow, GetEntPasswd
-from backend_server.utils.cmdl import LocalCommandLineTransaction, UserModAddGroup, GPasswdRemoveGroup
 from backend_server.utils.cmdl import ZFSSetQuota, UserModChangeUsername, SMBPasswd, RenameFile, UserModChangeHomeDir
-from backend_server.utils.config import CONFIG, create_system_user, get_mail_number
+from backend_server.utils.config import CONFIG, create_system_user
 from backend_server.utils.responses import ChgFullnameData, ChangeQuotaData, ChangeUsernameData, SudoData, UserDelete
-from backend_server.utils.responses import NewUserProfile, WarningMessage, UserPermissionsData
+from backend_server.utils.responses import NewUserProfile, WarningMessage, UserPermissionsData, Notification
 from backend_server.utils.responses import UserProfile, AccessServiceCredentials, ErrorMessage, SuccessMessage
 from backend_server.v1.auth import verify_token_factory
+from dataclasses import  dataclass
 from fastapi import APIRouter, Depends, HTTPException, Response
 from nms_shared.enums import UserPermissions
 from nms_shared.msg import ErrorMessages, SuccessMessages, WarningMessages
+from requests.structures import CaseInsensitiveDict
 from typing import Optional, List
+from email.utils import parsedate_to_datetime
 import os.path
+import re
 
 verify_token = verify_token_factory()
 
@@ -25,19 +31,199 @@ def allow_self_change(current_username:str,target_username:str):
     if (current_username!= target_username):
         check_permission(current_username, UserPermissions.USERS_ACCOUNT_MANAGE)
 
+@dataclass
+class MBoxMail:
+    From:str
+    date:datetime.datetime
+    headers:CaseInsensitiveDict[str]
+    id:str
+    body:str
+
+def get_mbox_basepath():
+    return "/var/mail"
+
+def get_mail_number(username:str) -> int:
+    MAIL_BASEPATH = get_mbox_basepath()
+    mail_file = os.path.join(MAIL_BASEPATH,username)
+    stat = Stat(mail_file,sudo=True).execute()
+
+    n_mails = 0
+
+    if (stat is not None) and ((stat.returncode == 0)):
+        cat = Cat(mail_file,sudo=True).execute()
+
+        if (cat is not None) and ((cat.returncode == 0)):
+            pattern = re.compile(r"^From[^:](.*)$")
+            for l in cat.stdout.splitlines():
+                if (pattern.match(l) is not None):
+                    n_mails+=1
+                elif ("X-Notification-Read" in l):
+                    k,v = l.strip().split(":")
+                    if (int(v.strip()) == 1):
+                        n_mails-=1
+
+    return n_mails
+
+def parse_mbox(username:str) -> List[MBoxMail]:
+    MAIL_BASEPATH = get_mbox_basepath()
+    mail_file = os.path.join(MAIL_BASEPATH, username)
+    stat = Stat(mail_file, sudo=True).execute()
+
+    mail = []
+
+    if (stat is not None) and ((stat.returncode == 0)):
+        cat = Cat(mail_file, sudo=True).execute()
+
+        if (cat is not None) and ((cat.returncode == 0)):
+            current_mail = {}
+            last_header = None
+
+            pattern_begin = re.compile(r"^From [a-zA-Z0-9_-]+(@[a-zA-Z0-9_\-.]+)?\s+(.*)$")
+            pattern_header = re.compile(r"^([a-zA-Z0-9_-]+):\s*(.*)$")
+            pattern_header_cnt = re.compile(r"^(\s+)(.*)$")
+            pattern_msg_id = re.compile(r"^\s*<([0-9a-zA-Z.-]+)(@(.+))?>\s*$")
+            body_started = False
+
+            for l in cat.stdout.splitlines():
+                if (not body_started):
+                    if (match := pattern_begin.match(l)):
+                        date = match.group(2)
+                        current_mail = {
+                            "date": parsedate_to_datetime(date),
+                            "From": l.strip()
+                        }
+                    if (match := pattern_header.match(l)):
+                        hdr = match.group(1)
+                        value = match.group(2)
+
+                        if (hdr.lower() == "message-id"):
+                            if (id_match := pattern_msg_id.match(value)):
+                                current_mail["id"] = id_match.group(1)
+                        elif (hdr.lower() == "date"):
+                            CONFIG.warning(f"suca: {value}" )
+                            current_mail['date'] = parsedate_to_datetime(value)
+
+                        if (current_mail.get("headers") is None):
+                            current_mail['headers'] = CaseInsensitiveDict({hdr: value})
+                        else:
+                            current_mail['headers'][hdr] = value
+
+                        last_header = hdr
+                    if  (match:=pattern_header_cnt.match(l)):
+                        current_mail['headers'][last_header]+=match.group(0)
+                    if (len(l.strip())==0):
+                        body_started = True
+                        current_mail['body'] = ""
+                else:
+                    if (len(l.strip())==0):
+                        body_started = False
+                        if (len(current_mail)>0):
+                            current_mail['body'] = current_mail['body'].strip()
+                            mail.append(MBoxMail(**current_mail))
+                            current_mail = {}
+                    else:
+                        current_mail["body"]+=f"\n{l}"
+
+    return mail
+
+def mail2notification(mail:MBoxMail) -> Notification:
+    read_header = mail.headers.get("X-Notification-Read", "0")
+    return Notification(
+        timestamp=mail.date.isoformat(),
+        id=mail.id,
+        subject=mail.headers.get("Subject"),
+        read=True if ((read_header is not None) and (read_header == "1")) else False,
+        body=mail.body,
+    )
+
+def flush_mailbox(username:str,mbox:List[MBoxMail]) -> None:
+    file = ""
+
+    for mail in mbox:
+        file+=mail.From + "\n"
+        for k,v in mail.headers.items():
+            file+=f"{k}: {v}\n"
+        file+=f"\n{mail.body}\n\n"
+
+    MAIL_BASEPATH = get_mbox_basepath()
+    mail_file = os.path.join(MAIL_BASEPATH, username)
+
+    subprocess.run(
+        ["sudo", "tee", mail_file],
+        input=file,
+        text=True,
+        stdout=subprocess.DEVNULL,
+        check=True
+    )
+
+    Chown(username,"mail",mail_file,sudo=True).execute()
 
 @users.get("/get",response_model=Optional[UserProfile],summary="Get information of the logged user")
 def get_user(token:dict=Depends(verify_token)) -> Optional[UserProfile]:
     return CONFIG.get_user(token.get("username"))
 
-@users.head("/get/notifications",summary="Retrieves the number of notifications the logged user has")
-def get_user_notifications(token:dict=Depends(verify_token)) -> Response:
+@users.head("/get/notifications",summary="Retrieves the notification count the logged user")
+def get_user_notifications_count(token:dict=Depends(verify_token)) -> Response:
     n = get_mail_number(token.get("username"))
 
     return Response(
         status_code=200,
         headers={"X-User-Notifications-Count": str(n)},
     )
+
+@users.delete("/get/notifications/{notification_id}",summary="Delete the given notification from the logged user")
+def delete_user_notification(notification_id=str,token:dict=Depends(verify_token)) -> None:
+    username:Optional[str] = token.get("username")
+
+    if (username is not None):
+        mbox = parse_mbox(username)
+        idx = None
+
+        for i,mail in enumerate(mbox):
+            if (mail.id == notification_id):
+                idx = i
+
+        if (idx is not None):
+            del mbox[idx]
+            flush_mailbox(username,mbox)
+
+
+
+@users.get("/get/notifications",response_model=List[Notification],summary="Retrieves the notifications of the logged user")
+def get_user_notifications(token:dict=Depends(verify_token)) -> List[Notification]:
+    notifications : List[Notification] = []
+    username:Optional[str] = token.get("username")
+
+    if (username is not None):
+        mbox = parse_mbox(username)
+
+        for mail in mbox:
+            notifications.append(
+                mail2notification(mail)
+            )
+
+    notifications.sort(key=lambda x : x.timestamp,reverse=True)
+
+    return notifications
+
+@users.get("/get/notifications/{notification_id}",response_model=Optional[Notification],summary="Get the specified notification for the logged user")
+def get_user_notification(notification_id:str,token:dict=Depends(verify_token)) -> Optional[Notification]:
+    username:Optional[str] = token.get("username")
+
+    found = None
+
+    if (username is not None):
+        mbox = parse_mbox(username)
+        for mail in mbox:
+            if (mail.id == notification_id):
+                found = mail2notification(mail)
+                mail.headers['X-Notification-Read'] = "1"
+                break
+
+        flush_mailbox(username,mbox)
+
+    return found
+
 
 @users.get("/get/sys",response_model=List[str],summary="Get the list of system usernames that have not been associated to other user")
 def get_available_system_users(token:dict=Depends(verify_token)):

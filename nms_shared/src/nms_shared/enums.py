@@ -16,6 +16,7 @@ class RequestMethod(Enum):
     POST = "POST"
     DELETE = "DELETE"
     PATCH = "PATCH"
+    HEAD = "HEAD"
 
 class UserPermissions(Enum):
     CLIENT_DASHBOARD_ACCESS = "client.dashboard.access"

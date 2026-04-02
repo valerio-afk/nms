@@ -2,6 +2,7 @@ from io import BytesIO
 
 from flask import flash, session, abort
 from flask_babel import _, format_datetime
+from requests.structures import CaseInsensitiveDict
 from frontend.api.tasks import BackgroundTask, ResilverStatusTask
 from frontend.api.threads import TimerThread
 from frontend.utils.exception import NotAuthenticatedError
@@ -10,7 +11,7 @@ from nms_shared.disks import Disk, DiskStatus
 from nms_shared.enums import LogFilter
 from nms_shared.enums import RequestMethod
 from nms_shared.threads import NMSThread
-from requests import get, post, delete, patch
+from requests import get, post, delete, patch, head
 from requests.exceptions import HTTPError
 from traceback import format_exc
 from typing import Optional, List, Any, Dict, Literal, Union, Tuple
@@ -95,7 +96,7 @@ class BackEndProxy:
                  extra_headers:Optional[dict] = None,
                  files:Optional[Dict[str,Tuple]] = None,
                  ignore_exception:bool = False,
-                 ) -> Optional[Union[bool,dict,list]]:
+                 ) -> Optional[Union[bool,dict,list,CaseInsensitiveDict[str]]]:
         url = f"{BackEndProxy.API}/{BackEndProxy.VERSION}/{endpoint}"
 
         if (url_params is not None):
@@ -118,6 +119,8 @@ class BackEndProxy:
                 fn = delete
             case RequestMethod.PATCH:
                 fn = patch
+            case RequestMethod.HEAD:
+                fn = head
 
         req_params = {}
 
@@ -167,6 +170,9 @@ class BackEndProxy:
 
 
             return None
+
+        if ( method == RequestMethod.HEAD):
+            return response.headers
 
         output = response.json()
 
@@ -257,6 +263,10 @@ class BackEndProxy:
     @property
     def system_users(this) -> List[dict]:
         return this._request("users/get/sys")
+
+    @property
+    def notifications(this) -> List[dict]:
+        return this._request("users/get/notifications")
 
 
     #SYSTEM PROPERTIES
@@ -683,6 +693,17 @@ class BackEndProxy:
         this._request(f"net/ddns/{provider}/stop",RequestMethod.POST)
 
     #USERS METHODS
+
+    def get_user_notification(this,id:str) -> Optional[Dict]:
+        return this._request(f"users/get/notifications/{id}",RequestMethod.GET)
+
+    def delete_user_notification(this,id:str) -> None:
+        this._request(f"users/get/notifications/{id}",RequestMethod.DELETE)
+
+    def get_user_notifications_number(this) -> int:
+        headers:CaseInsensitiveDict[str] = this._request("users/get/notifications",RequestMethod.HEAD)
+
+        return int(headers.get("X-User-Notifications-Count","0"))
 
     def change_password_to_service(this,service:str,username:str,password:str) -> None:
         this._request(f"users/service/{service}",RequestMethod.POST,body_params={"username":username,"password":password})

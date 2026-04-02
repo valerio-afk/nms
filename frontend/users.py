@@ -1,5 +1,8 @@
+import json
+
 from . import frontend as bp
 from .api.backend_proxy import NMSBACKEND as BACKEND, show_flash
+from .utils.filters import notification_date_format
 from .utils.forms import ChangePasswordForm
 from .utils.widget import get_widgets_html, get_widgets_css_files, render_widget
 from flask import session, render_template, g, flash, redirect, url_for, request, Response
@@ -98,7 +101,7 @@ def widget_user_account_admin(user:dict,move_to_users:List[dict]) -> Tuple[str,s
                          user_permissions=user_permissions,
                          move_to_users=move_to_users)
 
-def widget_access_services() -> Optional[Tuple[str,str]]:
+def widget_access_services() -> Optional[Tuple[str,Optional[str]]]:
     user = session.get("user")
 
     selected_services = ['ssh','smb']
@@ -118,7 +121,15 @@ def widget_access_services() -> Optional[Tuple[str,str]]:
 
     return render_widget("account_services",forms=forms)
 
-def widget_access_services_admin(user:dict) -> Optional[Tuple[str,str]]:
+
+
+
+def widget_notifications() -> Optional[Tuple[str,Optional[str]]]:
+    notifications = BACKEND.notifications
+
+    return render_widget("account_notifications",notifications=notifications)
+
+def widget_access_services_admin(user:dict) -> Optional[Tuple[str,Optional[str]]]:
     selected_services = ['ssh','smb']
 
     permissions = {
@@ -136,11 +147,17 @@ def widget_access_services_admin(user:dict) -> Optional[Tuple[str,str]]:
 
     return render_widget("user_admin_services",forms=forms,user=user)
 
+@bp.route('/async/widgets/notification')
+def async_widget_notification() -> Optional[str]:
+    widget = widget_notifications()
+    return None if widget is None else widget[0]
+
 @bp.route("/account")
 def user_account() -> str:
     widgets = [
         widget_user_account(),
         widget_access_services(),
+        widget_notifications(),
     ]
 
     return render_template("account.html",
@@ -148,6 +165,26 @@ def user_account() -> str:
                            widgets=get_widgets_html(widgets),
                            extra_css=get_widgets_css_files(widgets)
                            )
+
+@bp.route("/account/notification/<string:id>",methods=["GET"])
+def get_user_notification(id:str) -> str:
+    notification = BACKEND.get_user_notification(id)
+
+    from logging import getLogger
+
+    getLogger().warning(notification.get("timestamp"))
+
+    return json.dumps({
+        "body": notification.get("body","").strip(),
+        "title": notification.get("subject",_("No Title")),
+        "time": notification_date_format(t) if (t:=notification.get("timestamp")) else "-"
+    } if notification else {})
+
+@bp.route("/account/notification/<string:id>",methods=["POST"])
+def delete_user_notification(id:str) -> Response:
+    BACKEND.delete_user_notification(id)
+
+    return redirect(url_for("main.user_account"))
 
 @bp.route("/account/fullname",methods=["POST"])
 def account_fullname() -> Response:

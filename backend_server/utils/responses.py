@@ -144,6 +144,13 @@ class UserProfile(NewUserProfile):
     uid:Optional[int] = Field(None)
     notifications:int = Field(0)
 
+class Notification(BaseModel):
+    timestamp:str
+    id:str
+    subject:Optional[str]
+    read:bool
+    body:str
+
 class AccessServiceCredentials(BaseModel):
     username:str
     password:str

@@ -1,5 +1,5 @@
 from frontend.utils.filters import (human_readable_bytes, enabled_fmt, disk_charm, markdown_filter, smart_label,
-                                    boolean_fmt, disk_status_babel, iface_charm)
+                                    boolean_fmt, disk_status_babel, iface_charm,notification_date_format)
 from flask import Flask, g, request
 from flask_babel import Babel
 from flask_session import Session
@@ -45,6 +45,7 @@ def create_flask_app():
     app.add_template_filter(markdown_filter,"md")
     app.add_template_filter(smart_label,"smart_label")
     app.add_template_filter(disk_status_babel,"disk_status_babel")
+    app.add_template_filter(notification_date_format, "notification_date_format")
 
     app.secret_key = os.environ.get("NMS_SECRET_KEY")
 

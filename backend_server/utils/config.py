@@ -167,29 +167,7 @@ def detect_distro_family() -> DistroFamilies:
     return DistroFamilies.UNK
 
 
-def get_mail_number(username:str) -> int:
-    MAIL_BASEPATH = "/var/mail"
-    mail_file = os.path.join(MAIL_BASEPATH,username)
-    stat = Stat(mail_file,sudo=True).execute()
 
-    from logging import getLogger
-
-    logg = getLogger('NMS')
-
-    n_mails = 0
-
-    if (stat.returncode == 0):
-        logg.warning("stat OK")
-        cat = Cat(mail_file,sudo=True).execute()
-
-        if (cat.returncode == 0):
-            logg.warning("cat OK")
-            pattern = re.compile(r"^From[^:](.*)$")
-            for l in cat.stdout.splitlines():
-                if (pattern.match(l) is not None):
-                    n_mails+=1
-
-    return n_mails
 
 class NMSConfig(Logger):
     def __new__(cls):
@@ -710,8 +688,7 @@ class NMSConfig(Logger):
                 admin=this.is_admin(username),
                 first_login_token=activation_token,
                 home_dir=home_dir,
-                uid=uid,
-                notifications=get_mail_number(username)
+                uid=uid
             )
 
     def set_user_fullname(this,username:str,fullname:str) -> None:

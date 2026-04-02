@@ -1,7 +1,11 @@
 from markdown import markdown
-from typing import Optional
+from typing import Optional, Union
 from flask_babel import _
+from pytz import tzinfo
+
 from nms_shared.enums import DiskStatus
+from datetime import datetime,timedelta, timezone
+from flask_babel import format_datetime
 
 def disk_charm(disk_status:DiskStatus) -> str:
     match (disk_status):
@@ -61,3 +65,27 @@ def smart_label(lbl:str)->str:
             return _("Interface")
         case _:
             return _(lbl.replace("_", " ").title())
+
+def notification_date_format(ts:Union[int,str])->str:
+
+    if (isinstance(ts,str)):
+        now = datetime.now()
+        ts_datetime = datetime.fromisoformat(ts)
+        ts_date = ts_datetime.date()
+    else:
+        now = datetime.now()
+        ts_datetime = datetime.fromtimestamp(ts)
+        ts_date = ts_datetime.date()
+
+
+    today = now.date()
+    yesterday = today - timedelta(days=1)
+
+    time = format_datetime(ts_datetime, "HH:mm:ss",rebase=False)
+
+    if ts_date == today:
+        return time
+    elif ts_date == yesterday:
+        return f"{_("Yesterday")} {time}"
+    else:
+        return f"{format_datetime(ts_datetime, "dd/MM/yyyy",rebase=False)} {time}"

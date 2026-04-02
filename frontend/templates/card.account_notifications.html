@@ -1,0 +1,74 @@
+{% extends "card.html" %}
+
+{% block card_title %}<i class="bi bi-bell-fill"></i> {{ _("Notifications") }}{% endblock %}
+
+{% block card_content %}
+
+{% if notifications %}
+
+    <table class="table align-middle table-hover">
+        <tbody>
+            {% for ntf in notifications %}
+                <tr class="clickable-row" data-id="{{ ntf.id }}">
+                    <td class="{{ 'fw-bolder ' if not ntf.read else ''}}">{{ ntf.timestamp | notification_date_format }}</td>
+                    <td class="{{ 'fw-bolder ' if not ntf.read else ''}}">{{ ntf.subject }}</td>
+                    <td>
+                        <form method="POST"
+                              class="disable-on-submit"
+                              id="delete-notification-{{ ntf.id }}"
+                              action="{{ url_for('main.delete_user_notification',id=ntf.id) }}"
+                        >
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="id" value="{{ ntf.id }}">
+                            <button type="submit" class="btn btn-danger"><i class="bi bi-trash-fill"></i></button>
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+
+{% else %}
+    {% set callout_text = _("You have no new notifications.") %}
+    {% include "callout.success.html" %}
+{% endif %}
+
+<script nonce="{{ csp_nonce }}">
+document.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".clickable-row").forEach(row => {
+
+    row.addEventListener("click", function (e) {
+
+      if (e.target.closest("a, button, input, textarea, select, label"))
+      {
+        return;
+    }
+
+
+
+      const id = this.dataset.id;
+
+      fetch(`/account/notification/${id}`)
+        .then(response => {
+          if (!response.ok) throw new Error("Network error");
+          return response.json();
+        })
+        .then(data => {
+          showToast(data);
+        })
+        .catch(err => {
+          console.error(err);
+        });
+    });
+  });
+});
+
+GlobalRefresher.register("{{ card_id }}","{{ url_for('main.async_widget_notification') }}");
+</script>
+
+
+
+{% endblock %}
+
+

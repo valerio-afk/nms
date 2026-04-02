@@ -300,3 +300,9 @@ table#snapshot-list tr td
 .ansi35 {
     color: #9c27b0;
 }
+
+
+tr.clickable-row
+{
+  cursor: pointer;
+}

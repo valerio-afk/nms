@@ -42,6 +42,10 @@ def widget_disk_usage(user:dict) -> Tuple[str,Optional[str]]:
 
     return render_widget("disk_usage",global_usage={"used":used, "total":total},user_usage=user.get("quota"), capacity=capacity,mounted=BACKEND.is_mounted)
 
+@bp.route("/async/notification-number")
+def async_notification_number() -> str:
+    return render_template("badge.notifications.html",notification_count=BACKEND.get_user_notifications_number())
+
 @bp.route('/async/widgets/network_overview')
 def async_widget_network_overview() -> str:
     return widget_network_overview()[0]
