@@ -142,6 +142,7 @@ class UserProfile(NewUserProfile):
     first_login_token: Optional[str] = Field(None)
     home_dir: Optional[str] = Field(None)
     uid:Optional[int] = Field(None)
+    notifications:int = Field(0)
 
 class AccessServiceCredentials(BaseModel):
     username:str

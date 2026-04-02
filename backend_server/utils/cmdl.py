@@ -10,8 +10,6 @@ import socket
 import subprocess
 import time
 
-
-
 class CommandLine(ABC):
     def __init__(this,command:List[str],
                  sudo:bool=False,

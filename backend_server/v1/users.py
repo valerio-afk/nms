@@ -2,12 +2,12 @@ from .auth import check_permission
 from backend_server.utils.cmdl import RSync, Chown, Mkdir, UserDel, GroupModChangeGroupName, GetEntShadow, GetEntPasswd
 from backend_server.utils.cmdl import LocalCommandLineTransaction, UserModAddGroup, GPasswdRemoveGroup
 from backend_server.utils.cmdl import ZFSSetQuota, UserModChangeUsername, SMBPasswd, RenameFile, UserModChangeHomeDir
-from backend_server.utils.config import CONFIG, create_system_user
+from backend_server.utils.config import CONFIG, create_system_user, get_mail_number
 from backend_server.utils.responses import ChgFullnameData, ChangeQuotaData, ChangeUsernameData, SudoData, UserDelete
 from backend_server.utils.responses import NewUserProfile, WarningMessage, UserPermissionsData
 from backend_server.utils.responses import UserProfile, AccessServiceCredentials, ErrorMessage, SuccessMessage
 from backend_server.v1.auth import verify_token_factory
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from nms_shared.enums import UserPermissions
 from nms_shared.msg import ErrorMessages, SuccessMessages, WarningMessages
 from typing import Optional, List
@@ -29,6 +29,15 @@ def allow_self_change(current_username:str,target_username:str):
 @users.get("/get",response_model=Optional[UserProfile],summary="Get information of the logged user")
 def get_user(token:dict=Depends(verify_token)) -> Optional[UserProfile]:
     return CONFIG.get_user(token.get("username"))
+
+@users.head("/get/notifications",summary="Retrieves the number of notifications the logged user has")
+def get_user_notifications(token:dict=Depends(verify_token)) -> Response:
+    n = get_mail_number(token.get("username"))
+
+    return Response(
+        status_code=200,
+        headers={"X-User-Notifications-Count": str(n)},
+    )
 
 @users.get("/get/sys",response_model=List[str],summary="Get the list of system usernames that have not been associated to other user")
 def get_available_system_users(token:dict=Depends(verify_token)):
