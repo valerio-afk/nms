@@ -303,6 +303,10 @@ class BackEndProxy:
 
         return {}
 
+    @property
+    def sensors(this)->Optional[List[Dict]]:
+        return this._request("system/sensors",RequestMethod.GET)
+
     #POOL PROPERTIES
     @property
     def encryption_key(this) -> Optional[str]:
@@ -595,6 +599,9 @@ class BackEndProxy:
             qstring_params={"dev":dev},
             extra_headers={"X-Extra-Auth-format-disk":auth_token}
         )
+
+    def smart(this,dev:str) -> Optional[dict]:
+        return this._request("disks/smart",RequestMethod.GET,qstring_params={"dev":dev})
 
     #SERVICE METHODS
     def enable_service(this,service:str,**kwargs) -> None:

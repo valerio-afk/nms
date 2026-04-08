@@ -170,6 +170,10 @@ def system_logs(log):
     return render_template("advanced.logs.html",
                            active=log_filter.value,
                            log_html=logs,
+                           breadcrumbs=[
+                               (_("Advanced"), url_for("main.advanced")),
+                               (_("System Logs"), None)
+                           ],
                            csp_nonce=g.csp_nonce,
                            date_filter={"start":start,"end":end},
                            active_page="advanced")

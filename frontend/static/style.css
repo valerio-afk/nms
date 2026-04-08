@@ -306,3 +306,29 @@ tr.clickable-row
 {
   cursor: pointer;
 }
+
+.sensor-grid
+{
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 1rem;
+}
+
+.sensor-tile
+{
+  aspect-ratio: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dee2e6;
+  border-radius: 0.5rem;
+  text-align: center;
+  transition: transform 0.15s, box-shadow 0.15s;
+  cursor: pointer;
+}
+
+div.progress div.progress-bar
+{
+    width: calc(var(--progress, 0) * 1%);
+}

@@ -1,13 +1,15 @@
 from backend_server.utils.cmdl import Shutdown, Reboot, SystemCtlRestart, LocalCommandLineTransaction, JournalCtl
-from backend_server.utils.cmdl import TarArchive, LS
+from backend_server.utils.cmdl import TarArchive, LS, LMSensors
 from backend_server.utils.config import CONFIG
 from backend_server.utils.inet import DistroFamilies
-from backend_server.utils.responses import BackendProperty, BackgroundTask, ErrorMessage
+from backend_server.utils.responses import BackendProperty, BackgroundTask, ErrorMessage, Sensor, SensorType
+from backend_server.utils.responses import SensorMetric
 from backend_server.utils.scheduler import SCHEDULER
 from backend_server.utils.threads import AptGetUpdateThread, AptGetUpgradeThread, NMSUpdate, DNFCheckUpdateThread
 from backend_server.utils.threads import DNFUpgradeThread
 from backend_server.v1.auth import verify_token_factory, UserPermissions, check_permission
 from backend_server.v1.net import net_counter
+from backend_server.v1.disks import smartctl, get_system_disks
 from collections import OrderedDict
 from enum import Enum
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,11 +17,13 @@ from nms_shared import ErrorMessages
 from nms_shared.constants import APT_LISTS
 from nms_shared.enums import LogFilter
 from requests.exceptions import HTTPError
-from typing import Optional, Dict, Union
+from typing import Optional, Dict, Union, List
 import datetime
+import json
 import os
 import platform
 import psutil
+import re
 import requests
 
 
@@ -29,6 +33,11 @@ system = APIRouter(
     prefix='/system',
     tags=['system'],
     dependencies=[Depends(verify_token)]
+)
+
+system_sensors = APIRouter(
+    prefix='/system',
+    tags=['system']
 )
 
 
@@ -90,6 +99,70 @@ def restart_services(username) -> None:
     if (len(cmds) > 0):
         trans = LocalCommandLineTransaction(*cmds)
         trans.run()
+
+def coretemp_parser(data:dict) -> List[Sensor]:
+    sensors = []
+    package_re = re.compile(r"Package id ([0-9]+)")
+    core_re = re.compile(r"Core ([0-9]+)")
+    temp_re = re.compile(r"temp[0-9]+_input")
+
+    for k,v in data.items():
+        name = None
+
+        if (m:= package_re.match(k)):
+            id = int(m.group(1))
+            name = f"CPU {id+1}"
+        elif (m:= core_re.match(k)):
+            id = int(m.group(1))
+            name = f"Core {id+1}"
+
+        if ((name is not None) and (isinstance(v, dict))):
+            for tk,tv in v.items():
+                if (temp_re.match(tk)):
+                    sensors.append(Sensor(
+                        device=SensorType.CPU,
+                        name=name,
+                        value=tv,
+                        metric=SensorMetric.CELSIUS))
+
+    return sensors
+
+def anyfan_parser(data:dict) -> List[Sensor]:
+    sensors = []
+    fan_re = re.compile(r"fan([0-9]+)")
+
+    for k,v in data.items():
+        if (m:= fan_re.match(k)):
+            id = int(m.group(1))
+            fan_key = f"{k}_input"
+
+            sensors.append(Sensor(
+                device=SensorType.FAN,
+                name=f"Fan {id}",
+                value=v[fan_key],
+                metric=SensorMetric.RPM
+            ))
+
+    return sensors
+
+
+def hddtemp_parser(data:List[str]) -> List[Sensor]:
+    sensors = []
+
+    for l in data:
+        dev,_,temp = l.split(":")
+        temp_value = float(temp.strip("°C\n "))
+        sensors.append(Sensor(
+            device=SensorType.HDD,
+            name=dev,
+            value=temp_value,
+            metric=SensorMetric.CELSIUS
+        ))
+
+    return sensors
+
+
+
 
 class SystemProperties(Enum):
     system_information = "system_information"
@@ -326,3 +399,32 @@ def make_tarball(token:dict=Depends(verify_token)) -> None:
 
     if (cmd.returncode != 0):
         raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_SYSTEM_DIST.name,params=[cmd.stderr]))
+
+
+
+@system_sensors.get("/sensors",response_model=List[Sensor],summary="Returns sensor data information (temp, fans, etc.)")
+def get_sensors() -> List[Sensor]:
+    sensors = []
+
+    lmsensors_cmd = LMSensors().execute()
+    lmsensors = json.loads(lmsensors_cmd.stdout) if lmsensors_cmd.returncode == 0 else {}
+
+    for sensor,data in lmsensors.items():
+        if ("coretemp" in sensor):
+            sensors+=coretemp_parser(data)
+        if (len(fans:=anyfan_parser(data))>0):
+            sensors+=fans
+
+    for d in get_system_disks():
+        smart = smartctl(d.path)
+
+        if (smart.temperature is not None):
+            sensors.append(Sensor(
+                device=SensorType.HDD,
+                name=d.path,
+                value=smart.temperature,
+                metric=SensorMetric.CELSIUS
+            ))
+
+    return sensors
+

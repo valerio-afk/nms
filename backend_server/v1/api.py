@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from .system import system
+from .system import system, system_sensors
 from .auth import auth
 from .net import net
 from .pool import pool
@@ -14,6 +14,7 @@ v1.include_router(net)
 v1.include_router(pool)
 v1.include_router(disks)
 v1.include_router(system)
+v1.include_router(system_sensors)
 v1.include_router(services)
 v1.include_router(fs)
 v1.include_router(fs_preview)

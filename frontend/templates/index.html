@@ -123,6 +123,19 @@
   </nav>
 
   <div id="page-content">
+    {% if breadcrumbs %}
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb">
+        {% for lbl,url in breadcrumbs %}
+          {% if url is not none %}
+            <li class="breadcrumb-item"><a href="{{ url }}">{{ lbl }}</a></li>
+          {% else %}
+            <li class="breadcrumb-item active" aria-current="page">{{ lbl }}</li>
+          {% endif %}
+        {% endfor %}
+      </ol>
+    </nav>
+    {% endif %}
     {% include "flash_cards.html" %}
 
     {% block content %}
@@ -142,6 +155,7 @@
     GlobalRefresher.start();
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
     const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    refreshProgressBars()
   </script>
 </body>
 </html>

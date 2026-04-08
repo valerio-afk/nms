@@ -2709,3 +2709,63 @@ class DNFUpgrade(DNF):
     @staticmethod
     def from_dict(serialisation):
         return DNFUpgrade()
+
+
+class BashScript(CommandLine):
+    def __init__(this, script_path:str, arguments:Optional[List[str]],**kwargs):
+        cmd = ['bash',script_path]
+
+        if (arguments is not None):
+            cmd.extend(arguments)
+
+        this._script_path = script_path
+        this._arguments = arguments
+
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['script_path'] = this._script_path
+        d['arguments'] = this._arguments
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return BashScript(
+            serialisation.get("script_path", None),
+            serialisation.get('arguments', None),
+        )
+
+class LMSensors(CommandLine):
+    def __init__(this,**kwargs):
+        super().__init__(['sensors','-j'],**kwargs)
+
+    def to_dict(this):
+        return {}
+
+    @staticmethod
+    def from_dict(serialisation):
+        return DNFUpgrade()
+
+class HDDTemp(CommandLine):
+    def __init__(this,disks:List[str],**kwargs):
+        this._disks = disks
+
+        cmd = ['hddtemp'] + disks
+
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['disks'] = this._disks
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return HDDTemp(
+            serialisation.get("disks", None),
+        )
+
+

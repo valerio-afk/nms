@@ -4,7 +4,8 @@ from string import Template
 from nms_shared.enums import RequestMethod
 from nms_shared.disks import Disk
 from nms_shared.threads import NMSThread
-from backend_server.utils.cmdl import ZPoolStatus, APTGetUpdate, APTGetUpgrade, TarArchive, Chown, Chmod, RemoveFile
+from backend_server.utils.cmdl import ZPoolStatus, APTGetUpdate, APTGetUpgrade, TarArchive, Chown, Chmod, RemoveFile, \
+    BashScript
 from backend_server.utils.cmdl import LocalCommandLineTransaction, NPMRun, DNFCheckUpdate, DNFUpgrade
 from nms_shared import ErrorMessages, SuccessMessages
 from backend_server.utils.responses import ErrorMessage, SuccessMessage
@@ -283,9 +284,11 @@ class NMSUpdate(NMSThread):
                                 detail=ErrorMessage(code=ErrorMessages.E_APT_GET.name, params=[str(e)]))
 
         cwd = os.getcwd()
+        install_script = os.path.join(cwd, "nms_sysconf.sh")
 
         cmds = [
             TarArchive(cwd,tmp_path,action=TarArchive.TarAction.EXTRACT,strip_components=1),
+            BashScript(install_script,["--only-pkg"],sudo=True),
             NPMRun("build",cwd=os.path.join(cwd,"box")),
             Chown("backend","www-data",cwd,['-R']),
             Chmod(CONFIG.config_filename, "600"),

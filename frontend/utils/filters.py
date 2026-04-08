@@ -1,10 +1,9 @@
 from markdown import markdown
 from typing import Optional, Union
-from flask_babel import _
-from pytz import tzinfo
-
+from flask_babel import _, format_timedelta
 from nms_shared.enums import DiskStatus
-from datetime import datetime,timedelta, timezone
+from typing import Dict
+from datetime import datetime,timedelta
 from flask_babel import format_datetime
 
 def disk_charm(disk_status:DiskStatus) -> str:
@@ -89,3 +88,7 @@ def notification_date_format(ts:Union[int,str])->str:
         return f"{_("Yesterday")} {time}"
     else:
         return f"{format_datetime(ts_datetime, "dd/MM/yyyy",rebase=False)} {time}"
+
+
+def timedelta_fmt(delta:Dict[str,int])->str:
+    return format_timedelta(timedelta(hours=delta["hours"],minutes=delta["minutes"]),granularity="minute")

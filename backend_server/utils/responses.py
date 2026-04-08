@@ -11,6 +11,16 @@ class InterfaceType(Enum):
     VPN = 'vpn'
     UNKNOWN = 'unknown'
 
+class SensorType(Enum):
+    CPU = 'cpu'
+    HDD = 'hdd'
+    FAN = 'fan'
+
+class SensorMetric(Enum):
+    CELSIUS = '°C'
+    RPM = 'RPM'
+
+
 class StatusMessage(BaseModel):
     type:str
     code:str
@@ -237,3 +247,38 @@ class ZipFile(BaseModel):
     zip_filename: str
     files: List[str]
     format: Literal["zip","gz","xz","bz2","7z"] = Field("zip")
+
+class Sensor(BaseModel):
+    device: SensorType
+    name:str
+    value : Union[int,float]
+    metric : SensorMetric
+
+class SMARTPowerOnTime(BaseModel):
+    hours:int
+    minutes:int
+
+class SMARTAttribute(BaseModel):
+    id:int
+    name:str
+    value:int
+    worst:int
+    thresh:int
+    when_failed: Any
+
+class SMARTSelfTestLog(BaseModel):
+    type:str
+    status:str
+    passed:bool
+    progress:Optional[int]
+
+
+class SMART(BaseModel):
+    device:str
+    available:bool
+    enabled:bool
+    passed:Optional[bool]
+    poweron_time:Optional[SMARTPowerOnTime]
+    temperature:Optional[int]
+    attributes:List[SMARTAttribute]
+    self_test_logs: List[SMARTSelfTestLog]

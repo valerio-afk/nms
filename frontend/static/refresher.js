@@ -1,3 +1,11 @@
+function refreshProgressBars()
+{
+  document.querySelectorAll('.progress-bar').forEach(el => {
+    const val = el.dataset.progress;
+    el.style.setProperty('--progress', val);
+  });
+}
+
 class PartialRefresher {
   constructor(intervalMs = 1000) {
     this.targets = new Map();  // id -> url
@@ -93,6 +101,7 @@ class PartialRefresher {
                   setInterval(initializeToggleControls,100)
                   setInterval(disableOnSubmit,100)
                   setInterval(enablePasswordToggle,100)
+                  setInterval(refreshProgressBars,100)
                 },
                 onBeforeElUpdated: function (fromEl, toEl) {
                     const active = document.activeElement;

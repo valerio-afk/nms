@@ -21,6 +21,10 @@ def widget_network_overview() -> Tuple[str,Optional[str]]:
     ifaces = BACKEND.network_interfaces + [BACKEND.vpn_config]
     return render_widget("network_list",ifaces=ifaces)
 
+def widget_sensors() -> Tuple[str,Optional[str]]:
+    sensors = BACKEND.sensors
+    return render_widget("sensors",sensors=sensors)
+
 def widget_access_overview() -> Tuple[str,Optional[str]]:
     access_services = BACKEND.access_services
 
@@ -45,6 +49,10 @@ def widget_disk_usage(user:dict) -> Tuple[str,Optional[str]]:
 @bp.route("/async/notification-number")
 def async_notification_number() -> str:
     return render_template("badge.notifications.html",notification_count=BACKEND.get_user_notifications_number())
+
+@bp.route("/async/sensors")
+def async_sensors_overview() -> str:
+    return widget_sensors()[0]
 
 @bp.route('/async/widgets/network_overview')
 def async_widget_network_overview() -> str:
@@ -86,6 +94,7 @@ def dashboard() -> str:
 
     if (current_user.get("main_pages", {}).get("advanced", False)):
         dashboard_widgets.append(widget_sys_info())
+        dashboard_widgets.append(widget_sensors())
 
     user = session['user']
     visible_name = user.get("visible_name")

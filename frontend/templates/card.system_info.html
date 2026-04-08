@@ -19,13 +19,13 @@
       <dt class="col-sm-4">{{ _("CPU Load:") }}</dt>
       <dd class="col-sm-8">
         <div class="progress" role="progressbar" aria-valuenow="{{ system_info['_cpu_load'] }}" aria-valuemin="0" aria-valuemax="100">
-            <div class="progress-bar  progress-bar-striped  bg-success" style="width: {{ system_info['_cpu_load'] }}%">{{ system_info['_cpu_load'] }}%</div>
+            <div class="progress-bar  progress-bar-striped  bg-success" data-progress="{{ system_info['_cpu_load'] }}">{{ system_info['_cpu_load'] }}%</div>
         </div>
       </dd>
     <dt class="col-sm-4">{{ _("RAM Usage:") }}</dt>
       <dd class="col-sm-8">
         <div class="progress" role="progressbar" aria-valuenow="{{ system_info['_memory_load'] }}" aria-valuemin="0" aria-valuemax="100">
-            <div class="progress-bar  progress-bar-striped  bg-success" style="width: {{ system_info['_memory_load'] }}%">{{ system_info['_memory_load'] }}%</div>
+            <div class="progress-bar  progress-bar-striped  bg-success" data-progress="{{ system_info['_memory_load'] }}">{{ system_info['_memory_load'] }}%</div>
         </div>
       </dd>
 </dl>

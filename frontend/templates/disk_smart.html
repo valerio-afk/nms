@@ -3,25 +3,101 @@
 {% block title %}{{ _("Disk Diagnostic") }}{% endblock %}
 
 {% block content %}
-    <h3>{{ _("Disk Information") }}: {{ disk.dev_reference }}</h3>
+    <h3>{{ _("Disk Information") }}: {{ disk.device }}</h3>
+    <h4>{{ _("Support") }}</h4>
 
-    {% for k,v in disk.items() %}
-        {% if k != "dev_reference" %}
-            {% if (v is not none) %}
-                {% if (v is not string) or ( (v is string) and ((v|length) > 0)) %}
-                    <dl class="row">
-                        <dt class="col-sm-4">{{ k|smart_label }} :</dt>
-                        <dd class="col-sm-8">
-                            {%  if v is boolean %}
-                                {{ v|boolean_fmt|safe }}
-                            {% else %}
-                                {{ v }}
-                            {% endif %}
-                        </dd>
-                    </dl>
+    <dl class="row">
+        <dt class="col-sm-2">{{ _("Available") }} :</dt>
+        <dd class="col-sm-10">{{ disk.available | boolean_fmt | safe }}</dd>
+
+        <dt class="col-sm-2">{{ _("Enabled") }} :</dt>
+        <dd class="col-sm-10">{{ disk.enabled | boolean_fmt | safe }}</dd>
+    </dl>
+
+    <h4>{{ _("Status") }}</h4>
+
+    <dl class="row">
+        <dt class="col-sm-2">{{ _("Power on time") }} :</dt>
+        <dd class="col-sm-10">{{ disk.poweron_time | timedelta_fmt if disk.poweron_time is not none else "-" }}</dd>
+
+        <dt class="col-sm-2">{{ _("Passed") }} :</dt>
+        <dd class="col-sm-10">{{ disk.passed | boolean_fmt | safe }}</dd>
+
+        <dt class="col-sm-2">{{ _("Temperature") }} :</dt>
+        <dd class="col-sm-10">{{ disk.temperature }}°C</dd>
+    </dl>
+
+    {% if disk.attributes|length > 0 %}
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>{{ _("ID") }}</th>
+                <th>{{ _("Name") }}</th>
+                <th>{{ _("Current Value") }}</th>
+                <th>{{ _("Worst Recorded Value") }}</th>
+                <th>{{ _("Threshold Value") }}</th>
+                <th>{{ _("When Failed") }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in disk.attributes %}
+            <tr>
+                <td> {{ item.id }} </td>
+                <td> {{ item.name }} </td>
+                <td>
+                    <span class="badge bg-{{ 'success' if item.value>=item.thresh else 'danger' }}">
+                        {{ item.value }}
+                    </span>
+                </td>
+                <td>
+                    <span class="badge bg-{{ 'success' if item.worst>=item.thresh else 'danger' }}">
+                        {{ item.worst }}
+                    </span>
+                </td>
+                <td>
+                    <span class="badge bg-info text-bg-info">
+                        {{ item.thresh }}
+                    </span>
+                </td>
+                <td> {{ item.when_failed if ((item.when_failed is not none) and (item.when_failed|length > 0)) else "-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {% if disk.self_test_logs | length > 0 %}
+
+    <h4>{{ _("Self-Test Logs") }}</h4>
+
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>{{ _("Type") }}</th>
+                <th>{{ _("Status") }}</th>
+                <th>{{ _("Passed") }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in disk.self_test_logs %}
+            <tr>
+                <td> {{ item.type }} </td>
+                <td> {{ item.status }} </td>
+                <td>
+                {% if item.progress is not none %}
+                    <div class="progress" role="progressbar" aria-valuenow="{{ item.progress }}" aria-valuemin="0" aria-valuemax="100">
+                        <div class="progress-bar  bg-info text-bg-info" data-progress="{{ item.progress }}" >{{ item.progress }}%</div>
+                    </div>
+                {% else %}
+                    {{ item.passed | boolean_fmt | safe }}
                 {% endif %}
-            {% endif %}
-        {% endif %}
-   {% endfor %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endif %}
+
+
 
 {% endblock %}

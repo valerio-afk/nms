@@ -20,11 +20,13 @@ Despite its rich feature set, getting started is straightforward and requires mi
 ## 🌟 Key Features
 * 📦 [OpenZFS](https://openzfs.org/wiki/Main_Page) under the hood for robust file management.
 * 👥 Multi-user system with finely-grained access control
+  * 💬 Notification system [BETA]
 * 📃 Quota management
 * 📸 Snapshots for data protection and recovery
 * 🔐 Encryption for secure storage
 * 🗜️ Compression to optimise disk usage
 * 🖴 SMART support
+* 🌡️Temperature/Fan sensor monitoring
 * 🌐 Multiple access services: SSH, HTTP/Web interface, SMB (Windows shares), NFS, FTP
 * 🔒 Built-in VPN support for secure remote access
 * 🌍 Dynamic DNS compatibility (works with most providers)

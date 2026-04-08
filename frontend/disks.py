@@ -11,7 +11,7 @@ from flask_wtf.csrf import validate_csrf
 from frontend.utils.decorators import wait
 from frontend.utils.forms import ImportPoolForm, CreatePoolForm, AddDisksForm
 from nms_shared.msg import ErrorMessages
-from pySMART import Device
+# from pySMART import Device
 from typing import Union
 from wtforms import ValidationError
 import time
@@ -77,16 +77,23 @@ def disk_management() -> str:
     return render_template("disk_mngt.html", **parameters)
 
 @bp.route('/disks/smart', methods=['POST'])
-def smart_disk() -> str:
+def smart_disk() -> Union[str,Response]:
     try:
         validate_csrf(request.form.get("csrf_token"))
     except ValidationError:
         show_flash(code=ErrorMessages.E_CSRF.name)
         return redirect(url_for("main.advanced"))
 
-    d = BACKEND.smart_info(request.form.get("disk"))
+    d = BACKEND.smart(request.form.get("disk"))
 
-    return render_template("disk_smart.html", disk = d)
+    return render_template("disk_smart.html",
+                           csp_nonce=g.csp_nonce,
+                           active_page="disk",
+                           breadcrumbs=[
+                               (_("Disk Management"),url_for("main.disk_management")),
+                               (_("Check disk health"),None)
+                           ],
+                           disk = d)
 
 
 # ACTION PAGES

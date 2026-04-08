@@ -39,6 +39,7 @@ PACKAGES_APT=(
     p7zip-full
     mailutils
     postfix
+    lm-sensors
 )
 
 PACKAGES_DNF=(
@@ -69,6 +70,7 @@ PACKAGES_DNF=(
     perl
     postfix
     mailx
+    lm_sensors
 )
 
 SERVICES_TO_DISABLE_APT=(
@@ -1196,6 +1198,18 @@ build_box_app() {
 }
 
 
+JUST_PKG=false
+
+# Parse arguments
+for arg in "$@"; do
+    case "$arg" in
+        --only-pkg)
+            JUST_PKG=true
+            ;;
+        *)
+            ;;
+    esac
+done
 
 # Check if the script is run by root
 
@@ -1220,6 +1234,15 @@ elif [[ "$family" == "rpm" ]]; then
     SUDO_GROUP="wheel"
 else
   error_exit "Unable to determine your linux distribution. Please, perform manual installation."
+fi
+
+# Step 1.5 - Detecting sensors
+log_info "Detecting sensors"
+sudo sensors-detect --auto
+
+if [ "$JUST_PKG" = true ]; then
+    log_warn "Package installed - Exit now."
+    exit 0
 fi
 
 # Step 2 --- Adding ZFS kernel module

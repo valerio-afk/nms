@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: NMS 0.1dev\n"
 "Report-Msgid-Bugs-To: afk.broadcast@gmail.com\n"
-"POT-Creation-Date: 2026-03-27 23:34+0000\n"
+"POT-Creation-Date: 2026-04-09 00:44+0100\n"
 "PO-Revision-Date: 2026-03-17 22:26+0000\n"
 "Last-Translator: Valerio AFK <afk.broadcast@gmail.com>\n"
 "Language: it\n"
@@ -23,7 +23,17 @@ msgstr ""
 msgid "Never"
 msgstr "Mai"
 
-#: frontend/advanced.py:280
+#: frontend/advanced.py:174 frontend/templates/advanced.html:3
+#: frontend/templates/index.html:54 frontend/users.py:23
+msgid "Advanced"
+msgstr "Avanzato"
+
+#: frontend/advanced.py:175 frontend/templates/advanced.logs.html:3
+#: frontend/templates/card.sys_admin.html:11
+msgid "System Logs"
+msgstr "Log di Sistema"
+
+#: frontend/advanced.py:284
 msgid ""
 "Update in progress. At the end of this operation, NMS will be restarted. "
 "You may refresh this page. If it becomes unresponsive, wait a few more "
@@ -33,176 +43,185 @@ msgstr ""
 "Puoi ricaricare questa pagina. Se non risponde più, attendi ancora un po'"
 " e ritenta."
 
-#: frontend/users.py:14
+#: frontend/disks.py:93 frontend/templates/card.disk_list.html:39
+#: frontend/templates/card.disk_usage.html:61
+#: frontend/templates/disk_mngt.html:3 frontend/templates/index.html:34
+msgid "Disk Management"
+msgstr "Gestione Dischi"
+
+#: frontend/disks.py:94 frontend/templates/card.disk.html:27
+msgid "Check disk health"
+msgstr "Controlla lo stato di salute"
+
+#: frontend/users.py:17
 msgid "Web Client"
 msgstr "Client Web"
 
 #: frontend/templates/dashboard.html:3 frontend/templates/index.html:6
-#: frontend/templates/index.html:29 frontend/users.py:15
+#: frontend/templates/index.html:30 frontend/users.py:18
 msgid "Dashboard"
 msgstr ""
 
-#: frontend/users.py:16
+#: frontend/users.py:19
 msgid "Access"
 msgstr "Accesso"
 
 #: frontend/templates/card.network_list.html:3
 #: frontend/templates/card.network_list.html:26
-#: frontend/templates/index.html:38 frontend/templates/network.html:3
-#: frontend/users.py:17 frontend/users.py:38
+#: frontend/templates/index.html:39 frontend/templates/network.html:3
+#: frontend/users.py:20 frontend/users.py:41
 msgid "Network"
 msgstr "Rete"
 
 #: frontend/templates/card.access_list.html:3
 #: frontend/templates/card.account_services.html:3
-#: frontend/templates/card.user_admin_services.html:3 frontend/users.py:18
+#: frontend/templates/card.user_admin_services.html:3 frontend/users.py:21
 msgid "Access Services"
 msgstr "Servizi di Accesso Remoto"
 
-#: frontend/templates/index.html:43 frontend/templates/users.html:3
-#: frontend/users.py:19
+#: frontend/templates/index.html:44 frontend/templates/users.html:3
+#: frontend/users.py:22
 msgid "Users"
 msgstr "Utenti"
 
-#: frontend/templates/advanced.html:3 frontend/templates/index.html:53
-#: frontend/users.py:20
-msgid "Advanced"
-msgstr "Avanzato"
-
-#: frontend/templates/card.disk_usage.html:9 frontend/users.py:22
+#: frontend/templates/card.disk_usage.html:9 frontend/users.py:25
 msgid "Disk Array"
 msgstr "Archivio"
 
-#: frontend/users.py:23 frontend/utils/forms.py:88
+#: frontend/users.py:26 frontend/utils/forms.py:88
 msgid "Disks"
 msgstr "Dischi"
 
-#: frontend/users.py:24
+#: frontend/users.py:27
 msgid "Health"
 msgstr "Stato dei dischi"
 
-#: frontend/users.py:25
+#: frontend/users.py:28
 msgid "Format"
 msgstr "Formatta"
 
-#: frontend/users.py:26
+#: frontend/users.py:29
 msgid "Tools"
 msgstr "Strumenti"
 
-#: frontend/templates/card.disk_tools.html:10 frontend/users.py:27
+#: frontend/templates/card.disk_tools.html:10 frontend/users.py:30
 msgid "Verify"
 msgstr "Verifica"
 
-#: frontend/templates/card.disk_tools.html:47 frontend/users.py:28
+#: frontend/templates/card.disk_tools.html:47 frontend/users.py:31
 msgid "Mount"
 msgstr "Monta"
 
-#: frontend/users.py:29
+#: frontend/users.py:32
 msgid "Configuration"
 msgstr "Configurazione"
 
-#: frontend/users.py:30
+#: frontend/users.py:33
 msgid "Create"
 msgstr "Crea Archivio"
 
-#: frontend/users.py:31
+#: frontend/users.py:34
 msgid "Import"
 msgstr "Importa"
 
-#: frontend/users.py:32
+#: frontend/users.py:35
 msgid "Expand"
 msgstr "Espandere"
 
-#: frontend/users.py:33
+#: frontend/users.py:36
 msgid "Destroy"
 msgstr "Distruggere"
 
-#: frontend/users.py:34
+#: frontend/users.py:37
 msgid "Recover"
 msgstr "Recupero"
 
-#: frontend/templates/card.disk.html:17 frontend/users.py:35
+#: frontend/templates/card.disk.html:17 frontend/users.py:38
 msgid "Replace"
 msgstr "Sostituisci"
 
-#: frontend/users.py:36
+#: frontend/users.py:39
 msgid "Get Information"
 msgstr "Informazioni"
 
-#: frontend/users.py:39 frontend/utils/filters.py:61
+#: frontend/users.py:42 frontend/utils/filters.py:64
 msgid "Interface"
 msgstr "Interfaccia"
 
-#: frontend/users.py:40
+#: frontend/users.py:43
 msgid "Manage"
 msgstr "Gestire"
 
-#: frontend/templates/card.ddns.html:3 frontend/users.py:41
+#: frontend/templates/card.ddns.html:3 frontend/users.py:44
 msgid "Dynamic DNS"
 msgstr "DNS Dinamico"
 
-#: frontend/templates/card.vpn.html:4 frontend/users.py:42
+#: frontend/templates/card.vpn.html:4 frontend/users.py:45
 msgid "VPN"
 msgstr ""
 
-#: frontend/users.py:44
+#: frontend/users.py:47
 msgid "System"
 msgstr "Sistema"
 
-#: frontend/users.py:45
+#: frontend/users.py:48
 msgid "Administration"
 msgstr "Amministrazione"
 
-#: frontend/users.py:46
+#: frontend/users.py:49
 msgid "Power Control"
 msgstr "Gestione Alimentazione"
 
-#: frontend/templates/card.apt.html:3 frontend/users.py:47
+#: frontend/templates/card.apt.html:3 frontend/users.py:50
 msgid "Updates"
 msgstr "Aggiornamenti"
 
-#: frontend/users.py:48
+#: frontend/users.py:51
 msgid "System Services"
 msgstr "Servizi di Sistema"
 
-#: frontend/users.py:49
+#: frontend/users.py:52
 msgid "Logs"
 msgstr "Log"
 
 #: frontend/templates/account.html:3 frontend/templates/card.account.html:3
-#: frontend/templates/card.account_admin.html:9 frontend/users.py:51
+#: frontend/templates/card.account_admin.html:9 frontend/users.py:54
 msgid "Account"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:285
+#: frontend/users.py:179
+msgid "No Title"
+msgstr ""
+
+#: frontend/api/backend_proxy.py:295
 msgid "Uptime"
 msgstr "Attivo"
 
-#: frontend/api/backend_proxy.py:285
+#: frontend/api/backend_proxy.py:295
 msgid "Since"
 msgstr "da"
 
-#: frontend/api/backend_proxy.py:286
+#: frontend/api/backend_proxy.py:296
 msgid "NMS Version"
 msgstr "Versione NMS"
 
-#: frontend/api/backend_proxy.py:287
+#: frontend/api/backend_proxy.py:297
 msgid "CPU"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:288
+#: frontend/api/backend_proxy.py:298
 msgid "OS"
 msgstr ""
 
-#: frontend/api/backend_proxy.py:344 frontend/utils/forms.py:84
+#: frontend/api/backend_proxy.py:358 frontend/utils/forms.py:84
 msgid "Encryption"
 msgstr "Cifratura"
 
-#: frontend/api/backend_proxy.py:345 frontend/utils/forms.py:83
+#: frontend/api/backend_proxy.py:359 frontend/utils/forms.py:83
 msgid "Redundancy"
 msgstr "Ridondanza"
 
-#: frontend/api/backend_proxy.py:346 frontend/utils/forms.py:85
+#: frontend/api/backend_proxy.py:360 frontend/utils/forms.py:85
 msgid "Compression"
 msgstr "Compressione"
 
@@ -234,14 +253,9 @@ msgstr "Entra con le apposite credenziali oppure contatta l'amministratore."
 msgid "Go to Login"
 msgstr "Log in"
 
-#: frontend/templates/access.html:3 frontend/templates/index.html:48
+#: frontend/templates/access.html:3 frontend/templates/index.html:49
 msgid "Remote Access"
 msgstr "Accesso Remoto"
-
-#: frontend/templates/advanced.logs.html:3
-#: frontend/templates/card.sys_admin.html:11
-msgid "System Logs"
-msgstr "Log di Sistema"
 
 #: frontend/templates/advanced.logs.html:10
 msgid "Web App"
@@ -639,7 +653,7 @@ msgid "Quota"
 msgstr ""
 
 #: frontend/templates/card.account.html:28 frontend/templates/card.apt.html:64
-#: frontend/utils/filters.py:32
+#: frontend/utils/filters.py:35
 msgid "No"
 msgstr ""
 
@@ -686,8 +700,12 @@ msgid "Superuser"
 msgstr ""
 
 #: frontend/templates/card.account_admin.html:111
-msgid "Provide the link above to the new user to activate their account. This token is valid for 24 hours."
-msgstr "Dai questo link al nuovo utente per attivare il loro account. Il token è valido per 24 ore."
+msgid ""
+"Provide the link above to the new user to activate their account. This "
+"token is valid for 24 hours."
+msgstr ""
+"Dai questo link al nuovo utente per attivare il loro account. Il token è "
+"valido per 24 ore."
 
 #: frontend/templates/card.account_admin.html:118
 msgid "Reset login credentials"
@@ -719,6 +737,14 @@ msgid "User deletion is a permanent action and cannot be restored."
 msgstr ""
 "La cancellazione di un utente è un'operazione permanente e non può essere"
 " ripristinato."
+
+#: frontend/templates/card.account_notifications.html:3
+msgid "Notifications"
+msgstr "Notifiche"
+
+#: frontend/templates/card.account_notifications.html:33
+msgid "You have no new notifications."
+msgstr "Non hai nuove notifiche."
 
 #: frontend/templates/card.account_services.html:20
 #: frontend/templates/card.user_admin_services.html:21
@@ -832,17 +858,13 @@ msgstr "Prossimo Aggiornamento"
 msgid "Disk"
 msgstr "Disco"
 
-#: frontend/templates/card.disk.html:27
-msgid "Check disk health"
-msgstr "Controlla lo stato di salute"
-
 #: frontend/templates/card.disk_list.html:3
 msgid "Disk List"
 msgstr "Lista dei Dischi"
 
 #: frontend/templates/card.disk_list.html:11
 #: frontend/templates/card.snapshot_list.html:13
-#: frontend/templates/card.vpn.html:78
+#: frontend/templates/card.vpn.html:78 frontend/templates/disk_smart.html:35
 msgid "Name"
 msgstr "Nome"
 
@@ -862,12 +884,6 @@ msgstr "Nessun archivio configurato."
 #, python-format
 msgid "Go to %(disk_mngt)s to configure your disk array."
 msgstr "Vai su %(disk_mngt)s per configurare il tuo archivio."
-
-#: frontend/templates/card.disk_list.html:39
-#: frontend/templates/card.disk_usage.html:61
-#: frontend/templates/disk_mngt.html:3 frontend/templates/index.html:33
-msgid "Disk Management"
-msgstr "Gestione Dischi"
 
 #: frontend/templates/card.disk_tools.html:3
 msgid "Disk Tools"
@@ -1021,6 +1037,10 @@ msgstr "Finito alle"
 msgid "Errors"
 msgstr "Errori"
 
+#: frontend/templates/card.sensors.html:3
+msgid "Sensors"
+msgstr "Sensori"
+
 #: frontend/templates/card.snapshot_list.html:3
 msgid "Snapshots"
 msgstr "List Snapshot"
@@ -1129,6 +1149,63 @@ msgstr "Diagnostica Disco"
 msgid "Disk Information"
 msgstr "Informazioni Disco"
 
+#: frontend/templates/disk_smart.html:7
+msgid "Support"
+msgstr "Supporto"
+
+#: frontend/templates/disk_smart.html:10
+msgid "Available"
+msgstr "Disponibile"
+
+#: frontend/templates/disk_smart.html:13 frontend/utils/filters.py:30
+#: frontend/utils/forms.py:156
+msgid "Enabled"
+msgstr "Attivato"
+
+#: frontend/templates/disk_smart.html:17 frontend/templates/disk_smart.html:77
+msgid "Status"
+msgstr "Stato"
+
+#: frontend/templates/disk_smart.html:20
+msgid "Power on time"
+msgstr "Tempo di attività"
+
+#: frontend/templates/disk_smart.html:23 frontend/templates/disk_smart.html:78
+msgid "Passed"
+msgstr "Passato"
+
+#: frontend/templates/disk_smart.html:26
+msgid "Temperature"
+msgstr "Temperatura"
+
+#: frontend/templates/disk_smart.html:34
+msgid "ID"
+msgstr ""
+
+#: frontend/templates/disk_smart.html:36
+msgid "Current Value"
+msgstr "Valore Attuale"
+
+#: frontend/templates/disk_smart.html:37
+msgid "Worst Recorded Value"
+msgstr "Peggior Valore Registrato"
+
+#: frontend/templates/disk_smart.html:38
+msgid "Threshold Value"
+msgstr "Valore Soglia"
+
+#: frontend/templates/disk_smart.html:39
+msgid "When Failed"
+msgstr "Errore Verificato Quando..."
+
+#: frontend/templates/disk_smart.html:71
+msgid "Self-Test Logs"
+msgstr "Log Test Autodiagnostica"
+
+#: frontend/templates/disk_smart.html:76
+msgid "Type"
+msgstr "Tipo"
+
 #: frontend/templates/form.ddns.dnsexit.html:5
 #: frontend/templates/form.ddns.duckdns.html:5
 msgid "Domain"
@@ -1170,27 +1247,27 @@ msgstr ""
 msgid "DNS"
 msgstr ""
 
-#: frontend/templates/index.html:107
+#: frontend/templates/index.html:114
 msgid "Are you sure you want to log out?"
 msgstr "Sei sicuro di volere uscire?"
 
-#: frontend/templates/index.html:107
+#: frontend/templates/index.html:114
 msgid "Logout"
 msgstr "Esci"
 
-#: frontend/templates/index.html:109
+#: frontend/templates/index.html:116
 msgid "Are you sure you want to reboot the system?"
 msgstr "Sei sicuro di voler riavviare il sistema?"
 
-#: frontend/templates/index.html:109
+#: frontend/templates/index.html:116
 msgid "Reboot"
 msgstr "Riavvia"
 
-#: frontend/templates/index.html:110
+#: frontend/templates/index.html:117
 msgid "Are you sure you want to power off the system?"
 msgstr "Sei sicuro di voler spegnere il sistema?"
 
-#: frontend/templates/index.html:110
+#: frontend/templates/index.html:117
 msgid "Shutdown"
 msgstr "Spegni"
 
@@ -1249,7 +1326,7 @@ msgstr "Chiudi"
 msgid "Cancel"
 msgstr "Annulla"
 
-#: frontend/templates/modal.confirm.html:18 frontend/utils/filters.py:32
+#: frontend/templates/modal.confirm.html:18 frontend/utils/filters.py:35
 msgid "Yes"
 msgstr "Si"
 
@@ -1266,7 +1343,7 @@ msgstr ""
 
 #: frontend/templates/network.html:30
 msgid "Understood"
-msgstr ""
+msgstr "Ho Capito"
 
 #: frontend/templates/toast.copy_clipboard.html:5
 msgid "Text copied to clipboard."
@@ -1297,37 +1374,37 @@ msgstr "Se richiesto"
 msgid "Connect"
 msgstr "Connetti"
 
-#: frontend/utils/filters.py:21
+#: frontend/utils/filters.py:24
 msgid "New"
 msgstr "Nuovo"
 
-#: frontend/utils/filters.py:22
+#: frontend/utils/filters.py:25
 msgid "Online"
 msgstr ""
 
-#: frontend/utils/filters.py:23
+#: frontend/utils/filters.py:26
 msgid "Offline"
 msgstr ""
 
-#: frontend/utils/filters.py:24
+#: frontend/utils/filters.py:27
 msgid "Corrupted"
 msgstr "Corrotto"
 
-#: frontend/utils/filters.py:27 frontend/utils/forms.py:156
-msgid "Enabled"
-msgstr "Attivato"
-
-#: frontend/utils/filters.py:27
+#: frontend/utils/filters.py:30
 msgid "Disabled"
 msgstr "Disattivato"
 
-#: frontend/utils/filters.py:57
+#: frontend/utils/filters.py:60
 msgid "Device"
 msgstr "Dispositivo"
 
-#: frontend/utils/filters.py:59
+#: frontend/utils/filters.py:62
 msgid "Is SSD"
 msgstr "È SSD"
+
+#: frontend/utils/filters.py:88
+msgid "Yesterday"
+msgstr "Ieri"
 
 #: frontend/utils/forms.py:86
 msgid "Pool Name"
@@ -2240,19 +2317,21 @@ msgstr ""
 #: nms_shared/src/nms_shared/msg.py:229
 #, python-format
 msgid "Error while obtaining system information on ports: %(info)s"
-msgstr ""
-"Errore durante il recupero delle informazioni delle porte: "
-"%(info)s"
+msgstr "Errore durante il recupero delle informazioni delle porte: %(info)s"
 
 #: nms_shared/src/nms_shared/msg.py:230
 #, python-format
 msgid "Error while starting the system service(s) %(services)s: %(info)s"
-msgstr "Errore durante l'avvio del/dei servizio/o di sistema %(services)s: %(info)s."
+msgstr ""
+"Errore durante l'avvio del/dei servizio/o di sistema %(services)s: "
+"%(info)s."
 
 #: nms_shared/src/nms_shared/msg.py:231
 #, python-format
 msgid "Error while stopping the system service(s) %(services)s: %(info)s"
-msgstr "Errore durante l'arresto del/dei servizio/o di sistema %(services)s: %(info)s."
+msgstr ""
+"Errore durante l'arresto del/dei servizio/o di sistema %(services)s: "
+"%(info)s."
 
 #: nms_shared/src/nms_shared/msg.py:276
 msgid "You have already an OTP credentials configured."
@@ -2262,7 +2341,9 @@ msgstr "Hai già le credenziali OTP configurate."
 msgid ""
 "Unable to update your current system. You may do so manually by accessing"
 " it via SSH."
-msgstr "Non è possibile aggiornare il tuo sistema. Puoi farlo manualmente tramite SSH."
+msgstr ""
+"Non è possibile aggiornare il tuo sistema. Puoi farlo manualmente tramite"
+" SSH."
 
 #: nms_shared/src/nms_shared/msg.py:292
 #, python-format
@@ -2277,7 +2358,9 @@ msgstr "Errore durante la disattivazione del servizio %(service)s: %(info)s"
 #: nms_shared/src/nms_shared/msg.py:296
 #, python-format
 msgid "Error while changing the property `%(prop)s`: %(info)s"
-msgstr "Errore durante il cambiamento il valore per la proprietà `%(prop)s`: %(info)s"
+msgstr ""
+"Errore durante il cambiamento il valore per la proprietà `%(prop)s`: "
+"%(info)s"
 
 #: nms_shared/src/nms_shared/msg.py:334
 #, python-format
@@ -2314,12 +2397,12 @@ msgid "Error while copying: `%(path)s`: %(info)s."
 msgstr "Errore nel copiare `%(path)s`: %(info)s."
 
 #: nms_shared/src/nms_shared/msg.py:343
-#,  python-format
+#, python-format
 msgid "Error while moving: `%(path)s`: %(info)s."
 msgstr "Errore nello spostare `%(path)s`: %(info)s."
 
 #: nms_shared/src/nms_shared/msg.py:344
-#,  python-format
+#, python-format
 msgid "Error while creating the directory `%(path)s`: %(info)s."
 msgstr "Errore nel creare la directory `%(path)s`: %(info)s."
 
