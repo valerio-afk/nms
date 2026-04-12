@@ -282,3 +282,4 @@ class SMART(BaseModel):
     temperature:Optional[int]
     attributes:List[SMARTAttribute]
     self_test_logs: List[SMARTSelfTestLog]
+

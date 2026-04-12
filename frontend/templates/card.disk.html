@@ -19,15 +19,14 @@
 </div>
 </form>
 {% elif disk.status.value == 1 %}
-    <form action="{{ url_for('main.smart_disk') }}" method="POST">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-<div class="row g-1">
-    <div class="col-12">
-        <button class="btn btn-info w-100" type="submit" name="disk" value="{{ disk.path }}"><i class="bi bi-device-hdd-fill"></i>
-            {{ _("Check disk health") }}</button>
-    </div>
-</div>
-</form>
+    <form action="{{ url_for('main.smart_disk') }}" method="GET">
+        <div class="row g-1">
+            <div class="col-12">
+                <button class="btn btn-info w-100" type="submit" name="disk" value="{{ disk.path }}"><i class="bi bi-device-hdd-fill"></i>
+                    {{ _("Check disk health") }}</button>
+            </div>
+        </div>
+    </form>
 {% endif %}
 {% endblock %}
 

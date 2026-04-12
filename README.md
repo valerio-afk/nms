@@ -639,7 +639,44 @@ $ sudo systemctl restart nginx
 🚀 **Well done.** You can now follow the [Onboarding](#-onboarding) steps to start configuring your NMS installation. 
 </details>
 
+### Additional step for Raspberry Pi with Radxa Quad SATA HAT users 
 
+If you are using a Raspberry Pi with a [Radxa Quad SATA HAT](https://wiki.radxa.com/Dual_Quad_SATA_HAT), you should install the `radxactl` control script.  
+This script will:
+
+* Enable the SATA HAT ports (required) ⚠️ 
+* Control the fan (optional, if a fan is present)
+
+You can install the control script with the default GPIO configuration:
+
+```shell
+$ sudo ./install_radxactl.sh
+```
+
+If your [GPIO configuration](https://pinout.xyz) is different (for example, on a Radxa ROCK board), you can specify custom pins:
+
+| Flag          | Description                        | Default (BCM) |
+|---------------|------------------------------------|---------------|
+| `--sata12`      | GPIO pin for SATA ports 1-2 enable | 25            |
+| `--sata34`      | GPIO pin for SATA ports 3-4 enable | 26            |
+| `--fan-pwm`     | GPIO pin controlling fan PWM       | 13            |
+| `--fan-sensing` | GPIO pin reading fan tachometer    | 23            |
+
+Example of installing with custom pins:
+
+```shell
+$ sudo ./install_radxactl.sh \
+  --sata12=17 \
+  --sata34=27 \
+  --fan-pwm=18 \
+  --fan-sensing=24
+```
+
+Once installed, if a fan is connected, the script will read temperatures from the NMS backend and regulate fan RPMs automatically.
+
+>⚠️ **Important Note**
+> 
+> If the temperature sensors cannot be read, the fan will default to maximum speed for safety.
 
 
 ---

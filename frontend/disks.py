@@ -76,15 +76,9 @@ def disk_management() -> str:
 
     return render_template("disk_mngt.html", **parameters)
 
-@bp.route('/disks/smart', methods=['POST'])
+@bp.route('/disks/smart', methods=['GET'])
 def smart_disk() -> Union[str,Response]:
-    try:
-        validate_csrf(request.form.get("csrf_token"))
-    except ValidationError:
-        show_flash(code=ErrorMessages.E_CSRF.name)
-        return redirect(url_for("main.advanced"))
-
-    d = BACKEND.smart(request.form.get("disk"))
+    d = BACKEND.smart(request.args.get("disk"))
 
     return render_template("disk_smart.html",
                            csp_nonce=g.csp_nonce,
@@ -94,6 +88,22 @@ def smart_disk() -> Union[str,Response]:
                                (_("Check disk health"),None)
                            ],
                            disk = d)
+
+@bp.route('/disks/smart/test',methods=['POST'])
+def run_selftest() -> Response:
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+
+    test = request.form.get("test")
+    disk = request.form.get("disk")
+
+    BACKEND.run_smart_self_test(disk,test)
+
+    return redirect(url_for("main.smart_disk",disk=disk))
+
+
 
 
 # ACTION PAGES

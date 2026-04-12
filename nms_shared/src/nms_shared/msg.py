@@ -66,6 +66,7 @@ class ErrorMessages(Enum):
 
     E_DISK_ATTACH = "E_DISK_ATTACH"
     E_DISK_FORMAT = "E_DISK_FORMAT"
+    E_DISK_SELF_TEST = "E_DISK_SELF_TEST"
 
     E_FS_CH_PERM =  "E_FS_CH_PERM"
 
@@ -179,6 +180,7 @@ class SuccessMessages(Enum):
     S_ACCESS_DISABLED = "S_ACCESS_DISABLED"
 
     S_DISK_FORMATTED = "S_DISK_FORMATTED"
+    S_DISK_SELF_TEST = "S_DISK_SELF_TEST"
 
     S_POOL_REPLACE_DISK = "S_POOL_REPLACE_DISK"
 
@@ -283,6 +285,7 @@ ERROR_MESSAGES = {
 
     ErrorMessages.E_DISK_ATTACH : lambda details: _("Unable to attach new device to disk array: %(details)s") % {'details': details},
     ErrorMessages.E_DISK_FORMAT : lambda dev, info: _("Error while formatting %(dev)s: %(info)s") % {'dev': dev, 'info': info},
+    ErrorMessages.E_DISK_SELF_TEST: lambda dev, info: _("Error while running a self-test on %(dev)s: %(info)s") % {'dev': dev, 'info': info},
 
     ErrorMessages.E_FS_CH_PERM : lambda path, info: _("Unable to change permissions for %(path)s: %(info)s") % {'path':path,'info': info},
 
@@ -382,6 +385,7 @@ SUCCESS_MESSAGES = {
     SuccessMessages.S_ACCESS_DISABLED : lambda service : _("Service %(service)s disabled successfully.") % {'service':service},
 
     SuccessMessages.S_DISK_FORMATTED : lambda dev : _("Disk %(dev)s formatted successfully.") % {'dev':dev},
+    SuccessMessages.S_DISK_SELF_TEST : lambda dev : _("Disk self-test launched successfully on %(dev)s. Check the logs below to track the progression status and results.") % {'dev':dev},
 
     SuccessMessages.S_NET_VPN_KEYSGEN : lambda : _("VPN private and public keys generated successfully.") ,
     SuccessMessages.S_NET_VPN_CONFIG : lambda : _("VPN configuration changes applied successfully.") ,

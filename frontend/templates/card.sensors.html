@@ -5,26 +5,32 @@
 {% block card_content %}
 
 <div class="container">
-  <div class="sensor-grid">
-      {% if sensors %}
-      {% for sensor in sensors %}
-          <div class="sensor-tile">
-              <div class="d-flex flex-column align-items-center justify-content-center text-center">
-                  {% if sensor.device == "cpu" %}
-                    <i class="bi bi-cpu fs-1"></i>
-                  {% elif sensor.device == "hdd" %}
-                    <i class="bi bi-device-hdd-fill fs-1"></i>
-                  {% elif sensor.device == "fan" %}
-                    <i class="bi bi-fan fs-1"></i>
-                  {% endif %}
+    {% if sensors %}
+      <div class="sensor-grid">
 
-                <div class="mt-2 fw-bold">{{ sensor.name }}</div>
-                <div class="mt-1">{{ sensor.value }} {{ sensor.metric }}</div>
-              </div>
-         </div>
-      {% endfor %}
+          {% for sensor in sensors %}
+              <div class="sensor-tile">
+                  <div class="d-flex flex-column align-items-center justify-content-center text-center">
+                      {% if sensor.device == "cpu" %}
+                        <i class="bi bi-cpu fs-1"></i>
+                      {% elif sensor.device == "hdd" %}
+                        <i class="bi bi-device-hdd-fill fs-1"></i>
+                      {% elif sensor.device == "fan" %}
+                        <i class="bi bi-fan fs-1"></i>
+                      {% endif %}
+
+                    <div class="mt-2 fw-bold">{{ sensor.name }}</div>
+                    <div class="mt-1">{{ sensor.value }} {{ sensor.metric }}</div>
+                  </div>
+             </div>
+          {% endfor %}
+      </div>
+    {% else %}
+        <div class="mt-5">
+          {% set callout_text = "<p>"|safe ~ _("No sensors detected") ~"</p>"|safe %}
+          {% include "callout.warning.html" %}
+        </div>
       {% endif %}
-  </div>
 </div>
 
 

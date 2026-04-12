@@ -1,15 +1,17 @@
+from enum import Enum
+
 from .auth import check_permission
-from backend_server.utils.cmdl import LSBLK, ZPoolLabelClear, WipeFS
+from backend_server.utils.cmdl import LSBLK, ZPoolLabelClear, WipeFS, SMARTCTL
 from backend_server.utils.config import CONFIG
-from backend_server.utils.responses import ErrorMessage, SuccessMessage, SMART, SMARTPowerOnTime, SMARTAttribute, \
-    SMARTSelfTestLog
+from backend_server.utils.responses import ErrorMessage, SuccessMessage, SMART, SMARTPowerOnTime, SMARTAttribute
+from backend_server.utils.responses import SMARTSelfTestLog
 from backend_server.v1.auth import verify_token_factory, verify_token_header_factory
 from fastapi import APIRouter, Depends, HTTPException
 from nms_shared import ErrorMessages
 from nms_shared.disks import Disk
 from nms_shared.msg import SuccessMessages
 from nms_shared.enums import UserPermissions, DiskStatus
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Literal
 import json
 
 
@@ -20,6 +22,10 @@ disks = APIRouter(
     tags=['disks'],
     dependencies=[Depends(verify_token)]
 )
+
+class SMARTSelfTest(Enum):
+    LONG = "long"
+    SHORT = "short"
 
 
 def get_system_disks() -> List[Disk]:
@@ -84,8 +90,8 @@ def format_disk(dev:str) -> None:
 
 
 def smartctl(device:str) -> SMART:
-    with open("smartctl.json") as f:
-        smartctl_data = json.load(f)
+    cmd = SMARTCTL(device,sudo=True).execute()
+    smartctl_data = json.loads(cmd.stdout) if cmd.returncode == 0 else {}
 
     smart_support = smartctl_data.get("smart_support",{})
     smart_available = smart_support.get("available",False)
@@ -136,7 +142,7 @@ def smartctl(device:str) -> SMART:
 
 
     return SMART(
-        device = smartctl_data.get('device',{}).get("name"),
+        device = smartctl_data.get('device',{}).get("name",device),
         available=smart_available,
         enabled=smart_enabled,
         passed=smartctl_data.get("smart_status",{}).get("passed"),
@@ -186,3 +192,16 @@ def get_smart_info(dev:str,token:dict=Depends(verify_token)) -> SMART:
     check_permission(token.get("username"), UserPermissions.POOL_DISKS_HEALTH)
 
     return smartctl(dev)
+
+@disks.post("/smart/test/{test}",summary="Run a SMART self-test")
+def smart_self_test(test:SMARTSelfTest,dev:str,token:dict=Depends(verify_token)) -> Dict:
+    check_permission(token.get("username"), UserPermissions.POOL_DISKS_HEALTH)
+
+    cmd = SMARTCTL(dev,SMARTCTL.SMARTCTLActions.TEST,test.value,sudo=True).execute()
+
+    if (cmd.returncode == 0):
+        return {"detail": SuccessMessage(code=SuccessMessages.S_DISK_SELF_TEST.name,params=[dev])}
+    else:
+        error = f"{cmd.stderr}\n{cmd.stdout}".strip()
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_DISK_SELF_TEST.name,params=[dev,error]))
+

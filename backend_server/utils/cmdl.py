@@ -2748,24 +2748,62 @@ class LMSensors(CommandLine):
     def from_dict(serialisation):
         return DNFUpgrade()
 
-class HDDTemp(CommandLine):
-    def __init__(this,disks:List[str],**kwargs):
-        this._disks = disks
+# class HDDTemp(CommandLine):
+#     def __init__(this,disks:List[str],**kwargs):
+#         this._disks = disks
+#
+#         cmd = ['hddtemp'] + disks
+#
+#         super().__init__(cmd,**kwargs)
+#
+#     def to_dict(this):
+#         d = super().to_dict()
+#         d['disks'] = this._disks
+#
+#         return d
+#
+#     @staticmethod
+#     def from_dict(serialisation):
+#         return HDDTemp(
+#             serialisation.get("disks", None),
+#         )
+#
+#
 
-        cmd = ['hddtemp'] + disks
+class SMARTCTL(CommandLine):
+    class SMARTCTLActions(Enum):
+        LIST = "list"
+        TEST = "test"
+
+    def __init__(this,device:str, action:SMARTCTLActions=SMARTCTLActions.LIST,test:Optional[str]=None,**kwargs):
+        this._device = device
+        this._action = action
+        this._test = test
+
+        cmd = ['smartctl']
+
+        match (action):
+            case SMARTCTL.SMARTCTLActions.LIST:
+                cmd.append("-ja")
+            case SMARTCTL.SMARTCTLActions.TEST:
+                cmd.extend(["-t", test])
+
+        cmd.append(device)
 
         super().__init__(cmd,**kwargs)
 
     def to_dict(this):
         d = super().to_dict()
-        d['disks'] = this._disks
+        d['device'] = this._device
+        d['action'] = this._action
+        d['test'] = this._test
 
         return d
 
     @staticmethod
     def from_dict(serialisation):
-        return HDDTemp(
-            serialisation.get("disks", None),
+        return SMARTCTL(
+            serialisation.get("device", None),
+            serialisation.get('action', None),
+            serialisation.get('test', None),
         )
-
-

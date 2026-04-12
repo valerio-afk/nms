@@ -603,6 +603,10 @@ class BackEndProxy:
     def smart(this,dev:str) -> Optional[dict]:
         return this._request("disks/smart",RequestMethod.GET,qstring_params={"dev":dev})
 
+    def run_smart_self_test(this, dev:str, test:str):
+        return this._request("disks/smart/test",RequestMethod.POST,url_params=[test],qstring_params={"dev":dev})
+
+
     #SERVICE METHODS
     def enable_service(this,service:str,**kwargs) -> None:
         this._request(f"services/enable/{service}",RequestMethod.POST,body_params=kwargs)
