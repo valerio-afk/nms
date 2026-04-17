@@ -1,0 +1,32 @@
+{% extends "card.html" %}
+
+{% block card_title %}<i class="bi bi-box-fill"></i> {{ event.name }}{% endblock %}
+
+{% block card_content %}
+
+<dl class="row">
+    <dt class="col-sm-5">{{ _("Action:") }}</dt>
+    <dd class="col-sm-7">{{ event.action }}</dd>
+</dl>
+
+<table class="table table-striped" id="event_{{ idx }}_parameters">
+    <thead>
+        <tr>
+            <th>{{ _("Parameter") }}</th>
+            <th>{{ _("Value") }}</th>
+        </tr>
+    </thead>
+
+    <tbody>
+    {% for k,v in event.parameters.items %}
+    <tr>
+        <td>{{ k }}</td>
+        <td>{{ v }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}
+
+

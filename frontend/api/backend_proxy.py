@@ -433,6 +433,11 @@ class BackEndProxy:
     def access_services(this) -> Dict[str,dict]:
         return this._request("services/get", RequestMethod.GET) or {}
 
+    #EVENT PROPERTIES
+    @property
+    def events(this) -> Dict[str,dict]:
+        return this._request("events/list", RequestMethod.GET)
+
 
     #AUTH METHOD
     def get_session_token(this,purpose:str) -> Optional[str]:

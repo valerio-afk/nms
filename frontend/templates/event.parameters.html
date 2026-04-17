@@ -1,0 +1,11 @@
+<div id="param-action-{{ action_tag }}" class="d-none mt-4 param-action">
+    {% for p in parameters %}
+        {{ p | safe }}
+    {% endfor %}
+
+    <div class="row mt-3">
+        <div class="col-12">
+            <button type="submit" class="btn btn-success w-100">{{ _("Add Event") }}</button>
+        </div>
+    </div>
+</div>

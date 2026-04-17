@@ -1,3 +1,4 @@
+from nms_shared.msg import EVENT_NAMES, ACTION_CATEGORIES, ACTION_NAMES
 from .api.backend_proxy import show_flash
 from .import NMSBACKEND as BACKEND, frontend as bp
 from ansi2html import Ansi2HTMLConverter
@@ -7,10 +8,11 @@ from flask_wtf.csrf import  validate_csrf
 from frontend.utils.decorators import wait
 from frontend.utils.widget import render_widget,get_widgets_html,get_widgets_css_files
 from io import BytesIO
-from nms_shared import ErrorMessages
+from nms_shared import ErrorMessages, EventNames
 from nms_shared.constants import HTTP_REPEAT_HEADER
 from nms_shared.enums import LogFilter, UserPermissions
 from nms_shared.utils import match_permissions
+from nms_shared.msg import parse_msg, PARAMS_NAMES
 from typing import Optional, Dict, Callable, Any, Union
 from werkzeug.datastructures import ImmutableMultiDict
 from wtforms import ValidationError
@@ -43,7 +45,8 @@ def widget_system_admin():
     perms = {
         'logs': match_permissions(permissions,UserPermissions.SYS_ADMIN_LOGS),
         'systemctl' : match_permissions(permissions,UserPermissions.SYS_ADMIN_SYSTEMCTL),
-        'pool_info': match_permissions(permissions,UserPermissions.POOL_CONF_GET_INFO)
+        'pool_info': match_permissions(permissions,UserPermissions.POOL_CONF_GET_INFO),
+        'events': match_permissions(permissions,UserPermissions.SYS_ADMIN_EVENTS)
 
     }
 
@@ -176,6 +179,79 @@ def system_logs(log):
                            ],
                            csp_nonce=g.csp_nonce,
                            date_filter={"start":start,"end":end},
+                           active_page="advanced")
+
+@bp.route('/advanced/events')
+def events():
+
+    events_information = BACKEND.events
+    events_list = {}
+    allowed_actions = {}
+
+    for e in events_information.get("events",{}):
+        name = e.get("event","")
+        category = name.split(".")[0]
+
+        category_lbl = EventNames.get_event(EventNames(category))
+        event_lbl = EventNames.get_event(EventNames(name))
+
+        if (category_lbl not in events_list.keys()):
+            events_list[category_lbl] = {}
+
+        events_list[category_lbl].update({name: event_lbl})
+        allowed_actions[name] = {}
+
+        for tag in e.get("allowed_actions", {}):
+            for a in events_information.get("actions", {}):
+
+                if (a.get("tag") == tag):
+                    action_category = a.get("category","")
+
+                    action_category_lbl = parse_msg(ACTION_CATEGORIES.get(action_category))
+
+                    if (allowed_actions[name].get( action_category_lbl ) is None):
+                        allowed_actions[name][action_category_lbl] = {}
+
+                    allowed_actions[name][action_category_lbl].update({tag: parse_msg(ACTION_NAMES.get(tag))})
+
+    action_forms = {}
+    all_users = None
+    for action in events_information.get("actions", []):
+        tag = action.get("tag","")
+
+        parameters = []
+
+        for parameter,specs in action.get("parameters",{}).items():
+            metatype = specs.get("metatype","")
+            param_form = ""
+            match (metatype):
+                case "string":
+                    param_form = render_template("event.parameter.string.html",
+                                                 label=parse_msg(PARAMS_NAMES.get(parameter)),
+                                                 parameter=parameter)
+                case "user":
+                    if (all_users is None):
+                        all_users = BACKEND.users
+
+                    param_form = render_template("event.parameter.user.html",
+                                                 users = all_users,
+                                                 label=parse_msg(PARAMS_NAMES.get(parameter)),
+                                                 parameter=parameter)
+
+
+            parameters.append(param_form)
+
+        action_forms[tag] = parameters
+
+    return render_template("events.html",
+                           breadcrumbs=[
+                               (_("Advanced"), url_for("main.advanced")),
+                               (_("Events"), None)
+                           ],
+                           events=events_list,
+                           allowed_actions=allowed_actions,
+                           action_forms=action_forms,
+                           csp_nonce=g.csp_nonce,
                            active_page="advanced")
 
 # # ACTIONS

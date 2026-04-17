@@ -1,22 +1,22 @@
+from .models import NotificationToUser, Notification
+from abc import ABC, abstractmethod
 from enum import Enum
 from pydantic import BaseModel
 from typing import Type, List, Dict, Any, Generic, TypeVar, Optional
-from abc import ABC, abstractmethod
 import subprocess
-from utils.events.models import NotificationToUser
 
 P = TypeVar("P", bound=BaseModel)
 
 class EventActionCategories(Enum):
     NOTIFICATION = "notification"
 
-class EventContextData(Enum):
-    TRIGGER_USER = "trigger_user"
-    ALL_USERS = "all_users"
-
+class EventContext(Enum):
+    TRIGGER_USER = "TRIGGER_USER"
+    ALL_USERS = "ALL_USERS"
+    ISO_TIMESTAMP = "ISO_TIMESTAMP"
 
 class EventAction(Generic[P],ABC):
-    def __init__(this,category:str,tag:str,parameters:Type[P],context:List[EventContextData]):
+    def __init__(this,category:str,tag:str,parameters:Type[P],context:List[EventContext]):
         this._tag = tag
         this._category = category
         this._parameters = parameters
@@ -44,7 +44,7 @@ class EventAction(Generic[P],ABC):
         }
 
     @property
-    def context(this) -> List[EventContextData]:
+    def context(this) -> List[EventContext]:
         return [x for x in this._context]
 
     @abstractmethod
@@ -55,8 +55,12 @@ class EventAction(Generic[P],ABC):
         this.trigger(parameters=parameters,context=context)
 
 class SendNotificationAction(EventAction):
-    def __init__(this,tag:str,parameters:Type[P],context:List[EventContextData]) -> None:
-        super().__init__(category=EventActionCategories.NOTIFICATION.name,tag=tag,parameters=parameters,context=context)
+    def __init__(this,tag:str,parameters:Type[P],context:List[EventContext]) -> None:
+        super().__init__(category=EventActionCategories.NOTIFICATION.value,
+                         tag=tag,
+                         parameters=parameters,
+                         context=context
+                         )
 
     @staticmethod
     def _send_mail(username:str, subject:str, message:str,vars:Optional[Dict[str,str]]) -> None:
@@ -69,7 +73,7 @@ class SendNotificationToAction(SendNotificationAction):
     def __init__(this):
         super().__init__("send_to",
                          NotificationToUser,
-                         [EventContextData.TRIGGER_USER]
+                         [EventContext.TRIGGER_USER,EventContext.ISO_TIMESTAMP]
                          )
 
     def trigger(this,parameters:P,context:Dict[str,Any]) -> None:
@@ -88,14 +92,14 @@ class SendNotificationToAction(SendNotificationAction):
             this._send_mail(username=user,
                             subject=subject,
                             message=message,
-                            vars={EventContextData.TRIGGER_USER.name:context.get(EventContextData.TRIGGER_USER.name)}
+                            vars={EventContext.TRIGGER_USER.name:context.get(EventContext.TRIGGER_USER.name)}
                             )
 
 class SendNotificationToAllAction(SendNotificationAction):
     def __init__(this):
         super().__init__("send_to_all",
-                         NotificationToUser,
-                         [EventContextData.TRIGGER_USER,EventContextData.ALL_USERS]
+                         Notification,
+                         [EventContext.TRIGGER_USER,EventContext.ALL_USERS,EventContext.ISO_TIMESTAMP]
                          )
 
     def trigger(this, parameters: P, context: Dict[str, Any]) -> None:
@@ -112,13 +116,13 @@ class SendNotificationToAllAction(SendNotificationAction):
 
         if ((user is not None) and (subject is not None) and (message is not None)):
 
-            for u in context.get(EventContextData.ALL_USERS.name,{}):
+            for u in context.get(EventContext.ALL_USERS.name,{}):
                 if (hasattr(u,"username")):
                     this._send_mail(username=user,
                                     subject=subject,
                                     message=message,
-                                    vars={EventContextData.TRIGGER_USER.name: context.get(
-                                        EventContextData.TRIGGER_USER.name)}
+                                    vars={EventContext.TRIGGER_USER.name: context.get(
+                                        EventContext.TRIGGER_USER.name)}
                                     )
 
 class SendNotificationToAdminsAction(SendNotificationToAllAction):
@@ -127,8 +131,8 @@ class SendNotificationToAdminsAction(SendNotificationToAllAction):
         this._tag = "send_to_admins"
 
     def trigger(this,parameters:P,context:Dict[str,Any]) -> None:
-        admins = [ u for u in context.get(EventContextData.ALL_USERS.name,{})  if (hasattr(u,"admin")) and (u.admin) ]
-        context.setdefault(EventContextData.ALL_USERS.name,admins)
+        admins = [ u for u in context.get(EventContext.ALL_USERS.name,{})  if (hasattr(u,"admin")) and (u.admin) ]
+        context.setdefault(EventContext.ALL_USERS.name,admins)
 
         super().trigger(parameters=parameters,context=context)
 

@@ -22,14 +22,13 @@
             {% include "element.square_btn.html" %}
         {% endif %}
 
-        {#
-        {% set btn_icon = "<i class=\"bi  bi-shield-fill-x\"></i>" | safe %}
-        {% set btn_title = _("Reset Admin Login") %}
-        {% set btn_method = "POST" %}
-        {% set btn_link = url_for('main.reset_otp') %}
-        {% set btn_message = _("Are you sure you want to reset the adminstrator login credentials?") %}
-        {% include "element.square_btn.modal.html" %}
-        #}
+        {% if permissions.get("events") %}
+            {% set btn_icon = "<i class=\"bi  bi-calendar3-week-fill\"></i>" | safe %}
+            {% set btn_title = _("Events") %}
+            {% set btn_method = "GET" %}
+            {% set btn_link = url_for('main.events') %}
+            {% include "element.square_btn.html" %}
+        {% endif %}
 
         {% if encrypted and permissions.get("pool_info") %}
             {% set btn_icon = "<i class=\"bi bi-key-fill\"></i>" | safe %}
@@ -41,7 +40,7 @@
             {% include "element.square_btn.html" %}
         {% endif %}
 
-        {% set btn_modal = False %}
+
 
     </div>
 </div>

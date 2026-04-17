@@ -56,6 +56,7 @@ class UserPermissions(Enum):
     SERVICES_WEB_MANAGE = "services.web.manage"
 
     SYS_ADMIN_ACPI = "sys.admin.acpi"
+    SYS_ADMIN_EVENTS = "sys.admin.events"
     SYS_ADMIN_UPDATES = "sys.admin.updates"
     SYS_ADMIN_SYSTEMCTL = "sys.admin.systemctl"
     SYS_ADMIN_LOGS = "sys.admin.logs"

@@ -7,6 +7,7 @@ from .disks import disks
 from .fs import fs, fs_preview
 from .services import services
 from .users import users
+from .events import  events
 
 v1 = APIRouter(prefix="/v1")
 v1.include_router(auth)
@@ -19,3 +20,4 @@ v1.include_router(services)
 v1.include_router(fs)
 v1.include_router(fs_preview)
 v1.include_router(users)
+v1.include_router(events)

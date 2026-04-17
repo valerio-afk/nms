@@ -11,6 +11,11 @@ class EventMetaTypes(Enum):
 class UserParameter(BaseModel):
     user: str =  Field(...,json_schema_extra={"metavar":"USER","metatype":EventMetaTypes.USER})
 
-class NotificationToUser(UserParameter):
+
+class Notification(BaseModel):
     subject:   str = Field(...,json_schema_extra={"metavar":"SUBJECT","metatype":EventMetaTypes.STRING})
     message: str = Field(...,json_schema_extra={"metavar":"MESSAGE","metatype":EventMetaTypes.STRING})
+
+
+class NotificationToUser(Notification,UserParameter):
+    ...

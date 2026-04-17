@@ -1,0 +1,99 @@
+{% extends "card.html" %}
+
+{% block card_title %}<i class="bi bi-plus-circle-fill" xmlns="http://www.w3.org/1999/html"></i> {{ _("New Event") }}{% endblock %}
+
+{% block card_content %}
+
+<select name="event" id="event_list" class="form-select" size="10">
+    {% for category, event in events.items() %}
+    <optgroup label="{{ category }}">
+        {% for k,v in event.items() %}
+        <option value="{{ k }}">{{ v }}</option>
+        {% endfor %}
+    </optgroup>
+    {% endfor %}
+</select>
+
+{% for k,actions in allowed_actions.items() %}
+<select class="form-select d-none mt-4" name="allowed_actions" data-event="{{ k }}">
+    <option disabled selected>{{ _("Choose an action") }}</option>
+    {% for action_cat, actions in actions.items() %}
+    <optgroup label="{{ action_cat }}">
+        {% for k,v in actions.items() %}
+            <option value="{{ k }}">{{ v }}</option>
+        {% endfor %}
+    </optgroup>
+    {% endfor %}
+</select>
+{% endfor %}
+
+{% for action_tag, parameters in action_forms.items() %}
+    {% include "event.parameters.html" %}
+{% endfor %}
+
+
+<script nonce="{{ csp_nonce }}">
+    document.addEventListener("DOMContentLoaded", function () {
+        const eventList = document.getElementById("event_list");
+        const actionSelects = document.querySelectorAll('select[name="allowed_actions"]');
+        const paramDivs = document.querySelectorAll('.param-action');
+
+        function updateVisibleSelect() {
+            const selectedValue = eventList.value;
+
+            actionSelects.forEach(select => {
+                if (select.dataset.event === selectedValue) {
+                    select.classList.remove("d-none");
+                    select.disabled = false;
+                } else {
+                    select.classList.add("d-none");
+                    select.disabled = true;
+                }
+            });
+        }
+
+        function updateParams(selectedValue) {
+            paramDivs.forEach(div => {
+                const isMatch = div.id === `param-action-${selectedValue}`;
+
+                if (isMatch) {
+                    div.classList.remove("d-none");
+
+                    // Enable all form controls inside
+                    div.querySelectorAll("input, select, textarea, button").forEach(el => {
+                        el.disabled = false;
+                    });
+
+                } else {
+                    div.classList.add("d-none");
+
+                    // Disable all form controls inside
+                    div.querySelectorAll("input, select, textarea, button").forEach(el => {
+                        el.disabled = true;
+                    });
+                }
+            });
+        }
+
+
+        // Run once on load
+        updateVisibleSelect();
+
+        // Update on change
+        eventList.addEventListener("change", updateVisibleSelect);
+
+        actionSelects.forEach(select => {
+            select.addEventListener("change", function () {
+                updateParams(this.value);
+            });
+
+            // Optional: initialise based on current value (only if visible & enabled)
+            if (!select.disabled && !select.classList.contains("d-none")) {
+                updateParams(select.value);
+            }
+        });
+    });
+</script>
+{% endblock %}
+
+

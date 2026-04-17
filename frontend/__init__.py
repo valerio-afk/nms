@@ -109,8 +109,6 @@ def resilvering_ongoing() -> Optional[Response]:
 
 @frontend.context_processor
 def user_data():
-    initials = None
-
     if ((user:=session.get("user")) is not None):
         if (user.get("initials") is None):
             if ((initials := user.get("visible_name")) is None):

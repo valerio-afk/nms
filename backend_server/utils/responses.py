@@ -283,3 +283,17 @@ class SMART(BaseModel):
     attributes:List[SMARTAttribute]
     self_test_logs: List[SMARTSelfTestLog]
 
+
+class EventSpec(BaseModel):
+    event:str
+    allowed_actions:List[str]
+
+class ActionSpec(BaseModel):
+    category:str
+    tag:str
+    parameters: Dict[str, Dict[str, str]]
+    context:List[str]
+
+class AllowedEvents(BaseModel):
+    events:List[EventSpec]
+    actions:List[ActionSpec]

@@ -220,6 +220,19 @@ class InfoMessages(Enum):
     def get_message(code:"InfoMessages",*args,**kwargs) -> str:
         return parse_msg(INFO_MESSAGES[code],*args,**kwargs)
 
+
+class EventNames(Enum):
+    SYSTEM = "system"
+    SYSTEM_STARTUP = "system.startup"
+    SYSTEM_REBOOT = "system.reboot"
+    SYSTEM_POWEROFF = "system.poweroff"
+    SYSTEM_SHUTDOWN = "system.shutdown"
+
+    @staticmethod
+    def get_event(tag: "EventNames", *args, **kwargs) -> str:
+        return parse_msg(EVENT_NAMES[tag], *args, **kwargs)
+
+
 ERROR_MESSAGES = {
     ErrorMessages.E_UNKNOWN : lambda: _("Unknown Error"),
     ErrorMessages.E_UNKNOWN_RESPONSE : lambda: _("Unknown response from server"),
@@ -411,4 +424,29 @@ INFO_MESSAGES = {
     InfoMessages.I_POOL_EXPANSION_ETA : lambda eta: _("Disk expansion is expected to take %(eta)s.") % {'eta':eta},
     InfoMessages.I_POOL_EXPANSION : lambda: _("Disk expansion in progress."),
     InfoMessages.I_POOL_DISK_REPLACEMENT : lambda: _("Disk replacement in progress. This operation may take a while.")
+}
+
+EVENT_NAMES = {
+    EventNames.SYSTEM : lambda : _("System events"),
+    EventNames.SYSTEM_STARTUP: lambda : _("When the system starts up"),
+    EventNames.SYSTEM_REBOOT: lambda : _("When the system is rebooted"),
+    EventNames.SYSTEM_POWEROFF: lambda : _("When the system is powering off"),
+    EventNames.SYSTEM_SHUTDOWN: lambda : _("When the system is shutting down (either rebooting or powering off)"),
+}
+
+ACTION_CATEGORIES = {
+    "notification": lambda : _("Send a notification to...")
+}
+
+ACTION_NAMES = {
+    "send_to": lambda : _("A specific user"),
+    "send_to_all": lambda : _("All users"),
+    "send_to_admins": lambda : _("All admins"),
+}
+
+PARAMS_NAMES = {
+    "user": lambda : _("Username"),
+    "subject": lambda : _("Subject"),
+    "message": lambda : _("Message"),
+
 }
