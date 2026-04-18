@@ -302,7 +302,7 @@ class AllowedEvents(BaseModel):
 class RegisterEvent(BaseModel):
     event:str
     action:str
-    parameters:Dict[str, str]
+    parameters:Dict[str, Any]
 
 class RegisteredEvent(RegisterEvent):
     uuid:str

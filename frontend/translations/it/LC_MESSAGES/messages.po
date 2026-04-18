@@ -794,11 +794,11 @@ msgstr "Aggiungi Disco all'Archivio"
 
 #: frontend/templates/card.add_event.html:3
 msgid "New Event"
-msgstr ""
+msgstr "Nuovo Evento"
 
 #: frontend/templates/card.add_event.html:20
 msgid "Choose an action"
-msgstr ""
+msgstr "Seleziona un'azione"
 
 #: frontend/templates/card.apt.html:8
 msgid "Base System"
@@ -1272,7 +1272,7 @@ msgstr ""
 
 #: frontend/templates/event.parameters.html:23
 msgid "Add Event"
-msgstr ""
+msgstr "Aggiungi Evento"
 
 #: frontend/templates/form.ddns.dnsexit.html:5
 #: frontend/templates/form.ddns.duckdns.html:5
@@ -2535,7 +2535,7 @@ msgstr "Evento %(uuid)s cancellato con successo."
 
 #: nms_shared/src/nms_shared/msg.py:450
 msgid "System events"
-msgstr "Eventi di systema"
+msgstr "Eventi di sistema"
 
 #: nms_shared/src/nms_shared/msg.py:451
 msgid "When the system starts up"

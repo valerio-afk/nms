@@ -8,8 +8,10 @@
     <div class="row g-3">
         {% for event in registered_events %}
             {% set idx = loop.index %}
+            {% set card_id = "event_" ~ event.uuid %}
             {% include "card.event.html" %}
         {% endfor %}
+        {% set card_id = "new_event" %}
         {% include "card.add_event.html" %}
 
     </div>

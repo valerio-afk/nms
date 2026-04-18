@@ -13,7 +13,7 @@ from nms_shared.constants import HTTP_REPEAT_HEADER
 from nms_shared.enums import LogFilter, UserPermissions
 from nms_shared.utils import match_permissions
 from nms_shared.msg import parse_msg, PARAMS_NAMES
-from typing import Optional, Dict, Callable, Any, Union
+from typing import Optional, Dict, Callable, Any, Union, List, Tuple
 from werkzeug.datastructures import ImmutableMultiDict
 from wtforms import ValidationError
 
@@ -98,6 +98,47 @@ def widget_danger_zone():
 
     return render_widget("danger_zone",permissions=perms,disks=choices)
 
+
+def create_fields_event_action(action_tag:str) -> Optional[Tuple[List[str],Dict[str, str]]]:
+    parameters = []
+    events_information = BACKEND.events
+    actions = events_information.get("actions",[])
+    action:Optional[Dict[str,Any]] = None
+
+    for a in actions:
+        if (action_tag == a.get("tag")):
+            action = a
+            break
+
+    if (action is None):
+        return None
+
+    for parameter, specs in action.get("parameters", {}).items():
+        metatype = specs.get("metatype", "")
+        param_form = ""
+        match (metatype):
+            case "string":
+                param_form = render_template("event.parameter.string.html",
+                                             label=parse_msg(PARAMS_NAMES.get(parameter)),
+                                             parameter=parameter)
+            case "bool":
+                param_form = render_template("event.parameter.bool.html",
+                                             label=parse_msg(PARAMS_NAMES.get(parameter)),
+                                             parameter=parameter)
+            case "user":
+                all_users = BACKEND.users
+                param_form = render_template("event.parameter.user.html",
+                                             users=all_users,
+                                             label=parse_msg(PARAMS_NAMES.get(parameter)),
+                                             parameter=parameter)
+
+        parameters.append(param_form)
+
+    context:Dict[str,str] = {}
+    for v in action.get("context", []):
+        context[v] = parse_msg(CONTEXT_VARS.get(v))
+
+    return parameters, context
 
 @bp.route('/async/widgets/apt')
 def async_widget_system_updates():
@@ -215,44 +256,21 @@ def events():
                     allowed_actions[name][action_category_lbl].update({tag: parse_msg(ACTION_NAMES.get(tag))})
 
     action_forms = {}
-    all_users = None
+
     for action in events_information.get("actions", []):
         tag = action.get("tag","")
 
-        parameters = []
+        action_form = create_fields_event_action(tag)
 
-        for parameter,specs in action.get("parameters",{}).items():
-            metatype = specs.get("metatype","")
-            param_form = ""
-            match (metatype):
-                case "string":
-                    param_form = render_template("event.parameter.string.html",
-                                                 label=parse_msg(PARAMS_NAMES.get(parameter)),
-                                                 parameter=parameter)
-                case"bool":
-                    param_form = render_template("event.parameter.bool.html",
-                                                 label=parse_msg(PARAMS_NAMES.get(parameter)),
-                                                 parameter=parameter)
-                case "user":
-                    if (all_users is None):
-                        all_users = BACKEND.users
-
-                    param_form = render_template("event.parameter.user.html",
-                                                 users = all_users,
-                                                 label=parse_msg(PARAMS_NAMES.get(parameter)),
-                                                 parameter=parameter)
-
-
-            parameters.append(param_form)
-
-        context = {}
-        for v in action.get("context",[]):
-            context[v] = parse_msg(CONTEXT_VARS.get(v))
-
-
-        action_forms[tag] = (parameters,context)
+        if (action_form is not None):
+            action_forms[tag] = action_form
 
     registered_events = BACKEND.registered_events
+
+    for x in registered_events:
+        x['form'] = create_fields_event_action(x.get("action"))
+
+
 
     return render_template("events.html",
                            breadcrumbs=[
@@ -298,7 +316,7 @@ def add_event() -> Response:
             metatype = specs.get("metatype",None)
             match (metatype):
                 case "bool":
-                    parameters[p] = request.form.get(f"param_{p}",False)
+                    parameters[p] = True if (f"param_{p}" in request.form) else False
                 case _:
                     parameters[p] = request.form.get(f"param_{p}", None)
 

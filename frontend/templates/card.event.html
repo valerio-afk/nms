@@ -22,23 +22,48 @@
     <dd class="col-sm-9">{{ event.action }}</dd>
 </dl>
 
-<table class="table table-striped" id="event_{{ idx }}_parameters">
-    <thead>
-        <tr>
-            <th>{{ _("Parameter") }}</th>
-            <th>{{ _("Value") }}</th>
-        </tr>
-    </thead>
+<div class="event_parameters" data-event-uuid="{{ event.uuid }}">
+    <div class="row">
+        <div class="col-12">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>{{ _("Parameter") }}</th>
+                        <th>{{ _("Value") }}</th>
+                    </tr>
+                </thead>
 
-    <tbody>
-    {% for k,v in event.parameters.items() %}
-    <tr>
-        <td>{{ k }}</td>
-        <td>{{ v }}</td>
-    </tr>
-    {% endfor %}
-    </tbody>
-</table>
+                <tbody>
+                {% for k,v in event.parameters.items() %}
+                <tr>
+                    <td>{{ k }}</td>
+                    <td>{{ v }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <button class="btn btn-warning w-100" data-event-id="{{ event.uuid  }}">{{ _("Make Changes") }}</button>
+        </div>
+    </div>
+</div>
+
+<form class="disable-on-submit d-none event_form" data-event-uuid="{{ event.uuid }}">
+    <input type="hidden" name="uuid" value="{{ event.uuid }}">
+
+    {% set parameters = event.form[0] %}
+    {% set ctx = event.form[1] %}
+    {% set action_tag = event.action %}
+    {% set parameters_visible = True %}
+    {% set custom_button = '<button class="btn btn-warning w-100" data-event-id="'~ event.uuid ~'">'|safe ~ _("Apply Changes") ~'</button>'|safe %}
+    {% include "event.parameters.html" %}
+
+
+</form>
 
 <form method="POST" class="disable-on-submit mt-4" action="{{ url_for('main.delete_event') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

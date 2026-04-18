@@ -439,7 +439,7 @@ class BackEndProxy:
         return this._request("events/list", RequestMethod.GET)
 
     @property
-    def registered_events(this) -> Dict[str, dict]:
+    def registered_events(this) -> List[Dict[str, Any]]:
         return this._request("events/", RequestMethod.GET)
 
 

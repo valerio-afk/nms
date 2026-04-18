@@ -1,4 +1,4 @@
-{% extends "card.html" %}
+{% extends "card.double.html" %}
 
 {% block card_title %}<i class="bi bi-plus-circle-fill" xmlns="http://www.w3.org/1999/html"></i> {{ _("New Event") }}{% endblock %}
 
@@ -37,9 +37,10 @@
 
 <script nonce="{{ csp_nonce }}">
     document.addEventListener("DOMContentLoaded", function () {
+        const new_event_card = document.getElementById("new_event")
         const eventList = document.getElementById("event_list");
-        const actionSelects = document.querySelectorAll('select[name="allowed_actions"]');
-        const paramDivs = document.querySelectorAll('.param-action');
+        const actionSelects = new_event_card.querySelectorAll('select[name="allowed_actions"]');
+        const paramDivs = new_event_card.querySelectorAll('.param-action');
 
         function updateParams(selectedValue) {
             paramDivs.forEach(div => {
