@@ -2807,3 +2807,52 @@ class SMARTCTL(CommandLine):
             serialisation.get('action', None),
             serialisation.get('test', None),
         )
+
+
+class ReadLink(CommandLine):
+    def __init__(this,path:str,**kwargs):
+        cmd = ['readlink',path]
+        this._path = path
+
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['path'] = this._path
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return SMARTCTL(
+            serialisation.get("path", None),
+        )
+
+class Find(CommandLine):
+    def __init__(this,path:str,name:Optional[str]=None,**kwargs):
+        cmd = ['find',path]
+
+        if (name is not None):
+            cmd.extend(['-name',name])
+
+        this._path = path
+        this._name = name
+
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['path'] = this._path
+        d['name'] = this._name
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return SMARTCTL(
+            serialisation.get("path", None),
+            serialisation.get('name', None),
+        )
+
+
+

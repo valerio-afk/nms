@@ -18,8 +18,8 @@ auth = APIRouter(prefix='/auth',tags=['auth'])
 bearer = HTTPBearer()
 
 
-def check_permission(username:str, perm:UserPermissions) -> None:
-    if (not CONFIG.has_user_permission(username,perm)):
+def check_permission(username:Optional[str], perm:UserPermissions) -> None:
+    if ((username is None) or (not CONFIG.has_user_permission(username,perm))):
         raise HTTPException(status_code=401,detail=perm.value)
 
 def create_token(username:str,purpose:str, duration:int) -> str:

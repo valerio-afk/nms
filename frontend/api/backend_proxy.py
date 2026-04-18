@@ -438,6 +438,10 @@ class BackEndProxy:
     def events(this) -> Dict[str,dict]:
         return this._request("events/list", RequestMethod.GET)
 
+    @property
+    def registered_events(this) -> Dict[str, dict]:
+        return this._request("events/", RequestMethod.GET)
+
 
     #AUTH METHOD
     def get_session_token(this,purpose:str) -> Optional[str]:
@@ -771,6 +775,24 @@ class BackEndProxy:
 
     def verify_first_login_token(this,token:str) -> bool:
         r = this._request(f"auth/token/first_login",RequestMethod.GET,qstring_params={"token":token})
+
+    # EVENTS METHODS
+
+    def add_event(this,event_name:str, action_name:str,**kwargs) -> None:
+        this._request(f"events/",RequestMethod.POST,body_params={
+            "event":event_name,
+            "action":action_name,
+            "parameters": kwargs
+        })
+
+    def enable_event(this,uuid:str) -> None:
+        this._request(f"events/{uuid}/status/up",RequestMethod.PATCH)
+
+    def disable_event(this,uuid:str) -> None:
+        this._request(f"events/{uuid}/status/down",RequestMethod.PATCH)
+
+    def delete_event(this,uuid:str) -> None:
+        this._request(f"events/{uuid}",RequestMethod.DELETE)
 
     #Other Method
     def register_task(this,

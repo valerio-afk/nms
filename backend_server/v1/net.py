@@ -1,6 +1,7 @@
 from backend_server.utils.cmdl import NMCLIConnection, NMCLIDevice, LocalCommandLineTransaction, Firewall
 from backend_server.utils.cmdl import SystemCtlStart, SystemCtlStop, SystemCtlRestart, SystemCtlIsActive
 from backend_server.utils.config import CONFIG
+from backend_server.utils.enums import StatusAction
 from backend_server.utils.inet import TransportProtocol, SinglePort
 from backend_server.utils.responses import DDNSDefaultProviderConfiguration, DDNSProvider
 from backend_server.utils.responses import NetCounter, NetworkInterface, IPv4, IPv6, ErrorMessage, InterfaceType
@@ -8,7 +9,6 @@ from backend_server.utils.responses import WifiNetwork, WifiConnect, SuccessMess
 from backend_server.utils.threads import NetIOCounter
 from backend_server.v1.auth import verify_token_factory, check_permission
 from collections import OrderedDict
-from enum import Enum
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.params import Body, Query
 from nms_shared.constants import WIREGUARD_CONF, VPN_PUBLIC_KEY, VPN_PRIVATE_KEY
@@ -84,9 +84,7 @@ def net_counter() -> NetCounter:
     )
 
 
-class IFaceAction(Enum):
-    UP = "up"
-    DOWN = "down"
+
 
 def vpn_status() -> bool:
     service = CONFIG.vpn_service
@@ -526,17 +524,17 @@ def net_vpn_config(config:VPNServerConf,token:dict=Depends(verify_token)) -> dic
     return {"detail": SuccessMessage(code=SuccessMessages.S_NET_VPN_CONFIG.name)}
 
 @net.post('/vpn/{action}',summary="Enable or disable the VPN service")
-def net_iface_action(action:IFaceAction,token:dict=Depends(verify_token)) -> None:
+def net_iface_action(action:StatusAction, token:dict=Depends(verify_token)) -> None:
     check_permission(username:=token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
     cmd = None
     vpn_service = CONFIG.vpn_service
 
     match(action):
-        case IFaceAction.UP:
+        case StatusAction.UP:
             cmd = SystemCtlStart(vpn_service)
             log_action="enabled"
             firewall_action = Firewall.FirewallAction.ADD_PORT
-        case IFaceAction.DOWN:
+        case StatusAction.DOWN:
             cmd = SystemCtlStop(vpn_service)
             log_action="disabled"
             firewall_action = Firewall.FirewallAction.REMOVE_PORT
@@ -578,18 +576,18 @@ def net_get_vpn_config(token:dict=Depends(verify_token)) -> NetworkInterface:
 
 
 @net.post('/{iface}/{action}',summary="Enable or disable a network interface")
-def net_iface_action(iface:str,action:IFaceAction,token:dict=Depends(verify_token)) -> None:
+def net_iface_action(iface:str, action:StatusAction, token:dict=Depends(verify_token)) -> None:
     check_permission(username:=token.get("username"), UserPermissions.NETWORK_IFACE_MANAGE)
     match(action):
-        case IFaceAction.UP:
+        case StatusAction.UP:
             perform="connect"
-        case IFaceAction.DOWN:
+        case StatusAction.DOWN:
             perform = "disconnect"
 
     cmds = [NMCLIDevice(perform,iface,sudo=True)]
 
 
-    if (action == IFaceAction.DOWN):
+    if (action == StatusAction.DOWN):
         ifaces = get_network_interfaces()
         for x in ifaces:
             if ((x.name != iface) and (x.enabled)):

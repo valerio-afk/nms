@@ -5,7 +5,8 @@ from backend_server.utils.cmdl import SELinuxManagePort, Firewall, CommandLine, 
 from backend_server.utils.cmdl import Touch, Chmod, UserModAddGroup, GPasswdRemoveGroup, LocalCommandLineTransaction
 from backend_server.utils.cmdl import SystemCtlIsActive, ApplyPatch,  GetEntShadow, UserModChangeShell, UserDel
 from backend_server.utils.cmdl import SystemCtlMask, SystemCtlStop, ExportfsRA, SMBPasswd, Cat, SystemCtlRestart
-from backend_server.utils.inet import DistroFamilies, PortRange, GenericTransportPort, str2port, TransportProtocol
+from backend_server.utils.inet import PortRange, GenericTransportPort, str2port, TransportProtocol
+from backend_server.utils.enums import DistroFamilies
 from fastapi import HTTPException
 from nms_shared.enums import UserPermissions
 from nms_shared.msg import ErrorMessages

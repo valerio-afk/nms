@@ -1,4 +1,4 @@
-from nms_shared.msg import EVENT_NAMES, ACTION_CATEGORIES, ACTION_NAMES
+from nms_shared.msg import EVENT_NAMES, ACTION_CATEGORIES, ACTION_NAMES, CONTEXT_VARS
 from .api.backend_proxy import show_flash
 from .import NMSBACKEND as BACKEND, frontend as bp
 from ansi2html import Ansi2HTMLConverter
@@ -229,6 +229,10 @@ def events():
                     param_form = render_template("event.parameter.string.html",
                                                  label=parse_msg(PARAMS_NAMES.get(parameter)),
                                                  parameter=parameter)
+                case"bool":
+                    param_form = render_template("event.parameter.bool.html",
+                                                 label=parse_msg(PARAMS_NAMES.get(parameter)),
+                                                 parameter=parameter)
                 case "user":
                     if (all_users is None):
                         all_users = BACKEND.users
@@ -241,7 +245,14 @@ def events():
 
             parameters.append(param_form)
 
-        action_forms[tag] = parameters
+        context = {}
+        for v in action.get("context",[]):
+            context[v] = parse_msg(CONTEXT_VARS.get(v))
+
+
+        action_forms[tag] = (parameters,context)
+
+    registered_events = BACKEND.registered_events
 
     return render_template("events.html",
                            breadcrumbs=[
@@ -249,10 +260,90 @@ def events():
                                (_("Events"), None)
                            ],
                            events=events_list,
+                           registered_events = registered_events,
                            allowed_actions=allowed_actions,
                            action_forms=action_forms,
                            csp_nonce=g.csp_nonce,
                            active_page="advanced")
+
+@bp.route('/advanced/events/new',methods=['POST'])
+def add_event() -> Response:
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+
+        event = request.form.get("event")
+        action = request.form.get("allowed_actions")
+
+        if (event is None):
+            show_flash(code=ErrorMessages.E_EVENT_INVALID.name)
+            raise Exception()
+        if (action is None):
+            show_flash(code=ErrorMessages.E_ACTION_INVALID.name)
+            raise Exception()
+
+        events_information = BACKEND.events
+        expected_parameters:Optional[Dict[str,Dict[str,str]]] = None
+
+        for a in events_information.get("actions",[]):
+            if (action == a.get("tag")):
+                expected_parameters = a.get("parameters", None)
+
+        if (expected_parameters is None):
+            show_flash(code=ErrorMessages.E_ACTION_INVALID.name)
+            raise Exception()
+
+        parameters = {}
+
+        for p,specs in expected_parameters.items():
+            metatype = specs.get("metatype",None)
+            match (metatype):
+                case "bool":
+                    parameters[p] = request.form.get(f"param_{p}",False)
+                case _:
+                    parameters[p] = request.form.get(f"param_{p}", None)
+
+        BACKEND.add_event(
+            event_name=event,
+            action_name=action,
+            **parameters
+        )
+
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+    except Exception:
+        ...
+
+    return redirect(url_for("main.events"))
+
+@bp.route("/advanced/events/status/<string:action>",methods=['POST'])
+def event_change_status(action: str) -> Response:
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+        uuid = request.form.get("uuid")
+        match (action.lower()):
+            case "up":
+                BACKEND.enable_event(uuid)
+            case "down":
+                BACKEND.disable_event(uuid)
+
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+
+
+    return redirect(url_for("main.events"))
+
+@bp.route("/advanced/events/delete",methods=['POST'])
+def delete_event() -> Response:
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+        uuid = request.form.get("uuid")
+        BACKEND.delete_event(uuid)
+
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+
+    return redirect(url_for("main.events"))
+
 
 # # ACTIONS
 

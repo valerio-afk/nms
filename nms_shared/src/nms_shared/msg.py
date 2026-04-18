@@ -1,9 +1,10 @@
 from enum import Enum
 from flask_babel import _
-from typing import Callable
+from typing import Callable, Optional
 
-def parse_msg(msg:Callable[...,str],*args,**kwargs) -> str:
-    return str(msg(*args,**kwargs))
+
+def parse_msg(msg:Optional[Callable[...,str]],*args,**kwargs) -> str:
+    return str(msg(*args,**kwargs)) if msg is not None else "-"
 
 
 class ErrorMessages(Enum):
@@ -124,6 +125,11 @@ class ErrorMessages(Enum):
     E_FS_MOVE = "E_FS_MOVE"
     E_FS_MKDIR = "E_FS_MKDIR"
 
+    E_EVENT_INVALID = "E_EVENT_INVALID"
+    E_ACTION_INVALID = "E_ACTION_INVAID"
+    E_EVENT_INVALID_ACTION = "E_EVENT_INVALID_ACTION"
+    E_EVENT_INVALID_PARAM = "E_EVENT_INVALID_PARAM"
+
     @staticmethod
     def get_error_from_string(error_code:str,*args,**kwargs) -> str:
         return ErrorMessages.get_error(ErrorMessages[error_code],*args,**kwargs)
@@ -202,6 +208,11 @@ class SuccessMessages(Enum):
     S_DEL_USER = "S_DEL_USER"
     S_USER_LOGIN_RESET = "E_USER_LOGIN_RESET"
 
+    S_EVENT_ADDED = "S_EVENT_ADDED"
+    S_EVENT_ENABLED = "S_EVENT_ENABLED"
+    S_EVENT_DISABLED = "S_EVENT_DISABLED"
+    S_EVENT_DELETED = "S_EVENT_DELETED"
+
 
     @staticmethod
     def get_message(success_code:"SuccessMessage",*args,**kwargs) -> str:
@@ -227,6 +238,7 @@ class EventNames(Enum):
     SYSTEM_REBOOT = "system.reboot"
     SYSTEM_POWEROFF = "system.poweroff"
     SYSTEM_SHUTDOWN = "system.shutdown"
+    SYSTEM_SYSTEMD = "system.systemd"
 
     @staticmethod
     def get_event(tag: "EventNames", *args, **kwargs) -> str:
@@ -359,6 +371,11 @@ ERROR_MESSAGES = {
     ErrorMessages.E_FS_MOVE: lambda path,info: _("Error while moving: `%(path)s`: %(info)s.") % {'path':path,'info':info},
     ErrorMessages.E_FS_MKDIR: lambda path,info: _("Error while creating the directory `%(path)s`: %(info)s.") % {'path':path,'info':info},
 
+    ErrorMessages.E_EVENT_INVALID_ACTION : lambda action, event : _("The action `%(action)s` cannot be used for the event `%(event)s`") % {'action':action,'event':event},
+    ErrorMessages.E_EVENT_INVALID_PARAM : lambda  parameter, action : _("Invalid parameter for the action `%(action)s`: %(parameter)s.") % {'action':action,'parameter':parameter},
+    ErrorMessages.E_EVENT_INVALID : lambda : _("Invalid event"),
+    ErrorMessages.E_ACTION_INVALID : lambda : _("Invalid action"),
+
 }
 
 WARNING_MESSAGES = {
@@ -417,7 +434,10 @@ SUCCESS_MESSAGES = {
     SuccessMessages.S_DEL_USER: lambda user: _("User %(user)s deleted successfully.") % {'user': user},
     SuccessMessages.S_USER_PERM : lambda : _("Permissions changed successfully."),
     SuccessMessages.S_USER_LOGIN_RESET: lambda user : _("User login reset successfully. Provide to the user %(user)s the new first-time login link to set new credentials.") % {'user':user},
-
+    SuccessMessages.S_EVENT_ADDED: lambda : _("Event  added successfully."),
+    SuccessMessages.S_EVENT_ENABLED : lambda uuid : _("Event %(uuid)s enabled successfully.") % {'uuid':uuid},
+    SuccessMessages.S_EVENT_DISABLED : lambda uuid : _("Event %(uuid)s disabled successfully.") % {'uuid':uuid},
+    SuccessMessages.S_EVENT_DELETED : lambda uuid : _("Event %(uuid)s deleted successfully.") % {'uuid':uuid},
 }
 
 INFO_MESSAGES = {
@@ -432,21 +452,31 @@ EVENT_NAMES = {
     EventNames.SYSTEM_REBOOT: lambda : _("When the system is rebooted"),
     EventNames.SYSTEM_POWEROFF: lambda : _("When the system is powering off"),
     EventNames.SYSTEM_SHUTDOWN: lambda : _("When the system is shutting down (either rebooting or powering off)"),
+    EventNames.SYSTEM_SYSTEMD: lambda : _("When the system services are restarted"),
 }
 
 ACTION_CATEGORIES = {
-    "notification": lambda : _("Send a notification to...")
+    "notification": lambda : _("Send a notification to..."),
+    "execution": lambda : _("Run...")
 }
 
 ACTION_NAMES = {
     "send_to": lambda : _("A specific user"),
     "send_to_all": lambda : _("All users"),
     "send_to_admins": lambda : _("All admins"),
+    "run_script": lambda : _("A custom program or script"),
 }
 
 PARAMS_NAMES = {
     "user": lambda : _("Username"),
     "subject": lambda : _("Subject"),
     "message": lambda : _("Message"),
+    "path": lambda : _("Path"),
+    "run_sudo": lambda : _("Run as sudo"),
+}
 
+CONTEXT_VARS = {
+    "TRIGGER_USER": lambda : _("The username who triggered the event"),
+    "USER" : lambda : _("Recipient Username"),
+    "ISO_TIMESTAMP": lambda : _("Date and time in ISO format"),
 }

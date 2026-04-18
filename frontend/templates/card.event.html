@@ -1,12 +1,25 @@
 {% extends "card.html" %}
 
-{% block card_title %}<i class="bi bi-box-fill"></i> {{ event.name }}{% endblock %}
+{% block card_title %}
+{{ event.uuid|truncate(20,True) }}
+    <form method="POST" class="float-end disable-on-submit" action="{{ url_for('main.event_change_status',action='down' if event.enabled else 'up') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="uuid" value="{{ event.uuid }}">
+        <span class="form-check form-switch">
+             <input class="form-check-input auto-submit-switch" type="checkbox" role="switch" name="event_enabled" {{ 'checked' if event.enabled else '' }}>
+        </span>
+    </form>
+
+{% endblock %}
 
 {% block card_content %}
 
 <dl class="row">
-    <dt class="col-sm-5">{{ _("Action:") }}</dt>
-    <dd class="col-sm-7">{{ event.action }}</dd>
+    <dt class="col-sm-3">{{ _("Event") }}:</dt>
+    <dd class="col-sm-9">{{ event.event }}</dd>
+
+    <dt class="col-sm-3">{{ _("Action") }}:</dt>
+    <dd class="col-sm-9">{{ event.action }}</dd>
 </dl>
 
 <table class="table table-striped" id="event_{{ idx }}_parameters">
@@ -18,7 +31,7 @@
     </thead>
 
     <tbody>
-    {% for k,v in event.parameters.items %}
+    {% for k,v in event.parameters.items() %}
     <tr>
         <td>{{ k }}</td>
         <td>{{ v }}</td>
@@ -26,6 +39,16 @@
     {% endfor %}
     </tbody>
 </table>
+
+<form method="POST" class="disable-on-submit mt-4" action="{{ url_for('main.delete_event') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="uuid" value="{{ event.uuid }}">
+        <div class="row g-1">
+            <div class="col-12">
+                 <button class="btn btn-danger w-100">{{ _("Delete Event") }}</button>
+            </div>
+        </div>
+</form>
 
 {% endblock %}
 

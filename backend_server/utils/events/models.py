@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 class EventMetaTypes(Enum):
     NUMERIC = "numeric"
     STRING = "string"
+    BOOL = "bool"
     MULTILINE_STRING = "multiline-string"
     USER = "user"
 
@@ -19,3 +20,9 @@ class Notification(BaseModel):
 
 class NotificationToUser(Notification,UserParameter):
     ...
+
+class PathParameter(BaseModel):
+    path:str = Field(...,json_schema_extra={"metavar":"PATH","metatype":EventMetaTypes.STRING})
+
+class RunScript(PathParameter):
+    run_sudo: bool = Field(...,json_schema_extra={"metavar":"SUDO","metatype":EventMetaTypes.BOOL})

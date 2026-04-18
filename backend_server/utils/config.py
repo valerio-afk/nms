@@ -1,8 +1,7 @@
-
 from backend_server.utils.cmdl import Chown, LocalCommandLineTransaction, Groups, ZPoolList, GetEntPasswd, ZFSSnapshot
 from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet,  ZFSGetQuota, Chmod, ZFSRollback, ZFSDestroy
-from backend_server.utils.cmdl import UserAdd, GetUserUID
-from backend_server.utils.inet import DistroFamilies
+from backend_server.utils.cmdl import UserAdd, GetUserUID, ReadLink, Find
+from backend_server.utils.enums import DistroFamilies
 from backend_server.utils.logger import Logger
 from backend_server.utils.responses import ErrorMessage, UserProfile, Quota
 from backend_server.utils.services import SystemService
@@ -12,6 +11,7 @@ from cryptography.fernet import Fernet
 from datetime import datetime, timedelta
 from fastapi import HTTPException
 from importlib import import_module
+from backend_server.utils.events import EVENT_MANAGER, Events, EventContext
 from nms_shared import ErrorMessages
 from nms_shared.disks import Disk
 from nms_shared.enums import DiskStatus, UserPermissions
@@ -205,6 +205,13 @@ class NMSConfig(Logger):
 
         this._setup_access_services()
         this._ddns_init()
+        this._register_events()
+
+        this.trigger_event(Events.SYSTEM_STARTUP)
+
+    def _register_events(this) -> None:
+        [ this.register_event(uuid) for uuid in this._cfg.get("events", {}).keys()]
+
 
     def _setup_access_services(this) -> None:
         module = import_module("backend_server.utils.services")
@@ -489,6 +496,11 @@ class NMSConfig(Logger):
     def admins(this) -> List[UserProfile]:
         return [u for u in this.users if u.admin]
 
+    #EVENTS PROPERTIES
+    @property
+    def registered_events(this) -> List[Dict[str, Any]]:
+        return this._cfg.get("events", {}).copy()
+
     # BASE METHODS
 
     def check_daemon(this,name:str,prefix:Optional[str]=None) -> Optional[LongWaitThread]:
@@ -581,8 +593,9 @@ class NMSConfig(Logger):
                 "cloudns": ddns_def.copy()
             },
             "systemd": {
-                "services": ['nmswebapp.service','nmsbackend.service','wg-quick@wg0.service']
+                "services": ['nginx.service','nmswebapp.service','nmsbackend.service','wg-quick@wg0.service']
             },
+            "events":{},
             "updates": {
                 "apt": {
                     "last": None,
@@ -862,7 +875,25 @@ class NMSConfig(Logger):
                 if (len(block_devices)==0):
                     return
 
+                this.warning(str(disks))
+                this.warning(str(block_devices))
+
                 for dev in disks:
+                    #check if dev is a symlink or a block special file
+                    find_result = Find("/dev/disk",name=dev,sudo=True).execute()
+
+                    if ((find_result is not None) and (find_result.returncode==0)):
+                        symlinks = find_result.stdout.splitlines()
+
+                        if (len(symlinks)>0):
+                            #take first
+                            symlink = symlinks[0]
+
+                            readlink_result = ReadLink(symlink,sudo=True).execute()
+
+                            if ((readlink_result is not None) and (readlink_result.returncode==0)):
+                                _,dev = os.path.split(readlink_result.stdout.strip())
+
                     for dev_info in block_devices:
                         if dev == dev_info['name']:
                             disk_dev= Disk(name=dev_info['name'],
@@ -875,6 +906,8 @@ class NMSConfig(Logger):
 
 
                             disks_in_pool.append(disk_dev)
+
+
 
                 this._cfg['pool']['disks'] = [d.serialise() for d in disks_in_pool]
 
@@ -1176,10 +1209,64 @@ class NMSConfig(Logger):
     def clean_nms_update(this) -> None:
         this._cfg['updates']['releases'] = None
 
+    # EVENT METHODS
 
+    def add_event(this,event_name:str,action_name:str,**kwargs) -> None:
+        id = str(uuid.uuid4())
 
+        this._cfg['events'][id] = {
+            "name": event_name,
+            "action": action_name,
+            "enabled": True,
+            "parameters": kwargs
+        }
 
+        this.register_event(id)
 
+    def register_event(this,uuid:str)->None:
+        specs = this._cfg.get("events", {}).get(uuid)
+        if (specs is not None):
+            if (specs.get("enabled",False)):
+                EVENT_MANAGER.register_action(
+                    uuid=uuid,
+                    event=specs.get("name"),
+                    action=specs.get("action"),
+                    parameters=specs.get("parameters")
+                )
+
+            this.info(f"Event {uuid} registered successfully")
+        else:
+            this.warning(f"Invalid event {uuid} ")
+
+    def unregister_event(this,uuid:str)->None:
+        EVENT_MANAGER.unregister_action(uuid)
+        this.info(f"Event {uuid} unregistered successfully")
+
+    def enable_event(this,uuid:str)->None:
+        if ((e:=this._cfg['events'].get(uuid)) is not None):
+            e["enabled"] = True
+            this.register_event(uuid)
+
+    def disable_event(this,uuid:str)->None:
+        if ((e:=this._cfg['events'].get(uuid)) is not None):
+            e["enabled"] = False
+            this.unregister_event(uuid)
+
+    def trigger_event(this,event:Events,ctx:Optional[Dict[str,Any]]=None) -> None:
+        callbacks = {k:lambda : v for k,v in ctx.items()} if ctx is not None else {}
+
+        callbacks.setdefault(EventContext.USER.name,lambda : this.users)
+
+        triggered = EVENT_MANAGER.trigger(event,callbacks)
+
+        uuids = [t['uuid'] for t in triggered]
+
+        this.info(f"Event triggered: {event.value} - Actions Executed:{', '.join(uuids)}")
+
+    def delete_event(this,uuid:str)->None:
+        this.unregister_event(uuid)
+        if (this._cfg['events'].get(uuid) is not None):
+            del this._cfg['events'][uuid]
 
 
 CONFIG = NMSConfig()

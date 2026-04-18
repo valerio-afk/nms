@@ -1,15 +1,17 @@
 from backend_server.utils.cmdl import Shutdown, Reboot, SystemCtlRestart, LocalCommandLineTransaction, JournalCtl
 from backend_server.utils.cmdl import TarArchive, LS, LMSensors
 from backend_server.utils.config import CONFIG
-from backend_server.utils.inet import DistroFamilies
+from backend_server.utils.enums import DistroFamilies
+from backend_server.utils.events import EventContext
+from backend_server.utils.events import Events
 from backend_server.utils.responses import BackendProperty, BackgroundTask, ErrorMessage, Sensor, SensorType
 from backend_server.utils.responses import SensorMetric
 from backend_server.utils.scheduler import SCHEDULER
 from backend_server.utils.threads import AptGetUpdateThread, AptGetUpgradeThread, NMSUpdate, DNFCheckUpdateThread
 from backend_server.utils.threads import DNFUpgradeThread
 from backend_server.v1.auth import verify_token_factory, UserPermissions, check_permission
-from backend_server.v1.net import net_counter
 from backend_server.v1.disks import smartctl, get_system_disks
+from backend_server.v1.net import net_counter
 from collections import OrderedDict
 from enum import Enum
 from fastapi import APIRouter, Depends, HTTPException
@@ -200,6 +202,8 @@ def system_get_property(prop:SystemProperties,token:dict=Depends(verify_token)) 
 @system.post('/shutdown',summary="Power off the NAS")
 def shutdown(token:dict=Depends(verify_token)):
     check_permission(username:=token.get("username"), UserPermissions.SYS_ADMIN_ACPI)
+    CONFIG.trigger_event(Events.SYSTEM_POWEROFF,{EventContext.TRIGGER_USER.value:username})
+    CONFIG.trigger_event(Events.SYSTEM_SHUTDOWN,{EventContext.TRIGGER_USER.value:username})
     CONFIG.warning(f"System shutdown requested by {username}. Goodbye")
     Shutdown().execute()
 
@@ -207,12 +211,15 @@ def shutdown(token:dict=Depends(verify_token)):
 @system.post('/restart',summary="Reboot the NAS")
 def restart(token:dict=Depends(verify_token)):
     check_permission(username:=token.get("username"), UserPermissions.SYS_ADMIN_ACPI)
+    CONFIG.trigger_event(Events.SYSTEM_REBOOT,{EventContext.TRIGGER_USER.value:username})
+    CONFIG.trigger_event(Events.SYSTEM_SHUTDOWN,{EventContext.TRIGGER_USER.value:username})
     CONFIG.warning(f"System reboot requested by {username}. See you later")
     Reboot().execute()
 
 @system.post('/restart-systemd-services',summary="Restart main system services")
 def restart_systemd_services(token:dict=Depends(verify_token)) -> None:
     check_permission(username:=token.get("username"), UserPermissions.SYS_ADMIN_SYSTEMCTL)
+    CONFIG.trigger_event(Events.SYSTEM_SYSTEMD,{EventContext.TRIGGER_USER.value:username})
 
     restart_services(username)
 
