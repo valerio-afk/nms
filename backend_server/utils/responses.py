@@ -298,11 +298,12 @@ class AllowedEvents(BaseModel):
     events:List[EventSpec]
     actions:List[ActionSpec]
 
+class EventParameters(BaseModel):
+    parameters:Dict[str, Any]
 
-class RegisterEvent(BaseModel):
+class RegisterEvent(EventParameters):
     event:str
     action:str
-    parameters:Dict[str, Any]
 
 class RegisteredEvent(RegisterEvent):
     uuid:str

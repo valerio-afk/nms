@@ -4,6 +4,11 @@
     {% if not parameters_visible %}
         {% set parameters_visible = False %}
     {% endif %}
+
+    {% if not parameters_disabled %}
+        {% set parameters_disabled = True %}
+    {% endif %}
+    
     <div id="param-action-{{ action_tag }}" class="{{ 'd-none ' if not parameters_visible else '' }} mt-4 param-action">
         {% for p in parameters %}
             {{ p | safe }}

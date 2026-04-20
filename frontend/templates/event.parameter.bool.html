@@ -2,7 +2,15 @@
       <div class="col-sm-4 col-form-label">{{ label }}</div>
       <div class="col-sm-8">
         <span class="form-check form-switch">
-             <input class="form-check-input" type="checkbox" role="switch" name="param_{{ parameter }}" disabled>
+             <input
+                     class="form-check-input"
+                     type="checkbox"
+                     role="switch"
+                     name="param_{{ parameter }}" {{ 'disabled' if parameters_disabled else '' }}
+                    {% if default_value and (default_value==true) %}
+                        checked
+                    {% endif %}
+            >
         </span>
       </div>
     </div>

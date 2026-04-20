@@ -99,7 +99,7 @@ def widget_danger_zone():
     return render_widget("danger_zone",permissions=perms,disks=choices)
 
 
-def create_fields_event_action(action_tag:str) -> Optional[Tuple[List[str],Dict[str, str]]]:
+def create_fields_event_action(action_tag:str,default_values:Optional[Dict[str,Any]]=None) -> Optional[Tuple[List[str],Dict[str, str]]]:
     parameters = []
     events_information = BACKEND.events
     actions = events_information.get("actions",[])
@@ -116,21 +116,30 @@ def create_fields_event_action(action_tag:str) -> Optional[Tuple[List[str],Dict[
     for parameter, specs in action.get("parameters", {}).items():
         metatype = specs.get("metatype", "")
         param_form = ""
+        kwargs = {}
+
+        if (default_values is not None):
+            if ((value:=default_values.get(parameter)) is not None):
+                kwargs['default_value'] = value
+
         match (metatype):
             case "string":
                 param_form = render_template("event.parameter.string.html",
                                              label=parse_msg(PARAMS_NAMES.get(parameter)),
-                                             parameter=parameter)
+                                             parameter=parameter,
+                                             **kwargs)
             case "bool":
                 param_form = render_template("event.parameter.bool.html",
                                              label=parse_msg(PARAMS_NAMES.get(parameter)),
-                                             parameter=parameter)
+                                             parameter=parameter,
+                                             **kwargs)
             case "user":
                 all_users = BACKEND.users
                 param_form = render_template("event.parameter.user.html",
                                              users=all_users,
                                              label=parse_msg(PARAMS_NAMES.get(parameter)),
-                                             parameter=parameter)
+                                             parameter=parameter,
+                                             **kwargs)
 
         parameters.append(param_form)
 
@@ -139,6 +148,38 @@ def create_fields_event_action(action_tag:str) -> Optional[Tuple[List[str],Dict[
         context[v] = parse_msg(CONTEXT_VARS.get(v))
 
     return parameters, context
+
+def parse_event_form(event:Optional[str],action:Optional[str]):
+
+    if (event is None):
+        show_flash(code=ErrorMessages.E_EVENT_INVALID.name)
+        raise Exception()
+    if (action is None):
+        show_flash(code=ErrorMessages.E_ACTION_INVALID.name)
+        raise Exception()
+
+    events_information = BACKEND.events
+    expected_parameters: Optional[Dict[str, Dict[str, str]]] = None
+
+    for a in events_information.get("actions", []):
+        if (action == a.get("tag")):
+            expected_parameters = a.get("parameters", None)
+
+    if (expected_parameters is None):
+        show_flash(code=ErrorMessages.E_ACTION_INVALID.name)
+        raise Exception()
+
+    parameters = {}
+
+    for p, specs in expected_parameters.items():
+        metatype = specs.get("metatype", None)
+        match (metatype):
+            case "bool":
+                parameters[p] = True if (f"param_{p}" in request.form) else False
+            case _:
+                parameters[p] = request.form.get(f"param_{p}", None)
+
+    return parameters
 
 @bp.route('/async/widgets/apt')
 def async_widget_system_updates():
@@ -268,7 +309,7 @@ def events():
     registered_events = BACKEND.registered_events
 
     for x in registered_events:
-        x['form'] = create_fields_event_action(x.get("action"))
+        x['form'] = create_fields_event_action(x.get("action"),x.get("parameters",{}))
 
 
 
@@ -292,33 +333,7 @@ def add_event() -> Response:
         event = request.form.get("event")
         action = request.form.get("allowed_actions")
 
-        if (event is None):
-            show_flash(code=ErrorMessages.E_EVENT_INVALID.name)
-            raise Exception()
-        if (action is None):
-            show_flash(code=ErrorMessages.E_ACTION_INVALID.name)
-            raise Exception()
-
-        events_information = BACKEND.events
-        expected_parameters:Optional[Dict[str,Dict[str,str]]] = None
-
-        for a in events_information.get("actions",[]):
-            if (action == a.get("tag")):
-                expected_parameters = a.get("parameters", None)
-
-        if (expected_parameters is None):
-            show_flash(code=ErrorMessages.E_ACTION_INVALID.name)
-            raise Exception()
-
-        parameters = {}
-
-        for p,specs in expected_parameters.items():
-            metatype = specs.get("metatype",None)
-            match (metatype):
-                case "bool":
-                    parameters[p] = True if (f"param_{p}" in request.form) else False
-                case _:
-                    parameters[p] = request.form.get(f"param_{p}", None)
+        parameters = parse_event_form(event,action)
 
         BACKEND.add_event(
             event_name=event,
@@ -330,6 +345,47 @@ def add_event() -> Response:
         show_flash(code=ErrorMessages.E_CSRF.name)
     except Exception:
         ...
+
+    return redirect(url_for("main.events"))
+
+@bp.route('/advanced/events/update',methods=['POST'])
+def update_event() -> Response:
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+
+        uuid = request.form.get("uuid")
+
+        registered_events = BACKEND.registered_events
+
+        event = None
+
+
+        for e in registered_events:
+            if (e['uuid'] == uuid):
+                event = e
+                break
+
+        if ((uuid is None) or (event is None)):
+            raise ValueError()
+
+        name = event.get("event")
+        action = event.get("action")
+
+        parameters = parse_event_form(name,action)
+
+        BACKEND.update_event(
+            uuid=uuid,
+            **parameters
+        )
+
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+
+    except ValueError:
+        show_flash(code=ErrorMessages.E_EVENT_INVALID.name)
+    except Exception as e:
+        raise e
+
 
     return redirect(url_for("main.events"))
 

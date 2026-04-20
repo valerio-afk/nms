@@ -1,7 +1,7 @@
 from backend_server.utils.enums import StatusAction
 from backend_server.utils.config import CONFIG
 from backend_server.utils.events import ALLOWED_ACTIONS, ACTIONS
-from backend_server.utils.responses import AllowedEvents, EventSpec, ActionSpec
+from backend_server.utils.responses import AllowedEvents, EventSpec, ActionSpec, EventParameters
 from backend_server.utils.responses import RegisterEvent, ErrorMessage, SuccessMessage, RegisteredEvent
 from backend_server.v1.auth import verify_token_factory, check_permission
 from fastapi import APIRouter, Depends, HTTPException
@@ -20,7 +20,7 @@ def get_all_events() -> Tuple[List[EventSpec],List[ActionSpec]]:
     for e, actions in ALLOWED_ACTIONS.items():
         allowed_actions = []
         for a in actions:
-            tag = a.value
+            tag = a.tag
             allowed_actions.append(tag)
 
             if (a not in all_actions):
@@ -34,12 +34,11 @@ def get_all_events() -> Tuple[List[EventSpec],List[ActionSpec]]:
     actions = []
 
     for a in all_actions:
-        obj = ACTIONS[a]()
         actions.append(ActionSpec(
-            category=obj.category,
-            tag=a.value,
-            parameters=obj.parameters,
-            context=[var.value for var in obj.context],
+            category=a.category,
+            tag=a.tag,
+            parameters=a.parameters,
+            context=[var.value for var in a.context],
         ))
 
     return events, actions
@@ -61,6 +60,10 @@ def get_registered_events(token:dict=Depends(verify_token)) -> List[RegisteredEv
     check_permission(token.get("username"), UserPermissions.SYS_ADMIN_EVENTS)
 
     reg_events = CONFIG.registered_events
+
+    import sys
+
+    print(reg_events,file=sys.stderr)
 
     return [ RegisteredEvent(
         uuid=uuid,
@@ -130,6 +133,21 @@ def change_event_status(uuid:str,action:StatusAction,token:dict=Depends(verify_t
             CONFIG.disable_event(uuid)
             CONFIG.flush_config()
             return {"detail": SuccessMessage(code=SuccessMessages.S_EVENT_DISABLED.name, params=[uuid])}
+
+@events.patch("/{uuid}",summary="Update event parameters")
+def delete_event(uuid:str,parameters:EventParameters,token:dict=Depends(verify_token)) -> dict:
+    check_permission(token.get("username"), UserPermissions.SYS_ADMIN_EVENTS)
+
+    try:
+        CONFIG.update_event_parameters(uuid,parameters.parameters)
+        CONFIG.flush_config()
+    except AttributeError:
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_EVENT_INVALID.value))
+    except KeyError as e:
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_EVENT_INVALID_PARAM.value,
+                                                                 params=[str(e), uuid]))
+
+    return {"detail": SuccessMessage(code=SuccessMessages.S_EVENT_UPDATED.name, params=[uuid])}
 
 @events.delete("/{uuid}",summary="Delete an event")
 def delete_event(uuid:str,token:dict=Depends(verify_token)) -> dict:

@@ -212,6 +212,7 @@ class SuccessMessages(Enum):
     S_EVENT_ENABLED = "S_EVENT_ENABLED"
     S_EVENT_DISABLED = "S_EVENT_DISABLED"
     S_EVENT_DELETED = "S_EVENT_DELETED"
+    S_EVENT_UPDATED = "S_EVENT_UPDATED"
 
 
     @staticmethod
@@ -239,6 +240,8 @@ class EventNames(Enum):
     SYSTEM_POWEROFF = "system.poweroff"
     SYSTEM_SHUTDOWN = "system.shutdown"
     SYSTEM_SYSTEMD = "system.systemd"
+    SYSTEM_UPDATES = "system.updates"
+    SYSTEM_UPGRADE = "system.upgrade"
 
     @staticmethod
     def get_event(tag: "EventNames", *args, **kwargs) -> str:
@@ -252,7 +255,7 @@ ERROR_MESSAGES = {
     ErrorMessages.E_CSRF : lambda : _("Form validation failed"),
     ErrorMessages.E_UNKNOWN_METHOD : lambda : _("Unknown operation."),
     ErrorMessages.E_READ_FILE : lambda f,info : _("Unable to read the file %(file)s: %(info)s") % {"file":f,'info':info},
-    ErrorMessages.E_REL_PATH : lambda path1, path2: _("Path `%(path1)s is not relative to `%(path2)s`") % {"path1":path1, 'path2':path2},
+    ErrorMessages.E_REL_PATH : lambda path1, path2: _("Path `%(path1)s` is not relative to `%(path2)s`") % {"path1":path1, 'path2':path2},
     ErrorMessages.E_SELINUX_PORT: lambda info : _("Error while obtaining system information on ports: %(info)s") % {"info":info},
     ErrorMessages.E_SYSTEMD_START: lambda services,info : _("Error while starting the system service(s) %(services)s: %(info)s") % {"info":info,'services':services},
     ErrorMessages.E_SYSTEMD_STOP: lambda services,info : _("Error while stopping the system service(s) %(services)s: %(info)s") % {"info":info,'services':services},
@@ -261,8 +264,8 @@ ERROR_MESSAGES = {
     ErrorMessages.E_POOL_NO_CONF : lambda: _("Disk array not configured yet."),
     ErrorMessages.E_POOL_CONFIG : lambda: _("Disk array is configured."),
     ErrorMessages.E_POOL_DISK_UNAVAL : lambda dev : _("Disk %(dev)s is not available to be in the new disk array.") % {'dev':dev},
-    ErrorMessages.E_POOL_NEW : lambda info = None: _("Unable to create a new disk array: %(info)s)") % {'info': info or ErrorMessages.fallback_message()},
-    ErrorMessages.E_POOL_DESTROY : lambda info = None: _("Unable to destroy the disk array: %(info)s)") % {'info': info or ErrorMessages.fallback_message()},
+    ErrorMessages.E_POOL_NEW : lambda info = None: _("Unable to create a new disk array: %(info)s") % {'info': info or ErrorMessages.fallback_message()},
+    ErrorMessages.E_POOL_DESTROY : lambda info = None: _("Unable to destroy the disk array: %(info)s") % {'info': info or ErrorMessages.fallback_message()},
     ErrorMessages.E_POOL_REDUNDANCY_MIN : lambda: _("You must have at least 3 disks connected to opt in redundancy."),
     ErrorMessages.E_POOL_EXPAND : lambda dev, info: _("Error while adding %(dev)s: %(info)s") % {'dev': dev, 'info': info},
     ErrorMessages.E_POOL_EXPAND_INFO : lambda dev: _("Could not retrieve information for the disk: %(dev)s") % {'dev': dev},
@@ -438,6 +441,7 @@ SUCCESS_MESSAGES = {
     SuccessMessages.S_EVENT_ENABLED : lambda uuid : _("Event %(uuid)s enabled successfully.") % {'uuid':uuid},
     SuccessMessages.S_EVENT_DISABLED : lambda uuid : _("Event %(uuid)s disabled successfully.") % {'uuid':uuid},
     SuccessMessages.S_EVENT_DELETED : lambda uuid : _("Event %(uuid)s deleted successfully.") % {'uuid':uuid},
+    SuccessMessages.S_EVENT_UPDATED : lambda uuid : _("Event %(uuid)s updated successfully.") % {'uuid':uuid},
 }
 
 INFO_MESSAGES = {
@@ -453,6 +457,8 @@ EVENT_NAMES = {
     EventNames.SYSTEM_POWEROFF: lambda : _("When the system is powering off"),
     EventNames.SYSTEM_SHUTDOWN: lambda : _("When the system is shutting down (either rebooting or powering off)"),
     EventNames.SYSTEM_SYSTEMD: lambda : _("When the system services are restarted"),
+    EventNames.SYSTEM_UPDATES: lambda : _("When new system updates are available"),
+    EventNames.SYSTEM_UPGRADE: lambda : _("When the system has been upgraded")
 }
 
 ACTION_CATEGORIES = {

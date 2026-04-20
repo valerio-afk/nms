@@ -2,11 +2,21 @@
     <div class="col-sm-4 col-form-label">{{ label }}</div>
     <div class="col-sm-8">
         <div class="dropdown flex-fill">
-          <input id="user_search" name="param_{{ parameter }}" class="form-control w-100" list="user_list-{{ parameter }}" placeholder="{{ _('Type a username...') }}">
+          <input
+                  id="user_search"
+                  name="param_{{ parameter }}"
+                  class="form-control w-100"
+                  list="user_list-{{ parameter }}"
+                  placeholder="{{ _('Type a username...') }}"
+                  {{ 'disabled' if parameters_disabled else '' }}
+                {% if default_value %}
+                    value="{{ default_value }}"
+                {% endif %}
+            >
 
            <datalist id="user_list-{{ parameter }}">
                {% for u in users %}
-                    <option value="{{ u.username }}">{{ u.visible_name }}</option>
+                    <option value="{{ u.username }}"> </option>
                {% endfor %}
            </datalist>
         </div>

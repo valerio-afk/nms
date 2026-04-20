@@ -1,4 +1,5 @@
-from .actions import ActionTags, EventContext
+from .actions import SendNotificationToAdminsAction, SendNotificationToAllAction, SendNotificationToAction
+from .actions import  EventContext, RunScriptAction, EventAction, ActionTags
 from .actions import ACTIONS
 from enum import Enum
 from typing import List, Dict, Any, Optional, Callable
@@ -27,12 +28,25 @@ class Events(Enum):
     VPN_DISABLED = "vpn.disabled"
 
 
-ALLOWED_ACTIONS:Dict[Events,List[ActionTags]] = {
-    Events.SYSTEM_STARTUP: [ActionTags.SEND_TO,ActionTags.SEND_TO_ALL,ActionTags.SEND_TO_ADMINS,ActionTags.RUN_SCRIPT],
-    Events.SYSTEM_REBOOT: [ActionTags.SEND_TO,ActionTags.SEND_TO_ALL,ActionTags.SEND_TO_ADMINS,ActionTags.RUN_SCRIPT],
-    Events.SYSTEM_POWEROFF: [ActionTags.SEND_TO,ActionTags.SEND_TO_ALL,ActionTags.SEND_TO_ADMINS,ActionTags.RUN_SCRIPT],
-    Events.SYSTEM_SHUTDOWN: [ActionTags.SEND_TO,ActionTags.SEND_TO_ALL,ActionTags.SEND_TO_ADMINS,ActionTags.RUN_SCRIPT],
-    Events.SYSTEM_SYSTEMD: [ActionTags.SEND_TO,ActionTags.SEND_TO_ALL,ActionTags.SEND_TO_ADMINS,ActionTags.RUN_SCRIPT],
+ALLOWED_ACTIONS:Dict[Events,List[EventAction]] = {
+    Events.SYSTEM_STARTUP:  [SendNotificationToAction(),SendNotificationToAllAction(),SendNotificationToAdminsAction(),RunScriptAction()],
+    Events.SYSTEM_REBOOT:   [SendNotificationToAction(),SendNotificationToAllAction(),SendNotificationToAdminsAction(),RunScriptAction()],
+    Events.SYSTEM_POWEROFF: [SendNotificationToAction(),SendNotificationToAllAction(),SendNotificationToAdminsAction(),RunScriptAction()],
+    Events.SYSTEM_SHUTDOWN: [SendNotificationToAction(),SendNotificationToAllAction(),SendNotificationToAdminsAction(),RunScriptAction()],
+    Events.SYSTEM_SYSTEMD:  [SendNotificationToAction(),SendNotificationToAllAction(),SendNotificationToAdminsAction(),RunScriptAction()],
+    Events.SYSTEM_UPDATES:  [
+        SendNotificationToAction(event_context=[EventContext.PACKAGES]),
+        SendNotificationToAllAction(event_context=[EventContext.PACKAGES]),
+        SendNotificationToAdminsAction(event_context=[EventContext.PACKAGES]),
+        RunScriptAction(event_context=[EventContext.PACKAGES]),
+    ],
+
+    Events.SYSTEM_UPGRADE:  [
+        SendNotificationToAction(event_context=[EventContext.PACKAGES]),
+        SendNotificationToAllAction(event_context=[EventContext.PACKAGES]),
+        SendNotificationToAdminsAction(event_context=[EventContext.PACKAGES]),
+        RunScriptAction(event_context=[EventContext.PACKAGES]),
+    ]
 }
 
 

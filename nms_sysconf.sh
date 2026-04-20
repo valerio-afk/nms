@@ -40,6 +40,7 @@ PACKAGES_APT=(
     mailutils
     postfix
     lm-sensors
+    inotify-tools
 )
 
 PACKAGES_DNF=(
@@ -71,6 +72,7 @@ PACKAGES_DNF=(
     postfix
     mailx
     lm_sensors
+    inotify-tools
 )
 
 SERVICES_TO_DISABLE_APT=(

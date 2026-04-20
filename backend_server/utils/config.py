@@ -1263,6 +1263,20 @@ class NMSConfig(Logger):
 
         this.info(f"Event triggered: {event.value} - Actions Executed:{', '.join(uuids)}")
 
+    def update_event_parameters(this,uuid:str, parameters:Dict[str,Any]) -> None:
+        current_parameters = this._cfg['events'].get(uuid).get("parameters",{}).copy()
+
+        if (len(current_parameters)==0):
+            raise AttributeError()
+
+        for k1,k2 in zip(current_parameters.keys(),parameters.keys()):
+            if (k1!=k2):
+                raise KeyError(k2)
+
+
+        this._cfg['events'][uuid]['parameters'] = parameters
+
+
     def delete_event(this,uuid:str)->None:
         this.unregister_event(uuid)
         if (this._cfg['events'].get(uuid) is not None):

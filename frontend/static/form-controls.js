@@ -235,18 +235,35 @@ function initCopyToClipboard()
     });
 }
 
+function eventChangeForm()
+{
+    document.querySelectorAll(".event-btn").forEach(button => {
+    button.addEventListener("click", () => {
+      const uuid = button.dataset.eventUuid;
+
+      const div = document.querySelector(`.event-parameters[data-event-uuid="${uuid}"]`);
+      const form = document.querySelector(`.event-form[data-event-uuid="${uuid}"]`);
+
+      if (div) div.classList.add("d-none");
+      if (form) form.classList.remove("d-none");
+    });
+  });
+}
+
 // Auto init
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initializeToggleControls);
     document.addEventListener('DOMContentLoaded', disableOnSubmit);
     document.addEventListener('DOMContentLoaded', enablePasswordToggle);
     document.addEventListener('DOMContentLoaded', initPermissionSwitches);
+    document.addEventListener('DOMContentLoaded', eventChangeForm);
     document.addEventListener('DOMContentLoaded', initCopyToClipboard);
 } else {
     initializeToggleControls()
     disableOnSubmit()
     enablePasswordToggle()
     initPermissionSwitches()
+    eventChangeForm()
     initCopyToClipboard()
 }
 

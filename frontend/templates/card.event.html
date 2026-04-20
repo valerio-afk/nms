@@ -22,7 +22,7 @@
     <dd class="col-sm-9">{{ event.action }}</dd>
 </dl>
 
-<div class="event_parameters" data-event-uuid="{{ event.uuid }}">
+<div class="event-parameters" data-event-uuid="{{ event.uuid }}">
     <div class="row">
         <div class="col-12">
             <table class="table table-striped">
@@ -47,19 +47,22 @@
 
     <div class="row">
         <div class="col-12">
-            <button class="btn btn-warning w-100" data-event-id="{{ event.uuid  }}">{{ _("Make Changes") }}</button>
+            <button class="btn btn-warning w-100 event-btn" data-event-uuid="{{ event.uuid  }}">{{ _("Make Changes") }}</button>
         </div>
     </div>
 </div>
 
-<form class="disable-on-submit d-none event_form" data-event-uuid="{{ event.uuid }}">
+<form class="disable-on-submit d-none event-form" data-event-uuid="{{ event.uuid }}" method="POST" action="{{ url_for('main.update_event') }}">
     <input type="hidden" name="uuid" value="{{ event.uuid }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     {% set parameters = event.form[0] %}
     {% set ctx = event.form[1] %}
     {% set action_tag = event.action %}
     {% set parameters_visible = True %}
-    {% set custom_button = '<button class="btn btn-warning w-100" data-event-id="'~ event.uuid ~'">'|safe ~ _("Apply Changes") ~'</button>'|safe %}
+    {% set parameters_disabled = False %}
+    {% set parameter_default_values = event.parameters %}
+    {% set custom_button = '<button class="btn btn-warning w-100" data-event-id="'|safe ~ event.uuid ~'">'|safe ~ _("Apply Changes") ~'</button>'|safe %}
     {% include "event.parameters.html" %}
 
 

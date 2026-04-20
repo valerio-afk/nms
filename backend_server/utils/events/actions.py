@@ -1,3 +1,4 @@
+from .context import EventContext
 from .models import NotificationToUser, Notification, RunScript
 from abc import ABC, abstractmethod
 from enum import Enum
@@ -13,10 +14,7 @@ P = TypeVar("P", bound=BaseModel)
 class EventActionCategories(Enum):
     NOTIFICATION = "notification"
 
-class EventContext(Enum):
-    TRIGGER_USER = "TRIGGER_USER"
-    USER = "USER"
-    ISO_TIMESTAMP = "ISO_TIMESTAMP"
+
 
 class ActionTags(Enum):
     SEND_TO = "send_to"
@@ -25,11 +23,18 @@ class ActionTags(Enum):
     RUN_SCRIPT = "run_script"
 
 class EventAction(Generic[P],ABC):
-    def __init__(this,category:str,tag:str,parameters:Type[P],context:List[EventContext]):
+    def __init__(this, category:str,
+                 tag:str,
+                 parameters:Type[P],
+                 context:List[EventContext],
+                 event_context:Optional[List[EventContext]]=None):
         this._tag = tag
         this._category = category
         this._parameters = parameters
         this._context = context
+
+        if (event_context is not None):
+            this._context.extend(event_context)
 
     @property
     def tag(this):
@@ -64,11 +69,12 @@ class EventAction(Generic[P],ABC):
         this.trigger(parameters=parameters,context=context)
 
 class SendNotificationAction(EventAction):
-    def __init__(this,tag:str,parameters:Type[P],context:List[EventContext]) -> None:
+    def __init__(this,tag:str,parameters:Type[P],context:List[EventContext],**kwargs) -> None:
         super().__init__(category=EventActionCategories.NOTIFICATION.value,
                          tag=tag,
                          parameters=parameters,
-                         context=context
+                         context=context,
+                         **kwargs
                          )
 
     @staticmethod
@@ -80,10 +86,11 @@ class SendNotificationAction(EventAction):
         subprocess.run(cmd,input=formatted_msg,text=True,capture_output=True)
 
 class SendNotificationToAction(SendNotificationAction):
-    def __init__(this):
+    def __init__(this,**kwargs):
         super().__init__(ActionTags.SEND_TO.value,
                          NotificationToUser,
-                         [EventContext.TRIGGER_USER,EventContext.ISO_TIMESTAMP]
+                         [EventContext.TRIGGER_USER,EventContext.ISO_TIMESTAMP],
+                         **kwargs
                          )
 
     def trigger(this,parameters:P,context:Dict[str,Any]) -> None:
@@ -111,10 +118,11 @@ class SendNotificationToAction(SendNotificationAction):
                             )
 
 class SendNotificationToAllAction(SendNotificationAction):
-    def __init__(this):
+    def __init__(this, **kwargs):
         super().__init__(ActionTags.SEND_TO_ALL.value,
                          Notification,
-                         [EventContext.TRIGGER_USER,EventContext.USER,EventContext.ISO_TIMESTAMP]
+                         [EventContext.TRIGGER_USER,EventContext.USER,EventContext.ISO_TIMESTAMP],
+                         **kwargs
                          )
 
     def trigger(this, parameters: P, context: Dict[str, Any]) -> None:
@@ -141,8 +149,8 @@ class SendNotificationToAllAction(SendNotificationAction):
                                     )
 
 class SendNotificationToAdminsAction(SendNotificationToAllAction):
-    def __init__(this):
-        super().__init__()
+    def __init__(this, **kwargs):
+        super().__init__(**kwargs)
         this._tag = ActionTags.SEND_TO_ADMINS.value
 
     def trigger(this,parameters:P,context:Dict[str,Any]) -> None:
@@ -152,17 +160,17 @@ class SendNotificationToAdminsAction(SendNotificationToAllAction):
         super().trigger(parameters=parameters,context=context)
 
 class RunScriptAction(EventAction):
-    def __init__(this):
+    def __init__(this,**kwargs):
         super().__init__("execution",ActionTags.RUN_SCRIPT.value,RunScript,[
             EventContext.TRIGGER_USER, EventContext.ISO_TIMESTAMP
-        ])
+        ], **kwargs)
 
     def trigger(this,parameters:P,context:Dict[str,Any]) -> None:
         path:Optional[str] = None
         if (hasattr(parameters,"path")):
             path = parameters.path
 
-        sudo = parameters.sudo if hasattr(parameters,"sudo") else False
+        sudo = parameters.run_sudo if hasattr(parameters,"run_sudo") else False
 
         if (path is not None):
             cmd:List[str] = []
