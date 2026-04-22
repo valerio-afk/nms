@@ -37,6 +37,7 @@ def setup_logger(name: str, level=logging.INFO) -> Logger:
     return logger
 
 def read_lines_from_file(path:str) -> List[str]:
+    #TODO - change this function to make it sudo compatible
     return Path(path).read_text(encoding="utf-8", errors="surrogateescape").splitlines(keepends=True)
 
 

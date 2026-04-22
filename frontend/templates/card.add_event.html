@@ -43,8 +43,9 @@
         const paramDivs = new_event_card.querySelectorAll('.param-action');
 
         function updateParams(selectedValue) {
+            const selected_event = eventList.value;
             paramDivs.forEach(div => {
-                const isMatch = div.id === `param-action-${selectedValue}`;
+                const isMatch = div.id === `param-action-${selected_event}-${selectedValue}`;
 
                 if (isMatch) {
                     div.classList.remove("d-none");

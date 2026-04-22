@@ -48,6 +48,10 @@ class NMSThread(metaclass=ABCMeta):
 
         this._thread = None
 
+    def wait(this) -> None:
+        if ((this._thread is not None) and (this.is_running)):
+            this._thread.join()
+
     @abstractmethod
     def run(this) -> None:
         pass

@@ -1261,7 +1261,7 @@ class NMSConfig(Logger):
 
         uuids = [t['uuid'] for t in triggered]
 
-        this.info(f"Event triggered: {event.value} - Actions Executed:{', '.join(uuids)}")
+        this.info(f"Event triggered: {event.value} - Actions Executed: {', '.join(uuids) if len(uuids)>0 else 'None'}")
 
     def update_event_parameters(this,uuid:str, parameters:Dict[str,Any]) -> None:
         current_parameters = this._cfg['events'].get(uuid).get("parameters",{}).copy()

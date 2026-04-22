@@ -99,19 +99,28 @@ def widget_danger_zone():
     return render_widget("danger_zone",permissions=perms,disks=choices)
 
 
-def create_fields_event_action(action_tag:str,default_values:Optional[Dict[str,Any]]=None) -> Optional[Tuple[List[str],Dict[str, str]]]:
+def create_fields_event_action(event_name:str,action_tag:str,default_values:Optional[Dict[str,Any]]=None) -> Optional[Tuple[List[str],Dict[str, str]]]:
     parameters = []
     events_information = BACKEND.events
-    actions = events_information.get("actions",[])
-    action:Optional[Dict[str,Any]] = None
 
-    for a in actions:
-        if (action_tag == a.get("tag")):
+    event = None
+
+    for e in events_information:
+        if (e.get("event") == event_name):
+            event = e
+
+    if (event is None):
+        return None
+
+    action = None
+
+    for a in event.get("allowed_actions",[]):
+        if (a.get("tag") == action_tag):
             action = a
-            break
 
     if (action is None):
         return None
+
 
     for parameter, specs in action.get("parameters", {}).items():
         metatype = specs.get("metatype", "")
@@ -161,9 +170,16 @@ def parse_event_form(event:Optional[str],action:Optional[str]):
     events_information = BACKEND.events
     expected_parameters: Optional[Dict[str, Dict[str, str]]] = None
 
-    for a in events_information.get("actions", []):
-        if (action == a.get("tag")):
-            expected_parameters = a.get("parameters", None)
+    import sys
+
+    for e in events_information:
+        if (e.get("event") == event):
+            print("I am here bitches",file=sys.stderr)
+            for a in e.get("allowed_actions",[]):
+                if (action == a.get("tag")):
+                    expected_parameters = a.get("parameters", None)
+                    break
+            break
 
     if (expected_parameters is None):
         show_flash(code=ErrorMessages.E_ACTION_INVALID.name)
@@ -269,8 +285,9 @@ def events():
     events_information = BACKEND.events
     events_list = {}
     allowed_actions = {}
+    action_forms = {}
 
-    for e in events_information.get("events",{}):
+    for e in events_information:
         name = e.get("event","")
         category = name.split(".")[0]
 
@@ -283,33 +300,24 @@ def events():
         events_list[category_lbl].update({name: event_lbl})
         allowed_actions[name] = {}
 
-        for tag in e.get("allowed_actions", {}):
-            for a in events_information.get("actions", {}):
 
-                if (a.get("tag") == tag):
-                    action_category = a.get("category","")
 
-                    action_category_lbl = parse_msg(ACTION_CATEGORIES.get(action_category))
+        for a in e.get("allowed_actions", {}):
+            tag = a.get("tag","-")
 
-                    if (allowed_actions[name].get( action_category_lbl ) is None):
-                        allowed_actions[name][action_category_lbl] = {}
+            action_category_lbl = parse_msg(ACTION_CATEGORIES.get(a.get("category","-")))
 
-                    allowed_actions[name][action_category_lbl].update({tag: parse_msg(ACTION_NAMES.get(tag))})
+            if (allowed_actions[name].get( action_category_lbl ) is None):
+                allowed_actions[name][action_category_lbl] = {}
 
-    action_forms = {}
+            allowed_actions[name][action_category_lbl].update({tag: parse_msg(ACTION_NAMES.get(tag))})
+            action_forms[f"{name}-{tag}"] = create_fields_event_action(name,tag)
 
-    for action in events_information.get("actions", []):
-        tag = action.get("tag","")
-
-        action_form = create_fields_event_action(tag)
-
-        if (action_form is not None):
-            action_forms[tag] = action_form
 
     registered_events = BACKEND.registered_events
 
     for x in registered_events:
-        x['form'] = create_fields_event_action(x.get("action"),x.get("parameters",{}))
+        x['form'] = create_fields_event_action(x.get("event"),x.get("action"),x.get("parameters",{}))
 
 
 

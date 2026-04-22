@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: NMS 0.1dev\n"
 "Report-Msgid-Bugs-To: afk.broadcast@gmail.com\n"
-"POT-Creation-Date: 2026-04-21 00:35+0100\n"
+"POT-Creation-Date: 2026-04-22 01:28+0100\n"
 "PO-Revision-Date: 2026-03-17 22:26+0000\n"
 "Last-Translator: Valerio AFK <afk.broadcast@gmail.com>\n"
 "Language: it\n"
@@ -23,23 +23,23 @@ msgstr ""
 msgid "Never"
 msgstr "Mai"
 
-#: frontend/advanced.py:259 frontend/advanced.py:318
+#: frontend/advanced.py:275 frontend/advanced.py:326
 #: frontend/templates/advanced.html:3 frontend/templates/index.html:54
 #: frontend/users.py:23
 msgid "Advanced"
 msgstr "Avanzato"
 
-#: frontend/advanced.py:260 frontend/templates/advanced.logs.html:3
+#: frontend/advanced.py:276 frontend/templates/advanced.logs.html:3
 #: frontend/templates/card.sys_admin.html:11
 msgid "System Logs"
 msgstr "Log di Sistema"
 
-#: frontend/advanced.py:319 frontend/templates/card.sys_admin.html:27
+#: frontend/advanced.py:327 frontend/templates/card.sys_admin.html:27
 #: frontend/templates/events.html:3
 msgid "Events"
 msgstr "Eventi"
 
-#: frontend/advanced.py:525
+#: frontend/advanced.py:533
 msgid ""
 "Update in progress. At the end of this operation, NMS will be restarted. "
 "You may refresh this page. If it becomes unresponsive, wait a few more "
@@ -1579,12 +1579,12 @@ msgid "Disk %(dev)s is not available to be in the new disk array."
 msgstr "Il disco %(dev)s non è disponibile per far parte di un nuovo archivio."
 
 #: nms_shared/build/lib/nms_shared/msg.py:215
-#, fuzzy, python-format
+#, python-format
 msgid "Unable to create a new disk array: %(info)s)"
 msgstr "Impossibile creare un nuovo archivio: %(info)s"
 
 #: nms_shared/build/lib/nms_shared/msg.py:216
-#, fuzzy, python-format
+#, python-format
 msgid "Unable to destroy the disk array: %(info)s)"
 msgstr "Impossibile cancellare l'archivio: %(info)s"
 
@@ -1858,12 +1858,12 @@ msgid "Unable to get system updates: %(info)s"
 msgstr "Non è stato possibile ottenere gli aggiornamenti di sistema: %(info)s"
 
 #: nms_shared/build/lib/nms_shared/msg.py:269
-#, fuzzy, python-format
+#,  python-format
 msgid "Error while enabling %(service)s: %(info)s)"
 msgstr "Errore durante l'attivazione del servizio %(service)s: %(info)s"
 
 #: nms_shared/build/lib/nms_shared/msg.py:270
-#, fuzzy, python-format
+#,  python-format
 msgid "Error while disabling %(service)s: %(info)s)"
 msgstr "Errore durante la disattivazione del servizio %(service)s: %(info)s"
 
@@ -2643,4 +2643,8 @@ msgstr "Destinatario"
 #: nms_shared/src/nms_shared/msg.py:487
 msgid "Date and time in ISO format"
 msgstr "Data e ora in formato ISO"
+
+#: nms_shared/src/nms_shared/msg.py:488
+msgid "Comma-separated list of packages"
+msgstr "Lista dei pacchetti separati da virgole"
 

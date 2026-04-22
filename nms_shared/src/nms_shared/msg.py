@@ -243,6 +243,10 @@ class EventNames(Enum):
     SYSTEM_UPDATES = "system.updates"
     SYSTEM_UPGRADE = "system.upgrade"
 
+    DISK = "disk"
+    DISK_MOUNT = "disk.mount"
+    DISK_UNMOUNT = "disk.unmount"
+
     @staticmethod
     def get_event(tag: "EventNames", *args, **kwargs) -> str:
         return parse_msg(EVENT_NAMES[tag], *args, **kwargs)
@@ -458,7 +462,11 @@ EVENT_NAMES = {
     EventNames.SYSTEM_SHUTDOWN: lambda : _("When the system is shutting down (either rebooting or powering off)"),
     EventNames.SYSTEM_SYSTEMD: lambda : _("When the system services are restarted"),
     EventNames.SYSTEM_UPDATES: lambda : _("When new system updates are available"),
-    EventNames.SYSTEM_UPGRADE: lambda : _("When the system has been upgraded")
+    EventNames.SYSTEM_UPGRADE: lambda : _("When the system has been upgraded"),
+    EventNames.DISK: lambda : _("Disk-related events"),
+    EventNames.DISK_MOUNT : lambda  : _("When the disk array is mounted"),
+    EventNames.DISK_UNMOUNT : lambda  : _("When the disk array is unmounted"),
+
 }
 
 ACTION_CATEGORIES = {
@@ -485,4 +493,5 @@ CONTEXT_VARS = {
     "TRIGGER_USER": lambda : _("The username who triggered the event"),
     "USER" : lambda : _("Recipient Username"),
     "ISO_TIMESTAMP": lambda : _("Date and time in ISO format"),
+    "PACKAGES": lambda : _("Comma-separated list of packages"),
 }

@@ -111,10 +111,7 @@ class SendNotificationToAction(SendNotificationAction):
             this._send_mail(username=user,
                             subject=subject,
                             message=message,
-                            vars={
-                                EventContext.TRIGGER_USER.value:context.get(EventContext.TRIGGER_USER.value,""),
-                                EventContext.ISO_TIMESTAMP.value:datetime.now().isoformat()
-                            }
+                            vars=context
                             )
 
 class SendNotificationToAllAction(SendNotificationAction):
@@ -141,11 +138,7 @@ class SendNotificationToAllAction(SendNotificationAction):
                     this._send_mail(username=u.username,
                                     subject=subject,
                                     message=message,
-                                    vars={
-                                        EventContext.TRIGGER_USER.value: context.get(EventContext.TRIGGER_USER.value,""),
-                                        EventContext.USER.name: u.username,
-                                        EventContext.ISO_TIMESTAMP.value: datetime.now().isoformat()
-                                    }
+                                    vars=context
                                     )
 
 class SendNotificationToAdminsAction(SendNotificationToAllAction):

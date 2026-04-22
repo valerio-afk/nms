@@ -1,26 +1,26 @@
-import datetime
 from abc import abstractmethod
-from string import Template
-from nms_shared.enums import RequestMethod
-from nms_shared.disks import Disk
-from nms_shared.threads import NMSThread
-from backend_server.utils.cmdl import ZPoolStatus, APTGetUpdate, APTGetUpgrade, TarArchive, Chown, Chmod, RemoveFile, \
-    BashScript
-from backend_server.utils.cmdl import LocalCommandLineTransaction, NPMRun, DNFCheckUpdate, DNFUpgrade
-from nms_shared import ErrorMessages, SuccessMessages
+from backend_server.utils.cmdl import LocalCommandLineTransaction, NPMRun, DNFCheckUpdate, DNFUpgrade, BashScript
+from backend_server.utils.cmdl import ZPoolStatus, APTGetUpdate, APTGetUpgrade, TarArchive, Chown, Chmod, RemoveFile
+from backend_server.utils.events import  Events, EventContext
 from backend_server.utils.responses import ErrorMessage, SuccessMessage
 from fastapi import HTTPException
+from nms_shared import ErrorMessages, SuccessMessages
+from nms_shared.disks import Disk
+from nms_shared.enums import RequestMethod
+from nms_shared.threads import NMSThread
+from string import Template
 from typing import Optional, Callable
 from urllib.parse import quote_plus
-import psutil
-import time
+import datetime
 import json
-import threading
-import subprocess
-import re
-import tempfile
 import os
+import psutil
+import re
 import requests
+import subprocess
+import tempfile
+import threading
+import time
 
 class LongWaitThread(NMSThread):
     def __init__(this, interval:int) -> None:
@@ -173,6 +173,7 @@ class AptGetUpdateThread(NMSThread):
 
             CONFIG.system_updates = updates
             CONFIG.flush_config()
+            CONFIG.trigger_event(Events.SYSTEM_UPDATES, {EventContext.PACKAGES.value: ", ".join(updates)})
 
         except Exception as e:
             raise HTTPException(status_code=500,
@@ -184,13 +185,11 @@ class AptGetUpgradeThread(NMSThread):
 
     def run(this) -> None:
         from backend_server.utils.config import CONFIG
-        cmd = APTGetUpdate()
-        process = cmd.execute()
+        update = AptGetUpdateThread()
+        update.start()
+        update.wait()
 
         try:
-            if (process.returncode != 0):
-                raise Exception(process.stderr)
-
             cmd = APTGetUpgrade(dry_run=False)
             process = cmd.execute()
 
@@ -199,6 +198,8 @@ class AptGetUpgradeThread(NMSThread):
 
             CONFIG.system_updates = []
             CONFIG.flush_config()
+
+            CONFIG.trigger_event(Events.SYSTEM_UPGRADE, {EventContext.PACKAGES.value: ", ".join(CONFIG.system_updates)})
 
         except Exception as e:
             raise HTTPException(status_code=500,
@@ -218,6 +219,7 @@ class DNFCheckUpdateThread(NMSThread):
 
             CONFIG.system_updates = updates
             CONFIG.flush_config()
+            CONFIG.trigger_event(Events.SYSTEM_UPDATES, {EventContext.PACKAGES.value: ", ".join(updates)})
 
         except Exception as e:
             raise HTTPException(status_code=500,
@@ -229,14 +231,21 @@ class DNFUpgradeThread(NMSThread):
     def run(this) -> None:
         from backend_server.utils.config import CONFIG
         try:
+            update = DNFCheckUpdateThread()
+            update.start()
+            update.wait()
+
             cmd = DNFUpgrade()
             process = cmd.execute()
 
             if (process.returncode != 0):
                 raise Exception(process.stderr)
 
+
             CONFIG.system_updates = []
             CONFIG.flush_config()
+
+            CONFIG.trigger_event(Events.SYSTEM_UPGRADE, {EventContext.PACKAGES.value: ", ".join(CONFIG.system_updates)})
 
         except Exception as e:
             raise HTTPException(status_code=500,

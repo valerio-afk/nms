@@ -4,6 +4,7 @@ from backend_server.utils.cmdl import ZFSUnLoadKey, ZFSDestroy, ZFSCreate, ZPool
 from backend_server.utils.cmdl import ZPoolAttach, ZPoolAdd, ZPoolImport, CreateKey, ZPoolCreate, ZPoolDestroy
 from backend_server.utils.cmdl import ZPoolClear, ZPoolReplace, Stat
 from backend_server.utils.config import CONFIG
+from backend_server.utils.events import Events, EventContext
 from backend_server.utils.responses import ExpasionStatus, BackendProperty, ErrorMessage, SuccessMessage
 from backend_server.utils.responses import PoolSnapshot, CreatePool, ReplaceDevice, BackgroundTask, ImportPool
 from backend_server.utils.scheduler import SCHEDULER
@@ -563,6 +564,7 @@ def pool_get_property(prop:PoolProperties,token:dict=Depends(verify_token)) -> O
 def pool_mount(token:dict=Depends(verify_token)) -> Dict:
     check_permission(username:=token.get("username"), UserPermissions.POOL_TOOLS_MOUNT)
     mount()
+    CONFIG.trigger_event(Events.DISK_MOUNT, {EventContext.TRIGGER_USER.value: username})
 
     CONFIG.info(f"Pool mounted by {username}")
 
@@ -577,6 +579,7 @@ def pool_unmount(token:dict=Depends(verify_token)) -> Dict:
     check_permission(username:=token.get("username"), UserPermissions.POOL_TOOLS_MOUNT)
     disable_all_access_services()
     unmount()
+    CONFIG.trigger_event(Events.DISK_UNMOUNT, {EventContext.TRIGGER_USER.value: username})
 
     CONFIG.warning(f"Pool unmounted by {username}")
 

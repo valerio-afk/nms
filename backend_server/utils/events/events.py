@@ -46,7 +46,10 @@ ALLOWED_ACTIONS:Dict[Events,List[EventAction]] = {
         SendNotificationToAllAction(event_context=[EventContext.PACKAGES]),
         SendNotificationToAdminsAction(event_context=[EventContext.PACKAGES]),
         RunScriptAction(event_context=[EventContext.PACKAGES]),
-    ]
+    ],
+
+    Events.DISK_MOUNT:  [SendNotificationToAction(),SendNotificationToAllAction(),SendNotificationToAdminsAction(),RunScriptAction()],
+    Events.DISK_UNMOUNT:  [SendNotificationToAction(),SendNotificationToAllAction(),SendNotificationToAdminsAction(),RunScriptAction()],
 }
 
 
@@ -81,6 +84,7 @@ class EventManager:
 
         now_timestamp = datetime.datetime.now()
         ctx.setdefault(EventContext.ISO_TIMESTAMP.value, now_timestamp.isoformat())
+        ctx.setdefault(EventContext.TRIGGER_USER.value, "-")
 
         for e,d in this._registered_events.items():
             if (e == event):
