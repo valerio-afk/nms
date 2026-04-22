@@ -1132,20 +1132,21 @@ class LSBLK(CommandLine):
 class ApplyPatch(RevertibleCommandLine):
     BACK_EXT = ".bkp"
 
-    def __init__(this, patch_file, file_to_patch=None, sudo=True):
-        super().__init__(["patch",file_to_patch],sudo=sudo)
+    def __init__(this, patch_file, file_to_patch=None,strip:int=0, **kwargs):
+        super().__init__(["patch",f"-p{strip}",file_to_patch],**kwargs)
         this._file_to_patch = file_to_patch
         this._patch_file = patch_file
+        this._strip = strip
 
     def to_dict(this):
         d = super().to_dict()
         d['patch_file'] = this._patch_file
         d['file_to_patch'] = this._file_to_patch
-        d['sudo'] = this._sudo
+        d['strip'] = this._strip
 
         return d
 
-    def execute(this,revert=False):
+    def execute(this,revert:bool=False,**kwargs):
         return this._forward_exec() if not revert else this._backward_exec()
 
     def _forward_exec(this):
@@ -1174,7 +1175,7 @@ class ApplyPatch(RevertibleCommandLine):
         return ApplyPatch(
             serialisation.get('patch_file',None),
             serialisation.get('file_to_patch', None),
-            serialisation.get('sudo', True)
+            serialisation.get('strip', 0),
         )
 
 class UserModChangeUsername(RevertibleCommandLine):

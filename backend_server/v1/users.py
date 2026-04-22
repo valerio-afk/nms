@@ -5,6 +5,7 @@ from backend_server.utils.cmdl import LocalCommandLineTransaction, UserModAddGro
 from backend_server.utils.cmdl import RSync, Chown, Mkdir, UserDel, GroupModChangeGroupName, GetEntShadow, GetEntPasswd
 from backend_server.utils.cmdl import ZFSSetQuota, UserModChangeUsername, SMBPasswd, RenameFile, UserModChangeHomeDir
 from backend_server.utils.config import CONFIG, create_system_user
+from backend_server.utils.events import EventContext, Events
 from backend_server.utils.responses import ChgFullnameData, ChangeQuotaData, ChangeUsernameData, SudoData, UserDelete
 from backend_server.utils.responses import NewUserProfile, WarningMessage, UserPermissionsData, Notification
 from backend_server.utils.responses import UserProfile, AccessServiceCredentials, ErrorMessage, SuccessMessage
@@ -454,6 +455,7 @@ def new_user(profile:NewUserProfile,token:dict=Depends(verify_token)) -> dict:
             return {"detail": WarningMessage(code=WarningMessages.W_NEW_USER.name, params=[profile.username,output.stderr])}
 
     CONFIG.info(f"New user created by {username}: {profile.username}")
+    CONFIG.trigger_event(Events.USER_CREATED, {EventContext.ACCOUNT.value: profile.username})
 
     return {"detail": SuccessMessage(code=SuccessMessages.S_NEW_USER.name,params=[profile.username])}
 
@@ -510,6 +512,7 @@ def user_delete(data:UserDelete,token:dict=Depends(verify_token)) -> dict:
     CONFIG.flush_config()
 
     CONFIG.info(f"User {data.username} deleted by {username}")
+    CONFIG.trigger_event(Events.USER_DELETED, {EventContext.ACCOUNT.value: data.username})
 
     return {"detail": SuccessMessage(code=SuccessMessages.S_DEL_USER.name, params=[user_to_delete.username])}
 

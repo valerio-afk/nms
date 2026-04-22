@@ -243,9 +243,23 @@ class EventNames(Enum):
     SYSTEM_UPDATES = "system.updates"
     SYSTEM_UPGRADE = "system.upgrade"
 
+    USER = "user"
+    USER_LOGGED_IN = "user.logged_in"
+    USER_CREATED = "user.created"
+    USER_DELETED = "user.deleted"
+
+
     DISK = "disk"
     DISK_MOUNT = "disk.mount"
     DISK_UNMOUNT = "disk.unmount"
+
+    ACCESS = "access"
+    ACCESS_ENABLED = "access.enabled"
+    ACCESS_DISABLED = "access.disabled"
+
+    NETWORK = "net"
+    VPN_ENABLED = "net.vpn_enabled"
+    VPN_DISABLED = "net.vpn_disabled"
 
     @staticmethod
     def get_event(tag: "EventNames", *args, **kwargs) -> str:
@@ -463,9 +477,25 @@ EVENT_NAMES = {
     EventNames.SYSTEM_SYSTEMD: lambda : _("When the system services are restarted"),
     EventNames.SYSTEM_UPDATES: lambda : _("When new system updates are available"),
     EventNames.SYSTEM_UPGRADE: lambda : _("When the system has been upgraded"),
+
     EventNames.DISK: lambda : _("Disk-related events"),
     EventNames.DISK_MOUNT : lambda  : _("When the disk array is mounted"),
     EventNames.DISK_UNMOUNT : lambda  : _("When the disk array is unmounted"),
+
+    EventNames.USER : lambda : _("User events"),
+    EventNames.USER_LOGGED_IN : lambda : _("When a user logs in"),
+    EventNames.USER_CREATED: lambda : _("When a user is created"),
+    EventNames.USER_DELETED: lambda : _("When a user is deleted"),
+
+
+    EventNames.ACCESS : lambda : _("Remote access services events"),
+    EventNames.ACCESS_ENABLED : lambda : _("When an access service is enabled"),
+    EventNames.ACCESS_DISABLED : lambda : _("When an access service is disabled"),
+
+    EventNames.NETWORK : lambda : _("Network events"),
+    EventNames.VPN_ENABLED : lambda : _("When the VPN is enabled"),
+    EventNames.VPN_DISABLED : lambda : _("When the VPN is disabled"),
+
 
 }
 
@@ -492,6 +522,8 @@ PARAMS_NAMES = {
 CONTEXT_VARS = {
     "TRIGGER_USER": lambda : _("The username who triggered the event"),
     "USER" : lambda : _("Recipient Username"),
+    "ACCOUNT" : lambda : _("Created/Deleted Username"),
     "ISO_TIMESTAMP": lambda : _("Date and time in ISO format"),
     "PACKAGES": lambda : _("Comma-separated list of packages"),
+    "SERVICE": lambda : _("Enabled/Disabled access service"),
 }

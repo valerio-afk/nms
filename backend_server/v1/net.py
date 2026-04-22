@@ -2,6 +2,7 @@ from backend_server.utils.cmdl import NMCLIConnection, NMCLIDevice, LocalCommand
 from backend_server.utils.cmdl import SystemCtlStart, SystemCtlStop, SystemCtlRestart, SystemCtlIsActive
 from backend_server.utils.config import CONFIG
 from backend_server.utils.enums import StatusAction
+from backend_server.utils.events import EventContext, Events
 from backend_server.utils.inet import TransportProtocol, SinglePort
 from backend_server.utils.responses import DDNSDefaultProviderConfiguration, DDNSProvider
 from backend_server.utils.responses import NetCounter, NetworkInterface, IPv4, IPv6, ErrorMessage, InterfaceType
@@ -529,15 +530,19 @@ def net_iface_action(action:StatusAction, token:dict=Depends(verify_token)) -> N
     cmd = None
     vpn_service = CONFIG.vpn_service
 
+    event = None
+
     match(action):
         case StatusAction.UP:
             cmd = SystemCtlStart(vpn_service)
             log_action="enabled"
             firewall_action = Firewall.FirewallAction.ADD_PORT
+            event = Events.VPN_ENABLED
         case StatusAction.DOWN:
             cmd = SystemCtlStop(vpn_service)
             log_action="disabled"
             firewall_action = Firewall.FirewallAction.REMOVE_PORT
+            event = Events.VPN_DISABLED
 
     firewall_cmd = Firewall(Firewall.FirewallAction.STATE, sudo=True).execute()
     if ((firewall_cmd.returncode == 0) and (firewall_cmd.stdout.strip() == "running")):
@@ -554,6 +559,7 @@ def net_iface_action(action:StatusAction, token:dict=Depends(verify_token)) -> N
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_CHANGE_STATE.name,params=["VPN",output.stderr]))
 
     CONFIG.warning(f"VPN service {log_action} by {username}")
+    CONFIG.trigger_event(event)
 
 @net.get('/vpn',response_model=NetworkInterface,summary="Returns the VPN configuration")
 def net_get_vpn_config(token:dict=Depends(verify_token)) -> NetworkInterface:

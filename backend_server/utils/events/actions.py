@@ -65,6 +65,7 @@ class EventAction(Generic[P],ABC):
     def trigger(this,parameters:P,context:Dict[str,Any]) -> None:
         ...
 
+
     def __call__(this,parameters:P,context:Dict[str,Any]) -> None:
         this.trigger(parameters=parameters,context=context)
 

@@ -1,17 +1,18 @@
-from enum import Enum
-import jwt
-import pyotp
-import pytz
+from backend_server.utils.config import CONFIG, SECRET_KEY, _create_token
+from backend_server.utils.events import EventContext, Events
+from backend_server.utils.responses import OTPVerification, ErrorMessage, AuthToken
 from datetime import datetime
+from enum import Enum
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.params import Depends, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
-from typing import Any, Dict, Optional
-from backend_server.utils.config import CONFIG, SECRET_KEY, _create_token
-from backend_server.utils.responses import OTPVerification, ErrorMessage, AuthToken
 from nms_shared import ErrorMessages
 from nms_shared.enums import UserPermissions
+from pydantic import BaseModel
+from typing import Any, Dict, Optional
+import jwt
+import pyotp
+import pytz
 
 auth = APIRouter(prefix='/auth',tags=['auth'])
 
@@ -176,6 +177,7 @@ def auth_otp_verify(data:OTPVerification) -> AuthToken:
 
     token = create_token(username,data.purpose,data.duration)
     CONFIG.info(f"Valid OTP for `{username}` - token issued")
+    CONFIG.trigger_event(Events.USER_LOGGED_IN, {EventContext.TRIGGER_USER.value: username})
 
     return AuthToken(token=token,username=username)
 

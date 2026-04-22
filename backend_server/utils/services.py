@@ -819,7 +819,7 @@ class SMBService(SystemService):
 #
 class WEBService(SystemService):
     NGINX_BLOCKS = ['/box','/api/']
-    CONF_DEB = '/etc/nginx/sites-enabled/nms'
+    CONF_DEB = '/etc/nginx/sites-available/nms'
     CONF_RH = '/etc/nginx/conf.d/nms.conf'
 
     def __init__(this,*args,**kwargs):
@@ -848,16 +848,17 @@ class WEBService(SystemService):
         return c.stdout.splitlines(keepends=True)
 
     def _apply_patch(this, new_config:List[str]) -> None:
-        patch_text = make_diff_from_file(this.config_file, new_config)
+        orig_config_file = this._read_config_file()
+        patch_text = make_diff(this.config_file,orig_config_file, new_config)
 
         patch_fname = os.path.join(tempfile.gettempdir(), f"nms_nginx.patch")
         Path(patch_fname).write_text(patch_text, encoding="utf-8", errors="surrogateescape")
 
-        cmd = ApplyPatch(patch_fname, this.config_file, sudo=True)
+        cmd = ApplyPatch(patch_fname, this.config_file, sudo=True, cwd="/")
         trans = LocalCommandLineTransaction(cmd)
 
         trans.run()
-        os.remove(patch_fname)
+        # os.remove(patch_fname)
 
     def _restart_service(this) -> None:
         def _worker():

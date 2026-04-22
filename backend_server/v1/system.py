@@ -2,8 +2,7 @@ from backend_server.utils.cmdl import Shutdown, Reboot, SystemCtlRestart, LocalC
 from backend_server.utils.cmdl import TarArchive, LS, LMSensors
 from backend_server.utils.config import CONFIG
 from backend_server.utils.enums import DistroFamilies
-from backend_server.utils.events import EventContext
-from backend_server.utils.events import Events
+from backend_server.utils.events import EventContext, Events
 from backend_server.utils.responses import BackendProperty, BackgroundTask, ErrorMessage, Sensor, SensorType
 from backend_server.utils.responses import SensorMetric
 from backend_server.utils.scheduler import SCHEDULER

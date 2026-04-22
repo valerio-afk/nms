@@ -1,4 +1,5 @@
 from backend_server.utils.config import CONFIG
+from backend_server.utils.events import EventContext, Events
 from backend_server.utils.responses import AccessService, ErrorMessage, SuccessMessage
 from nms_shared import SuccessMessages
 from nms_shared.enums import UserPermissions
@@ -52,7 +53,8 @@ def get_system_services(token:dict=Depends(verify_token)) -> Dict[str,AccessServ
     summary = "Enable an access service"
 )
 async def enable_access_service(service_id: str, request: Request,token:dict=Depends(verify_token)) -> Optional[Dict]:
-    check_permission(username:=token.get("username"), UserPermissions[f"SERVICES_{service_id.upper()}_MANAGE"])
+    service_name = service_id.upper()
+    check_permission(username:=token.get("username"), UserPermissions[f"SERVICES_{service_name}_MANAGE"])
     try:
         data = await request.json()
         service = CONFIG.access_services[service_id]
@@ -60,7 +62,8 @@ async def enable_access_service(service_id: str, request: Request,token:dict=Dep
 
         if (service.is_active):
             CONFIG.info(f"Access service {service_id} enabled by {username}")
-            return {"detail":SuccessMessage(code=SuccessMessages.S_ACCESS_ENABLED.name,params=[service_id.upper()])}
+            CONFIG.trigger_event(Events.ACCESS_ENABLED, {EventContext.SERVICE.value: service_name})
+            return {"detail":SuccessMessage(code=SuccessMessages.S_ACCESS_ENABLED.name,params=[service_name])}
         else:
             raise Exception()
 
@@ -93,19 +96,21 @@ async def update_access_service(service_id: str, request: Request, token:dict=De
     summary = "Disable an access service"
 )
 async def disable_access_service(service_id: str, request: Request,token:dict=Depends(verify_token)) -> Optional[Dict]:
-    check_permission(username:=token.get("username"), UserPermissions[f"SERVICES_{service_id.upper()}_MANAGE"])
+    service_name = service_id.upper()
+    check_permission(username:=token.get("username"), UserPermissions[f"SERVICES_{service_name}_MANAGE"])
     try:
         data = await request.json()
         service = CONFIG.access_services[service_id]
         service.disable(**data)
         if (not service.is_active):
             CONFIG.warning(f"Access service {service_id} disabled by {username}")
-            return {"detail":SuccessMessage(code=SuccessMessages.S_ACCESS_DISABLED.name,params=[service_id.upper()])}
+            CONFIG.trigger_event(Events.ACCESS_DISABLED, {EventContext.SERVICE.value: service_name})
+            return {"detail":SuccessMessage(code=SuccessMessages.S_ACCESS_DISABLED.name,params=[service_name])}
         else:
             raise Exception()
     except HTTPException as http_e:
         raise http_e
     except Exception as e:
-        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_ACCESS_DISABLED.name,params=[service_id.upper(),str(e)]))
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_ACCESS_DISABLED.name,params=[service_name.upper(),str(e)]))
 
 

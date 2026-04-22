@@ -17,6 +17,7 @@ class Events(Enum):
     SYSTEM_UPGRADE = "system.upgrade"
     SYSTEM_NMS_UPDATES = "system.nms_updates"
     SYSTEM_NMS_UPGRADE = "system.nms_upgrade"
+    SYSTEM_TIMER = "system.timer"
     DISK_MOUNT = "disk.mount"
     DISK_UNMOUNT = "disk.unmount"
     USER_LOGGED_IN = "user.logged_in"
@@ -24,8 +25,8 @@ class Events(Enum):
     USER_DELETED = "user.deleted"
     ACCESS_ENABLED = "access.enabled"
     ACCESS_DISABLED = "access.disabled"
-    VPN_ENABLED = "vpn.enabled"
-    VPN_DISABLED = "vpn.disabled"
+    VPN_ENABLED = "net.vpn_enabled"
+    VPN_DISABLED = "net.vpn_disabled"
 
 
 ALLOWED_ACTIONS:Dict[Events,List[EventAction]] = {
@@ -50,6 +51,39 @@ ALLOWED_ACTIONS:Dict[Events,List[EventAction]] = {
 
     Events.DISK_MOUNT:  [SendNotificationToAction(),SendNotificationToAllAction(),SendNotificationToAdminsAction(),RunScriptAction()],
     Events.DISK_UNMOUNT:  [SendNotificationToAction(),SendNotificationToAllAction(),SendNotificationToAdminsAction(),RunScriptAction()],
+
+    Events.USER_LOGGED_IN: [SendNotificationToAction(),SendNotificationToAllAction(),SendNotificationToAdminsAction(),RunScriptAction()],
+    Events.USER_CREATED: [
+        SendNotificationToAction(event_context=[EventContext.ACCOUNT]),
+        SendNotificationToAllAction(event_context=[EventContext.ACCOUNT]),
+        SendNotificationToAdminsAction(event_context=[EventContext.ACCOUNT]),
+        RunScriptAction(event_context=[EventContext.ACCOUNT]),
+    ],
+
+    Events.USER_DELETED: [
+        SendNotificationToAction(event_context=[EventContext.ACCOUNT]),
+        SendNotificationToAllAction(event_context=[EventContext.ACCOUNT]),
+        SendNotificationToAdminsAction(event_context=[EventContext.ACCOUNT]),
+        RunScriptAction(event_context=[EventContext.ACCOUNT]),
+    ],
+
+
+    Events.ACCESS_ENABLED:  [
+        SendNotificationToAction(event_context=[EventContext.SERVICE]),
+        SendNotificationToAllAction(event_context=[EventContext.SERVICE]),
+        SendNotificationToAdminsAction(event_context=[EventContext.SERVICE]),
+        RunScriptAction(event_context=[EventContext.SERVICE]),
+    ],
+
+    Events.ACCESS_DISABLED:  [
+        SendNotificationToAction(event_context=[EventContext.SERVICE]),
+        SendNotificationToAllAction(event_context=[EventContext.SERVICE]),
+        SendNotificationToAdminsAction(event_context=[EventContext.SERVICE]),
+        RunScriptAction(event_context=[EventContext.SERVICE]),
+    ],
+
+    Events.VPN_ENABLED:  [SendNotificationToAction(),SendNotificationToAllAction(),SendNotificationToAdminsAction(),RunScriptAction()],
+    Events.VPN_DISABLED:  [SendNotificationToAction(),SendNotificationToAllAction(),SendNotificationToAdminsAction(),RunScriptAction()],
 }
 
 
