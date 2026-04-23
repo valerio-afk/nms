@@ -32,6 +32,10 @@ class LongWaitThread(NMSThread):
         this._stop_event.set()
         super().stop()
 
+    @property
+    def interval(this) -> int:
+        return this._interval
+
 class NetIOCounter (NMSThread):
 
     def __init__(this):
@@ -79,7 +83,18 @@ class FreeOldChunkFiles(LongWaitThread):
             if this._stop_event.wait(timeout=this.interval):
                 break
 
-    #
+# class CallbackThreaed(LongWaitThread):
+#     def __init__(this,timer:int,callback:Callable[[],None]):
+#         super().__init__(timer)
+#         this._callback = callback
+#
+#     def run(this) -> None:
+#         while (this.is_running):
+#             if this._stop_event.wait(timeout=this.interval):
+#                 break
+#             this._callback()
+
+
 
 class ScrubStateChecker(NMSThread):
     def __init__(this, pool_name: str):

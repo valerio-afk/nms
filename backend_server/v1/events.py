@@ -1,10 +1,11 @@
 from backend_server.utils.enums import StatusAction
 from backend_server.utils.config import CONFIG
-from backend_server.utils.events import ALLOWED_ACTIONS
 from backend_server.utils.responses import  EventSpec, ActionSpec, EventParameters
 from backend_server.utils.responses import RegisterEvent, ErrorMessage, SuccessMessage, RegisteredEvent
 from backend_server.v1.auth import verify_token_factory, check_permission
 from fastapi import APIRouter, Depends, HTTPException
+
+from backend_server.utils.events import EVENT_MANAGER
 from nms_shared import ErrorMessages, SuccessMessages
 from nms_shared.enums import UserPermissions
 from typing import  List
@@ -16,10 +17,10 @@ events = APIRouter(prefix='/events',tags=['events'],dependencies=[Depends(verify
 def get_all_events() -> List[EventSpec]:
     events = []
 
-    for e, actions in ALLOWED_ACTIONS.items():
+    for event in EVENT_MANAGER.events:
         allowed_actions =[]
 
-        for action in actions:
+        for action in event.allowed_actions:
             allowed_actions.append(
                 ActionSpec(
                     category=action.category,
@@ -30,7 +31,7 @@ def get_all_events() -> List[EventSpec]:
             )
 
         events.append(EventSpec(
-            event=e.value,
+            event=event.tag,
             allowed_actions=allowed_actions)
         )
 
@@ -48,10 +49,6 @@ def get_registered_events(token:dict=Depends(verify_token)) -> List[RegisteredEv
     check_permission(token.get("username"), UserPermissions.SYS_ADMIN_EVENTS)
 
     reg_events = CONFIG.registered_events
-
-    import sys
-
-    print(reg_events,file=sys.stderr)
 
     return [ RegisteredEvent(
         uuid=uuid,

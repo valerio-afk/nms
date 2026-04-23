@@ -1,5 +1,6 @@
 from .context import EventContext
-from .models import NotificationToUser, Notification, RunScript
+from .models import NotificationToUser, Notification, RunScript, FileOwnership, FilePermissions
+from backend_server.utils.cmdl import Chown, Chmod
 from abc import ABC, abstractmethod
 from enum import Enum
 from pydantic import BaseModel
@@ -21,6 +22,8 @@ class ActionTags(Enum):
     SEND_TO_ALL = "send_to_all"
     SEND_TO_ADMINS = "send_to_admins"
     RUN_SCRIPT = "run_script"
+    CHANGE_OWNER = "change_owner"
+    CHANGE_PERMISSIONS = "change_permissions"
 
 class EventAction(Generic[P],ABC):
     def __init__(this, category:str,
@@ -182,6 +185,66 @@ class RunScriptAction(EventAction):
             env[EventContext.ISO_TIMESTAMP.value] = datetime.now().isoformat()
 
             subprocess.run(cmd,env=env,text=True,capture_output=True)
+
+
+class ChangeOwnerAction(EventAction):
+    def __init__(this,**kwargs):
+        super().__init__(
+            "file",
+            ActionTags.CHANGE_OWNER.value,
+            parameters=FileOwnership,
+            context=[
+                EventContext.TRIGGER_USER,
+                EventContext.USER,
+                EventContext.GROUP,
+                EventContext.FILE,
+                EventContext.ISO_TIMESTAMP
+            ],**kwargs)
+
+    def trigger(this,parameters:P,context:Dict[str,Any]) -> None:
+        filepath:Optional[str] = context.get(EventContext.FILE.value,None)
+
+        if (filepath is None):
+            return
+
+        if (hasattr(parameters,"user")):
+            user = parameters.user
+        else:
+            return
+
+        group = None
+        if (hasattr(parameters,"group")):
+            if (len(parameters.group) > 0):
+                group = parameters.group
+
+        Chown(user,group,filepath,sudo=True).execute()
+
+class ChangePermissionSAction(EventAction):
+    def __init__(this,**kwargs):
+        super().__init__(
+            "file",
+            ActionTags.CHANGE_PERMISSIONS.value,
+            parameters=FilePermissions,
+            context=[
+                EventContext.TRIGGER_USER,
+                EventContext.USER,
+                EventContext.GROUP,
+                EventContext.FILE,
+                EventContext.ISO_TIMESTAMP
+            ],**kwargs)
+
+    def trigger(this,parameters:P,context:Dict[str,Any]) -> None:
+        filepath:Optional[str] = context.get(EventContext.FILE.value,None)
+
+        if (filepath is None):
+            return
+
+        if (hasattr(parameters,"permissions")):
+            permissions = parameters.permissions
+        else:
+            return
+
+        Chmod(filepath,permissions,sudo=True).execute()
 
 ACTIONS:Dict[ActionTags,Type[EventAction]] = {
     ActionTags.SEND_TO:SendNotificationToAction,

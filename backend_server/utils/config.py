@@ -1229,8 +1229,8 @@ class NMSConfig(Logger):
             if (specs.get("enabled",False)):
                 EVENT_MANAGER.register_action(
                     uuid=uuid,
-                    event=specs.get("name"),
-                    action=specs.get("action"),
+                    event_tag=specs.get("name"),
+                    action_tag=specs.get("action"),
                     parameters=specs.get("parameters")
                 )
 

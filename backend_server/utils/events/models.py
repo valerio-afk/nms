@@ -26,3 +26,9 @@ class PathParameter(BaseModel):
 
 class RunScript(PathParameter):
     run_sudo: bool = Field(...,json_schema_extra={"metavar":"SUDO","metatype":EventMetaTypes.BOOL})
+
+class FileOwnership(UserParameter):
+    group:Optional[str]
+
+class FilePermissions(BaseModel):
+    permissions:int
