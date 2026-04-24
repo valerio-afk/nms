@@ -1,0 +1,14 @@
+    <div class="mt-2 mb-2 row">
+      <div class="col-sm-4 col-form-label">{{ label }}</div>
+      <div class="col-sm-8">
+        <input type="number"
+               min="1"
+               name="param_{{ parameter }}"
+               class="form-control" {{ 'disabled' if parameters_disabled else '' }}
+
+            {% if default_value %}
+                value="{{ default_value }}"
+            {% endif %}
+          />
+      </div>
+    </div>

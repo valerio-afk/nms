@@ -210,7 +210,8 @@ class NMSConfig(Logger):
         this.trigger_event(Events.SYSTEM_STARTUP)
 
     def _register_events(this) -> None:
-        [ this.register_event(uuid) for uuid in this._cfg.get("events", {}).keys()]
+        for uuid in this._cfg.get("events", {}).keys():
+            this.register_event(uuid)
 
 
     def _setup_access_services(this) -> None:
@@ -1211,15 +1212,16 @@ class NMSConfig(Logger):
 
     # EVENT METHODS
 
-    def add_event(this,event_name:str,action_name:str,**kwargs) -> None:
+    def add_event(this,event_name:str,action_name:str,parameters:Dict[str,dict]) -> None:
         id = str(uuid.uuid4())
 
         this._cfg['events'][id] = {
             "name": event_name,
             "action": action_name,
             "enabled": True,
-            "parameters": kwargs
         }
+
+        this._cfg['events'][id]['parameters'] = parameters
 
         this.register_event(id)
 
@@ -1231,7 +1233,8 @@ class NMSConfig(Logger):
                     uuid=uuid,
                     event_tag=specs.get("name"),
                     action_tag=specs.get("action"),
-                    parameters=specs.get("parameters")
+                    action_parameters=specs.get("parameters",{}).get("action_parameters",{}),
+                    event_parameters = specs.get("parameters",{}).get("event_parameters",{})
                 )
 
             this.info(f"Event {uuid} registered successfully")

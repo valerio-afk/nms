@@ -11,7 +11,6 @@ from flask_wtf.csrf import validate_csrf
 from frontend.utils.decorators import wait
 from frontend.utils.forms import ImportPoolForm, CreatePoolForm, AddDisksForm
 from nms_shared.msg import ErrorMessages
-# from pySMART import Device
 from typing import Union
 from wtforms import ValidationError
 import time

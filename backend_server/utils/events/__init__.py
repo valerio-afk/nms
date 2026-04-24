@@ -1,4 +1,3 @@
-from .events import EventManager, Events, EventContext
+from .events import EventManager, Events, EventContext, EVENT_MANAGER
 from .actions import SendNotificationToAction, SendNotificationToAdminsAction, SendNotificationToAllAction, ACTIONS
 
-EVENT_MANAGER = EventManager()

@@ -261,6 +261,10 @@ class EventNames(Enum):
     VPN_ENABLED = "net.vpn_enabled"
     VPN_DISABLED = "net.vpn_disabled"
 
+    TIMER = "timer"
+    TIMER_MINUTES = "timer.minutes"
+
+
     @staticmethod
     def get_event(tag: "EventNames", *args, **kwargs) -> str:
         return parse_msg(EVENT_NAMES[tag], *args, **kwargs)
@@ -496,6 +500,9 @@ EVENT_NAMES = {
     EventNames.VPN_ENABLED : lambda : _("When the VPN is enabled"),
     EventNames.VPN_DISABLED : lambda : _("When the VPN is disabled"),
 
+    EventNames.TIMER : lambda : _("Timed events"),
+    EventNames.TIMER_MINUTES : lambda : _("At every specified time interval"),
+
 
 }
 
@@ -517,6 +524,7 @@ PARAMS_NAMES = {
     "message": lambda : _("Message"),
     "path": lambda : _("Path"),
     "run_sudo": lambda : _("Run as sudo"),
+    "minutes": lambda : _("Time (minutes)"),
 }
 
 CONTEXT_VARS = {

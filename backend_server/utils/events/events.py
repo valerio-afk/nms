@@ -1,5 +1,6 @@
 from .actions import SendNotificationToAdminsAction, SendNotificationToAllAction, SendNotificationToAction
-from .actions import  EventContext, RunScriptAction, EventAction, P
+from .actions import  EventContext, RunScriptAction, AbstractAction
+from .parameters import P, Parametrisable, TimeParameter
 from enum import Enum
 from typing import List, Dict, Any, Optional, Callable
 import datetime
@@ -15,7 +16,9 @@ class Events(Enum):
     SYSTEM_UPGRADE = "system.upgrade"
     SYSTEM_NMS_UPDATES = "system.nms_updates"
     SYSTEM_NMS_UPGRADE = "system.nms_upgrade"
-    # SYSTEM_TIMER = "system.timer"
+
+    TIMER_MINUTES = "timer.minutes"
+
     DISK_MOUNT = "disk.mount"
     DISK_UNMOUNT = "disk.unmount"
     USER_LOGGED_IN = "user.logged_in"
@@ -32,19 +35,23 @@ class Events(Enum):
 
 
 
-class AbstractEvent:
+class AbstractEvent(Parametrisable):
 
-    def __init__(this,tag:str,allowed_actions:List[EventAction],context:Optional[List[EventContext]]=None):
+    def __init__(this, tag:str,
+                 allowed_actions:List[AbstractAction],
+                 context:Optional[List[EventContext]]=None,**kwargs):
         this._tag = tag
         this._allowed_actions = allowed_actions
         this._context = context
+        super().__init__(**kwargs)
+
 
     @property
     def tag(this) -> str:
         return this._tag
 
     @property
-    def allowed_actions(this) -> List[EventAction]:
+    def allowed_actions(this) -> List[AbstractAction]:
         return [x for x in this._allowed_actions]
 
     @property
@@ -59,7 +66,8 @@ class AbstractEvent:
 
 class SystemStartupEvent(AbstractEvent):
     def __init__(this):
-        super().__init__(Events.SYSTEM_STARTUP.value,[SendNotificationToAction(),SendNotificationToAllAction(),SendNotificationToAdminsAction(),RunScriptAction()])
+        super().__init__(Events.SYSTEM_STARTUP.value,
+                         [SendNotificationToAction(),SendNotificationToAllAction(),SendNotificationToAdminsAction(),RunScriptAction()])
 
 
 class SystemRebootEvent(AbstractEvent):
@@ -110,9 +118,37 @@ class SystemUpgradeEvent(AbstractEvent):
                          )
 
 
-# class SystemTimerEvent(AbstractEvent):
-#     def __init__(this):
-#         super().__init__(Events.SYSTEM_TIMER.value,[RunScriptAction()])
+class TimerMinutesEvent(AbstractEvent):
+
+    def __init__(this):
+        from backend_server.utils.threads import CallbackThreaed
+        super().__init__(
+            Events.TIMER_MINUTES.value,
+            [RunScriptAction()],
+            parameters=TimeParameter)
+
+        this._threads:Dict[str,CallbackThreaed] = {}
+
+    def on_registration(this,uuid:str,parameters:Optional[P]=None) -> None:
+        from backend_server.utils.threads import CallbackThreaed
+        if (parameters is None) or (not hasattr(parameters,'minutes')):
+            return
+
+        interval = parameters.minutes*60
+
+
+        thread = CallbackThreaed(
+            timer=interval,
+            callback=lambda : EVENT_MANAGER.trigger(Events.TIMER_MINUTES)
+        )
+
+        thread.start()
+        this._threads[uuid] = thread
+
+    def on_unregistration(this,uuid:str):
+        if uuid not in this._threads.keys():
+            thread = this._threads.pop(uuid)
+            thread.stop()
 
 
 class DiskMountEvent(AbstractEvent):
@@ -208,6 +244,7 @@ class EventManager:
         Events.ACCESS_DISABLED.value: AccessDisabledEvent(),
         Events.VPN_ENABLED.value: VPNEnabledEvent(),
         Events.VPN_DISABLED.value: VPNDisabled(),
+        Events.TIMER_MINUTES.value : TimerMinutesEvent(),
     }
 
     def __init__(this):
@@ -219,8 +256,13 @@ class EventManager:
         return [x for x in EventManager.__EVENT_MAPPING.values()]
 
 
-    def register_action(this, uuid:str, event_tag: str,action_tag:str,parameters:Dict[str,Any]) -> None:
-        event = None
+    def register_action(this, uuid:str,
+                        event_tag: str,
+                        action_tag:str,
+                        event_parameters:Dict[str,Any],
+                        action_parameters: Dict[str, Any]
+                        ) -> None:
+        event:Optional[AbstractEvent] = None
 
         for x in this.events:
             if (x.tag == event_tag):
@@ -242,14 +284,16 @@ class EventManager:
 
         actions = this._registered_events[event_tag]
 
-        parameter_obj = action.parameter_type(**parameters)
+        action_parameter_obj = action.parameter_type(**action_parameters) if action.parameter_type is not None else None
 
         actions[uuid] = {
             "action": action,
-            "parameters":parameter_obj,
+            "parameters":action_parameter_obj,
         }
 
-        event.on_registration(uuid, parameter_obj)
+        event_parameter_obj = event.parameter_type(**event_parameters) if event.parameter_type is not None else None
+
+        event.on_registration(uuid, event_parameter_obj)
 
     def unregister_action(this, uuid:str) -> None:
         for e,actions in this._registered_events.items():
@@ -263,7 +307,7 @@ class EventManager:
                 break
 
 
-    def trigger(this, event:Events, ctx_callbacks:Optional[Dict[str,Callable[[],Any]]]) -> List[str]:
+    def trigger(this, event:Events, ctx_callbacks:Optional[Dict[str,Callable[[],Any]]]=None) -> List[str]:
         triggered_actions = []
         ctx:Dict[str,Any] = {k:fn() for k,fn in ctx_callbacks.items()} if ctx_callbacks is not None else {}
 
@@ -286,3 +330,4 @@ class EventManager:
 
         return triggered_actions
 
+EVENT_MANAGER = EventManager()

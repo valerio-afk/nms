@@ -34,11 +34,13 @@
                 </thead>
 
                 <tbody>
-                {% for k,v in event.parameters.items() %}
-                <tr>
-                    <td>{{ k }}</td>
-                    <td>{{ v }}</td>
-                </tr>
+                {% for  t in event.parameters.keys() %}
+                    {% for k,v in event.parameters[t].items() %}
+                    <tr>
+                        <td>{{ k }}</td>
+                        <td>{{ v }}</td>
+                    </tr>
+                    {% endfor %}
                 {% endfor %}
                 </tbody>
             </table>

@@ -1,7 +1,6 @@
 from abc import abstractmethod
 from backend_server.utils.cmdl import LocalCommandLineTransaction, NPMRun, DNFCheckUpdate, DNFUpgrade, BashScript
 from backend_server.utils.cmdl import ZPoolStatus, APTGetUpdate, APTGetUpgrade, TarArchive, Chown, Chmod, RemoveFile
-from backend_server.utils.events import  Events, EventContext
 from backend_server.utils.responses import ErrorMessage, SuccessMessage
 from fastapi import HTTPException
 from nms_shared import ErrorMessages, SuccessMessages
@@ -18,6 +17,7 @@ import psutil
 import re
 import requests
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -83,16 +83,21 @@ class FreeOldChunkFiles(LongWaitThread):
             if this._stop_event.wait(timeout=this.interval):
                 break
 
-# class CallbackThreaed(LongWaitThread):
-#     def __init__(this,timer:int,callback:Callable[[],None]):
-#         super().__init__(timer)
-#         this._callback = callback
-#
-#     def run(this) -> None:
-#         while (this.is_running):
-#             if this._stop_event.wait(timeout=this.interval):
-#                 break
-#             this._callback()
+class CallbackThreaed(LongWaitThread):
+    def __init__(this,timer:int,callback:Callable[[],None]):
+        super().__init__(timer)
+        this._callback = callback
+
+    def run(this) -> None:
+        while (this.is_running):
+            if this._stop_event.wait(timeout=this.interval):
+                break
+
+            try:
+                this._callback()
+            except Exception as e:
+                print(e,file=sys.stderr)
+
 
 
 
@@ -164,6 +169,7 @@ class PoolExpansionStatus(NMSThread):
 class AptGetUpdateThread(NMSThread):
     def run(this) -> None:
         from backend_server.utils.config import CONFIG
+        from backend_server.utils.events import Events, EventContext
         cmd = APTGetUpdate()
         process = cmd.execute()
 
@@ -200,6 +206,8 @@ class AptGetUpgradeThread(NMSThread):
 
     def run(this) -> None:
         from backend_server.utils.config import CONFIG
+        from backend_server.utils.events import Events, EventContext
+
         update = AptGetUpdateThread()
         update.start()
         update.wait()
@@ -224,6 +232,8 @@ class AptGetUpgradeThread(NMSThread):
 class DNFCheckUpdateThread(NMSThread):
     def run(this) -> None:
         from backend_server.utils.config import CONFIG
+        from backend_server.utils.events import Events, EventContext
+
         try:
 
             cmd = DNFCheckUpdate() # this comamnd returns !=0 if there are updates (is it always 100?) - better not to check
@@ -245,6 +255,7 @@ class DNFUpgradeThread(NMSThread):
 
     def run(this) -> None:
         from backend_server.utils.config import CONFIG
+        from backend_server.utils.events import Events, EventContext
         try:
             update = DNFCheckUpdateThread()
             update.start()

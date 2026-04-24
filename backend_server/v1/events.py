@@ -20,12 +20,14 @@ def get_all_events() -> List[EventSpec]:
     for event in EVENT_MANAGER.events:
         allowed_actions =[]
 
+        event_parameters = event.parameters
+
         for action in event.allowed_actions:
             allowed_actions.append(
                 ActionSpec(
                     category=action.category,
                     tag=action.tag,
-                    parameters=action.parameters,
+                    parameters=EventParameters(event_parameters=event_parameters, action_parameters=action.parameters),
                     context=[var.value for var in action.context],
                 )
             )
@@ -84,8 +86,13 @@ def create_event(event:RegisterEvent,token:dict=Depends(verify_token)) -> dict:
 
     wrong_param = None
 
-    for p in event.parameters.keys():
-        if (p not in action_allowed.parameters.keys()):
+    for p in event.parameters.event_parameters:
+        if (p not in action_allowed.parameters.event_parameters.keys()):
+            wrong_param = p
+            break
+
+    for p in event.parameters.action_parameters:
+        if (p not in action_allowed.parameters.action_parameters.keys()):
             wrong_param = p
             break
 
@@ -96,7 +103,7 @@ def create_event(event:RegisterEvent,token:dict=Depends(verify_token)) -> dict:
     CONFIG.add_event(
         event_name= event.event,
         action_name = event.action,
-        **event.parameters
+        parameters=event.parameters.model_dump()
     )
 
     CONFIG.flush_config()
@@ -118,11 +125,11 @@ def change_event_status(uuid:str,action:StatusAction,token:dict=Depends(verify_t
             return {"detail": SuccessMessage(code=SuccessMessages.S_EVENT_DISABLED.name, params=[uuid])}
 
 @events.patch("/{uuid}",summary="Update event parameters")
-def delete_event(uuid:str,parameters:EventParameters,token:dict=Depends(verify_token)) -> dict:
+def update_event_parameters(uuid:str,parameters:EventParameters,token:dict=Depends(verify_token)) -> dict:
     check_permission(token.get("username"), UserPermissions.SYS_ADMIN_EVENTS)
 
     try:
-        CONFIG.update_event_parameters(uuid,parameters.parameters)
+        CONFIG.update_event_parameters(uuid,parameters.model_dump())
         CONFIG.flush_config()
     except AttributeError:
         raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_EVENT_INVALID.value))

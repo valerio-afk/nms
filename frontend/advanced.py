@@ -99,8 +99,9 @@ def widget_danger_zone():
     return render_widget("danger_zone",permissions=perms,disks=choices)
 
 
-def create_fields_event_action(event_name:str,action_tag:str,default_values:Optional[Dict[str,Any]]=None) -> Optional[Tuple[List[str],Dict[str, str]]]:
-    parameters = []
+def create_fields_event_action(event_name:str,
+                               action_tag:str,
+                               default_values:Optional[Dict[str,Any]]=None) -> Optional[Tuple[List[str],Dict[str, str]]]:
     events_information = BACKEND.events
 
     event = None
@@ -121,42 +122,55 @@ def create_fields_event_action(event_name:str,action_tag:str,default_values:Opti
     if (action is None):
         return None
 
+    parameters = {}
 
-    for parameter, specs in action.get("parameters", {}).items():
-        metatype = specs.get("metatype", "")
-        param_form = ""
-        kwargs = {}
+    for parameter_type in action.get("parameters", {}).keys():
+        prefix = parameter_type.split("_")[0]
+        for parameter,specs in action['parameters'][parameter_type].items():
+            metatype = specs.get("metatype", "")
+            param_form = ""
+            kwargs = {}
 
-        if (default_values is not None):
-            if ((value:=default_values.get(parameter)) is not None):
-                kwargs['default_value'] = value
+            parameter_name = f"{prefix}_{parameter}"
 
-        match (metatype):
-            case "string":
-                param_form = render_template("event.parameter.string.html",
-                                             label=parse_msg(PARAMS_NAMES.get(parameter)),
-                                             parameter=parameter,
-                                             **kwargs)
-            case "bool":
-                param_form = render_template("event.parameter.bool.html",
-                                             label=parse_msg(PARAMS_NAMES.get(parameter)),
-                                             parameter=parameter,
-                                             **kwargs)
-            case "user":
-                all_users = BACKEND.users
-                param_form = render_template("event.parameter.user.html",
-                                             users=all_users,
-                                             label=parse_msg(PARAMS_NAMES.get(parameter)),
-                                             parameter=parameter,
-                                             **kwargs)
+            if (default_values is not None):
+                if ((value:=default_values[parameter_type].get(parameter)) is not None):
+                    kwargs['default_value'] = value
 
-        parameters.append(param_form)
+            match (metatype):
+                case "string":
+                    param_form = render_template("event.parameter.string.html",
+                                                 label=parse_msg(PARAMS_NAMES.get(parameter)),
+                                                 parameter=parameter_name,
+                                                 **kwargs)
+                case "bool":
+                    param_form = render_template("event.parameter.bool.html",
+                                                 label=parse_msg(PARAMS_NAMES.get(parameter)),
+                                                 parameter=parameter_name,
+                                                 **kwargs)
+                case "user":
+                    all_users = BACKEND.users
+                    param_form = render_template("event.parameter.user.html",
+                                                 users=all_users,
+                                                 label=parse_msg(PARAMS_NAMES.get(parameter)),
+                                                 parameter=parameter_name,
+                                                 **kwargs)
+                case "numeric":
+                    param_form = render_template("event.parameter.numeric.html",
+                                                 label=parse_msg(PARAMS_NAMES.get(parameter)),
+                                                 parameter=parameter_name,
+                                                 **kwargs)
+
+            parameters[parameter_name] = param_form
 
     context:Dict[str,str] = {}
     for v in action.get("context", []):
         context[v] = parse_msg(CONTEXT_VARS.get(v))
 
-    return parameters, context
+    return (
+        [parameters[field] for field in sorted(parameters.keys(),key=lambda x : x.split("_")[1],reverse=True)], #sort if event/action param only
+        context
+    )
 
 def parse_event_form(event:Optional[str],action:Optional[str]):
 
@@ -168,13 +182,10 @@ def parse_event_form(event:Optional[str],action:Optional[str]):
         raise Exception()
 
     events_information = BACKEND.events
-    expected_parameters: Optional[Dict[str, Dict[str, str]]] = None
-
-    import sys
+    expected_parameters: Optional[Dict[str, dict]] = None
 
     for e in events_information:
         if (e.get("event") == event):
-            print("I am here bitches",file=sys.stderr)
             for a in e.get("allowed_actions",[]):
                 if (action == a.get("tag")):
                     expected_parameters = a.get("parameters", None)
@@ -187,13 +198,17 @@ def parse_event_form(event:Optional[str],action:Optional[str]):
 
     parameters = {}
 
-    for p, specs in expected_parameters.items():
-        metatype = specs.get("metatype", None)
-        match (metatype):
-            case "bool":
-                parameters[p] = True if (f"param_{p}" in request.form) else False
-            case _:
-                parameters[p] = request.form.get(f"param_{p}", None)
+    for p_type in expected_parameters.keys():
+        parameter_type = p_type.split("_")[0]
+        parameters[p_type] = {}
+
+        for p_name, specs in expected_parameters[p_type].items():
+            metatype = specs.get("metatype", None)
+            match (metatype):
+                case "bool":
+                    parameters[p_type][p_name] = True if (f"param_{parameter_type}_{p_name}" in request.form) else False
+                case _:
+                    parameters[p_type][p_name] = request.form.get(f"param_{parameter_type}_{p_name}", None)
 
     return parameters
 

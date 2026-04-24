@@ -792,9 +792,7 @@ class BackEndProxy:
         this._request(f"events/{uuid}/status/down",RequestMethod.PATCH)
 
     def update_event(this,uuid:str,**kwargs) -> None:
-        this._request(f"events/{uuid}",body_params={
-            "parameters": kwargs
-        },method=RequestMethod.PATCH)
+        this._request(f"events/{uuid}",body_params=kwargs,method=RequestMethod.PATCH)
 
     def delete_event(this,uuid:str) -> None:
         this._request(f"events/{uuid}",RequestMethod.DELETE)

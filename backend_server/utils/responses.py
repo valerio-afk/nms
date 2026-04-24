@@ -284,10 +284,14 @@ class SMART(BaseModel):
     self_test_logs: List[SMARTSelfTestLog]
 
 
+class EventParameters(BaseModel):
+    action_parameters : Dict[str, Any]
+    event_parameters : Dict[str, Any]
+
 class ActionSpec(BaseModel):
     category:str
     tag:str
-    parameters: Dict[str, Dict[str, str]]
+    parameters: EventParameters
     context:List[str]
 
 
@@ -296,16 +300,11 @@ class EventSpec(BaseModel):
     allowed_actions:List[ActionSpec]
 
 
-# class AllowedEvents(BaseModel):
-#     events:List[EventSpec]
-#     actions:List[ActionSpec]
 
-class EventParameters(BaseModel):
-    parameters:Dict[str, Any]
-
-class RegisterEvent(EventParameters):
+class RegisterEvent(BaseModel):
     event:str
     action:str
+    parameters: EventParameters
 
 class RegisteredEvent(RegisterEvent):
     uuid:str

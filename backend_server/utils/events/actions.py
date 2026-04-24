@@ -1,16 +1,15 @@
 from .context import EventContext
-from .models import NotificationToUser, Notification, RunScript, FileOwnership, FilePermissions
+from .parameters import NotificationToUser, Notification, RunScript, FileOwnership, FilePermissions, Parametrisable, P
 from backend_server.utils.cmdl import Chown, Chmod
 from abc import ABC, abstractmethod
 from enum import Enum
-from pydantic import BaseModel
 from datetime import datetime
-from typing import Type, List, Dict, Any, Generic, TypeVar, Optional
+from typing import Type, List, Dict, Any,  Optional
 import shlex
 import subprocess
 import os
 
-P = TypeVar("P", bound=BaseModel)
+
 
 class EventActionCategories(Enum):
     NOTIFICATION = "notification"
@@ -25,16 +24,17 @@ class ActionTags(Enum):
     CHANGE_OWNER = "change_owner"
     CHANGE_PERMISSIONS = "change_permissions"
 
-class EventAction(Generic[P],ABC):
+class AbstractAction(Parametrisable, ABC):
     def __init__(this, category:str,
                  tag:str,
-                 parameters:Type[P],
                  context:List[EventContext],
-                 event_context:Optional[List[EventContext]]=None):
+                 event_context:Optional[List[EventContext]]=None,
+                 **kwargs):
         this._tag = tag
         this._category = category
-        this._parameters = parameters
         this._context = context
+
+        super().__init__(**kwargs)
 
         if (event_context is not None):
             this._context.extend(event_context)
@@ -47,18 +47,6 @@ class EventAction(Generic[P],ABC):
     def category(this) -> str:
         return this._category
 
-    @property
-    def parameter_type(this) -> Type[P]:
-        return this._parameters
-
-    @property
-    def parameters(this) -> Dict[str,Dict[str, str]]:
-        return {
-            name: {
-                "metavar": field.json_schema_extra.get("metavar", None),
-                "metatype": field.json_schema_extra.get("metatype", None),
-            } for name,field in this._parameters.model_fields.items()
-        }
 
     @property
     def context(this) -> List[EventContext]:
@@ -72,11 +60,10 @@ class EventAction(Generic[P],ABC):
     def __call__(this,parameters:P,context:Dict[str,Any]) -> None:
         this.trigger(parameters=parameters,context=context)
 
-class SendNotificationAction(EventAction):
-    def __init__(this,tag:str,parameters:Type[P],context:List[EventContext],**kwargs) -> None:
+class SendNotificationAction(AbstractAction):
+    def __init__(this,tag:str,context:List[EventContext],**kwargs) -> None:
         super().__init__(category=EventActionCategories.NOTIFICATION.value,
                          tag=tag,
-                         parameters=parameters,
                          context=context,
                          **kwargs
                          )
@@ -92,8 +79,8 @@ class SendNotificationAction(EventAction):
 class SendNotificationToAction(SendNotificationAction):
     def __init__(this,**kwargs):
         super().__init__(ActionTags.SEND_TO.value,
-                         NotificationToUser,
-                         [EventContext.TRIGGER_USER,EventContext.ISO_TIMESTAMP],
+                         parameters=NotificationToUser,
+                         context=[EventContext.TRIGGER_USER,EventContext.ISO_TIMESTAMP],
                          **kwargs
                          )
 
@@ -121,8 +108,8 @@ class SendNotificationToAction(SendNotificationAction):
 class SendNotificationToAllAction(SendNotificationAction):
     def __init__(this, **kwargs):
         super().__init__(ActionTags.SEND_TO_ALL.value,
-                         Notification,
-                         [EventContext.TRIGGER_USER,EventContext.USER,EventContext.ISO_TIMESTAMP],
+                         parameters=Notification,
+                         context=[EventContext.TRIGGER_USER,EventContext.USER,EventContext.ISO_TIMESTAMP],
                          **kwargs
                          )
 
@@ -156,11 +143,13 @@ class SendNotificationToAdminsAction(SendNotificationToAllAction):
 
         super().trigger(parameters=parameters,context=context)
 
-class RunScriptAction(EventAction):
+class RunScriptAction(AbstractAction):
     def __init__(this,**kwargs):
-        super().__init__("execution",ActionTags.RUN_SCRIPT.value,RunScript,[
-            EventContext.TRIGGER_USER, EventContext.ISO_TIMESTAMP
-        ], **kwargs)
+        super().__init__("execution",
+                         ActionTags.RUN_SCRIPT.value,
+                         parameters=RunScript,
+                         context=[EventContext.TRIGGER_USER, EventContext.ISO_TIMESTAMP],
+                         **kwargs)
 
     def trigger(this,parameters:P,context:Dict[str,Any]) -> None:
         path:Optional[str] = None
@@ -187,7 +176,7 @@ class RunScriptAction(EventAction):
             subprocess.run(cmd,env=env,text=True,capture_output=True)
 
 
-class ChangeOwnerAction(EventAction):
+class ChangeOwnerAction(AbstractAction):
     def __init__(this,**kwargs):
         super().__init__(
             "file",
@@ -219,7 +208,7 @@ class ChangeOwnerAction(EventAction):
 
         Chown(user,group,filepath,sudo=True).execute()
 
-class ChangePermissionSAction(EventAction):
+class ChangePermissionSAction(AbstractAction):
     def __init__(this,**kwargs):
         super().__init__(
             "file",
@@ -246,7 +235,7 @@ class ChangePermissionSAction(EventAction):
 
         Chmod(filepath,permissions,sudo=True).execute()
 
-ACTIONS:Dict[ActionTags,Type[EventAction]] = {
+ACTIONS:Dict[ActionTags,Type[AbstractAction]] = {
     ActionTags.SEND_TO:SendNotificationToAction,
     ActionTags.SEND_TO_ALL:SendNotificationToAllAction,
     ActionTags.SEND_TO_ADMINS:SendNotificationToAdminsAction,
