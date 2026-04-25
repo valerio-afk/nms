@@ -4,7 +4,7 @@ from backend_server.utils.cmdl import Chown, Chmod
 from abc import ABC, abstractmethod
 from enum import Enum
 from datetime import datetime
-from typing import Type, List, Dict, Any,  Optional
+from typing import  List, Dict, Any,  Optional
 import shlex
 import subprocess
 import os
@@ -173,6 +173,10 @@ class RunScriptAction(AbstractAction):
             env[EventContext.TRIGGER_USER.value] = context.get(EventContext.TRIGGER_USER.value,"")
             env[EventContext.ISO_TIMESTAMP.value] = datetime.now().isoformat()
 
+            for k,v in context.items():
+                if (k not in env):
+                    env[k] = str(v)
+
             subprocess.run(cmd,env=env,text=True,capture_output=True)
 
 
@@ -183,61 +187,53 @@ class ChangeOwnerAction(AbstractAction):
             ActionTags.CHANGE_OWNER.value,
             parameters=FileOwnership,
             context=[
-                EventContext.TRIGGER_USER,
                 EventContext.USER,
                 EventContext.GROUP,
-                EventContext.FILE,
+                EventContext.PERMISSIONS,
                 EventContext.ISO_TIMESTAMP
             ],**kwargs)
 
     def trigger(this,parameters:P,context:Dict[str,Any]) -> None:
-        filepath:Optional[str] = context.get(EventContext.FILE.value,None)
-
-        if (filepath is None):
+        if (hasattr(parameters,"path")):
+            path = parameters.path.format_map(context)
+        else:
             return
 
+
         if (hasattr(parameters,"user")):
-            user = parameters.user
+            user = parameters.user.format_map(context)
         else:
             return
 
         group = None
         if (hasattr(parameters,"group")):
             if (len(parameters.group) > 0):
-                group = parameters.group
+                group = parameters.group.format_map(context)
 
-        Chown(user,group,filepath,sudo=True).execute()
+        Chown(user,group,path,sudo=True).execute()
 
-class ChangePermissionSAction(AbstractAction):
+class ChangePermissionsAction(AbstractAction):
     def __init__(this,**kwargs):
         super().__init__(
             "file",
             ActionTags.CHANGE_PERMISSIONS.value,
             parameters=FilePermissions,
             context=[
-                EventContext.TRIGGER_USER,
                 EventContext.USER,
                 EventContext.GROUP,
-                EventContext.FILE,
+                EventContext.PERMISSIONS,
                 EventContext.ISO_TIMESTAMP
             ],**kwargs)
 
     def trigger(this,parameters:P,context:Dict[str,Any]) -> None:
-        filepath:Optional[str] = context.get(EventContext.FILE.value,None)
-
-        if (filepath is None):
-            return
-
-        if (hasattr(parameters,"permissions")):
-            permissions = parameters.permissions
+        if (hasattr(parameters, "path")):
+            path = parameters.path.format_map(context)
         else:
             return
 
-        Chmod(filepath,permissions,sudo=True).execute()
+        if (hasattr(parameters,"permissions")):
+            permissions = parameters.permissions.format_map(context)
+        else:
+            return
 
-ACTIONS:Dict[ActionTags,Type[AbstractAction]] = {
-    ActionTags.SEND_TO:SendNotificationToAction,
-    ActionTags.SEND_TO_ALL:SendNotificationToAllAction,
-    ActionTags.SEND_TO_ADMINS:SendNotificationToAdminsAction,
-    ActionTags.RUN_SCRIPT:RunScriptAction,
-}
+        Chmod(path,permissions,sudo=True).execute()

@@ -47,11 +47,11 @@ class PathParameter(BaseModel):
 class RunScript(PathParameter):
     run_sudo: bool = Field(...,json_schema_extra={"metavar":"SUDO","metatype":EventMetaTypes.BOOL})
 
-class FileOwnership(UserParameter):
-    group:Optional[str]
+class FileOwnership(UserParameter,PathParameter):
+    group:Optional[str] = Field(...,json_schema_extra={"metavar":"GROUP","metatype":EventMetaTypes.STRING})
 
-class FilePermissions(BaseModel):
-    permissions:int
+class FilePermissions(PathParameter):
+    permissions:str = Field(...,json_schema_extra={"metavar":"PERMISSIONS","metatype":EventMetaTypes.STRING})
 
 class TimeParameter(BaseModel):
     minutes:int = Field(...,json_schema_extra={"metavar":"MINUTES","metatype":EventMetaTypes.NUMERIC})

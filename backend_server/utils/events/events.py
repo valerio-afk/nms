@@ -1,5 +1,6 @@
+from backend_server.utils.threads import INotifyEventTriggerThread
 from .actions import SendNotificationToAdminsAction, SendNotificationToAllAction, SendNotificationToAction
-from .actions import  EventContext, RunScriptAction, AbstractAction
+from .actions import  EventContext, RunScriptAction, AbstractAction,  ChangePermissionsAction, ChangeOwnerAction
 from .parameters import P, Parametrisable, TimeParameter
 from enum import Enum
 from typing import List, Dict, Any, Optional, Callable
@@ -58,10 +59,10 @@ class AbstractEvent(Parametrisable):
     def context(this) -> Optional[List[EventContext]]:
         return None if this._context is None else [x for x in this._context]
 
-    def on_registration(this,uuid:str,parameters:Optional[P]=None):
+    def on_registration(this,uuid:str,parameters:Optional[P]=None,mountpoint:Optional[str]=None,**kwargs) ->None:
         pass
 
-    def on_unregistration(this,uuid:str):
+    def on_unregistration(this,uuid:str) ->None:
         pass
 
 class SystemStartupEvent(AbstractEvent):
@@ -121,25 +122,26 @@ class SystemUpgradeEvent(AbstractEvent):
 class TimerMinutesEvent(AbstractEvent):
 
     def __init__(this):
-        from backend_server.utils.threads import CallbackThreaed
+        from backend_server.utils.threads import EventTriggerThread
         super().__init__(
             Events.TIMER_MINUTES.value,
             [RunScriptAction()],
             parameters=TimeParameter)
 
-        this._threads:Dict[str,CallbackThreaed] = {}
+        this._threads:Dict[str,EventTriggerThread] = {}
 
-    def on_registration(this,uuid:str,parameters:Optional[P]=None) -> None:
-        from backend_server.utils.threads import CallbackThreaed
+    def on_registration(this,uuid:str,parameters:Optional[P]=None,**kwargs) -> None:
+        from backend_server.utils.threads import EventTriggerThread
+
         if (parameters is None) or (not hasattr(parameters,'minutes')):
             return
 
         interval = parameters.minutes*60
 
 
-        thread = CallbackThreaed(
+        thread = EventTriggerThread(
             timer=interval,
-            callback=lambda : EVENT_MANAGER.trigger(Events.TIMER_MINUTES)
+            uuid=uuid
         )
 
         thread.start()
@@ -225,6 +227,64 @@ class VPNDisabled(AbstractEvent):
                          [SendNotificationToAction(), SendNotificationToAllAction(), SendNotificationToAdminsAction(),
                           RunScriptAction()])
 
+
+class INotifyEvent(AbstractEvent):
+    INOTIFYTHREAD: Optional[INotifyEventTriggerThread] = None
+    INSTANCES: int = 0
+    CONTEXT:List[EventContext] = [
+            EventContext.ISDIR,
+            EventContext.PATH,
+            EventContext.FILENAME,
+            EventContext.HOME_OWNER
+        ]
+
+    def __init__(this,tag:str,allowed_actions:List[AbstractAction]):
+        super().__init__(tag,allowed_actions)
+
+    def on_registration(this,uuid:str,parameters:Optional[P]=None,mountpoint:Optional[str]=None,**kwargs) -> None:
+        if ((INotifyEvent.INSTANCES == 0) or (INotifyEvent.INOTIFYTHREAD is None)):
+            if (mountpoint is not None):
+                INotifyEvent.INOTIFYTHREAD = INotifyEventTriggerThread(path=mountpoint)
+                INotifyEvent.INOTIFYTHREAD.start()
+
+        INotifyEvent.INSTANCES += 1
+
+    def on_unregistration(this,*args,**kwargs) -> None:
+        INotifyEvent.INSTANCES -=1
+
+        if (INotifyEvent.INSTANCES == 0):
+            if (INotifyEvent.INOTIFYTHREAD is not None):
+                INotifyEvent.INOTIFYTHREAD.stop()
+                INotifyEvent.INOTIFYTHREAD = None
+
+class FileCreatedEvent(INotifyEvent):
+    def __init__(this):
+        super().__init__(
+           Events.FILE_CREATED.value, [
+                ChangePermissionsAction(event_context=INotifyEvent.CONTEXT.copy()),
+                ChangeOwnerAction(event_context=INotifyEvent.CONTEXT.copy()),
+                RunScriptAction(event_context=INotifyEvent.CONTEXT.copy()),
+            ]
+        )
+
+class FileModifiedEvent(INotifyEvent):
+    def __init__(this):
+        super().__init__(
+           Events.FILE_MODIFIED.value, [
+                ChangePermissionsAction(event_context=INotifyEvent.CONTEXT.copy()),
+                ChangeOwnerAction(event_context=INotifyEvent.CONTEXT.copy()),
+                RunScriptAction(event_context=INotifyEvent.CONTEXT.copy()),
+            ]
+        )
+
+class FileDeletedEvent(INotifyEvent):
+    def __init__(this):
+        super().__init__(
+           Events.FILE_DELETED.value, [
+                RunScriptAction(event_context=INotifyEvent.CONTEXT.copy())
+            ]
+        )
+
 class EventManager:
 
     __EVENT_MAPPING:Dict[str,AbstractEvent] = {
@@ -245,6 +305,9 @@ class EventManager:
         Events.VPN_ENABLED.value: VPNEnabledEvent(),
         Events.VPN_DISABLED.value: VPNDisabled(),
         Events.TIMER_MINUTES.value : TimerMinutesEvent(),
+        Events.FILE_CREATED.value : FileCreatedEvent(),
+        Events.FILE_MODIFIED.value : FileModifiedEvent(),
+        Events.FILE_DELETED.value : FileDeletedEvent()
     }
 
     def __init__(this):
@@ -260,7 +323,8 @@ class EventManager:
                         event_tag: str,
                         action_tag:str,
                         event_parameters:Dict[str,Any],
-                        action_parameters: Dict[str, Any]
+                        action_parameters: Dict[str, Any],
+                        mountpoint:Optional[str]=None,
                         ) -> None:
         event:Optional[AbstractEvent] = None
 
@@ -293,7 +357,7 @@ class EventManager:
 
         event_parameter_obj = event.parameter_type(**event_parameters) if event.parameter_type is not None else None
 
-        event.on_registration(uuid, event_parameter_obj)
+        event.on_registration(uuid, event_parameter_obj,mountpoint=mountpoint)
 
     def unregister_action(this, uuid:str) -> None:
         for e,actions in this._registered_events.items():

@@ -3,7 +3,9 @@ from .enums import UserPermissions
 from datetime import datetime
 from logging import Logger
 from pathlib import Path
-from typing import List
+from typing import List, Optional
+import os
+import pwd
 import difflib
 import logging
 import sys
@@ -100,3 +102,28 @@ def match_permissions(user_permissions:List[str], target_permission:UserPermissi
             return True
 
     return False
+
+
+def get_home_owner(path: str) -> Optional[str]:
+    path = os.path.abspath(path)
+
+    best_match = None
+    best_length = -1
+
+    for user in pwd.getpwall():
+        home = user.pw_dir
+
+        if not home:
+            continue
+
+        # Normalize home path
+        home = os.path.abspath(home)
+
+        # Check exact match or proper subpath
+        if ((path == home) or (path.startswith(home + os.sep))):
+            # Pick the *longest* matching home (avoids /home/user vs /home/user2 issues)
+            if len(home) > best_length:
+                best_match = user.pw_name
+                best_length = len(home)
+
+    return best_match

@@ -264,6 +264,11 @@ class EventNames(Enum):
     TIMER = "timer"
     TIMER_MINUTES = "timer.minutes"
 
+    FILE = "file"
+    FILE_CREATED = "file.created"
+    FILE_DELETED = "file.deleted"
+    FILE_MODIFIED = "file.modified"
+
 
     @staticmethod
     def get_event(tag: "EventNames", *args, **kwargs) -> str:
@@ -503,12 +508,17 @@ EVENT_NAMES = {
     EventNames.TIMER : lambda : _("Timed events"),
     EventNames.TIMER_MINUTES : lambda : _("At every specified time interval"),
 
+    EventNames.FILE: lambda : _("File events"),
+    EventNames.FILE_CREATED: lambda : _("When a file is created"),
+    EventNames.FILE_DELETED: lambda : _("When a file is deleted"),
+    EventNames.FILE_MODIFIED: lambda : _("When a file is modified"),
 
 }
 
 ACTION_CATEGORIES = {
     "notification": lambda : _("Send a notification to..."),
-    "execution": lambda : _("Run...")
+    "execution": lambda : _("Run..."),
+    "file": lambda : _("File management"),
 }
 
 ACTION_NAMES = {
@@ -516,6 +526,9 @@ ACTION_NAMES = {
     "send_to_all": lambda : _("All users"),
     "send_to_admins": lambda : _("All admins"),
     "run_script": lambda : _("A custom program or script"),
+    "change_owner" : lambda : _("Change Owner"),
+    "change_permissions" : lambda : _("Change Permissions")
+
 }
 
 PARAMS_NAMES = {
@@ -525,6 +538,8 @@ PARAMS_NAMES = {
     "path": lambda : _("Path"),
     "run_sudo": lambda : _("Run as sudo"),
     "minutes": lambda : _("Time (minutes)"),
+    "group": lambda : _("Group"),
+    "permissions": lambda : _("Permissions"),
 }
 
 CONTEXT_VARS = {
@@ -534,4 +549,10 @@ CONTEXT_VARS = {
     "ISO_TIMESTAMP": lambda : _("Date and time in ISO format"),
     "PACKAGES": lambda : _("Comma-separated list of packages"),
     "SERVICE": lambda : _("Enabled/Disabled access service"),
+    "PATH" : lambda : _("Path"),
+    "FILENAME" : lambda : _("File name"),
+    "ISDIR" : lambda : _("Is directory"),
+    "HOME_OWNER" : lambda : _("User owning the home directory"),
+    "PERMISSIONS" : lambda : _("Permissions"),
+    "GROUP" : lambda : _("Group"),
 }

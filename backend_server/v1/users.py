@@ -86,13 +86,22 @@ def parse_mbox(username:str) -> List[MBoxMail]:
             body_started = False
 
             for l in cat.stdout.splitlines():
+
+                if (match := pattern_begin.match(l)):
+                    body_started = False
+                    if (len(current_mail) > 0):
+                        current_mail['body'] = current_mail['body'].strip()
+                        mail.append(MBoxMail(**current_mail))
+
+                    date = match.group(2)
+                    current_mail = {
+                        "date": parsedate_to_datetime(date),
+                        "From": l.strip()
+                    }
+                    continue
+
                 if (not body_started):
-                    if (match := pattern_begin.match(l)):
-                        date = match.group(2)
-                        current_mail = {
-                            "date": parsedate_to_datetime(date),
-                            "From": l.strip()
-                        }
+
                     if (match := pattern_header.match(l)):
                         hdr = match.group(1)
                         value = match.group(2)
@@ -101,7 +110,6 @@ def parse_mbox(username:str) -> List[MBoxMail]:
                             if (id_match := pattern_msg_id.match(value)):
                                 current_mail["id"] = id_match.group(1)
                         elif (hdr.lower() == "date"):
-                            CONFIG.warning(f"suca: {value}" )
                             current_mail['date'] = parsedate_to_datetime(value)
 
                         if (current_mail.get("headers") is None):
@@ -116,14 +124,11 @@ def parse_mbox(username:str) -> List[MBoxMail]:
                         body_started = True
                         current_mail['body'] = ""
                 else:
-                    if (len(l.strip())==0):
-                        body_started = False
-                        if (len(current_mail)>0):
-                            current_mail['body'] = current_mail['body'].strip()
-                            mail.append(MBoxMail(**current_mail))
-                            current_mail = {}
-                    else:
-                        current_mail["body"]+=f"\n{l}"
+                    current_mail["body"]+=f"\n{l}"
+
+            if (len(current_mail) > 0):
+                current_mail['body'] = current_mail['body'].strip()
+                mail.append(MBoxMail(**current_mail))
 
     return mail
 

@@ -1,9 +1,10 @@
 from abc import abstractmethod
-from backend_server.utils.cmdl import LocalCommandLineTransaction, NPMRun, DNFCheckUpdate, DNFUpgrade, BashScript
+from backend_server.utils.cmdl import LocalCommandLineTransaction, NPMRun, DNFCheckUpdate, DNFUpgrade, BashScript, Stat
 from backend_server.utils.cmdl import ZPoolStatus, APTGetUpdate, APTGetUpgrade, TarArchive, Chown, Chmod, RemoveFile
 from backend_server.utils.responses import ErrorMessage, SuccessMessage
 from fastapi import HTTPException
 from nms_shared import ErrorMessages, SuccessMessages
+from nms_shared.utils import get_home_owner
 from nms_shared.disks import Disk
 from nms_shared.enums import RequestMethod
 from nms_shared.threads import NMSThread
@@ -16,6 +17,7 @@ import os
 import psutil
 import re
 import requests
+import select
 import subprocess
 import sys
 import tempfile
@@ -83,22 +85,104 @@ class FreeOldChunkFiles(LongWaitThread):
             if this._stop_event.wait(timeout=this.interval):
                 break
 
-class CallbackThreaed(LongWaitThread):
-    def __init__(this,timer:int,callback:Callable[[],None]):
+class EventTriggerThread(LongWaitThread):
+    def __init__(this,timer:int,uuid:str):
         super().__init__(timer)
-        this._callback = callback
+        this._uuid = uuid
 
     def run(this) -> None:
+        from backend_server.utils.config import CONFIG
         while (this.is_running):
             if this._stop_event.wait(timeout=this.interval):
                 break
 
             try:
-                this._callback()
+                CONFIG.trigger_event_by_uuid(this._uuid)
             except Exception as e:
                 print(e,file=sys.stderr)
 
+class INotifyEventTriggerThread(LongWaitThread):
+    def __init__(this,path:str):
+        super().__init__(interval=1000)
+        this._path = path
 
+    def run(this) -> None:
+        from backend_server.utils.config import CONFIG
+        from backend_server.utils.events import Events, EventContext
+
+        cmd = [
+            "sudo",
+            "inotifywait",
+            "-m",
+            "-r",
+            "-e", "create,modify,delete",
+            "--format", "%e %w %f",
+            this._path
+        ]
+
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            text=True
+        )
+
+        poller = select.poll()
+        poller.register(process.stdout.fileno())
+
+        try:
+
+            while (not this._stop_event.is_set()):
+                events = poller.poll(this._interval)
+
+                if (not events):
+                    continue
+
+                for fd,_ in events:
+                    line = process.stdout.readline()
+
+                    if (line):
+                        event, path, name = line.strip().split(' ')
+
+                        owner = get_home_owner(path)
+
+                        is_dir = "ISDIR" in event
+
+                        ctx = {
+                            EventContext.ISDIR.value: is_dir,
+                            EventContext.PATH.value: path,
+                            EventContext.FILENAME.value: name,
+                            EventContext.HOME_OWNER.value: owner,
+                        }
+
+                        event_to_trigger = None
+
+                        make_stat = True
+
+                        if ("CREATE" in event):
+                            event_to_trigger = Events.FILE_CREATED
+                        elif ("MODIFY" in event):
+                            event_to_trigger = Events.FILE_MODIFIED
+                        elif ("DELETE" in event):
+                            event_to_trigger = Events.FILE_DELETED
+                            make_stat = False
+
+                        if (make_stat):
+                            stat = Stat(os.path.join(path,name),"%a %U %G",sudo=True).execute()
+                            user = group = permissions = None
+
+                            if (stat.returncode == 0):
+                                user,group,permissions = stat.stdout.strip().split(" ")
+
+                            ctx[EventContext.USER.value] = user
+                            ctx[EventContext.GROUP.value] = group
+                            ctx[EventContext.PERMISSIONS.value] = permissions
+
+                        if (event_to_trigger is not None):
+                            CONFIG.trigger_event(event_to_trigger, ctx=ctx)
+        except Exception as e:
+            print(e,file=sys.stderr)
+
+        process.terminate()
 
 
 class ScrubStateChecker(NMSThread):

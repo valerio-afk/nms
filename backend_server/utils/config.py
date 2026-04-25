@@ -1234,7 +1234,8 @@ class NMSConfig(Logger):
                     event_tag=specs.get("name"),
                     action_tag=specs.get("action"),
                     action_parameters=specs.get("parameters",{}).get("action_parameters",{}),
-                    event_parameters = specs.get("parameters",{}).get("event_parameters",{})
+                    event_parameters = specs.get("parameters",{}).get("event_parameters",{}),
+                    mountpoint=this.mountpoint,
                 )
 
             this.info(f"Event {uuid} registered successfully")
@@ -1256,7 +1257,11 @@ class NMSConfig(Logger):
             this.unregister_event(uuid)
 
     def trigger_event(this,event:Events,ctx:Optional[Dict[str,Any]]=None) -> None:
-        callbacks = {k:lambda : v for k,v in ctx.items()} if ctx is not None else {}
+
+        import sys
+        print(ctx,file=sys.stderr)
+
+        callbacks = {k:(lambda x=v: x) for k,v in ctx.items()} if ctx is not None else {}
 
         callbacks.setdefault(EventContext.USER.name,lambda : this.users)
 
@@ -1265,6 +1270,12 @@ class NMSConfig(Logger):
         uuids = [t['uuid'] for t in triggered]
 
         this.info(f"Event triggered: {event.value} - Actions Executed: {', '.join(uuids) if len(uuids)>0 else 'None'}")
+
+    def trigger_event_by_uuid(this, uuid:str, ctx: Optional[Dict[str, Any]] = None) -> None:
+        event = this._cfg['events'].get(uuid,None)
+
+        if ((event is not None) and ("name" in event.keys())):
+            this.trigger_event(Events(event['name']),ctx)
 
     def update_event_parameters(this,uuid:str, parameters:Dict[str,Any]) -> None:
         current_parameters = this._cfg['events'].get(uuid).get("parameters",{}).copy()
