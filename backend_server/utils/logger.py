@@ -11,5 +11,5 @@ class Logger:
     def warning(this, msg:str) -> None:
         this._logger.warning(msg)
 
-    def error(this, msg:str) -> None:
-        this._logger.error(msg)
+    def error(this, msg:str,**kwargs) -> None:
+        this._logger.error(msg, **kwargs)

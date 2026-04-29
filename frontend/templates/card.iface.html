@@ -14,17 +14,6 @@
 
 {% block card_content %}
 
-{% if (iface.type == "wifi") and ((enabler_form is none) or (not iface.enabled)) %}
-<div id="wifi_network_list" class="placeholder-glow h-100">
-    <div class="placeholder col-12 placeholder-lg h-100">
-    </div>
-</div>
-
-<script nonce="{{ csp_nonce }}">
-  GlobalRefresher.registerAndRefresh("wifi_network_list","{{ url_for('main.async_wifi_list',iface=iface.name) }}");
-</script>
-
-{% else %}
 <div class="accordion" id="accordion-{{ iface.name }}">
     {% for version,form in ip_forms.items() %}
       <div class="accordion-item">
@@ -76,6 +65,55 @@
         </div>
       </div>
     {% endfor %}
+</div>
+
+{% if (iface.type == "wifi")  %}
+<div class="mt-4">
+    <div id="wifi_network_list" class="placeholder-glow h-100">
+        <div class="placeholder col-12 placeholder-lg h-100">
+        </div>
+    </div>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+  GlobalRefresher.registerAndRefresh("wifi_network_list","{{ url_for('main.async_wifi_list',iface=iface.name) }}");
+</script>
+
+<div class="accordion mt-4" id="accordion-hotspot">
+    <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#hotspot-section" aria-expanded="true" aria-controls="hotspot-section">
+            {{ _("Make Hotspot") }}
+          </button>
+        </h2>
+
+        <div id="hotspot-section" class="accordion-collapse collapse" data-bs-parent="#accordion-hotspot">
+            <div class="accordion-body">
+
+                <p>{{ _("By enabling the hotspot, you will be able to connect directly to this device using the network name (SSID) and password as below.") }}</p>
+                <p>{{ _("If no network interface are properly configured, the hotspot will be enabled automatically to allow you to configure the proper network connection.") }}</p>
+
+                <form method="POST" class="disable-on-submit" action="{{ url_for('main.enable_hotspot',iface=iface.name) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <div class="row mt-4">
+                        <div class="col-4 col-form-label"><label for="ap_ssid">{{ _("Hotspot Name") }}</label></div>
+                        <div class="col-8"><input class="form-control" name="ssid"  id="ap_ssid" placeholder="{{ _('If required') }}" value="{{ ap.ssid if ((ap) and (ap.ssid)) else 'NMS' }}" /></div>
+                    </div>
+
+                    <div class="row mt-4">
+                        <div class="col-4 col-form-label"><label for="ap_psk">{{ _("Password") }}</label></div>
+                        <div class="col-6"><input class="form-control" type="password" name="psk" id="ap_psk" placeholder="{{ _('If required') }}" value="{{ ap.psk if ((ap) and (ap.psk)) else 'password123' }}" /></div>
+                        <div class="col-2"><button class="btn" data-password-id="ap_psk" type="button"><i class="bi bi-eye"></i></button></div>
+                    </div>
+
+                    <div class="row mt-4">
+                        <div class="col-12"><button type="submit" class="btn btn-success w-100">{{ _("Enable Hotspot") }}</button></div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 </div>
 {% endif %}
 

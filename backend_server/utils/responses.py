@@ -1,25 +1,7 @@
-from enum import Enum
-
 from pydantic import BaseModel, Field, conint
 from pydantic.networks import IPv4Address, IPv6Address
 from typing import Optional, Any, List, Dict, Union, Literal
-
-
-class InterfaceType(Enum):
-    ETHERNET = 'ethernet'
-    WIFI = 'wifi'
-    VPN = 'vpn'
-    UNKNOWN = 'unknown'
-
-class SensorType(Enum):
-    CPU = 'cpu'
-    HDD = 'hdd'
-    FAN = 'fan'
-
-class SensorMetric(Enum):
-    CELSIUS = '°C'
-    RPM = 'RPM'
-
+from backend_server.utils.enums import InterfaceType, SensorType, SensorMetric
 
 class StatusMessage(BaseModel):
     type:str
@@ -82,6 +64,7 @@ class NetworkInterface(BaseModel):
     network_name:Optional[str] = Field(None)
     type:InterfaceType
     has_profile: bool
+    ap: Optional[bool] = Field(None)
 
 class WifiNetworkInterface(NetworkInterface):
     wpa23: bool
@@ -116,6 +99,11 @@ class WifiConnect(BaseModel):
     ssid:str
     psk:Optional[str] = Field(None)
     profile:Optional[str] = Field(None)
+
+class APConfig(BaseModel):
+    iface:Optional[str]
+    ssid:str
+    psk:Optional[str] = Field(None)
 
 class VPNPeer(BaseModel):
     name:str

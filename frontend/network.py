@@ -63,7 +63,12 @@ def network() -> str:
 
         ip_forms = {k:v for (k,v) in ip_forms.items() if v is not None}
 
-        widget,css = render_widget("iface",enabler_form=enabler_form,ip_forms=ip_forms,iface=iface)
+        ap = BACKEND.ap_config if (iface.get("type") == "wifi") else None
+
+        if ((ap is not None) and (ap.get("iface") != iface.get("name"))):
+            ap = None
+
+        widget,css = render_widget("iface",enabler_form=enabler_form,ip_forms=ip_forms,iface=iface,ap=ap)
         widgets.append(widget)
 
     # vpn is special
@@ -183,6 +188,22 @@ def vpn_change_status(action:str) -> Response:
 
     return redirect(url_for("main.network"))
 
+@bp.route("/network/<string:iface>/hotspot",methods=["POST"])
+def enable_hotspot(iface:str) -> Response:
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+    else:
+        ssid = request.form.get("ssid")
+        psk = request.form.get("psk")
+
+        if (len(psk) == 0):
+            psk = None
+
+        BACKEND.enable_hotspot(iface,ssid, psk)
+
+    return redirect(url_for("main.network"))
 
 @bp.route("/network/<string:iface>/<string:action>",methods=["POST"])
 def iface_change_status(iface:str, action:str) -> Response:

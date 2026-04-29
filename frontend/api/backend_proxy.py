@@ -409,6 +409,10 @@ class BackEndProxy:
         return r or []
 
     @property
+    def ap_config(this) -> Optional[Dict[str,str]]:
+        return this._request("net/ap", RequestMethod.GET)
+
+    @property
     def vpn_config(this) -> dict:
         return this._request("net/vpn", RequestMethod.GET)
 
@@ -672,6 +676,13 @@ class BackEndProxy:
             RequestMethod.PATCH,
             qstring_params={"profile":profile},
             body_params=settings
+        )
+
+    def enable_hotspot(this,iface:str,ssid:str,psk:Optional[str]=None) -> None:
+        this._request(
+            f"net/ap",
+            RequestMethod.POST,
+            body_params={"iface":iface,"ssid":ssid,"psk":psk}
         )
 
     def wifi_list(this,iface:str) -> List[Dict]:

@@ -1,11 +1,11 @@
 from backend_server.utils.cmdl import NMCLIConnection, NMCLIDevice, LocalCommandLineTransaction, Firewall
 from backend_server.utils.cmdl import SystemCtlStart, SystemCtlStop, SystemCtlRestart, SystemCtlIsActive
 from backend_server.utils.config import CONFIG
-from backend_server.utils.enums import StatusAction
-from backend_server.utils.events import EventContext, Events
+from backend_server.utils.enums import StatusAction, InterfaceType
+from backend_server.utils.events import  Events
 from backend_server.utils.inet import TransportProtocol, SinglePort
-from backend_server.utils.responses import DDNSDefaultProviderConfiguration, DDNSProvider
-from backend_server.utils.responses import NetCounter, NetworkInterface, IPv4, IPv6, ErrorMessage, InterfaceType
+from backend_server.utils.responses import DDNSDefaultProviderConfiguration, DDNSProvider, APConfig
+from backend_server.utils.responses import NetCounter, NetworkInterface, IPv4, IPv6, ErrorMessage
 from backend_server.utils.responses import WifiNetwork, WifiConnect, SuccessMessage, VPNServerConf, VPNPeer
 from backend_server.utils.threads import NetIOCounter
 from backend_server.v1.auth import verify_token_factory, check_permission
@@ -15,14 +15,14 @@ from fastapi.params import Body, Query
 from nms_shared.constants import WIREGUARD_CONF, VPN_PUBLIC_KEY, VPN_PRIVATE_KEY
 from nms_shared.msg import ErrorMessages, SuccessMessages
 from nms_shared.enums import UserPermissions
-from typing import Optional, List, Tuple, Dict
+from typing import Optional, List, Tuple, Dict, Callable
 import base64
 import configparser
+import functools
 import io
 import ipaddress
 import re
 import subprocess
-
 
 verify_token = verify_token_factory()
 
@@ -31,6 +31,90 @@ net = APIRouter(
     tags=['net'],
     dependencies=[Depends(verify_token)]
 )
+
+_is_connecting = False
+
+is_connecting = lambda : _is_connecting
+
+def lock_connection(fn:Callable) -> Callable:
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        global _is_connecting
+        _is_connecting = True
+
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            _is_connecting = False
+
+    return wrapper
+
+
+def start_hotspot() -> None:
+    ap_config = CONFIG.ap
+
+    ifname = ap_config["iface"] if "iface" in ap_config else None
+    ssid =  ap_config["ssid"] if "ssid" in ap_config else CONFIG.AP_DEFAULT_SSID
+    psk = ap_config["psk"] if "psk" in ap_config else CONFIG.AP_DEFAULT_PSK
+
+    if (ifname is None):
+        for iface in get_network_interfaces():
+            if (iface.type == InterfaceType.WIFI):
+                ifname = iface.name
+                break
+
+    if (ifname is None):
+        CONFIG.error("Unable to find suitable WIFI interface to start a hotspot")
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_NET_WIFI_DEV.name))
+
+
+    cmd_show = NMCLIConnection("show","Hotspot",sudo=True).execute()
+
+    if (cmd_show.returncode != 0): #hotspot never configured before
+        cli_args:List[str] = [
+            "hotspot",
+            "ifname", ifname,
+            "ssid", ssid
+        ]
+
+        if (psk is not None):
+            cli_args.extend(["password", psk])
+
+        base_cmds = [NMCLIDevice("wifi",*cli_args)]
+    else:
+        base_cmds = [
+            NMCLIConnection("modify", 'Hotspot', "802-11-wireless.ssid", ssid),
+            NMCLIConnection("modify", 'Hotspot', "connection.interface-name", ifname),
+            NMCLIConnection("modify", 'Hotspot', "802-11-wireless-security.key-mgmt", "wpa-psk" if (psk is not None) else "none"),
+            NMCLIConnection("modify", 'Hotspot', "802-11-wireless-security.psk", psk if (psk is not None) else ""),
+        ]
+
+
+
+    cmds = base_cmds + [
+        NMCLIConnection("modify",'Hotspot',"ipv4.addresses","10.0.0.1/24"),
+        NMCLIConnection("modify", 'Hotspot', "ipv4.method", "shared"),
+    ]
+
+    trans = LocalCommandLineTransaction(*cmds,privileged=True)
+    output = trans.run()
+
+    if (not trans.success):
+        error = "\n".join([x['stderr'] for x in output])
+        CONFIG.error(f"Error while configuring {ifname} as hotspot: {error}")
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_NET_AP.name,params=[ifname, error]))
+
+    NMCLIConnection("down", 'Hotspot',sudo=True).execute()
+    hotspot_up = NMCLIConnection("up", 'Hotspot',sudo=True).execute()
+
+    if (hotspot_up.returncode != 0):
+        error = hotspot_up.stderr
+        CONFIG.error(f"Error while configuring {ifname} as hotspot: {error}")
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_AP.name, params=[ifname, error]))
+
+    CONFIG.info(f"WiFi hotspot {ifname} started - SSID: {ssid}")
+
+
 
 def read_wireguard_config_file() -> configparser.ConfigParser:
     output = subprocess.run(["sudo", "cat", WIREGUARD_CONF], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -148,7 +232,7 @@ def get_network_interfaces() -> List[NetworkInterface]:
     cmd = NMCLIDevice("status")
     iface_process = cmd.execute()
 
-    ifaces = [line.split(":") for line in iface_process.stdout.splitlines()]
+    ifaces:List[List[str]] = [line.split(":") for line in iface_process.stdout.splitlines()]
 
     network_interfaces = []
 
@@ -159,11 +243,15 @@ def get_network_interfaces() -> List[NetworkInterface]:
 
         iface_type = InterfaceType.UNKNOWN
 
+        hotspot = None
+
         match (type.strip()):
             case "ethernet":
                 iface_type = InterfaceType.ETHERNET
             case "wifi":
                 iface_type = InterfaceType.WIFI
+
+                hotspot = True if "Hotspot" == connection.strip() else False
             case _:
                 continue
 
@@ -174,7 +262,8 @@ def get_network_interfaces() -> List[NetworkInterface]:
             'enabled': iface_enabled,
             'network_name': connection,
             'type': iface_type,
-            'has_profile': False
+            'has_profile': False,
+            'ap': hotspot
         }
 
         ipv4_info = None
@@ -236,7 +325,7 @@ def get_network_interfaces() -> List[NetworkInterface]:
                             values = value.split(",") if value is not None else []
                             ipv6["dns"] = [x for x in values if len(x) > 0]
                         case _:
-                            if ("=" in value):
+                            if ((value is not None) and ("=" in value)):
                                 try:
                                     sub_property, sub_value = value.split("=")
                                     sub_property = sub_property.strip()
@@ -305,6 +394,7 @@ def net_wifi_networks(iface:str,token:dict=Depends(verify_token)) -> List[WifiNe
     return networks
 
 @net.post('/{iface}/connect',summary="Connect to a wifi network")
+@lock_connection
 def net_wifi_connect(iface:str,network:WifiConnect,token:dict=Depends(verify_token)) -> None:
     check_permission(token.get("username"), UserPermissions.NETWORK_IFACE_MANAGE)
     if (network.ssid is None):
@@ -324,7 +414,7 @@ def net_wifi_connect(iface:str,network:WifiConnect,token:dict=Depends(verify_tok
     if (network.psk is not None):
         add_profile.append(["wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk",network.psk])
 
-    connection_up = NMCLIConnection("up",profile_name,sudo=True)
+    connection_up = NMCLIConnection("up",network.ssid,sudo=True)
 
     trans = LocalCommandLineTransaction(add_profile,connection_up)
     output = trans.run()
@@ -335,6 +425,34 @@ def net_wifi_connect(iface:str,network:WifiConnect,token:dict=Depends(verify_tok
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_WIFI_CONNECT.name,params=[network.ssid, error]))
 
     CONFIG.info(f"{iface} connected to {network.ssid}")
+
+
+@net.get("/ap",summary="Returns the configuration of the hotspot",response_model=APConfig)
+def get_hotspot_configuration(token:dict=Depends(verify_token)) -> Optional[APConfig]:
+    check_permission(token.get("username"), UserPermissions.NETWORK_IFACE_MANAGE)
+
+    ap = CONFIG.ap
+
+    if (ap is None): return None
+
+    return APConfig(
+        iface = ap.get("iface"),
+        ssid = ap.get("ssid"),
+        psk = ap.get("psk"),
+    )
+
+@net.post("/ap",summary="Makes a Wifi interface as hotspot")
+def make_hotspot(profile:APConfig,token:dict=Depends(verify_token)) -> Dict:
+    check_permission(token.get("username"), UserPermissions.NETWORK_IFACE_MANAGE)
+
+    CONFIG.ap_config(ssid=profile.ssid,password=profile.psk,iface=profile.iface)
+    CONFIG.flush_config()
+
+    start_hotspot()
+
+
+    return {"detail": SuccessMessage(code=SuccessMessages.S_NET_AP.name, params=[profile.iface,profile.ssid])}
+
 
 
 @net.get("/vpn/pubkey",response_model=str,summary="Provides the VPN public key")

@@ -24,6 +24,7 @@ import tempfile
 import threading
 import time
 
+
 class LongWaitThread(NMSThread):
     def __init__(this, interval:int) -> None:
         super().__init__()
@@ -68,22 +69,50 @@ class NetIOCounter (NMSThread):
 
             time.sleep(1)
 
-class FreeOldChunkFiles(LongWaitThread):
-    INTERVAL = 60*60*24 # one day
+class HotspotSafeguardThread(NMSThread):
+    def run(this):
+        from backend_server.utils.config import CONFIG
+        from backend_server.v1.net import get_network_interfaces, start_hotspot, is_connecting
 
-    def __init__(this,mountpoint:str):
-        super().__init__(interval=FreeOldChunkFiles.INTERVAL)
-        this._mountpoint = mountpoint
+        CONFIG.info("Network safeguarding thread started")
 
-
-    def run(this) -> None:
         while (this.is_running):
-            subprocess.run(
-                ["sudo","find", this._mountpoint, "-type", "f", "-name", ".*.nms.chunk", "-mtime", "+1", "-delete"],
-                stdout = subprocess.PIPE, stderr = subprocess.PIPE, text = True
-            )
-            if this._stop_event.wait(timeout=this.interval):
-                break
+            make_hotspot = True
+
+            if (not is_connecting()):
+                for iface in get_network_interfaces():
+                    if ((iface.enabled) and (iface.has_profile)):
+                        make_hotspot = False
+
+                if (make_hotspot):
+                    CONFIG.warning("No network interface is configured - starting hotspot")
+
+                    try:
+                        start_hotspot()
+                    except Exception as e:
+                        CONFIG.error("Error while preparing the hotspot",exc_info=e)
+
+            time.sleep(10)
+
+
+
+# class FreeOldChunkFiles(LongWaitThread):
+#     INTERVAL = 60*60*24 # one day
+#
+#     def __init__(this,mountpoint:str):
+#         super().__init__(interval=FreeOldChunkFiles.INTERVAL)
+#         this._mountpoint = mountpoint
+#
+#
+#     def run(this) -> None:
+#         while (this.is_running):
+#             subprocess.run(
+#                 ["sudo","find", this._mountpoint, "-type", "f", "-name", ".*.nms.chunk", "-mtime", "+1", "-delete"],
+#                 stdout = subprocess.PIPE, stderr = subprocess.PIPE, text = True
+#             )
+#             if this._stop_event.wait(timeout=this.interval):
+#                 break
+
 
 class EventTriggerThread(LongWaitThread):
     def __init__(this,timer:int,uuid:str):

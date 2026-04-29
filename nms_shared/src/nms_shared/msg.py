@@ -88,6 +88,8 @@ class ErrorMessages(Enum):
     E_NET_INVALID_DNS = "E_NET_INVALID_DNS"
     E_NET_WIFI_LIST = "E_NET_WIFI_LIST"
     E_NET_WIFI_CONNECT = "E_NET_WIFI_CONNECT"
+    E_NET_WIFI_DEV = "E_NET_WIFI_DEV"
+    E_NET_AP = "E_NET_AP"
     E_NET_VPN_NOTCONF = "E_NET_VPN_NOTCONF"
     E_NET_VPN_STATE = "E_NET_VPN_STATE"
     E_NET_VPN_KEY = "E_VPN_KEY"
@@ -197,6 +199,7 @@ class SuccessMessages(Enum):
     S_NET_VPN_PEER_ADDED = "S_NET_VPN_PEER_ADDED"
     S_NET_DDNS_ENABLED = "S_NET_DDNS_ENABLED"
     S_NET_DDNS_DISABLED = "S_NET_DDNS_DISABLED"
+    S_NET_AP = "S_NET_AP"
 
     S_USER_PASSWORD = "S_USER_PASSWORD"
     S_USER_FULLNAME = "S_USER_FULLNAME"
@@ -361,6 +364,8 @@ ERROR_MESSAGES = {
     ErrorMessages.E_NET_INVALID_DNS : lambda : _("Invalid DNS address(es)"),
     ErrorMessages.E_NET_WIFI_LIST : lambda iface,info: _("Error while retrieving the list of WiFi networks for %(iface)s: %(info)s") % {"iface":iface,"info":info},
     ErrorMessages.E_NET_WIFI_CONNECT : lambda ssid,info: _("Unable to connect to `%(ssid)s`: %(info)s") % {'info':info,'ssid':ssid},
+    ErrorMessages.E_NET_WIFI_DEV : lambda : _("No valid WiFi network interfaces detected."),
+    ErrorMessages.E_NET_AP : lambda iface,info : _("Unable to create hotspot on %(iface)s: %(info)s") % {'iface':iface,'info':info},
     ErrorMessages.E_NET_VPN_NOTCONF : lambda : _("VPN service not configured."),
     ErrorMessages.E_NET_VPN_STATE : lambda info: _("Unable to get the state of the VPN service: %(info)s") % {'info':info},
     ErrorMessages.E_NET_VPN_KEY : lambda info = None: _("Error while retrieving the VPN key: %(info)s") % {'info': info or ErrorMessages.fallback_message()},
@@ -454,6 +459,7 @@ SUCCESS_MESSAGES = {
     SuccessMessages.S_NET_VPN_PEER_ADDED : lambda peer: _("Device `%(peer)s` added successfully.") % {'peer':peer} ,
     SuccessMessages.S_NET_DDNS_ENABLED : lambda provider: _("Dynamic DNS provider `%(provider)s` enabled successfully.") % {'provider':provider} ,
     SuccessMessages.S_NET_DDNS_DISABLED : lambda provider: _("Dynamic DNS provider `%(provider)s` disabled successfully.") % {'provider':provider},
+    SuccessMessages.S_NET_AP : lambda iface,ssid : _("The wifi interface %(iface)s is now a hotspot with the SSID %(ssid)s.") % {'iface':iface,'ssid':ssid},
 
     SuccessMessages.S_USER_PASSWORD : lambda : _("Password changed successfully."),
     SuccessMessages.S_USER_FULLNAME : lambda : _("Visible name changed successfully."),

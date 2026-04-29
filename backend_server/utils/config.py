@@ -5,7 +5,7 @@ from backend_server.utils.enums import DistroFamilies
 from backend_server.utils.logger import Logger
 from backend_server.utils.responses import ErrorMessage, UserProfile, Quota
 from backend_server.utils.services import SystemService
-from backend_server.utils.threads import FreeDNS, DNSExit, Dynv6, ClouDNS, FreeOldChunkFiles
+from backend_server.utils.threads import FreeDNS, DNSExit, Dynv6, ClouDNS, HotspotSafeguardThread
 from backend_server.utils.threads import NetIOCounter, DDNSNoIP, LongWaitThread, DDNSServiceThread, DuckDNS, DynuDDNS
 from cryptography.fernet import Fernet
 from datetime import datetime, timedelta
@@ -170,6 +170,9 @@ def detect_distro_family() -> DistroFamilies:
 
 
 class NMSConfig(Logger):
+    AP_DEFAULT_SSID = "NMS"
+    AP_DEFAULT_PSK = "password123"
+
     def __new__(cls):
         if not hasattr(cls, 'instance'):
             cls.instance = super(NMSConfig, cls).__new__(cls)
@@ -194,7 +197,7 @@ class NMSConfig(Logger):
 
         this._daemons = {
             'netcounter': NetIOCounter(),
-            'chunk_delete': FreeOldChunkFiles(this.mountpoint)
+            'hotspot_safeguarding': HotspotSafeguardThread()
         }
 
         for d in this._daemons.values():
@@ -292,15 +295,19 @@ class NMSConfig(Logger):
 
     @property
     def vpn_public_ip(this) -> str:
-        return this._cfg.get("vpn",{}).get("endpoint")
+        return this._cfg.get("networking",{}).get("vpn",{}).get("endpoint")
 
     @vpn_public_ip.setter
     def vpn_public_ip(this,endpoint:str) -> None:
-        this._cfg["vpn"]['endpoint'] = endpoint
+        this._cfg["networking"]["vpn"]['endpoint'] = endpoint
 
     @property
     def vpn_peer_names(this) -> List[str]:
-        return this._cfg.get("vpn",{}).get('peers', [])
+        return this._cfg.get("networking",{}).get("vpn",{}).get('peers', [])
+
+    @property
+    def ap(this) -> Dict[str,str]:
+        return this._cfg.get("networking",{}).get("ap", {}).copy()
 
     @property
     def ddns_providers(this)->List[Dict[str,Any]]:
@@ -580,9 +587,17 @@ class NMSConfig(Logger):
                         }
                     }
             },
-            "vpn": {
-                "peers": [],
-                "endpoint": None
+            "networking":
+                {
+                "vpn": {
+                    "peers": [],
+                    "endpoint": None
+                },
+                "ap" : {
+                    "iface": None,
+                    "ssid": NMSConfig.AP_DEFAULT_SSID,
+                    "psk": NMSConfig.AP_DEFAULT_PSK,
+                }
             },
             "ddns": {
                 "noip":    ddns_def.copy(),
@@ -1038,14 +1053,21 @@ class NMSConfig(Logger):
     def vpn_remove_peer(this,idx:int) -> None:
         peers = this.vpn_peer_names
         peers.remove(this.vpn_peer_names[idx])
-        this._cfg['vpn']['peers'] = peers
+        this._cfg["networking"]['vpn']['peers'] = peers
 
     def vpn_add_peer(this,name:str)->int:
         peers = this.vpn_peer_names
         peers.append(name)
-        this._cfg['vpn']['peers'] = peers
+        this._cfg["networking"]['vpn']['peers'] = peers
 
         return len(peers)
+
+    def ap_config(this,ssid:str,password:Optional[str]=None,iface:Optional[str]=None) -> None:
+        this._cfg["networking"]['ap'] = {
+            "ssid": ssid,
+            "psk": password,
+            "iface": iface
+        }
 
     def ddns_provider_enabled(this,provider:str,enabled:bool) -> None:
         this._cfg['ddns'][provider]['enabled'] = enabled
