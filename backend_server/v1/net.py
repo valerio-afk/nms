@@ -90,11 +90,13 @@ def start_hotspot() -> None:
         ]
 
 
-
     cmds = base_cmds + [
         NMCLIConnection("modify",'Hotspot',"ipv4.addresses","10.0.0.1/24"),
         NMCLIConnection("modify", 'Hotspot', "ipv4.method", "shared"),
     ]
+
+    if (vpn_status()):
+        vpn_disable()
 
     trans = LocalCommandLineTransaction(*cmds,privileged=True)
     output = trans.run()
@@ -185,6 +187,45 @@ def vpn_status() -> bool:
         return False if "inactive" in output.stdout else True
 
     raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_NET_VPN_NOTCONF.name))
+
+
+def vpn_change_status(action: StatusAction) -> None:
+    vpn_service = CONFIG.vpn_service
+
+    match (action):
+        case StatusAction.UP:
+            cmd = SystemCtlStart(vpn_service)
+            log_action = "enabled"
+            firewall_action = Firewall.FirewallAction.ADD_PORT
+            event = Events.VPN_ENABLED
+        case StatusAction.DOWN:
+            cmd = SystemCtlStop(vpn_service)
+            log_action = "disabled"
+            firewall_action = Firewall.FirewallAction.REMOVE_PORT
+            event = Events.VPN_DISABLED
+
+    firewall_cmd = Firewall(Firewall.FirewallAction.STATE, sudo=True).execute()
+    if ((firewall_cmd.returncode == 0) and (firewall_cmd.stdout.strip() == "running")):
+        firewall_cmds = [
+            Firewall(firewall_action, SinglePort(51820), protocol=TransportProtocol.UDP),
+            Firewall(Firewall.FirewallAction.RELOAD)
+        ]
+
+        LocalCommandLineTransaction(*firewall_cmds, privileged=True).run()
+
+    output = cmd.execute()
+
+    if (output.returncode != 0):
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_NET_CHANGE_STATE.name,
+                                                                 params=["VPN", output.stderr]))
+
+
+def vpn_enable() -> None:
+    vpn_change_status(StatusAction.UP)
+
+
+def vpn_disable() -> None:
+    vpn_change_status(StatusAction.DOWN)
 
 def get_vpn_public_key() -> Optional[str]:
     fname = VPN_PUBLIC_KEY
@@ -400,9 +441,10 @@ def net_wifi_connect(iface:str,network:WifiConnect,token:dict=Depends(verify_tok
     if (network.ssid is None):
         return
 
-    profile_name = network.profile if network.profile else network.ssid
+    if (network.profile is not None):
+        NMCLIConnection("delete",network.profile,sudo=True).execute()
 
-    NMCLIConnection("delete",profile_name,sudo=True).execute()
+    NMCLIConnection("delete", network.ssid, sudo=True).execute()
 
     add_profile = NMCLIConnection("add",
                           "type","wifi",
@@ -642,39 +684,22 @@ def net_vpn_config(config:VPNServerConf,token:dict=Depends(verify_token)) -> dic
 
     return {"detail": SuccessMessage(code=SuccessMessages.S_NET_VPN_CONFIG.name)}
 
+
+
 @net.post('/vpn/{action}',summary="Enable or disable the VPN service")
 def net_iface_action(action:StatusAction, token:dict=Depends(verify_token)) -> None:
     check_permission(username:=token.get("username"), UserPermissions.NETWORK_VPN_MANAGE)
-    cmd = None
-    vpn_service = CONFIG.vpn_service
 
-    event = None
 
-    match(action):
+    match (action):
         case StatusAction.UP:
-            cmd = SystemCtlStart(vpn_service)
-            log_action="enabled"
-            firewall_action = Firewall.FirewallAction.ADD_PORT
+            vpn_enable()
+            log_action = "enabled"
             event = Events.VPN_ENABLED
         case StatusAction.DOWN:
-            cmd = SystemCtlStop(vpn_service)
-            log_action="disabled"
-            firewall_action = Firewall.FirewallAction.REMOVE_PORT
+            vpn_disable()
+            log_action = "disabled"
             event = Events.VPN_DISABLED
-
-    firewall_cmd = Firewall(Firewall.FirewallAction.STATE, sudo=True).execute()
-    if ((firewall_cmd.returncode == 0) and (firewall_cmd.stdout.strip() == "running")):
-        firewall_cmds = [
-            Firewall(firewall_action, SinglePort(51820), protocol=TransportProtocol.UDP),
-            Firewall(Firewall.FirewallAction.RELOAD)
-        ]
-
-        LocalCommandLineTransaction(*firewall_cmds, privileged=True).run()
-
-    output = cmd.execute()
-
-    if (output.returncode != 0):
-        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_NET_CHANGE_STATE.name,params=["VPN",output.stderr]))
 
     CONFIG.warning(f"VPN service {log_action} by {username}")
     CONFIG.trigger_event(event)

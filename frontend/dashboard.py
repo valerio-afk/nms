@@ -5,34 +5,53 @@ from frontend.utils.widget import render_widget, get_widgets_css_files, get_widg
 from nms_shared.utils import match_permissions, UserPermissions
 
 
-def widget_disk_overview() -> Tuple[str,Optional[str]]:
+def widget_disk_overview(placeholder:bool=False) -> Tuple[str,Optional[str]]:
+    if (placeholder):
+        return render_widget("disk_list", placeholder=True)
+
     disks = BACKEND.disks
     pool_options = BACKEND.pool_settings if BACKEND.is_pool_configured else []
 
 
     return render_widget("disk_list",disks=disks,pool_options=pool_options)
 
-def widget_sys_info() -> Tuple[str,Optional[str]]:
+def widget_sys_info(placeholder:bool=False) -> Tuple[str,Optional[str]]:
+    if (placeholder):
+        return render_widget("system_info", placeholder=True)
+
     sys_info = BACKEND.system_information
 
     return render_widget("system_info",system_info=sys_info)
 
-def widget_network_overview() -> Tuple[str,Optional[str]]:
+def widget_network_overview(placeholder:bool=False) -> Tuple[str,Optional[str]]:
+    if (placeholder):
+        return render_widget("network_list", placeholder=True)
+
     ifaces = BACKEND.network_interfaces + [BACKEND.vpn_config]
     return render_widget("network_list",ifaces=ifaces)
 
-def widget_sensors() -> Tuple[str,Optional[str]]:
+def widget_sensors(placeholder:bool=False) -> Tuple[str,Optional[str]]:
+
+    if (placeholder):
+        return render_widget("sensors", placeholder=True)
+
     sensors = BACKEND.sensors
     return render_widget("sensors",sensors=sensors)
 
-def widget_access_overview() -> Tuple[str,Optional[str]]:
+def widget_access_overview(placeholder:bool=False) -> Tuple[str,Optional[str]]:
+    if (placeholder):
+        return render_widget("access_list", placeholder=True)
+
     access_services = BACKEND.access_services
 
     services = [(name.upper(),obj.get('active')) for name,obj in access_services.items()]
 
     return render_widget("access_list",services=services)
 
-def widget_disk_usage(user:dict) -> Tuple[str,Optional[str]]:
+def widget_disk_usage(user:Optional[dict]) -> Tuple[str,Optional[str]]:
+    if (user is None):
+        return render_widget("disk_usage", placeholder=True)
+
     try:
         pool_capacity = BACKEND.pool_capacity
         used = pool_capacity['used']
@@ -50,9 +69,14 @@ def widget_disk_usage(user:dict) -> Tuple[str,Optional[str]]:
 def async_notification_number() -> str:
     return render_template("badge.notifications.html",notification_count=BACKEND.get_user_notifications_number())
 
-@bp.route("/async/sensors")
+@bp.route("/async/widgets/sensors")
 def async_sensors_overview() -> str:
     return widget_sensors()[0]
+
+
+@bp.route('/async/widgets/access_list_overview')
+def async_widget_access_overview() -> str:
+    return widget_access_overview()[0]
 
 @bp.route('/async/widgets/network_overview')
 def async_widget_network_overview() -> str:
@@ -80,21 +104,20 @@ def dashboard() -> str:
     perms = current_user.get("permissions", [])
 
     if ((BACKEND.is_pool_configured) and (match_permissions(perms,UserPermissions.POOL_CONF_GET_INFO))):
-        u = BACKEND.current_user
-        dashboard_widgets.append(widget_disk_usage(u))
+        dashboard_widgets.append(widget_disk_usage(None))
 
     if (current_user.get("main_pages",{}).get("disks",False)):
-        dashboard_widgets.append(widget_disk_overview())
+        dashboard_widgets.append(widget_disk_overview(True))
 
     if (current_user.get("main_pages", {}).get("network", False)):
-        dashboard_widgets.append(widget_network_overview())
+        dashboard_widgets.append(widget_network_overview(True))
 
     if (current_user.get("main_pages", {}).get("access", False)):
-        dashboard_widgets.append(widget_access_overview())
+        dashboard_widgets.append(widget_access_overview(True))
 
     if (current_user.get("main_pages", {}).get("advanced", False)):
-        dashboard_widgets.append(widget_sys_info())
-        dashboard_widgets.append(widget_sensors())
+        dashboard_widgets.append(widget_sys_info(True))
+        dashboard_widgets.append(widget_sensors(True))
 
     user = session['user']
     visible_name = user.get("visible_name")

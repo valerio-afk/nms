@@ -14,7 +14,7 @@
           </td>
 
           <!-- Column 2: SSID or BSSID -->
-          <td class="align-middle col-9">{{ net.ssid }}</td>
+          <td class="align-middle col-9">{{ net.ssid }} {% if net.connected %}<span class="ms-1 badge bg-success">{{ _("Connected") }}</span>{% endif %}</td>
 
           <!-- Column 3: strength -->
           <td class="text-center align-middle col-1"><i class="bi bi-reception-{{ net.strength }}"></i></td>

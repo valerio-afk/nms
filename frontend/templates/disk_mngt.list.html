@@ -1,0 +1,7 @@
+<div class="row g-3" id="disk-widgets">
+    {% for disk in disks %}
+        {% set idx = loop.index %}
+        {% set placeholder = true if disk is none else false %}
+        {% include "card.disk.html" %}
+    {% endfor %}
+</div>

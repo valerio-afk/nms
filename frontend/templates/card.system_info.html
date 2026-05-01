@@ -41,14 +41,14 @@
     </div>
 </div>
 
-
 {% endif %}
 
-<script nonce="{{ csp_nonce }}">
-    GlobalRefresher.register("{{ card_id }}","{{ url_for('main.async_widget_sys_info') }}");
-</script>
+{% endblock %}
 
-
+{% block card_end %}
+  <script nonce="{{ csp_nonce }}">
+    GlobalRefresher.registerAndRefresh("{{ card_id }}","{{ url_for('main.async_widget_sys_info') }}");
+  </script>
 {% endblock %}
 
 

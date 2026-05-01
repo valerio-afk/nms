@@ -28,6 +28,7 @@ Despite its rich feature set, getting started is straightforward and requires mi
 * 🖴 SMART support
 * 🌡️Temperature/Fan sensor monitoring
 * 🌐 Multiple access services: SSH, HTTP/Web interface, SMB (Windows shares), NFS, FTP
+* Configurable as a Wifi hotspot
 * 🔒 Built-in VPN support for secure remote access
 * 🌍 Dynamic DNS compatibility (works with most providers)
 * 📴 Offline-first design — works fully without internet
@@ -39,13 +40,14 @@ Despite its rich feature set, getting started is straightforward and requires mi
 
 ## Table of Contents
 - [⚙️ How It Works](#-how-it-works)
-   * [📁 Installation Structure](#-installation-structure)
-   * [🔧 Services](#-services)
-   * [👥 User Integration](#-user-integration)
-   * [🔐 Security Model](#-security-model)
+  * [📁 Installation Structure](#-installation-structure)
+  * [🔧 Services](#-services)
+  * [👥 User Integration](#-user-integration)
+  * [🔐 Security Model](#-security-model)
 - [🧰 Install](#-install)
    * [️🚀 Quick Start](#-quick-start)
    * [👩‍💻 Manual Installation](#-manual-installation)
+   * [Additional step for Raspberry Pi with Radxa Quad SATA HAT users ](#additional-step-for-raspberry-pi-with-radxa-quad-sata-hat-users)
 - [🏁 Onboarding](#-onboarding)
 - [☺️ Enjoy](#-enjoy)
    * [🖴 Disk Management](#-disk-management)
@@ -54,8 +56,12 @@ Despite its rich feature set, getting started is straightforward and requires mi
    * [📺 Remote Access](#-remote-access)
    * [⚙️ Advanced](#-advanced)
 - [🖴 Creation of a Disk Array](#-creation-of-a-disk-array)
+- [🛜 Wifi Hotspot](#-wifi-hotspot)
 - [📦 Box](#-box)
    * [🤔 Why not use an off-the-shelf solution?](#-why-not-use-an-off-the-shelf-solution)
+      + [**Nextcloud**](#nextcloud)
+      + [**FileBrowser**](#filebrowser)
+      + [**MinIO**](#minio)
    * [🎯 Summary](#-summary)
    * [🗒️ Notes](#-notes)
 - [🛡 VPN & Remote Access](#-vpn-remote-access)
@@ -684,6 +690,15 @@ Once installed, if a fan is connected, the script will read temperatures from th
 ## 🏁 Onboarding
 
 You should identify the IP address of your NMS installation and access it with your browser.
+This information can be retrieved from your router.
+
+> ✔️ **Useful Information**
+>
+> In case no network interfaces are configured (e.g., first time boot on a raspberry pi, or no ethernet cable), and
+> you want to connect to your home/local wifi network, NMS will automatically set up a wifi hotspot with the following
+> configuration
+> * **Network Name (SSID):** NMS
+> * **Password (PSK):** password123
 
 The first thing you need to do is to configure your login credentials. 
 
@@ -800,6 +815,7 @@ A disk array (or pool) is the virtual disk created by merging several physical h
 
 ![new_pool.png](images/new_pool.png)
 
+
 When creating a disk array, you can choose to enable the following options
 
 * **Redundancy:** Using a minimum of 3 disks, the system will use 1/3 of the space to generate redundancy information. Although you will have 1/3 (or 1/4 with 4 disks) less disk space at your disposal, this setting is crucial to recover data if one disk physically breaks down.
@@ -815,6 +831,26 @@ When creating a disk array, you can choose to enable the following options
 > If you are using encryption, you must download the encryption key from the `Advanced` page. In case you need to reinstall your system, you won't be able to import your disk array without this key. Given how OpenZFS operates, there is no way to recover your data without the encryption key.  
 
 ---
+
+## 🛜 Wifi Hotspot
+
+ou can configure the Wi-Fi network interface to operate as a hotspot. As mentioned earlier in the [Onboarding section](#-onboarding), a hotspot is automatically created if no network interface has been configured. This ensures that you can always access the device and configure connectivity without being locked out.
+
+When the hotspot mode is enabled, any existing VPN configuration is temporarily disabled to avoid conflicts with internal IP address management.
+
+Once the hotspot has started, connect to the network advertised by the NMS using another device. The default SSID and PSK (unless changed) are provided in the [Onboarding section](#-onboarding).
+
+After connecting, open a web browser and navigate to 10.0.0.1, then follow the instructions described in the [Onboarding section](#-onboarding).
+
+It is recommended to configure your Wi-Fi connection first from the [Network page](#-network).
+
+When you connect the NMS to a new Wi-Fi network while still using the hotspot connection, the hotspot will be disabled and the web interface may temporarily become unreachable.
+
+If incorrect Wi-Fi credentials are provided, the hotspot will automatically become available again after a short period (typically within one minute).
+
+If the Wi-Fi credentials are correct, the NMS will obtain a new IP address from your router. You will then need to use that new IP address to reconnect to the NMS web interface.
+
+
 
 ## 📦 Box
 

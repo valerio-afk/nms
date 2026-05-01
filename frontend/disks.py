@@ -16,44 +16,43 @@ from wtforms import ValidationError
 import time
 
 
-# MAIN PAGE
+def widget_disk_mngt_list() -> str:
+    disks = BACKEND.disks
+    return render_template("disk_mngt.list.html",disks=disks)
 
-@bp.route('/disks')
-# @wait(redirect_to="/disks/new/wait",tag="new_disk")
-@wait(redirect_to="/disks/add/wait",tag="add_disk")
-def disk_management() -> str:
+@bp.route("/async/widgets/disk_list")
+def async_widget_disk_mngt_list() -> str:
+
+    return widget_disk_mngt_list()
+
+def widget_disk_mngt_tools() -> str:
     disks = BACKEND.disks
     attachable_disks = BACKEND.attachable_disks
-
     importable_pools = BACKEND.importable_pools
 
     imports = []
 
     for p in importable_pools:
         if (p['state'] == "ONLINE"):
-            imports.append((p['name'],p['disks'], None, ImportPoolForm()))
+            imports.append((p['name'], p['disks'], None, ImportPoolForm()))
         else:
-            flash(f"Disk array {p['name']} unrecoverable error: {p['message']}","error")
+            flash(f"Disk array {p['name']} unrecoverable error: {p['message']}", "error")
 
     current_user = session['user']
     perms = current_user.get("permissions", [])
 
-
     snapshots = []
 
-    if (match_permissions(perms,UserPermissions.POOL_TOOLS_SNAPSHOT)):
+    if (match_permissions(perms, UserPermissions.POOL_TOOLS_SNAPSHOT)):
         snapshots = BACKEND.snapshots
-
 
     parameters = {
         "active_page": "disk",
-        "disks": disks,
         "pool": BACKEND.is_pool_configured,
         "imported_pools": imports,
         "csp_nonce": g.csp_nonce,
         "snapshots": snapshots
     }
-
 
     if (parameters['pool'] == False):
         parameters['new_pool_form'] = CreatePoolForm(disks)
@@ -67,13 +66,25 @@ def disk_management() -> str:
     if (verify['last'] is None):
         verify['last'] = _("Never")
     else:
-        verify['last'] = format_datetime(verify['last'] , "EEEE, d MMMM yyyy HH:mm").title()
+        verify['last'] = format_datetime(verify['last'], "EEEE, d MMMM yyyy HH:mm").title()
 
     parameters['verify'] = verify
 
+    return render_template("disk_mngt.tools.html",**parameters)
 
+@bp.route("/async/widgets/disk_tools")
+def async_widget_disk_mngt_tools() -> str:
+    return widget_disk_mngt_tools()
 
-    return render_template("disk_mngt.html", **parameters)
+# MAIN PAGE
+
+@bp.route('/disks')
+# @wait(redirect_to="/disks/new/wait",tag="new_disk")
+@wait(redirect_to="/disks/add/wait",tag="add_disk")
+def disk_management() -> str:
+    disks = [None] * 4
+
+    return render_template("disk_mngt.html",disks=disks,placeholder=True,csp_nonce=g.csp_nonce)
 
 @bp.route('/disks/smart', methods=['GET'])
 def smart_disk() -> Union[str,Response]:

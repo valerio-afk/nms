@@ -1,11 +1,23 @@
   <div class="col-12 col-sm-6 col-md-4 col-lg-3" id="{{ card_id }}">
-    <div class="card h-100">
-      <div class="card-header">
-        {% block card_title %} {% endblock %}
-      </div>
-      <div class="card-body">
-        {% block card_content %}
-        {% endblock %}
-      </div>
-    </div>
+      {% if placeholder %}
+        <div class="placeholder-glow h-100">
+            <div class="placeholder col-12 placeholder-lg h-100">
+            </div>
+        </div>
+      {% else %}
+        <div class="card h-100">
+
+          <div class="card-header">
+            {% block card_title %} {% endblock %}
+          </div>
+          <div class="card-body">
+            {% block card_content %}
+            {% endblock %}
+          </div>
+        </div>
+      {% endif %}
   </div>
+
+
+  {% block card_end %}
+  {% endblock %}

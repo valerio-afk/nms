@@ -34,11 +34,12 @@
 </div>
 
 
-  <script nonce="{{ csp_nonce }}">
-      GlobalRefresher.register("{{ card_id }}","{{ url_for('main.async_sensors_overview') }}");
-  </script>
-
-
 {% endblock %}
 
 
+
+{% block card_end %}
+  <script nonce="{{ csp_nonce }}">
+    GlobalRefresher.registerAndRefresh("{{ card_id }}","{{ url_for('main.async_sensors_overview') }}");
+  </script>
+{% endblock %}

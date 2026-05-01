@@ -16,3 +16,8 @@
 {% endblock %}
 
 
+{% block card_end %}
+  <script nonce="{{ csp_nonce }}">
+    GlobalRefresher.registerAndRefresh("{{ card_id }}","{{ url_for('main.async_widget_access_overview') }}");
+  </script>
+{% endblock %}
