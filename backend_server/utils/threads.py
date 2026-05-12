@@ -1,4 +1,4 @@
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from backend_server.utils.cmdl import LocalCommandLineTransaction, NPMRun, DNFCheckUpdate, DNFUpgrade, BashScript, Stat
 from backend_server.utils.cmdl import ZPoolStatus, APTGetUpdate, APTGetUpgrade, TarArchive, Chown, Chmod, RemoveFile
 from backend_server.utils.responses import ErrorMessage, SuccessMessage
@@ -131,9 +131,57 @@ class EventTriggerThread(LongWaitThread):
                 print(e,file=sys.stderr)
 
 class INotifyEventTriggerThread(LongWaitThread):
+
+    class DelayedINotifyTrigger:
+        def __init__(this):
+            this._delayed_triggers = []
+            this._condition = threading.Condition()
+            this._running = True
+
+            this._thread = threading.Thread(target=this._run,daemon=True)
+            this._thread.start()
+
+        def add_delayed_trigger(this,path:str,**kwargs) -> None:
+            with this._condition:
+                this._delayed_triggers.append((path,kwargs))
+                this._condition.notify()
+
+        def stop(this) -> None:
+            with this._condition:
+                this._running = False
+                this._condition.notify()
+
+            this._thread.join()
+
+        def _run(this):
+            from backend_server.utils.config import CONFIG
+
+            while True:
+                with this._condition:
+                    while ((this._running) and (not this._delayed_triggers)):
+                        this._condition.wait()
+
+                    if (not this._running):
+                        return
+
+                    remaining_triggers = []
+
+                    for k,v in this._delayed_triggers:
+                        if (CONFIG.is_upload_in_progress_by_path(k)):
+                            remaining_triggers.append((k,v))
+                        else:
+                            CONFIG.trigger_event(**v)
+                            CONFIG.warning(f"inotify delayed trigger for {k} executed")
+
+                    this._delayed_triggers = remaining_triggers
+
+                time.sleep(1)
+
     def __init__(this,path:str):
         super().__init__(interval=1000)
         this._path = path
+        this._delayed_triggers_thread = INotifyEventTriggerThread.DelayedINotifyTrigger()
+
 
     def run(this) -> None:
         from backend_server.utils.config import CONFIG
@@ -145,7 +193,7 @@ class INotifyEventTriggerThread(LongWaitThread):
             "-m",
             "-r",
             "-e", "create,modify,delete",
-            "--format", "%e %w %f",
+            "--format", "%e%0%w%0%f",
             this._path
         ]
 
@@ -159,7 +207,6 @@ class INotifyEventTriggerThread(LongWaitThread):
         poller.register(process.stdout.fileno())
 
         try:
-
             while (not this._stop_event.is_set()):
                 events = poller.poll(this._interval)
 
@@ -168,9 +215,8 @@ class INotifyEventTriggerThread(LongWaitThread):
 
                 for fd,_ in events:
                     line = process.stdout.readline()
-
                     if (line):
-                        event, path, name = line.strip().split(' ')
+                        event, path, name = line.strip().split('\0')
 
                         owner = get_home_owner(path)
 
@@ -195,8 +241,10 @@ class INotifyEventTriggerThread(LongWaitThread):
                             event_to_trigger = Events.FILE_DELETED
                             make_stat = False
 
+                        full_path = os.path.join(path,name)
+
                         if (make_stat):
-                            stat = Stat(os.path.join(path,name),"%a %U %G",sudo=True).execute()
+                            stat = Stat(full_path,"%a %U %G",sudo=True).execute()
                             user = group = permissions = None
 
                             if (stat.returncode == 0):
@@ -207,9 +255,16 @@ class INotifyEventTriggerThread(LongWaitThread):
                             ctx[EventContext.PERMISSIONS.value] = permissions
 
                         if (event_to_trigger is not None):
-                            CONFIG.trigger_event(event_to_trigger, ctx=ctx)
+                            params = {"event":event_to_trigger,"ctx":ctx}
+                            if (CONFIG.is_upload_in_progress_by_path(full_path)):
+                                CONFIG.warning(f"inotify trigger for {full_path} delayed")
+                                this._delayed_triggers_thread.add_delayed_trigger(full_path,**params)
+                            else:
+                                CONFIG.trigger_event(**params)
+
+
         except Exception as e:
-            print(e,file=sys.stderr)
+            CONFIG.error(f"Exception occurred in iNotifyEventTriggerThread",exc_info=e)
 
         process.terminate()
 

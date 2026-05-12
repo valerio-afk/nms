@@ -27,34 +27,43 @@ class SystemService:
     def __init__(this,service_name:Optional[str]=None, config_file:Optional[str]=None,**kwargs):
         this._service_name = service_name
         this._config_file = config_file
-        this._change_hooks = {}
+        # this._change_hooks = {}
         this._pre_start_hooks = []
+        this._post_stop_hooks = []
         this._permission_hook:Optional[UserPermissions] = None
         this._os_family = kwargs.get('os', DistroFamilies.DEB)
 
-    def add_change_hook(this,property:str,callback:Callable[[Self],None]) -> None:
-        hooks = this._change_hooks.get(property,[])
-        if (callback not in hooks):
-            hooks.append(callback)
-
-        this._change_hooks[property] = hooks
-
-    def remove_change_hook(this,property:str,callback:Callable[[Self],None]) -> None:
-        hooks = this._change_hooks.get(property, [])
-        try:
-            hooks.remove(callback)
-        except ValueError:
-            ...
-
-        this._change_hooks[property] = hooks
+    # def add_change_hook(this,property:str,callback:Callable[[Self],None]) -> None:
+    #     hooks = this._change_hooks.get(property,[])
+    #     if (callback not in hooks):
+    #         hooks.append(callback)
+    #
+    #     this._change_hooks[property] = hooks
+    #
+    # def remove_change_hook(this,property:str,callback:Callable[[Self],None]) -> None:
+    #     hooks = this._change_hooks.get(property, [])
+    #     try:
+    #         hooks.remove(callback)
+    #     except ValueError:
+    #         ...
+    #
+    #     this._change_hooks[property] = hooks
 
     def add_pre_start_hook(this,callback:Callable[[Self],None]):
         if (callback not in this._pre_start_hooks):
             this._pre_start_hooks.append(callback)
 
 
+
     def remove_pre_start_hook(this,callback:Callable[[Self],None]):
         this._pre_start_hooks.append(callback)
+
+    def add_post_stop_hook(this, callback: Callable[[Self], None]):
+        if (callback not in this._post_stop_hooks):
+            this._post_stop_hooks.append(callback)
+
+    def remove_post_stop_hook(this, callback: Callable[[Self], None]):
+        this._post_stop_hooks.append(callback)
 
     @property
     def os_family(this) -> DistroFamilies:
@@ -104,12 +113,13 @@ class SystemService:
 
         return sum([r.get("stdout","").strip() == "active" for r in results]) == n_services
 
-
-    def start(this) -> None:
-        hooks = this._pre_start_hooks
-
+    def _run_hooks(this,hooks:List[Callable[[Self],None]]) -> None:
         for callback in hooks:
             callback(this)
+
+
+    def start(this) -> None:
+        this._run_hooks(this._pre_start_hooks)
 
         names = this.service_names
         cmds = []
@@ -158,6 +168,7 @@ class SystemService:
                 errors = "\n".join([o['stderr'] for o in results])
                 raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_SYSTEMD_STOP.name,
                                                                          params=[services, errors]))
+        this._run_hooks(this._post_stop_hooks)
 
     def permission_granted(this,username:str) -> None:
         ...
@@ -871,6 +882,7 @@ class WEBService(SystemService):
 
 
     def enable(this,**kwargs):
+        this._run_hooks(this._pre_start_hooks)
         start_decommenting = False
         new_config_file = []
 
@@ -911,6 +923,7 @@ class WEBService(SystemService):
 
         this._apply_patch(new_config_file)
         this._restart_service()
+        this._run_hooks(this._post_stop_hooks)
 
 
     @property

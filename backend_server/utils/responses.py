@@ -188,11 +188,12 @@ class UserDelete(BaseModel):
 
 
 class FileInfo(BaseModel):
-    type:Literal["dir","image","video","audio","text","zip","bin","pdf","unk"]
+    type:Literal["dir","image","video","audio","text","zip","bin","pdf","word","spreadsheet","presentation","unk"]
     mimetype:Optional[str] = Field(None)
     name:str
     size:Optional[int]
     creation_time:int
+    modification_time:str
     real:bool
 
 class FSBrowse(BaseModel):

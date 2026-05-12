@@ -7,18 +7,20 @@
 <form action="{{ url_for('main.change_access_settings',service='web') }}" method="POST" class="disable-on-submit">
     {{ form.hidden_tag() }}
 
-        {% if enabled %}
-    <div class="row g-1">
-        <div class="col-12">
-            <button class="btn btn-danger w-100" type="submit" name="action" value="disable">{{ _("Disable") }}</button>
+
+
+    {% if enabled %}
+        <div class="row g-1">
+            <div class="col-12">
+                <button class="btn btn-danger w-100" type="submit" name="action" value="disable">{{ _("Disable") }}</button>
+            </div>
         </div>
-    </div>
     {% else %}
-      <div class="row g-1">
-        <div class="col-12">
-            <button class="btn btn-success w-100" type="submit" name="action" value="enable" {{ "" if mountpoint else "disabled" }}>{{ _("Enable") }}</button>
+          <div class="row g-1">
+            <div class="col-12">
+                <button class="btn btn-success w-100" type="submit" name="action" value="enable" {{ "" if mountpoint else "disabled" }}>{{ _("Enable") }}</button>
+            </div>
         </div>
-    </div>
     {% endif %}
 </form>
 

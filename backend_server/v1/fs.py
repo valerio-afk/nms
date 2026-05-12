@@ -1,12 +1,11 @@
 from PIL import Image
-from backend_server.utils.cmdl import Chown, Chmod, LocalCommandLineTransaction, LS, Stat, MimeType, Mkdir, Move, \
-    Unpack, TarArchive, SevenZip, Copy
-from backend_server.utils.cmdl import RemoveFile, Touch, SetfACL, Zip
+from fastapi.security import HTTPAuthorizationCredentials
+from backend_server.utils.cmdl import Chown, Chmod, LocalCommandLineTransaction, LS, Stat, MimeType, Mkdir, Move
+from backend_server.utils.cmdl import RemoveFile, Touch, SetfACL, Zip, Unpack, TarArchive, SevenZip, Copy
 from backend_server.utils.config import CONFIG
-from backend_server.utils.responses import ErrorMessage, UserProfile, FileInfo, FSBrowse, MkDirModel, MvModel, Quota, \
-    CpModel
-from backend_server.utils.responses import ZipFile
-from backend_server.v1.auth import verify_token_factory, check_permission, create_token, token_verification
+from backend_server.utils.responses import ErrorMessage, UserProfile, FileInfo, FSBrowse, MkDirModel, MvModel, Quota
+from backend_server.utils.responses import ZipFile, CpModel
+from backend_server.v1.auth import verify_token_factory, check_permission, create_token, token_verification, bearer
 from datetime import datetime,timedelta, UTC
 from email.utils import format_datetime
 from fastapi import HTTPException, APIRouter, Depends, Request, Response
@@ -15,15 +14,33 @@ from io import BytesIO
 from nms_shared import ErrorMessages
 from nms_shared.enums import UserPermissions
 from pathlib import Path
-from typing import Optional, List, Generator
+from typing import Optional, List, Generator, Dict
 import base64
+import httpx
 import grp
 import hashlib
+import jwt
 import os
 import pwd
 import subprocess
 
 verify_token = verify_token_factory()
+
+
+def verify_onlyoffice_token(token: str):
+    try:
+        payload = jwt.decode(
+            token,
+            CONFIG.ONLYOFFICE_CONF['jwt_secret'],
+            algorithms=["HS256"]
+        )
+        return payload
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=403, detail="Invalid ONLYOFFICE token")
+
+def verify_onlyoffice(credentials: HTTPAuthorizationCredentials = Depends(bearer)):
+    token = credentials.credentials
+    return verify_onlyoffice_token(token)
 
 fs = APIRouter(
     prefix='/fs',
@@ -34,6 +51,11 @@ fs = APIRouter(
 fs_preview = APIRouter(
     prefix='/fs',
     tags=['fs']
+)
+
+onlyoffice = APIRouter(
+    prefix='/onlyoffice',
+    tags=['onlyoffice']
 )
 
 TUS_VERSION = "1.0.0"
@@ -158,10 +180,10 @@ def file_generator(path: str, chunk_size:int=1024**2, start: int = 0, end:Option
                 break
 
 def get_file_info(path:str) -> Optional[FileInfo]:
-    stat = Stat(path, "%n\n%s\n%F\n%W").execute()
+    stat = Stat(path, "%n\n%s\n%F\n%W\n%y").execute()
 
     if (stat.returncode == 0):
-        fullpath, size, ftype, creation_time = (
+        fullpath, size, ftype, creation_time,modification_time = (
             stat.stdout.splitlines())
 
         fname = os.path.split(path)[1]
@@ -170,7 +192,7 @@ def get_file_info(path:str) -> Optional[FileInfo]:
             case "directory":
                 ftype = "dir"
                 mime_type = "inode/directory"
-            case "regular file":
+            case "regular file" | "regular empty file":
                 mime_type_cmd = MimeType(path).execute()
                 ftype = "bin"
                 mime_type = "application/octet-stream"
@@ -185,10 +207,36 @@ def get_file_info(path:str) -> Optional[FileInfo]:
                         ftype = "audio"
                     elif ("image" in mime_type):
                         ftype = "image"
+
                     elif ("application/pdf" in mime_type):
                         ftype = "pdf"
+                    elif ("application/rtf" in mime_type):
+                        ftype = "word"
+                    elif ("text/csv" in mime_type):
+                        ftype = "spreadsheet"
                     elif (("text" in mime_type) or ("shellscript" in mime_type)):
                         ftype = "text"
+                    elif ("openxmlformats" in mime_type):
+                        if ("wordprocessing" in mime_type):
+                            ftype = "word"
+                        elif ("spreadsheet" in mime_type):
+                            ftype = "spreadsheet"
+                        elif ("presentation" in mime_type):
+                            ftype = "presentation"
+                    elif ("opendocument" in mime_type):
+                        if ("text" in mime_type):
+                            ftype = "word"
+                        elif ("spreadsheet" in mime_type):
+                            ftype = "spreadsheet"
+                        elif ("presentation" in mime_type):
+                            ftype = "presentation"
+                    elif ("msword" in mime_type):
+                        ftype = "word"
+                    elif ("ms-excel" in mime_type):
+                        ftype = "spreadsheet"
+                    elif ("ms-powerpoint" in mime_type):
+                        ftype = "presentation"
+
                     else:
                         compressed = [
                             "application/zip",
@@ -208,18 +256,27 @@ def get_file_info(path:str) -> Optional[FileInfo]:
                         if (any([t in mime_type for t in compressed])):
                             ftype = "zip"
 
+                else:
+                    CONFIG.warning(f"\t> {mime_type_cmd.stderr}")
+
             case _:
                 ftype = "unk"
                 mime_type = None
 
-        return FileInfo(
-            name=str(fname),
-            size=int(size),
-            type=ftype,
-            mimetype = mime_type.strip(),
-            real=True,
-            creation_time=int(creation_time)
-        )
+        try:
+            return FileInfo(
+                name=str(fname),
+                size=int(size),
+                type=ftype,
+                mimetype = mime_type.strip(),
+                real=True,
+                creation_time=int(creation_time),
+                modification_time=modification_time
+            )
+        except Exception as e:
+            CONFIG.warning(path)
+            CONFIG.error((str(e)))
+            raise e
     else:
         return None
 
@@ -454,9 +511,10 @@ def fs_upload(request:Request, token:dict=Depends(verify_token)) -> Response:
 
         return metadata
 
+    parsed_metadata = parse_metadata(metadata)
+    upload_id = CONFIG.init_upload(int(upload_length),parsed_metadata, user)
 
-
-    upload_id = CONFIG.init_upload(int(upload_length),parse_metadata(metadata))
+    CONFIG.warning(parsed_metadata)
 
     location = request.url_for("chunk_upload", upload_id=upload_id)
 
@@ -660,6 +718,107 @@ def download_file(filename: str, token:dict=Depends(verify_token)) -> StreamingR
         media_type=file_info.mimetype,
         headers={"Content-Disposition": f'attachment; filename="{fname}"'}
     )
+
+@fs.get("/item/{filename:path}/onlyoffice")
+def onlyoffice_session(filename: str, token:dict=Depends(verify_token)) -> Dict:
+    check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
+    user = CONFIG.get_user(token.get("username", None))
+
+    if (not user):
+        raise HTTPException(status_code=401)
+
+    p = check_path_jail(user, filename)
+
+    stat = Stat(str(p),format="%F",sudo=True).execute()
+
+    if (stat.returncode != 0) or ("regular file" not in stat.stdout):
+        raise HTTPException(status_code=400)
+
+    fname = p.name
+
+    if (len(fname) == 0):
+        raise HTTPException(status_code=500)
+
+    file_info = get_file_info(str(p))
+
+    key = f"{p}:{file_info.modification_time}"
+
+    filetype = "txt"
+    documentType = file_info.type
+
+    if (documentType == "word"):
+        if ("openxmlformats" in file_info.mimetype):
+            filetype = "docx"
+        elif ("opendocument" in file_info.mimetype):
+            filetype = "odt"
+        elif ("ms" in file_info.mimetype):
+            filetype = "doc"
+        elif ("pdf" in file_info.mimetype):
+            filetype = "pdf"
+    elif (documentType == "presentation"):
+        documentType = "cell"
+        if ("openxmlformats" in file_info.mimetype):
+            filetype = "pptx"
+        elif ("opendocument" in file_info.mimetype):
+            filetype = "odp"
+        elif ("ms" in file_info.mimetype):
+            filetype = "ppt"
+
+    elif (documentType == "spreadsheet"):
+        documentType = "slide"
+        if ("openxmlformats" in file_info.mimetype):
+            filetype = "xlsx"
+        elif ("opendocument" in file_info.mimetype):
+            filetype = "ods"
+        elif ("ms" in file_info.mimetype):
+            filetype = "xls"
+
+    url_path = p.relative_to(CONFIG.mountpoint)
+
+    url = onlyoffice.url_path_for(
+        "get_document",
+        filename=str(url_path)
+    )
+
+    callback = onlyoffice.url_path_for(
+        "onlyoffice_callback",
+        filename=str(url_path)
+    )
+
+    only_office_config = {
+        "document": {
+            "fileType": filetype,
+            "key": key,
+            "title": file_info.name,
+            "url": url,
+            "permissions": {
+                "edit": True,
+                "download": True,
+                "print": True,
+                "comment": True,
+                "review": True
+            }
+        },
+        "documentType": documentType,
+        "editorConfig": {
+            "mode": "edit",
+            "callbackUrl": callback,
+            "user": {
+                "id": user.uid,
+                "name": user.visible_name if user.visible_name is not None else user.username,
+            }
+        }
+    }
+
+    token = jwt.encode(
+        only_office_config,
+        CONFIG.ONLYOFFICE_CONF['jwt_secret'],
+        algorithm="HS256"
+    )
+
+    only_office_config["token"] = token
+
+    return only_office_config
 
 @fs.delete("/item/{filename:path}",summary="Delete a file/directory within the user space.")
 def fs_rm(filename: str, token:dict=Depends(verify_token)) -> None:
@@ -884,3 +1043,75 @@ def fs_quota(token:dict=Depends(verify_token)) -> Quota:
     limit = user.quota.quota if user.quota.quota > 0 else CONFIG.get_pool_capacity.get('total')
 
     return Quota(used=used,quota=limit)
+
+
+@onlyoffice.get("/file/{filename:path}")
+def get_document(filename: str,token:dict=Depends(verify_token)) -> Response:
+    path = str(Path(CONFIG.mountpoint,filename))
+
+    file_info = get_file_info(path)
+
+    return StreamingResponse(
+        file_generator(str(path)),
+        media_type=file_info.mimetype,
+    )
+
+@onlyoffice.post("/onlyoffice/{filename:path}")
+async def onlyoffice_callback(filename:str,request: Request) -> Dict:
+    data = await request.json()
+
+    token = data.get("token")
+    if not token:
+        raise HTTPException(401, "Missing ONLYOFFICE token")
+
+    verify_onlyoffice_token(token)
+
+    status = data.get("status")
+
+
+    if status in (2,6):
+        file_url = data["url"]
+
+
+        path = Path(CONFIG.mountpoint, filename).resolve()
+
+        mountpoint = Path(CONFIG.mountpoint).resolve()
+
+        if ((mountpoint not in path.parents) and (path != mountpoint)):
+            raise HTTPException(403, "Invalid path")
+
+        async with httpx.AsyncClient() as client:
+            async with client.stream("GET", file_url) as r:
+                r.raise_for_status()
+
+                content_type = r.headers.get("content-type", "")
+
+                if "html" in content_type.lower():
+                    raise HTTPException(500, "Unexpected HTML response")
+
+                proc = subprocess.Popen(
+                    ["sudo", "tee", str(path)],
+                    stdin=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+
+                if proc.stdin is None:
+                    raise HTTPException(500, "tee stdin unavailable")
+
+                async for chunk in r.aiter_bytes():
+                    proc.stdin.write(chunk)
+
+                proc.stdin.close()
+                proc.wait()
+
+                _, stderr = proc.communicate()
+                proc.stderr.close()
+
+                if proc.returncode != 0:
+                    raise HTTPException(
+                        500,
+                        stderr.decode(errors="ignore")
+                    )
+
+
+    return {"error": 0}

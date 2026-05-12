@@ -21,3 +21,4 @@ asgiref >= 3.11.1
 pyyaml >= 6.0.3
 ansi2html >= 1.9.2
 pyeventmanager >= 0.6.0
+httpx >= 0.28.1

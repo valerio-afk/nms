@@ -1,6 +1,8 @@
+from pathlib import Path
+
 from backend_server.utils.cmdl import Chown, LocalCommandLineTransaction, Groups, ZPoolList, GetEntPasswd, ZFSSnapshot
 from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet,  ZFSGetQuota, Chmod, ZFSRollback, ZFSDestroy
-from backend_server.utils.cmdl import UserAdd, GetUserUID, ReadLink, Find
+from backend_server.utils.cmdl import UserAdd, GetUserUID, ReadLink, Find, DockerRun, DockerStop
 from backend_server.utils.enums import DistroFamilies
 from backend_server.utils.logger import Logger
 from backend_server.utils.responses import ErrorMessage, UserProfile, Quota
@@ -16,7 +18,7 @@ from nms_shared import ErrorMessages
 from nms_shared.disks import Disk
 from nms_shared.enums import DiskStatus, UserPermissions
 from nms_shared.utils import match_permissions
-from typing import Optional, Dict, List, Any, Type, Tuple
+from typing import Optional, Dict, List, Any, Type, Tuple, Union
 import base64
 import hashlib
 import json
@@ -172,6 +174,11 @@ def detect_distro_family() -> DistroFamilies:
 class NMSConfig(Logger):
     AP_DEFAULT_SSID = "NMS"
     AP_DEFAULT_PSK = "password123"
+    ONLYOFFICE_CONF:Dict[str,Optional[Union[str,int]]] = {
+        "port": 8090,
+        "container_name" : "onlyoffice_server",
+        "jwt_secret":None
+    }
 
     def __new__(cls):
         if not hasattr(cls, 'instance'):
@@ -228,6 +235,14 @@ class NMSConfig(Logger):
                 arguments['mountpoint'] = this.mountpoint
                 arguments['os'] = this.distro_family
                 this._access_services[service] = cls(**arguments)
+
+                if (service == "web"):
+                    this._access_services[service].add_pre_start_hook(this._start_only_office_server)
+                    this._access_services[service].add_post_stop_hook(this._stop_only_office_server)
+
+                    if (this._access_services[service].is_active):
+                        this._start_only_office_server(this._access_services[service])
+
             except AttributeError as e:
                 ... #service not implemented yet
 
@@ -235,6 +250,40 @@ class NMSConfig(Logger):
         for admin in this.admins:
             for service in this.access_services.values():
                 service.permission_granted(admin.username)
+
+    #onlyoffice hooks
+    def _start_only_office_server(this,_:Any) -> None:
+        jwt_secret = str(uuid.uuid4())
+        NMSConfig.ONLYOFFICE_CONF["jwt_secret"] = jwt_secret
+        cmd = DockerRun(
+            image_name=NMSConfig.ONLYOFFICE_CONF["container_name"],
+            container_name="onlyoffice/documentserver",
+            envvars={
+                "JWT_SECRET": jwt_secret,
+            },
+            port_forwarding=[(NMSConfig.ONLYOFFICE_CONF['port'],80)],
+            mount={
+                "/app/onlyoffice/DocumentServer/logs":"/var/log/onlyoffice",
+                "/app/onlyoffice/DocumentServer/data":"/var/www/onlyoffice/Data",
+                "/app/onlyoffice/DocumentServer/lib":"/var/lib/onlyoffice",
+                "/app/onlyoffice/DocumentServer/db":"/var/lib/postgresql"
+            }
+        )
+
+        out = cmd.execute()
+
+        if (out is not None):
+            if (len(x:=out.stdout)>0): this.info(x)
+            if (len(x := out.stderr) > 0): this.info(x)
+
+
+    def _stop_only_office_server(this,_:Any) -> None:
+        cmd = DockerStop(container_name=NMSConfig.ONLYOFFICE_CONF["container_name"])
+        out = cmd.execute()
+
+        if (out is not None):
+            if (len(x:=out.stdout)>0): this.info(x)
+            if (len(x := out.stderr) > 0): this.info(x)
 
 
 
@@ -1181,12 +1230,13 @@ class NMSConfig(Logger):
                     mtd()
 
     #FS METHODS
-    def init_upload(this,length:int,metadata:Any) -> str:
+    def init_upload(this,length:int,metadata:Any,user:UserProfile) -> str:
         upload_id = str(uuid.uuid4())
         this._uploads[upload_id] = {
             "length":length,
             "offset":0,
-            "metadata": metadata
+            "metadata": metadata,
+            "user": user
         }
 
         return upload_id
@@ -1208,6 +1258,29 @@ class NMSConfig(Logger):
 
     def is_upload_complete(this,id:str) -> bool:
         return this._uploads[id]['offset'] == this._uploads[id]['length']
+
+    def is_upload_in_progress_by_path(this,full_path:str) -> bool:
+        fpath = Path(full_path)
+
+        for data in this._uploads.values():
+            path = data['metadata'].get("path",None)
+            fname = data['metadata'].get("name",None)
+            user = data['user']
+
+            if ((path is not None) and (fname is not None) and (user is not None)):
+                upload_full_path = Path(path,fname)
+                if (not upload_full_path.is_absolute()):
+                    upload_full_path = (Path(user.home_dir) / upload_full_path).resolve()
+
+                if (fpath == upload_full_path):
+                    return True
+
+        return False
+
+
+
+
+
 
     #SYSTEM METHODS
     def new_nms_update(this,version:str,tarball_url:str) -> None:
@@ -1279,10 +1352,6 @@ class NMSConfig(Logger):
             this.unregister_event(uuid)
 
     def trigger_event(this,event:Events,ctx:Optional[Dict[str,Any]]=None) -> None:
-
-        import sys
-        print(ctx,file=sys.stderr)
-
         callbacks = {k:(lambda x=v: x) for k,v in ctx.items()} if ctx is not None else {}
 
         callbacks.setdefault(EventContext.USER.name,lambda : this.users)

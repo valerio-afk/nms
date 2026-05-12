@@ -138,7 +138,8 @@ class SMBServiceForm(AccessServiceForm):
     # confirm_password = PasswordField(_("Confirm Password"), validators=[EqualTo('password', message=_('Passwords must match'))])
 
 class WEBServiceForm(AccessServiceForm):
-   ...
+    # onlyoffice = BooleanField(_("OnlyOffice Integration"))
+    ...
 
 
 class IFaceEnableForm(FlaskForm):

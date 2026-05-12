@@ -3,7 +3,7 @@ from backend_server.utils.inet import TransportProtocol, GenericTransportPort
 from enum import Enum
 from subprocess import CompletedProcess
 from tempfile import gettempdir
-from typing import Optional, List, Dict, Any, Union, Literal
+from typing import Optional, List, Dict, Any, Union, Literal, Tuple
 import json
 import os
 import socket
@@ -1676,14 +1676,14 @@ class Docker(RevertibleCommandLine):
 
 class DockerRun(Docker):
     def __init__(this,container_name,
-                 mount=None,
-                 envvars = None,
-                 port_forwarding=None,
-                 image_name=None,
-                 detach=True,
-                 remove=True,
-                 restart="no",
-                 user=None):
+                 mount:Optional[Dict[str,str]]=None,
+                 envvars:Optional[Dict[str,str]] = None,
+                 port_forwarding:Optional[List[Tuple[int,int]]]=None,
+                 image_name:str=None,
+                 detach:bool=True,
+                 remove:bool=True,
+                 restart:str="no",
+                 user:Optional[Union[str,Tuple[int,int]]]=None):
 
         this._mount = mount
         this._envvars = envvars

@@ -634,6 +634,23 @@ install_redis_docker() {
     fi
 }
 
+install_onlyoffice() {
+    local image_name="onlyoffice/documentserver"
+
+    # Check if Docker is installed
+    if ! command -v docker &>/dev/null; then
+        log_error "Docker is not installed. Cannot download ONLYOFFICE."
+        return 1
+    fi
+
+    log_info "Pulling ONLYOFFICE Docker image ($image_name)..."
+    if ! docker pull "$image_name" >> "$LOG_FILE" 2>&1; then
+        log_error "Failed to pull ONLYOFFICE image $image_name"
+        return 1
+    fi
+
+}
+
 build_docker_image() {
     local repo_dir="$1"     # Path to the repository to build from
     local image_name="$2"   # Docker image name with optional tag
@@ -1281,8 +1298,9 @@ fi
 
 build_box_app "/nms/box"
 
-# Step 7 --- Install redis
+# Step 7 --- Download redis and onlyoffice images
 install_redis_docker
+install_onlyoffice
 
 #Step 8 --- Configure users
 manage_users "${SUDO_GROUP}"
