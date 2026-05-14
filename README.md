@@ -18,17 +18,19 @@ NMS is built with simplicity in mind: it combines **advanced features, security,
 Despite its rich feature set, getting started is straightforward and requires minimal effort.
 
 ## 🌟 Key Features
-* 📦 [OpenZFS](https://openzfs.org/wiki/Main_Page) under the hood for robust file management.
+* 📦 [OpenZFS](https://openzfs.org/wiki/Main_Page) under the hood for robust file management
 * 👥 Multi-user system with finely-grained access control
-  * 💬 Notification system [BETA]
+* 💬 Notification system
 * 📃 Quota management
+* ⏰ Event management
+* 🏢 Integration with [OnlyOffice](https://www.onlyoffice.com/)
 * 📸 Snapshots for data protection and recovery
 * 🔐 Encryption for secure storage
 * 🗜️ Compression to optimise disk usage
 * 🖴 SMART support
 * 🌡️Temperature/Fan sensor monitoring
 * 🌐 Multiple access services: SSH, HTTP/Web interface, SMB (Windows shares), NFS, FTP
-* Configurable as a Wifi hotspot
+* 🛜 Configurable as a Wifi hotspot
 * 🔒 Built-in VPN support for secure remote access
 * 🌍 Dynamic DNS compatibility (works with most providers)
 * 📴 Offline-first design — works fully without internet
@@ -197,6 +199,10 @@ NMS expects the following programs and system tools to be installed in your syst
 > * acl
 > * libfile-mimeinfo-perl
 > * p7zip-full
+> * mailutils
+> * postfix
+> * lm-sensors
+> * inotify-tools
 
 > #### RedHat-based package names:
 > * python3
@@ -224,6 +230,10 @@ NMS expects the following programs and system tools to be installed in your syst
 > * p7zip
 > * p7zip-plugins
 > * perl
+> * postfix
+> * mailx
+> * lm_sensors
+> * inotify-tools
 
 You should adapt the name of these packages for your distribution.
 
@@ -251,6 +261,11 @@ In some system, you need to add the module `zfs` un the list of modules to load.
 
 ```sh
 $ echo zfs | sudo tee /etc/modules-load.d/zfs.conf
+```
+
+If you want that NMS shows sensors information, run:
+```sh
+$ sudo sensors-detect --auto
 ```
 </details>
 
@@ -368,7 +383,7 @@ $ sudo restorecon -Rv /nms/box/dist
 </details>
 
 <details>
-<summary>Step 6: Install redis on Docker</summary>
+<summary>Step 6: Pull Docker images</summary>
 
 Let's start by pulling `redis` docker image first:
 
@@ -384,6 +399,14 @@ $ sudo docker run -d            \
        --restart unless-stopped \
        redis
 ```
+
+If you want the integration witb OnlyOffice, also run:
+
+```sh
+$ sudo docker pull onlyoffice/documentserver
+```
+
+You don't need to start the container. An OnlyOffice container is automatically started when the Web Remote Access Service is enabled.
 </details>
 
 <details>
@@ -862,6 +885,8 @@ If you have used services like Dropbox, OneDrive, or Google Drive, the concept s
 
 Box is a **multi-user, self-hosted file management web application** written in React.  
 Although it is separated from the main admin dashboard, it shares the same authentication system, user accounts, and backend, making it fully integrated with NMS.
+
+If OnlyOffice is installed (if you followed the automatic installation process, it will be installed automatically as a docker image), you can edit documents, spreadsheets, and slide decks directly on your browser, without downloading those files and edit them locally.
 
 ![box.png](images/box.png)
 

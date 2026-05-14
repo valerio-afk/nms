@@ -96,7 +96,7 @@ export async function logout(): Promise<void> {
 // Add more API calls here sequentially
 
 export interface FileInfo {
-    type: "dir" | "image" | "video" | "audio" | "text" | "zip" | "bin" | "pdf" | "unk";
+    type: "dir" | "image" | "video" | "audio" | "text" | "zip" | "bin" | "pdf" | "word" | "spreadsheet" | "presentation" | "unk";
     name: string;
     size?: number;
     creation_time: number;
@@ -233,4 +233,8 @@ export async function downloadFile(path: string): Promise<void> {
     a.remove();
 
     window.URL.revokeObjectURL(url);
+}
+
+export async function getOnlyOfficeConfig(path: string): Promise<any> {
+    return await apiRequest<any>(`/fs/onlyoffice/${path}`, { method: 'GET' });
 }

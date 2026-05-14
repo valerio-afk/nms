@@ -129,34 +129,34 @@ def change_ownership(path:str) -> None:
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_FS_CH_PERM.name, params=[path, str(e)]))
 
 
-# def file_generator(path:str,chunk_size:Optional[int]=1024**2, start:int=0,end:Optional[int]=None) -> Generator[bytes, None, None]:
-#     proc = subprocess.Popen(
-#         ["dd", f"if={path}", "status=none","iflag=skip_bytes",f"skip={start}"],
-#         stdout=subprocess.PIPE
-#     )
-#
-#     delta = None if end is None else (end-start+1)
-#
-#     if (chunk_size is None):
-#         if (end is None):
-#             chunk_size=1024**2
-#         else:
-#             chunk_size=end-start+1
-#
-#     while True:
-#         if ((delta is not None) and (delta<=0)):
-#             break
-#
-#         read_size = chunk_size if delta is None else min(chunk_size,delta)
-#         chunk = proc.stdout.read(read_size)
-#
-#         if (not chunk):
-#             break
-#
-#         if (delta is not None):
-#             delta -= len(chunk)
-#
-#         yield chunk
+def file_generator_dd(path:str,chunk_size:Optional[int]=1024**2, start:int=0,end:Optional[int]=None) -> Generator[bytes, None, None]:
+    proc = subprocess.Popen(
+        ["sudo","dd", f"if={path}", "status=none","iflag=skip_bytes",f"skip={start}"],
+        stdout=subprocess.PIPE
+    )
+
+    delta = None if end is None else (end-start+1)
+
+    if (chunk_size is None):
+        if (end is None):
+            chunk_size=1024**2
+        else:
+            chunk_size=end-start+1
+
+    while True:
+        if ((delta is not None) and (delta<=0)):
+            break
+
+        read_size = chunk_size if delta is None else min(chunk_size,delta)
+        chunk = proc.stdout.read(read_size)
+
+        if (not chunk):
+            break
+
+        if (delta is not None):
+            delta -= len(chunk)
+
+        yield chunk
 
 def file_generator(path: str, chunk_size:int=1024**2, start: int = 0, end:Optional[int] = None) -> Generator[bytes, None, None]:
     with open(path, "rb") as f:
@@ -719,8 +719,8 @@ def download_file(filename: str, token:dict=Depends(verify_token)) -> StreamingR
         headers={"Content-Disposition": f'attachment; filename="{fname}"'}
     )
 
-@fs.get("/item/{filename:path}/onlyoffice")
-def onlyoffice_session(filename: str, token:dict=Depends(verify_token)) -> Dict:
+@fs.get("/onlyoffice/{filename:path}")
+def onlyoffice_session(filename: str, request:Request, token:dict=Depends(verify_token)) -> Dict:
     check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
     user = CONFIG.get_user(token.get("username", None))
 
@@ -741,7 +741,10 @@ def onlyoffice_session(filename: str, token:dict=Depends(verify_token)) -> Dict:
 
     file_info = get_file_info(str(p))
 
-    key = f"{p}:{file_info.modification_time}"
+    raw_key = f"{str(p)}:{file_info.modification_time}:{file_info.size}"
+    key = hashlib.md5(raw_key.encode()).hexdigest()
+
+    # key = f"{p}:{file_info.modification_time}"
 
     filetype = "txt"
     documentType = file_info.type
@@ -756,7 +759,7 @@ def onlyoffice_session(filename: str, token:dict=Depends(verify_token)) -> Dict:
         elif ("pdf" in file_info.mimetype):
             filetype = "pdf"
     elif (documentType == "presentation"):
-        documentType = "cell"
+        documentType = "slide"
         if ("openxmlformats" in file_info.mimetype):
             filetype = "pptx"
         elif ("opendocument" in file_info.mimetype):
@@ -765,7 +768,7 @@ def onlyoffice_session(filename: str, token:dict=Depends(verify_token)) -> Dict:
             filetype = "ppt"
 
     elif (documentType == "spreadsheet"):
-        documentType = "slide"
+        documentType = "cell"
         if ("openxmlformats" in file_info.mimetype):
             filetype = "xlsx"
         elif ("opendocument" in file_info.mimetype):
@@ -773,16 +776,21 @@ def onlyoffice_session(filename: str, token:dict=Depends(verify_token)) -> Dict:
         elif ("ms" in file_info.mimetype):
             filetype = "xls"
 
-    url_path = p.relative_to(CONFIG.mountpoint)
 
-    url = onlyoffice.url_path_for(
+    url_path = str(p.relative_to(CONFIG.mountpoint))
+
+    if (url_path.startswith("/")):
+        url_path = url_path[1:]
+
+
+    url = request.url_for(
         "get_document",
-        filename=str(url_path)
+        filename=url_path
     )
 
-    callback = onlyoffice.url_path_for(
+    callback = request.url_for(
         "onlyoffice_callback",
-        filename=str(url_path)
+        filename=url_path
     )
 
     only_office_config = {
@@ -790,7 +798,7 @@ def onlyoffice_session(filename: str, token:dict=Depends(verify_token)) -> Dict:
             "fileType": filetype,
             "key": key,
             "title": file_info.name,
-            "url": url,
+            "url": str(url),
             "permissions": {
                 "edit": True,
                 "download": True,
@@ -802,7 +810,7 @@ def onlyoffice_session(filename: str, token:dict=Depends(verify_token)) -> Dict:
         "documentType": documentType,
         "editorConfig": {
             "mode": "edit",
-            "callbackUrl": callback,
+            "callbackUrl": str(callback),
             "user": {
                 "id": user.uid,
                 "name": user.visible_name if user.visible_name is not None else user.username,
@@ -1045,18 +1053,18 @@ def fs_quota(token:dict=Depends(verify_token)) -> Quota:
     return Quota(used=used,quota=limit)
 
 
-@onlyoffice.get("/file/{filename:path}")
-def get_document(filename: str,token:dict=Depends(verify_token)) -> Response:
+@onlyoffice.get("/file/{filename:path}",name="get_document")
+def get_document(filename: str,token:dict=Depends(verify_onlyoffice)) -> Response:
     path = str(Path(CONFIG.mountpoint,filename))
 
     file_info = get_file_info(path)
 
     return StreamingResponse(
-        file_generator(str(path)),
+        file_generator_dd(str(path)),
         media_type=file_info.mimetype,
     )
 
-@onlyoffice.post("/onlyoffice/{filename:path}")
+@onlyoffice.post("/save/{filename:path}")
 async def onlyoffice_callback(filename:str,request: Request) -> Dict:
     data = await request.json()
 
@@ -1092,6 +1100,7 @@ async def onlyoffice_callback(filename:str,request: Request) -> Dict:
                 proc = subprocess.Popen(
                     ["sudo", "tee", str(path)],
                     stdin=subprocess.PIPE,
+                    stdout=subprocess.DEVNULL,
                     stderr=subprocess.PIPE
                 )
 
@@ -1102,12 +1111,10 @@ async def onlyoffice_callback(filename:str,request: Request) -> Dict:
                     proc.stdin.write(chunk)
 
                 proc.stdin.close()
-                proc.wait()
+                return_code = proc.wait()
+                stderr = proc.stderr.read() if proc.stderr else b""
 
-                _, stderr = proc.communicate()
-                proc.stderr.close()
-
-                if proc.returncode != 0:
+                if return_code != 0:
                     raise HTTPException(
                         500,
                         stderr.decode(errors="ignore")

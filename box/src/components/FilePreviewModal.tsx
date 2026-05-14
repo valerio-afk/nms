@@ -9,9 +9,10 @@ interface FilePreviewModalProps {
     onClose: () => void;
     file: FileInfo | null;
     currentPath: string;
+    onEditInOnlyOffice?: (file: FileInfo) => void;
 }
 
-export default function FilePreviewModal({ isOpen, onClose, file, currentPath }: FilePreviewModalProps) {
+export default function FilePreviewModal({ isOpen, onClose, file, currentPath, onEditInOnlyOffice }: FilePreviewModalProps) {
     const { t } = useTranslation();
     const [checksum, setChecksum] = useState<string | null>(null);
     const [previewContent, setPreviewContent] = useState<{ type: 'text' | 'image' | 'video' | 'audio' | 'pdf' | 'error' | 'unsupported', data?: string | null }>({ type: 'unsupported' });
@@ -78,6 +79,7 @@ export default function FilePreviewModal({ isOpen, onClose, file, currentPath }:
     if (!isOpen || !file) return null;
 
     const fullPath = currentPath ? `${currentPath}/${file.name}` : file.name;
+    const canEditInOnlyOffice = ['text', 'word', 'spreadsheet', 'presentation'].includes(file.type);
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/50 dark:bg-black/50 backdrop-blur-sm">
@@ -85,8 +87,16 @@ export default function FilePreviewModal({ isOpen, onClose, file, currentPath }:
 
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-zinc-800">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate pr-4">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate pr-4 flex items-center gap-2">
                         {t('preview.title')}: {file.name}
+                        {canEditInOnlyOffice && onEditInOnlyOffice && (
+                            <button onClick={() => {
+                                onClose();
+                                onEditInOnlyOffice(file);
+                            }} className="ml-4 text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded dark:bg-indigo-900/40 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-900/60 transition font-medium">
+                                Edit on OnlyOffice
+                            </button>
+                        )}
                     </h3>
                     <button
                         onClick={onClose}

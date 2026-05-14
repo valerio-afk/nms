@@ -1779,7 +1779,7 @@ class DockerRemove(Docker):
 
 
 class DockerInspect(Docker):
-    def __init__(this,container_name,flags):
+    def __init__(this,container_name,flags=None):
         super().__init__(subcommand="inspect",
                          container_name=container_name,
                          flags=flags)

@@ -491,7 +491,7 @@ class NMSUpdate(NMSThread):
 
         cmds = [
             TarArchive(cwd,tmp_path,action=TarArchive.TarAction.EXTRACT,strip_components=1),
-            BashScript(install_script,["--only-pkg"],sudo=True),
+            BashScript(install_script,["--only-pkg","--pull-images"],sudo=True),
             NPMRun("build",cwd=os.path.join(cwd,"box")),
             Chown("backend","www-data",cwd,['-R']),
             Chmod(CONFIG.config_filename, "600"),

@@ -11,10 +11,12 @@ import {
     FileArchive, Binary, FileOutput, FileQuestion,
     ChevronRight, ArrowUp, ArrowDown, ShieldAlert,
     FolderPlus, Upload, Edit2, Download, Trash2,
-    MoveRight, CornerLeftUp, ArchiveRestore, Copy, Sparkles
+    MoveRight, CornerLeftUp, ArchiveRestore, Copy, Sparkles,
+    FileSpreadsheet, Presentation
 } from 'lucide-react';
 import { ContextMenuContext } from '../App';
 import FilePreviewModal from './FilePreviewModal';
+import OnlyOfficeModal from './OnlyOfficeModal';
 import { useTranslation, Trans } from 'react-i18next';
 
 const humanReadableType = (type: FileInfo['type'], t: any): string => {
@@ -27,6 +29,9 @@ const humanReadableType = (type: FileInfo['type'], t: any): string => {
         case 'zip': return t('browser.types.zip');
         case 'bin': return t('browser.types.bin');
         case 'pdf': return t('browser.types.pdf');
+        case 'word': return t('browser.types.word', 'Word Document');
+        case 'spreadsheet': return t('browser.types.spreadsheet', 'Spreadsheet');
+        case 'presentation': return t('browser.types.presentation', 'Presentation');
         case 'unk':
         default: return t('browser.types.unk');
     }
@@ -45,6 +50,9 @@ const FileIcon = ({ type }: { type: FileInfo['type'] }) => {
         case 'zip': return <FileArchive className={className} />;
         case 'bin': return <Binary className={className} />;
         case 'pdf': return <FileOutput className={className} />;
+        case 'word': return <FileText className={className} />;
+        case 'spreadsheet': return <FileSpreadsheet className={className} />;
+        case 'presentation': return <Presentation className={className} />;
         case 'unk':
         default: return <FileQuestion className={className} />;
     }
@@ -108,6 +116,8 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     // File Preview Modal State
     const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
     const [previewFile, setPreviewFile] = useState<FileInfo | null>(null);
+    const [isOnlyOfficeModalOpen, setIsOnlyOfficeModalOpen] = useState(false);
+    const [onlyOfficeFile, setOnlyOfficeFile] = useState<FileInfo | null>(null);
 
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [isDraggingOverMain, setIsDraggingOverMain] = useState(false);
@@ -1460,6 +1470,20 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                 }}
                 file={previewFile}
                 currentPath={currentPath}
+                onEditInOnlyOffice={(f) => {
+                    setOnlyOfficeFile(f);
+                    setIsOnlyOfficeModalOpen(true);
+                }}
+            />
+
+            <OnlyOfficeModal
+                isOpen={isOnlyOfficeModalOpen}
+                onClose={() => {
+                    setIsOnlyOfficeModalOpen(false);
+                    setOnlyOfficeFile(null);
+                }}
+                file={onlyOfficeFile}
+                currentPath={currentPath}
             />
 
             {
@@ -1595,6 +1619,19 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${singleSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
                         >
                             <Download className="w-4 h-4" /> {t('browser.toolbar.download')}
+                        </a>
+                        <div className="h-px bg-slate-200 my-1"></div>
+                        <a
+                            onClick={singleSelected && ['text', 'word', 'spreadsheet', 'presentation'].includes(browseData?.files.find(f => f.name === Array.from(selectedItems)[0])?.type || '') ? () => {
+                                const file = browseData?.files.find(f => f.name === Array.from(selectedItems)[0]);
+                                if (file) {
+                                    setOnlyOfficeFile(file);
+                                    setIsOnlyOfficeModalOpen(true);
+                                }
+                            } : undefined}
+                            className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${singleSelected && ['text', 'word', 'spreadsheet', 'presentation'].includes(browseData?.files.find(f => f.name === Array.from(selectedItems)[0])?.type || '') ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed hidden'}`}
+                        >
+                            <Edit2 className="w-4 h-4" /> Edit on OnlyOffice
                         </a>
                         <div className="h-px bg-slate-200 my-1"></div>
                         <a

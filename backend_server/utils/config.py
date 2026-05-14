@@ -1,8 +1,7 @@
 from pathlib import Path
-
 from backend_server.utils.cmdl import Chown, LocalCommandLineTransaction, Groups, ZPoolList, GetEntPasswd, ZFSSnapshot
 from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet,  ZFSGetQuota, Chmod, ZFSRollback, ZFSDestroy
-from backend_server.utils.cmdl import UserAdd, GetUserUID, ReadLink, Find, DockerRun, DockerStop
+from backend_server.utils.cmdl import UserAdd, GetUserUID, ReadLink, Find, DockerRun, DockerStop, DockerInspect
 from backend_server.utils.enums import DistroFamilies
 from backend_server.utils.logger import Logger
 from backend_server.utils.responses import ErrorMessage, UserProfile, Quota
@@ -255,26 +254,50 @@ class NMSConfig(Logger):
     def _start_only_office_server(this,_:Any) -> None:
         jwt_secret = str(uuid.uuid4())
         NMSConfig.ONLYOFFICE_CONF["jwt_secret"] = jwt_secret
-        cmd = DockerRun(
-            image_name=NMSConfig.ONLYOFFICE_CONF["container_name"],
-            container_name="onlyoffice/documentserver",
-            envvars={
-                "JWT_SECRET": jwt_secret,
-            },
-            port_forwarding=[(NMSConfig.ONLYOFFICE_CONF['port'],80)],
-            mount={
-                "/app/onlyoffice/DocumentServer/logs":"/var/log/onlyoffice",
-                "/app/onlyoffice/DocumentServer/data":"/var/www/onlyoffice/Data",
-                "/app/onlyoffice/DocumentServer/lib":"/var/lib/onlyoffice",
-                "/app/onlyoffice/DocumentServer/db":"/var/lib/postgresql"
-            }
-        )
+        inspect_output = DockerInspect(NMSConfig.ONLYOFFICE_CONF["container_name"]).execute()
 
-        out = cmd.execute()
+        run_container = True
 
-        if (out is not None):
-            if (len(x:=out.stdout)>0): this.info(x)
-            if (len(x := out.stderr) > 0): this.info(x)
+        if (inspect_output.returncode==0):
+            #container is running
+            container_conf = json.loads(inspect_output.stdout)
+            old_secret = None
+
+            for conf in container_conf:
+                for env in conf.get("Config",{}).get("Env",[]):
+                    if ("JWT_SECRET" in env):
+                        token = env.split("=")[1].strip()
+                        old_secret = token
+                        break
+
+            if (old_secret is None):
+                DockerStop(NMSConfig.ONLYOFFICE_CONF["container_name"])
+            else:
+                NMSConfig.ONLYOFFICE_CONF["jwt_secret"] = old_secret
+                run_container = False
+
+
+        if (run_container):
+            cmd = DockerRun(
+                image_name=NMSConfig.ONLYOFFICE_CONF["container_name"],
+                container_name="onlyoffice/documentserver",
+                envvars={
+                    "JWT_SECRET": jwt_secret,
+                },
+                port_forwarding=[(NMSConfig.ONLYOFFICE_CONF['port'],80)],
+                mount={
+                    "/app/onlyoffice/DocumentServer/logs":"/var/log/onlyoffice",
+                    "/app/onlyoffice/DocumentServer/data":"/var/www/onlyoffice/Data",
+                    "/app/onlyoffice/DocumentServer/lib":"/var/lib/onlyoffice",
+                    "/app/onlyoffice/DocumentServer/db":"/var/lib/postgresql"
+                }
+            )
+
+            out = cmd.execute()
+
+            if (out is not None):
+                if (len(x:=out.stdout)>0): this.info(x)
+                if (len(x := out.stderr) > 0): this.info(x)
 
 
     def _stop_only_office_server(this,_:Any) -> None:

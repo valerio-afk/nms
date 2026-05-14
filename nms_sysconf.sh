@@ -1217,13 +1217,18 @@ build_box_app() {
 }
 
 
-JUST_PKG=false
+PULL_IMAGES=false
+FULL_INSTALLATION=true
 
 # Parse arguments
 for arg in "$@"; do
     case "$arg" in
         --only-pkg)
-            JUST_PKG=true
+            FULL_INSTALLATION=false
+            ;;
+        --pull-images)
+            PULL_IMAGES=true
+            FULL_INSTALLATION=false
             ;;
         *)
             ;;
@@ -1259,73 +1264,75 @@ fi
 log_info "Detecting sensors"
 sudo sensors-detect --auto
 
-if [ "$JUST_PKG" = true ]; then
-    log_warn "Package installed - Exit now."
-    exit 0
+if [ "$FULL_INSTALLATION" = true ]; then
+  # Step 2 --- Adding ZFS kernel module
+
+  modprobe zfs
+  if [[ "$family" == "rpm" ]]; then
+    echo zfs > /etc/modules-load.d/zfs.conf
+  fi
+
+  # Step 3 --- Disable systemctl services
+  if [[ "$family" == "apt" ]]; then
+    manage_services stop "${SERVICES_TO_DISABLE_APT[@]}"
+    manage_services disable "${SERVICES_TO_DISABLE_APT[@]}"
+  elif [[ "$family" == "rpm" ]]; then
+    manage_services stop "${SERVICES_TO_DISABLE_DNF[@]}"
+    manage_services disable "${SERVICES_TO_DISABLE_DNF[@]}"
+
+    manage_services enable "${SERVICES_TO_ENABLE[@]}"
+    manage_services start "${SERVICES_TO_ENABLE[@]}"
+  fi
+
+  # Step 4 --- Configure network manager
+  enable_network_manager
+
+  # Step 5 --- Create python virtual environment
+  setup_python_venv "$PYTHON_VENV_PATH"
+
+  # Step 6 --- Cloning NMS git repository
+  if download_latest_release "${REPOSITORY}"; then
+    log_info "Latest release of NMS downloaded and installed successfully"
+  else
+    clone_git_repo "$REPO_URL" "$DEST_DIR"
+  fi
+
+  build_box_app "/nms/box"
 fi
-
-# Step 2 --- Adding ZFS kernel module
-
-modprobe zfs
-if [[ "$family" == "rpm" ]]; then
-  echo zfs > /etc/modules-load.d/zfs.conf
-fi
-
-# Step 3 --- Disable systemctl services
-if [[ "$family" == "apt" ]]; then
-  manage_services stop "${SERVICES_TO_DISABLE_APT[@]}"
-  manage_services disable "${SERVICES_TO_DISABLE_APT[@]}"
-elif [[ "$family" == "rpm" ]]; then
-  manage_services stop "${SERVICES_TO_DISABLE_DNF[@]}"
-  manage_services disable "${SERVICES_TO_DISABLE_DNF[@]}"
-
-  manage_services enable "${SERVICES_TO_ENABLE[@]}"
-  manage_services start "${SERVICES_TO_ENABLE[@]}"
-fi
-
-# Step 4 --- Configure network manager
-enable_network_manager
-
-# Step 5 --- Create python virtual environment
-setup_python_venv "$PYTHON_VENV_PATH"
-
-# Step 6 --- Cloning NMS git repository
-if download_latest_release "${REPOSITORY}"; then
-  log_info "Latest release of NMS downloaded and installed successfully"
-else
-  clone_git_repo "$REPO_URL" "$DEST_DIR"
-fi
-
-build_box_app "/nms/box"
 
 # Step 7 --- Download redis and onlyoffice images
-install_redis_docker
-install_onlyoffice
+if [[ "$FULL_INSTALLATION" = true  || "$PULL_IMAGES" = true ]]; then
+  install_redis_docker
+  install_onlyoffice
+fi
 
-#Step 8 --- Configure users
-manage_users "${SUDO_GROUP}"
-set_repo_permissions_wwwdata "$DEST_DIR"
-add_nopasswd_sudo "backend"
+if [ "$FULL_INSTALLATION" = true ]; then
+  #Step 8 --- Configure users
+  manage_users "${SUDO_GROUP}"
+  set_repo_permissions_wwwdata "$DEST_DIR"
+  add_nopasswd_sudo "backend"
 
-#Step 9 --- Python configuration
-install_requirements "$DEST_DIR" "$PYTHON_VENV_PATH"
-install_editable_package "$DEST_DIR/nms_shared" "$PYTHON_VENV_PATH"
+  #Step 9 --- Python configuration
+  install_requirements "$DEST_DIR" "$PYTHON_VENV_PATH"
+  install_editable_package "$DEST_DIR/nms_shared" "$PYTHON_VENV_PATH"
 
-#Step 10 --- Systemctl
-create_backend_service "$DEST_DIR" "$PYTHON_VENV_PATH"
-create_frontend_service "$DEST_DIR" "$PYTHON_VENV_PATH"
+  #Step 10 --- Systemctl
+  create_backend_service "$DEST_DIR" "$PYTHON_VENV_PATH"
+  create_frontend_service "$DEST_DIR" "$PYTHON_VENV_PATH"
 
-#Step 11 --- Wireguard configuration
-configure_wireguard
+  #Step 11 --- Wireguard configuration
+  configure_wireguard
 
-#Step 12 --- Noip dynamic updater script
-install_noip_duc "$family"
+  #Step 12 --- Noip dynamic updater script
+  install_noip_duc "$family"
 
-#Step 13 --- Configure nginx as a reverse proxy
-configure_nginx_nms $family
+  #Step 13 --- Configure nginx as a reverse proxy
+  configure_nginx_nms $family
 
-# Done
-IP=$(ip -o -4 addr show up scope global | awk '{split($4,a,"/"); print a[1]; exit}')
-if [ -n "$IP" ]; then
-  log_info "Now you can use your browser and go to http://${IP}"
+  # Done
+  IP=$(ip -o -4 addr show up scope global | awk '{split($4,a,"/"); print a[1]; exit}')
+  if [ -n "$IP" ]; then
+    log_info "Now you can use your browser and go to http://${IP}"
+  fi
+
 fi

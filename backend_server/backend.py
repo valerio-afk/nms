@@ -23,7 +23,6 @@ app = FastAPI(lifespan=automount,root_path="/api")
 
 app.include_router(v1)
 
-
 # Custom exception handler
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
