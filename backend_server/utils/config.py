@@ -683,6 +683,7 @@ class NMSConfig(Logger):
             "systemd": {
                 "services": ['nginx.service','nmswebapp.service','nmsbackend.service','wg-quick@wg0.service']
             },
+            "shares":{},
             "events":{},
             "updates": {
                 "apt": {
@@ -1300,8 +1301,51 @@ class NMSConfig(Logger):
 
         return False
 
+    def share_file(this, path:str,expire_date:int,share_with:Optional[Dict[str,Dict]]) -> str:
+        shares = this._cfg['shares']
 
+        token_data = {
+            "expire_date":expire_date,
+            "share_with":share_with
+        }
 
+        shares[path] = token_data.copy()
+
+        token_data['path'] = path
+        token_data['purpose'] = "fileshare"
+
+        token = jwt.encode(
+            token_data,
+            SECRET_KEY,
+            algorithm="HS256"
+        )
+
+        return token
+
+    def remove_share_file(this,path:str) -> None:
+        del this._cfg['shares'][path]
+
+    def get_files_shared_with(this, username:Optional[str], include_all:bool=False) -> Dict[str,Dict]:
+        shared_with_me:Dict[str,Dict] = {}
+
+        expired_keys = []
+
+        for p, d in this._cfg.get('shares',{}).items():
+            if (d['expire_date'] is not None):
+                if (d['expire_date'] < datetime.now().timestamp()):
+                    expired_keys.append(p)
+                    continue
+
+            if (d['shared_with'] is not None):
+                if (username in d['shared_with'].keys()):
+                    shared_with_me[p] = d
+            elif (include_all):
+                shared_with_me[p]=d
+
+        for key in expired_keys:
+            del this._cfg['shares'][key]
+
+        return shared_with_me
 
 
 

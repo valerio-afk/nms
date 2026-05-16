@@ -1979,6 +1979,7 @@ class LS(CommandLine):
         if (all):
             cmd.append("-a")
 
+        cmd.append("--")
         cmd.append(path)
 
         this._path = path

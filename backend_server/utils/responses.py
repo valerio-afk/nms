@@ -194,7 +194,12 @@ class FileInfo(BaseModel):
     size:Optional[int]
     creation_time:int
     modification_time:str
+    owner:str
     real:bool
+
+class SharedFileInfo(FileInfo):
+    can_edit:bool
+    relative_path:str
 
 class FSBrowse(BaseModel):
     path:str
@@ -298,3 +303,15 @@ class RegisterEvent(BaseModel):
 class RegisteredEvent(RegisterEvent):
     uuid:str
     enabled:bool
+
+class SharingPermissions(BaseModel):
+    username:str
+    can_edit:bool
+
+class FileSharing(BaseModel):
+    path:str
+    sharing_permissions: Optional[List[SharingPermissions]]
+    expire:Optional[int]
+
+class SharedFile(BaseModel):
+    token:str

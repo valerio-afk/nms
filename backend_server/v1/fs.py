@@ -2,19 +2,21 @@ from PIL import Image
 from fastapi.security import HTTPAuthorizationCredentials
 from backend_server.utils.cmdl import Chown, Chmod, LocalCommandLineTransaction, LS, Stat, MimeType, Mkdir, Move
 from backend_server.utils.cmdl import RemoveFile, Touch, SetfACL, Zip, Unpack, TarArchive, SevenZip, Copy
-from backend_server.utils.config import CONFIG
+from backend_server.utils.config import CONFIG, SECRET_KEY
 from backend_server.utils.responses import ErrorMessage, UserProfile, FileInfo, FSBrowse, MkDirModel, MvModel, Quota
-from backend_server.utils.responses import ZipFile, CpModel
+from backend_server.utils.responses import ZipFile, CpModel, SharedFileInfo, FileSharing, SharedFile
+from backend_server.utils.events import Events, EventContext
 from backend_server.v1.auth import verify_token_factory, check_permission, create_token, token_verification, bearer
 from datetime import datetime,timedelta, UTC
 from email.utils import format_datetime
 from fastapi import HTTPException, APIRouter, Depends, Request, Response
 from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.security import  HTTPBearer
 from io import BytesIO
 from nms_shared import ErrorMessages
 from nms_shared.enums import UserPermissions
 from pathlib import Path
-from typing import Optional, List, Generator, Dict
+from typing import Optional, List, Generator, Dict, Any, Tuple
 import base64
 import httpx
 import grp
@@ -24,7 +26,9 @@ import os
 import pwd
 import subprocess
 
+
 verify_token = verify_token_factory()
+permissive_bearer = HTTPBearer(auto_error=False)
 
 
 def verify_onlyoffice_token(token: str):
@@ -42,6 +46,39 @@ def verify_onlyoffice(credentials: HTTPAuthorizationCredentials = Depends(bearer
     token = credentials.credentials
     return verify_onlyoffice_token(token)
 
+def verify_user_token_shared_files(credentials:HTTPAuthorizationCredentials = Depends(permissive_bearer)) -> Optional[Dict[str,Any]]:
+    token = credentials.credentials
+    try:
+        return token_verification(token,"login")
+    except HTTPException as e:
+        return None
+
+def verify_anon_token(token:str):
+    requested_purpose = "fileshare"
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+
+        purpose = payload.get("purpose")
+        if (purpose is None):
+            CONFIG.error("Token missing `purpose` claim")
+            raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_MALFORMED.name))
+        elif (purpose != requested_purpose):
+            CONFIG.error(f"Purpose claim not matching ({purpose} != {requested_purpose})")
+            raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_INVALID.name))
+
+        exp = payload.get("expire_date")
+
+        if ((exp is not None) and (datetime.now(pytz.timezone("UTC")).timestamp() > exp)):
+            CONFIG.error("Token Expired")
+            raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_EXPIRED.name))
+
+        payload['token'] = token
+
+        return payload
+
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_MALFORMED.name))
+
 fs = APIRouter(
     prefix='/fs',
     tags=['fs'],
@@ -56,6 +93,12 @@ fs_preview = APIRouter(
 onlyoffice = APIRouter(
     prefix='/onlyoffice',
     tags=['onlyoffice']
+)
+
+file_sharing = APIRouter(
+    prefix='/filesharing',
+    tags=['filesharing'],
+    dependencies=[Depends(verify_user_token_shared_files)]
 )
 
 TUS_VERSION = "1.0.0"
@@ -180,10 +223,10 @@ def file_generator(path: str, chunk_size:int=1024**2, start: int = 0, end:Option
                 break
 
 def get_file_info(path:str) -> Optional[FileInfo]:
-    stat = Stat(path, "%n\n%s\n%F\n%W\n%y").execute()
+    stat = Stat(path, "%n\n%s\n%F\n%W\n%y\n%U").execute()
 
     if (stat.returncode == 0):
-        fullpath, size, ftype, creation_time,modification_time = (
+        fullpath, size, ftype, creation_time,modification_time,owner = (
             stat.stdout.splitlines())
 
         fname = os.path.split(path)[1]
@@ -270,6 +313,7 @@ def get_file_info(path:str) -> Optional[FileInfo]:
                 type=ftype,
                 mimetype = mime_type.strip(),
                 real=True,
+                owner=owner,
                 creation_time=int(creation_time),
                 modification_time=modification_time
             )
@@ -332,7 +376,7 @@ def ls_dir(path: Optional[str]=None, token:dict=Depends(verify_token)) -> FSBrow
     ls = LS(str(p)).execute()
 
     if (ls.returncode != 0):
-        HTTPException(status_code=500)
+        raise HTTPException(status_code=500)
 
     files:List[FileInfo] = []
 
@@ -349,6 +393,35 @@ def ls_dir(path: Optional[str]=None, token:dict=Depends(verify_token)) -> FSBrow
     browsed_path = p.relative_to(user.home_dir)
 
     return FSBrowse(path=str(browsed_path),files=files)
+
+@fs.get("/shared",response_model=List[SharedFileInfo],summary="Get the list of files shared with a specific user.")
+def ls_shared(token:dict=Depends(verify_token)) -> List[SharedFileInfo]:
+    check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
+    user = CONFIG.get_user(token.get("username",None))
+
+    if (not user):
+        raise HTTPException(status_code=401)
+
+    files:List[SharedFileInfo] = []
+
+    mountpoint = CONFIG.mountpoint
+
+    for f,d in CONFIG.get_files_shared_with(user.username).items:
+        obj = get_file_info(str(f))
+        if (obj is not None):
+            full_path = Path(f)
+
+
+            files.append(
+                SharedFileInfo(**obj.model_dump(),
+                    can_edit = d.get("can_edit",False),
+                    relative_path =  str(full_path.relative_to(mountpoint))
+                )
+            )
+
+    files.sort(key=lambda x: x.name)
+
+    return files
 
 @fs.get("/checksum/{path:path}",response_model=str,summary="Get MD5 checksum of the specified file")
 def checksum(path: Optional[str]=None, token:dict=Depends(verify_token)) -> str:
@@ -402,6 +475,61 @@ def fs_mkdir(data:MkDirModel,token:dict=Depends(verify_token)) -> None:
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_FS_MKDIR.name,params=[new_dir,errors]))
 
     CONFIG.info(f"New directory {p} created by {user.username}")
+
+@fs.post("/share",summary="Enable a file or directory sharing with someone else (either another user or externally)", response_model=SharedFile)
+def fs_share(share_conf:FileSharing,token:dict=Depends(verify_token)) -> SharedFile:
+    check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
+    user = CONFIG.get_user(token.get("username", None))
+
+    if (not user):
+        raise HTTPException(status_code=401)
+
+    path = check_path_jail(user, share_conf.path)
+
+    expire_date = None
+
+    if ((share_conf.expire is not None) and (share_conf.expire>0)):
+        expire_date = datetime.now() + timedelta(days=share_conf.expire)
+        expire_date = expire_date.timestamp()
+
+    shared_with = None
+
+    if (share_conf.sharing_permissions is not None):
+        shared_with = {}
+
+        for perms in share_conf.sharing_permissions:
+            shared_with[perms.username] = {
+                "can_edit":perms.can_edit
+            }
+
+    share_token = CONFIG.share_file(
+        path = str(path),
+        expire_date=expire_date,
+        shared_with=shared_with,
+    )
+
+    CONFIG.flush_config()
+    CONFIG.trigger_event(Events.FILE_SHARED, {
+        EventContext.TRIGGER_USER.value: user.username,
+        EventContext.TOKEN : token
+    })
+
+    return SharedFile(token=share_token)
+
+@fs.delete("/share/{path:path}",summary="Remove a file sharing")
+def fs_share_delete(path:str,token:dict=Depends(verify_token)) -> None:
+    check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
+    user = CONFIG.get_user(token.get("username", None))
+
+    if (not user):
+        raise HTTPException(status_code=401)
+
+    p = check_path_jail(user, path)
+
+    CONFIG.remove_share_file(str(p))
+
+    CONFIG.flush_config()
+
 
 
 @fs.post("/mv",summary="Rename or move a file/directory within the user space.")
@@ -1122,3 +1250,270 @@ async def onlyoffice_callback(filename:str,request: Request) -> Dict:
 
 
     return {"error": 0}
+
+
+def shared_file_check_authorisation(
+        filename:str,
+        authentication_token:Dict[str,Any],
+        anon_user_token:Optional[str]
+) -> Tuple[Path,bool]:
+    #
+    # Resolve authenticated user (if any)
+    #
+    user = None
+
+    if authentication_token is not None:
+        user = CONFIG.get_user(authentication_token.get("username"))
+
+    #
+    # Get all shares available to this user.
+    #
+    # include_all=True means:
+    # - user-specific shares
+    # - public shares
+    #
+    # You mentioned expired shares are already filtered here.
+    #
+    shared_with_user = CONFIG.get_files_shared_with(
+        user,
+        include_all=True
+    )
+
+    CONFIG.flush_config()
+
+    #
+    # Resolve mountpoint to avoid path traversal and
+    # path representation inconsistencies.
+    #
+    mountpoint = Path(CONFIG.mountpoint).resolve()
+
+    #
+    # Resolve the requested path.
+    #
+    # IMPORTANT:
+    # resolve() normalizes:
+    # - ../
+    # - symlinks
+    # - duplicate separators
+    #
+    requested_path = Path(mountpoint, filename).resolve()
+
+    #
+    # Ensure requested path stays inside mountpoint.
+    #
+    # Prevents:
+    # /browse/../../etc/passwd
+    #
+    if not requested_path.is_relative_to(mountpoint):
+        raise HTTPException(status_code=403)
+
+    #
+    # These variables represent:
+    #
+    # matched_shared_root:
+    #   The share boundary that grants access.
+    #
+    # matched_share_data:
+    #   ACL/configuration associated with the share.
+    #
+    matched_shared_root = None
+    matched_share_data = None
+
+    can_edit = False
+
+    #
+    # Find which shared root authorizes this request.
+    #
+    # IMPORTANT:
+    # We preserve the ORIGINAL shared root.
+    # We do NOT replace it with the requested path.
+    #
+    for shared_path, share_data in shared_with_user.items():
+
+        shared_root = Path(shared_path).resolve()
+
+        if requested_path.is_relative_to(shared_root):
+
+            #
+            # Prefer the MOST SPECIFIC matching share.
+            #
+            # Example:
+            #
+            # /a
+            # /a/private
+            #
+            # If accessing /a/private/file.txt,
+            # we should use /a/private.
+            #
+            if (
+                    matched_shared_root is None or
+                    len(shared_root.parts) > len(matched_shared_root.parts)
+            ):
+                matched_shared_root = shared_root
+                matched_share_data = share_data
+
+    #
+    # No matching share found.
+    #
+    if matched_shared_root is None:
+        raise HTTPException(status_code=403)
+
+    #
+    # Resolve edit permissions for authenticated users.
+    #
+    if user is not None:
+
+        user_acl = matched_share_data.get("shared_with", {}).get(
+            user.username
+        )
+
+        if user_acl is not None:
+            can_edit = user_acl.get("can_edit", False)
+
+    #
+    # Anonymous users must present a valid anonymous share token.
+    #
+    if user is None:
+
+        if anon_user_token is None:
+            raise HTTPException(status_code=403)
+
+        anon_token_data = verify_anon_token(anon_user_token)
+
+        #
+        # Token contains the path it grants access to.
+        #
+        granted_path = anon_token_data.get("path")
+
+        if granted_path is None:
+            raise HTTPException(status_code=403)
+
+        granted_path = Path(granted_path).resolve()
+
+        #
+        # Ensure the requested file is inside the granted path.
+        #
+        # This preserves your inheritance model:
+        #
+        # If /a is shared,
+        # then /a/subdir/file.txt is also allowed.
+        #
+        if not requested_path.is_relative_to(granted_path):
+            raise HTTPException(status_code=403)
+
+        #
+        # Additional safety:
+        #
+        # Ensure token does not grant MORE than the matched share.
+        #
+        # Example:
+        #
+        # Token grants /a
+        # but request matched /a/private
+        #
+        # This prevents mismatched share scopes.
+        #
+        if not granted_path.is_relative_to(matched_shared_root):
+            raise HTTPException(status_code=403)
+
+    return requested_path, can_edit
+
+
+
+@file_sharing.get("/browse/{filename:path}")
+def fs_shared_browse(
+    filename: str,
+    t: Optional[str] = None,
+    auth_token: dict = Depends(verify_user_token_shared_files)
+) -> List[SharedFileInfo]:
+
+    requested_path, can_edit = shared_file_check_authorisation(filename, auth_token,t)
+    mountpoint = Path(CONFIG.mountpoint).resolve()
+
+    #
+    # Read metadata for the ACTUAL requested path.
+    #
+    file_info = get_file_info(str(requested_path))
+
+    if file_info is None:
+        raise HTTPException(status_code=404)
+
+    #
+    # Regular file -> return single item.
+    #
+    if file_info.type != "dir":
+        return [
+            SharedFileInfo(
+                **file_info.model_dump(),
+                relative_path=filename,
+                can_edit=can_edit
+            )
+        ]
+
+    #
+    # Directory listing
+    #
+    ls = LS(str(requested_path), sudo=True).execute()
+
+    if ls.returncode != 0:
+        raise HTTPException(status_code=500)
+
+    files: List[FileInfo] = []
+
+    for f in ls.stdout.splitlines():
+
+        current = requested_path.joinpath(f).resolve()
+
+        #
+        # Prevent symlink escape during directory traversal.
+        #
+        if not current.is_relative_to(mountpoint):
+            continue
+
+        obj = get_file_info(str(current))
+
+        if obj is not None:
+            files.append(obj)
+
+    files.sort(key=lambda x: x.name)
+
+    return [
+        SharedFileInfo(
+            **d.model_dump(),
+            can_edit=can_edit,
+            relative_path=str(Path(filename, d.name))
+        )
+        for d in files
+    ]
+
+@file_sharing.get("/item/{filename:path}",summary="Allows to download a shared file")
+def download_shared_file (filename: str,
+    r:Request,
+    t: Optional[str] = None,
+    auth_token: dict = Depends(verify_user_token_shared_files),
+
+) -> StreamingResponse:
+
+    requested_path, _ = shared_file_check_authorisation(filename, auth_token,t)
+
+    stat = Stat(str(requested_path),format="%F",sudo=True).execute()
+
+    if (stat.returncode != 0) or ("regular file" not in stat.stdout):
+        raise HTTPException(status_code=400)
+
+    fname = requested_path.name
+
+    if (len(fname) == 0):
+        raise HTTPException(status_code=500)
+
+    file_info = get_file_info(str(requested_path))
+
+    username = auth_token["username"] if "username" in auth_token else "Anonymous"
+
+    CONFIG.info(f"Shared file {filename} downloaded by {r.client.host} - User: {username}")
+
+    return StreamingResponse(
+        file_generator(str(requested_path)),
+        media_type=file_info.mimetype,
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'}
+    )

@@ -13,3 +13,4 @@ class EventContext(Enum):
     ISDIR = "ISDIR"
     HOME_OWNER = "HOME_OWNER"
     PERMISSIONS = "PERMISSIONS"
+    TOKEN = "TOKEN"

@@ -33,6 +33,7 @@ class Events(Enum):
     FILE_CREATED = "file.created"
     FILE_DELETED = "file.deleted"
     FILE_MODIFIED = "file.modified"
+    FILE_SHARED = "file.shared"
 
 
 
@@ -227,6 +228,10 @@ class VPNDisabled(AbstractEvent):
                          [SendNotificationToAction(), SendNotificationToAllAction(), SendNotificationToAdminsAction(),
                           RunScriptAction()])
 
+class FileSharedEvent(AbstractEvent):
+    def __init__(this):
+        super().__init__(Events.FILE_SHARED.value,[SendNotificationToAction(event_context=[EventContext.TOKEN]),RunScriptAction(event_context=[EventContext.TOKEN])])
+
 
 class INotifyEvent(AbstractEvent):
     INOTIFYTHREAD: Optional[INotifyEventTriggerThread] = None
@@ -307,7 +312,8 @@ class EventManager:
         Events.TIMER_MINUTES.value : TimerMinutesEvent(),
         Events.FILE_CREATED.value : FileCreatedEvent(),
         Events.FILE_MODIFIED.value : FileModifiedEvent(),
-        Events.FILE_DELETED.value : FileDeletedEvent()
+        Events.FILE_DELETED.value : FileDeletedEvent(),
+        Events.FILE_SHARED.value : FileSharedEvent(),
     }
 
     def __init__(this):
