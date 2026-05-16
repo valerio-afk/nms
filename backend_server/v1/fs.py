@@ -138,6 +138,172 @@ def check_path_jail(user:UserProfile,path:str,stat_last:bool=True) -> Path:
 
     return requested_path
 
+def shared_file_check_authorisation(
+        filename:str,
+        authentication_token:Optional[Dict[str,Any]],
+        anon_user_token:Optional[str] = None
+) -> Tuple[Path,bool]:
+    #
+    # Resolve authenticated user (if any)
+    #
+    user = None
+
+    if authentication_token is not None:
+        user = CONFIG.get_user(authentication_token.get("username"))
+
+    #
+    # Get all shares available to this user.
+    #
+    # include_all=True means:
+    # - user-specific shares
+    # - public shares
+    #
+    # You mentioned expired shares are already filtered here.
+    #
+    shared_with_user = CONFIG.get_files_shared_with(
+        user,
+        include_all=True
+    )
+
+    CONFIG.flush_config()
+
+    #
+    # Resolve mountpoint to avoid path traversal and
+    # path representation inconsistencies.
+    #
+    mountpoint = Path(CONFIG.mountpoint).resolve()
+
+    #
+    # Resolve the requested path.
+    #
+    # IMPORTANT:
+    # resolve() normalizes:
+    # - ../
+    # - symlinks
+    # - duplicate separators
+    #
+    requested_path = Path(mountpoint, filename).resolve()
+
+    #
+    # Ensure requested path stays inside mountpoint.
+    #
+    # Prevents:
+    # /browse/../../etc/passwd
+    #
+    if not requested_path.is_relative_to(mountpoint):
+        raise HTTPException(status_code=403)
+
+    #
+    # These variables represent:
+    #
+    # matched_shared_root:
+    #   The share boundary that grants access.
+    #
+    # matched_share_data:
+    #   ACL/configuration associated with the share.
+    #
+    matched_shared_root = None
+    matched_share_data = None
+
+    can_edit = False
+
+    #
+    # Find which shared root authorizes this request.
+    #
+    # IMPORTANT:
+    # We preserve the ORIGINAL shared root.
+    # We do NOT replace it with the requested path.
+    #
+    for shared_path, share_data in shared_with_user.items():
+
+        shared_root = Path(shared_path).resolve()
+
+        if requested_path.is_relative_to(shared_root):
+
+            #
+            # Prefer the MOST SPECIFIC matching share.
+            #
+            # Example:
+            #
+            # /a
+            # /a/private
+            #
+            # If accessing /a/private/file.txt,
+            # we should use /a/private.
+            #
+            if (
+                    matched_shared_root is None or
+                    len(shared_root.parts) > len(matched_shared_root.parts)
+            ):
+                matched_shared_root = shared_root
+                matched_share_data = share_data
+
+    #
+    # No matching share found.
+    #
+    if matched_shared_root is None:
+        raise HTTPException(status_code=403)
+
+    #
+    # Resolve edit permissions for authenticated users.
+    #
+    if user is not None:
+
+        user_acl = matched_share_data.get("shared_with", {}).get(
+            user.username
+        )
+
+        if user_acl is not None:
+            can_edit = user_acl.get("can_edit", False)
+
+    #
+    # Anonymous users must present a valid anonymous share token.
+    #
+    if user is None:
+
+        if anon_user_token is None:
+            raise HTTPException(status_code=403)
+
+        anon_token_data = verify_anon_token(anon_user_token)
+
+        #
+        # Token contains the path it grants access to.
+        #
+        granted_path = anon_token_data.get("path")
+
+        if granted_path is None:
+            raise HTTPException(status_code=403)
+
+        granted_path = Path(granted_path).resolve()
+
+        #
+        # Ensure the requested file is inside the granted path.
+        #
+        # This preserves your inheritance model:
+        #
+        # If /a is shared,
+        # then /a/subdir/file.txt is also allowed.
+        #
+        if not requested_path.is_relative_to(granted_path):
+            raise HTTPException(status_code=403)
+
+        #
+        # Additional safety:
+        #
+        # Ensure token does not grant MORE than the matched share.
+        #
+        # Example:
+        #
+        # Token grants /a
+        # but request matched /a/private
+        #
+        # This prevents mismatched share scopes.
+        #
+        if not granted_path.is_relative_to(matched_shared_root):
+            raise HTTPException(status_code=403)
+
+    return requested_path, can_edit
+
 
 def change_permissions(path:str,group:str="users") -> None:
     if (not CONFIG.is_mounted):
@@ -855,7 +1021,12 @@ def onlyoffice_session(filename: str, request:Request, token:dict=Depends(verify
     if (not user):
         raise HTTPException(status_code=401)
 
-    p = check_path_jail(user, filename)
+    edit=True
+
+    try:
+        p = check_path_jail(user, filename)
+    except HTTPException:
+        p,edit = shared_file_check_authorisation(filename, token)
 
     stat = Stat(str(p),format="%F",sudo=True).execute()
 
@@ -869,7 +1040,13 @@ def onlyoffice_session(filename: str, request:Request, token:dict=Depends(verify
 
     file_info = get_file_info(str(p))
 
-    raw_key = f"{str(p)}:{file_info.modification_time}:{file_info.size}"
+    stat = Stat(str(p), "%D:%i",sudo=True).execute()
+
+    if (stat.returncode == 0):
+        raw_key = stat.stdout
+    else:
+        raw_key = str(p)
+
     key = hashlib.md5(raw_key.encode()).hexdigest()
 
     # key = f"{p}:{file_info.modification_time}"
@@ -928,16 +1105,16 @@ def onlyoffice_session(filename: str, request:Request, token:dict=Depends(verify
             "title": file_info.name,
             "url": str(url),
             "permissions": {
-                "edit": True,
+                "edit": edit,
                 "download": True,
                 "print": True,
-                "comment": True,
-                "review": True
+                "comment": edit,
+                "review": edit
             }
         },
         "documentType": documentType,
         "editorConfig": {
-            "mode": "edit",
+            "mode": "edit" if edit else "view",
             "callbackUrl": str(callback),
             "user": {
                 "id": user.uid,
@@ -1252,171 +1429,7 @@ async def onlyoffice_callback(filename:str,request: Request) -> Dict:
     return {"error": 0}
 
 
-def shared_file_check_authorisation(
-        filename:str,
-        authentication_token:Dict[str,Any],
-        anon_user_token:Optional[str]
-) -> Tuple[Path,bool]:
-    #
-    # Resolve authenticated user (if any)
-    #
-    user = None
 
-    if authentication_token is not None:
-        user = CONFIG.get_user(authentication_token.get("username"))
-
-    #
-    # Get all shares available to this user.
-    #
-    # include_all=True means:
-    # - user-specific shares
-    # - public shares
-    #
-    # You mentioned expired shares are already filtered here.
-    #
-    shared_with_user = CONFIG.get_files_shared_with(
-        user,
-        include_all=True
-    )
-
-    CONFIG.flush_config()
-
-    #
-    # Resolve mountpoint to avoid path traversal and
-    # path representation inconsistencies.
-    #
-    mountpoint = Path(CONFIG.mountpoint).resolve()
-
-    #
-    # Resolve the requested path.
-    #
-    # IMPORTANT:
-    # resolve() normalizes:
-    # - ../
-    # - symlinks
-    # - duplicate separators
-    #
-    requested_path = Path(mountpoint, filename).resolve()
-
-    #
-    # Ensure requested path stays inside mountpoint.
-    #
-    # Prevents:
-    # /browse/../../etc/passwd
-    #
-    if not requested_path.is_relative_to(mountpoint):
-        raise HTTPException(status_code=403)
-
-    #
-    # These variables represent:
-    #
-    # matched_shared_root:
-    #   The share boundary that grants access.
-    #
-    # matched_share_data:
-    #   ACL/configuration associated with the share.
-    #
-    matched_shared_root = None
-    matched_share_data = None
-
-    can_edit = False
-
-    #
-    # Find which shared root authorizes this request.
-    #
-    # IMPORTANT:
-    # We preserve the ORIGINAL shared root.
-    # We do NOT replace it with the requested path.
-    #
-    for shared_path, share_data in shared_with_user.items():
-
-        shared_root = Path(shared_path).resolve()
-
-        if requested_path.is_relative_to(shared_root):
-
-            #
-            # Prefer the MOST SPECIFIC matching share.
-            #
-            # Example:
-            #
-            # /a
-            # /a/private
-            #
-            # If accessing /a/private/file.txt,
-            # we should use /a/private.
-            #
-            if (
-                    matched_shared_root is None or
-                    len(shared_root.parts) > len(matched_shared_root.parts)
-            ):
-                matched_shared_root = shared_root
-                matched_share_data = share_data
-
-    #
-    # No matching share found.
-    #
-    if matched_shared_root is None:
-        raise HTTPException(status_code=403)
-
-    #
-    # Resolve edit permissions for authenticated users.
-    #
-    if user is not None:
-
-        user_acl = matched_share_data.get("shared_with", {}).get(
-            user.username
-        )
-
-        if user_acl is not None:
-            can_edit = user_acl.get("can_edit", False)
-
-    #
-    # Anonymous users must present a valid anonymous share token.
-    #
-    if user is None:
-
-        if anon_user_token is None:
-            raise HTTPException(status_code=403)
-
-        anon_token_data = verify_anon_token(anon_user_token)
-
-        #
-        # Token contains the path it grants access to.
-        #
-        granted_path = anon_token_data.get("path")
-
-        if granted_path is None:
-            raise HTTPException(status_code=403)
-
-        granted_path = Path(granted_path).resolve()
-
-        #
-        # Ensure the requested file is inside the granted path.
-        #
-        # This preserves your inheritance model:
-        #
-        # If /a is shared,
-        # then /a/subdir/file.txt is also allowed.
-        #
-        if not requested_path.is_relative_to(granted_path):
-            raise HTTPException(status_code=403)
-
-        #
-        # Additional safety:
-        #
-        # Ensure token does not grant MORE than the matched share.
-        #
-        # Example:
-        #
-        # Token grants /a
-        # but request matched /a/private
-        #
-        # This prevents mismatched share scopes.
-        #
-        if not granted_path.is_relative_to(matched_shared_root):
-            raise HTTPException(status_code=403)
-
-    return requested_path, can_edit
 
 
 
@@ -1424,7 +1437,7 @@ def shared_file_check_authorisation(
 def fs_shared_browse(
     filename: str,
     t: Optional[str] = None,
-    auth_token: dict = Depends(verify_user_token_shared_files)
+    auth_token: Optional[dict] = Depends(verify_user_token_shared_files)
 ) -> List[SharedFileInfo]:
 
     requested_path, can_edit = shared_file_check_authorisation(filename, auth_token,t)
@@ -1490,7 +1503,7 @@ def fs_shared_browse(
 def download_shared_file (filename: str,
     r:Request,
     t: Optional[str] = None,
-    auth_token: dict = Depends(verify_user_token_shared_files),
+    auth_token: Optional[dict] = Depends(verify_user_token_shared_files),
 
 ) -> StreamingResponse:
 
@@ -1517,3 +1530,25 @@ def download_shared_file (filename: str,
         media_type=file_info.mimetype,
         headers={"Content-Disposition": f'attachment; filename="{fname}"'}
     )
+
+
+@file_sharing.head("/preview/{filename:path}",summary="Generate a token for preview (this is to accommodate <video>)")
+def get_preview_token_file_sharing(filename: str,
+        t: Optional[str] = None,
+        auth_token: Optional[dict] = Depends(verify_user_token_shared_files)
+  ) -> Response:
+
+    requested_path, _ = shared_file_check_authorisation(filename, auth_token, t)
+
+    file_info = get_file_info(str(requested_path))
+
+    if ((file_info is None) or (file_info.type == 'dir')):
+        raise HTTPException(status_code=400)
+
+    token = create_token(auth_token.get("username") if (auth_token is not None) else "Anonymous",filename,60)
+
+    return Response(
+        status_code=200,
+        headers={"X-Preview-Token": token}
+    )
+
