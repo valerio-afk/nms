@@ -24,6 +24,7 @@ Despite its rich feature set, getting started is straightforward and requires mi
 * 📃 Quota management
 * ⏰ Event management
 * 🏢 Integration with [OnlyOffice](https://www.onlyoffice.com/)
+* 📹 Make your own streaming platform with [Jellyfin](https://jellyfin.org)
 * 📸 Snapshots for data protection and recovery
 * 🔐 Encryption for secure storage
 * 🗜️ Compression to optimise disk usage
@@ -400,13 +401,19 @@ $ sudo docker run -d            \
        redis
 ```
 
-If you want the integration witb OnlyOffice, also run:
+If you want the integration with OnlyOffice, also run:
 
 ```sh
 $ sudo docker pull onlyoffice/documentserver
 ```
 
-You don't need to start the container. An OnlyOffice container is automatically started when the Web Remote Access Service is enabled.
+If you also want the integration with Jellyfin media server, also run:
+
+```sh
+$ sudo docker pull jellyfin/jellyfin
+```
+
+You don't need to start these containers, as they are managed by the NMS software.
 </details>
 
 <details>
@@ -803,6 +810,7 @@ In this page, you can activate and deactivate the following access services:
 > * `NFS`: no login is required. Access control is guaranteed via IP address.
 > * `SMB`: Windows share (SMB) uses different credentials. Although the username remains the same, go to your account page to set a password.
 > * `WEB`: OTP login. [See box to learn more](#-box).
+> * `MEDIASERVER`: Plex-like service to stream your own media through local network and the internet. When activated, a Jellyfin server will become available for you to configure. Jellyfin is configured to have a user management system separated than the rest of NMS to give you full customisation capabilities.
 
 This page will also explain how to access them remotely with different operating systems.
 

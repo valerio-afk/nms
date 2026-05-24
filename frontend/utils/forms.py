@@ -141,6 +141,9 @@ class WEBServiceForm(AccessServiceForm):
     # onlyoffice = BooleanField(_("OnlyOffice Integration"))
     ...
 
+class MEDIASERVERServiceForm(AccessServiceForm):
+    port = IntegerField(_("Port"),validators=[NumberRange(min=PORT_MIN,max=PORT_MAX,message=_("The port number must be between %(port_min)s-%(port_max)s",port_min=PORT_MIN,port_max=PORT_MAX))])
+    media_username = StringField(_("Username"),validators=[DataRequired(),Regexp(r'^[a-z_][a-z0-9_-]*[$]?$',message=_("Invalid username: must start with a letter or _, and contain only lowercase letters, digits, _ or -."))])
 
 class IFaceEnableForm(FlaskForm):
     iface_enabler = BooleanField()

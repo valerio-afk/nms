@@ -285,12 +285,12 @@ class NMSConfig(Logger):
                     "JWT_SECRET": jwt_secret,
                 },
                 port_forwarding=[(NMSConfig.ONLYOFFICE_CONF['port'],80)],
-                mount={
-                    "/app/onlyoffice/DocumentServer/logs":"/var/log/onlyoffice",
-                    "/app/onlyoffice/DocumentServer/data":"/var/www/onlyoffice/Data",
-                    "/app/onlyoffice/DocumentServer/lib":"/var/lib/onlyoffice",
-                    "/app/onlyoffice/DocumentServer/db":"/var/lib/postgresql"
-                }
+                mount=[
+                    ("/app/onlyoffice/DocumentServer/logs", "/var/log/onlyoffice"),
+                    ("/app/onlyoffice/DocumentServer/data", "/var/www/onlyoffice/Data"),
+                    ("/app/onlyoffice/DocumentServer/lib", "/var/lib/onlyoffice"),
+                    ("/app/onlyoffice/DocumentServer/db", "/var/lib/postgresql")
+                ]
             )
 
             out = cmd.execute()
@@ -564,6 +564,22 @@ class NMSConfig(Logger):
     def nms_updates(this) -> Optional[Dict[str, str]]:
         return this._cfg.get("updates", {}).get("releases")
 
+    @property
+    def media_server_port(this) -> int:
+        return this._cfg['access']['services']['mediaserver']['port']
+
+    @media_server_port.setter
+    def media_server_port(this,port:int) -> None:
+        this._cfg['access']['services']['mediaserver']['port'] = port
+
+    @property
+    def media_server_user(this) -> Optional[str]:
+        return this._cfg['access']['services']['mediaserver']['user']
+
+    @media_server_user.setter
+    def media_server_user(this, user:str) -> None:
+        this._cfg['access']['services']['mediaserver']['user'] = user
+
     # USER PROPERTIES
 
     @property
@@ -656,6 +672,11 @@ class NMSConfig(Logger):
                         "smb": {"service_name":[f"smb{smb_daemon_suffix}.service",f"nmb{smb_daemon_suffix}.service"]},
                         'web': {
                             "service_name": "nginx.service"
+                        },
+                        "mediaserver" : {
+                            "service_name" : "jellyfin_server",
+                            "port": 8096,
+                            "media_username": None
                         }
                     }
             },
@@ -899,6 +920,7 @@ class NMSConfig(Logger):
 
         this.flush_config()
         return username
+
 
     #POOL METHODS
     def init_pool(this) -> None:

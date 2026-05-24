@@ -7,8 +7,8 @@
 
 <dl class="row">
   {% for name,enabled in services %}
-    <dt class="col-sm-4">{{ name }}:</dt>
-    <dd class="col-sm-8">{{ enabled | enabled_fmt | safe }}</dd>
+    <dt class="col-sm-5">{{ name }}:</dt>
+    <dd class="col-sm-7">{{ enabled | enabled_fmt | safe }}</dd>
   {% endfor %}
 </dl>
 

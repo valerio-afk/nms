@@ -1,0 +1,52 @@
+{% extends "card.html" %}
+
+{% block card_title %}MediaServer (Jellyfin) <span class="float-end">{{ enabled | enabled_fmt | safe }}</span>{% endblock %}
+
+{% block card_content %}
+
+<form action="{{ url_for('main.change_access_settings',service='mediaserver') }}" method="POST" class="disable-on-submit">
+    {{ form.hidden_tag() }}
+
+    <div class="mb-3 row">
+      <div class="col-sm-4 col-form-label">{{ form.port.label }}</div>
+      <div class="col-sm-8">
+        {{ form.port(class="form-control",disabled=enabled) }}
+      </div>
+    </div>
+
+    <div class="mb-3 row">
+      <div class="col-sm-4 col-form-label">{{ form.media_username.label }}</div>
+      <div class="col-sm-8">
+        {{ form.media_username(class="form-control",disabled=enabled) }}
+        <div class="form-text">
+            {{ _("Enter the username that will contain all the media (e.g. video) files. It is recommended to create a specific user that collects all the media you wish to stream") }}
+        </div>
+      </div>
+    </div>
+
+
+    {% if enabled %}
+      <div class="row g-2">
+        <div class="col-12">
+            <button class="btn btn-danger w-100" type="submit" name="action" value="disable">{{ _("Disable") }}</button>
+        </div>
+      </div>
+    {% else %}
+      <div class="row g-1">
+        <div class="col-12">
+            <button class="btn btn-success w-100" type="submit" name="action" value="enable" {{ "" if mountpoint else "disabled" }}>{{ _("Enable") }}</button>
+        </div>
+    </div>
+    {% endif %}
+</form>
+
+<div class="mt-4">
+    <h4>{{  _("Connecting using %(service)s",service="Jellyfin") }}</h4>
+
+    <p>{{ _("Using this browser, go to %(st_code)shttp://IP:%(port)s%(e_code)s. Replace %(st_code)sIP%(e_code)s with the IP address/hostname of this NAS (you can find in the Network tab).",st_code="<code>"|safe,e_code="</code>"|safe,port=form.port.default) }}</p>
+    <p>{{ _("Differently than other services, Jellyfin has an autonomous management of users. If enabled for the first time, you will be asked to set an administrator account (which is separated from the one you use here) and configure your media.") }}</p>
+
+</div>
+{% endblock %}
+
+

@@ -54,6 +54,7 @@ class UserPermissions(Enum):
     SERVICES_SMB_MANAGE = "services.smb.manage"
     SERVICES_WEB_ACCESS = "services.web.access"
     SERVICES_WEB_MANAGE = "services.web.manage"
+    SERVICES_MEDIASERVER_MANAGE = "services.mediaserver.manage"
 
     SYS_ADMIN_ACPI = "sys.admin.acpi"
     SYS_ADMIN_EVENTS = "sys.admin.events"

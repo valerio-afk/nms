@@ -1,11 +1,11 @@
 from .responses import ErrorMessage
 from backend_server.utils.cmdl import ChPasswd, SystemCtlUnmask, SystemCtlEnable, SystemCtlStart, SystemCtlDisable
-from backend_server.utils.cmdl import RestoreContext
+from backend_server.utils.cmdl import RestoreContext, DockerStop, DockerInspect, DockerRun, DockerRemove
 from backend_server.utils.cmdl import SELinuxManagePort, Firewall, CommandLine, SELinuxSetBool, SELinuxManageContext
 from backend_server.utils.cmdl import Touch, Chmod, UserModAddGroup, GPasswdRemoveGroup, LocalCommandLineTransaction
 from backend_server.utils.cmdl import SystemCtlIsActive, ApplyPatch,  GetEntShadow, UserModChangeShell, UserDel
 from backend_server.utils.cmdl import SystemCtlMask, SystemCtlStop, ExportfsRA, SMBPasswd, Cat, SystemCtlRestart
-from backend_server.utils.inet import PortRange, GenericTransportPort, str2port, TransportProtocol
+from backend_server.utils.inet import PortRange, GenericTransportPort, str2port, TransportProtocol, SinglePort
 from backend_server.utils.enums import DistroFamilies
 from fastapi import HTTPException
 from nms_shared.enums import UserPermissions
@@ -936,3 +936,181 @@ class WEBService(SystemService):
                     found.append(l)
 
         return len(found) == 0
+
+
+class MEDIASERVERService(SystemService):
+    port:int
+    media_username:Optional[str]
+    DISCOVERY_PORT = 7359
+
+    def __init__(this,service_name:str,**kwargs) -> None:
+        super().__init__(service_name,**kwargs)
+
+        port:Optional[int] = kwargs.get("port",None)
+        this.port = port if port is not None else 8096
+
+        this.media_username = kwargs.get("media_username",None)
+
+    def _start_container(this) -> None:
+        from backend_server.utils.config import CONFIG
+        if (((uname:=this.get_media_username()) is None) or ((user:=CONFIG.get_user(uname)) is None)):
+            raise Exception("User containing media files not set")
+
+        media_path = user.home_dir
+
+        docker = DockerRun(
+            "jellyfin/jellyfin",
+            mount=[
+                ("/var/jellyfin/cache","/cache"),
+                ("/var/jellyfin/config", "/config"),
+                (media_path,"/media"),
+            ],
+            restart="unless-stopped",
+            remove=False,
+            image_name=this.service_names,
+            port_forwarding=[(this.port, 8096),(MEDIASERVERService.DISCOVERY_PORT,MEDIASERVERService.DISCOVERY_PORT)],
+        )
+
+        trans = LocalCommandLineTransaction(docker)
+        out = trans.run()
+
+        if (not trans.success):
+            errors = "\n".join([o['stderr'] for o in out])
+            error_code = ErrorMessages.E_ACCESS_ENABLED
+            raise HTTPException(status_code=500, detail=ErrorMessage(code=error_code.name, params=['MediaServer', errors]))
+
+    def _stop_container(this) -> None:
+        docker = [
+            DockerStop(this.service_names),
+            DockerRemove(this.service_names),
+        ]
+
+        trans = LocalCommandLineTransaction(*docker)
+        out = trans.run()
+
+        if (not trans.success):
+            errors = "\n".join([o['stderr'] for o in out])
+            error_code = ErrorMessages.E_ACCESS_ENABLED
+            raise HTTPException(status_code=500,
+                                detail=ErrorMessage(code=error_code.name, params=['MediaServer', errors]))
+
+
+    def _setup_firewall(this):
+        if (this.os_family == DistroFamilies.RH):
+            cmds = []
+
+            firewall_cmd = Firewall(Firewall.FirewallAction.STATE,sudo=True).execute()
+            if ((firewall_cmd.returncode == 0) and (firewall_cmd.stdout.strip() == "running")):
+                cmds.extend([
+                    Firewall(
+                        Firewall.FirewallAction.ADD_PORT,
+                        port = SinglePort(this.get_port())
+                    ),
+                    Firewall(
+                        Firewall.FirewallAction.ADD_PORT,
+                        port= SinglePort(MEDIASERVERService.DISCOVERY_PORT),
+                        protocol=TransportProtocol.UDP
+                    ),
+                    Firewall(Firewall.FirewallAction.RELOAD)
+                ])
+
+    def _unsetup_firewall(this):
+        if (this.os_family == DistroFamilies.RH):
+            cmds = []
+
+            firewall_cmd = Firewall(Firewall.FirewallAction.STATE, sudo=True).execute()
+            if ((firewall_cmd.returncode == 0) and (firewall_cmd.stdout.strip() == "running")):
+                cmds.extend([
+                    Firewall(
+                        Firewall.FirewallAction.REMOVE_PORT,
+                        port=SinglePort(this.get_port()),
+                    ),
+                    Firewall(
+                        Firewall.FirewallAction.REMOVE_PORT,
+                        port=SinglePort(MEDIASERVERService.DISCOVERY_PORT),
+                        protocol=TransportProtocol.UDP
+                    ),
+                    Firewall(Firewall.FirewallAction.RELOAD)
+                ])
+
+    def set_port(this,port:int)->None:
+        from backend_server.utils.config import CONFIG
+        CONFIG.media_server_port = port
+
+    def set_media_username(this,user:str)->None:
+        from backend_server.utils.config import CONFIG
+        CONFIG.media_server_user = user
+
+    def get_port(this) -> int:
+        from backend_server.utils.config import CONFIG
+        return CONFIG.media_server_port
+
+    def get_media_username(this) -> int:
+        from backend_server.utils.config import CONFIG
+        return CONFIG.media_server_user
+
+    @property
+    def is_active(this) -> bool:
+        inspect_output = DockerInspect(this.service_names,flags=['-f','{{.State.Running}}']).execute()
+
+
+        if (inspect_output.returncode == 0):
+            return True if inspect_output.stdout.strip() == "true" else False
+        else:
+            return False
+
+    @staticmethod
+    def _check_user(user:Optional[str]) -> None:
+        from backend_server.utils.config import CONFIG
+        if (user is None) or (CONFIG.get_user(user) is None):
+            raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.value, params=[user if user is not None else '']))
+
+    def enable(this, **kwargs):
+        from backend_server.utils.config import CONFIG
+        this._run_hooks(this._pre_start_hooks)
+        this._unsetup_firewall()
+
+        flush_changes = False
+
+        if (((port:=kwargs.get("port")) is not None) and (port != this.port)):
+            this.set_port(port)
+            flush_changes = True
+
+        if (((user:=kwargs.get("media_username")) is not None) and (user != this.get_media_username())):
+            this.set_media_username(user)
+            flush_changes = True
+
+        if (flush_changes):
+            CONFIG.flush_config()
+
+        this._check_user(user)
+
+        this._setup_firewall()
+        this._start_container()
+
+    def disable(this, **kwargs):
+        from backend_server.utils.config import CONFIG
+        this._run_hooks(this._pre_start_hooks)
+        this._unsetup_firewall()
+        this._stop_container()
+
+        flush_changes = False
+
+        if (((port := kwargs.get("port")) is not None) and (port != this.port)):
+            this.set_port(port)
+            flush_changes = True
+
+        if (((user := kwargs.get("media_username")) is not None) and (user != this.get_media_username())):
+            this.set_media_username(user)
+            flush_changes = True
+
+        if (flush_changes):
+            CONFIG.flush_config()
+
+        # this._check_user(user)
+
+
+
+
+
+

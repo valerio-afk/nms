@@ -651,6 +651,26 @@ install_onlyoffice() {
 
 }
 
+install_jellyfin() {
+    local image_name="jellyfin/jellyfin"
+
+    # Check if Docker is installed
+    if ! command -v docker &>/dev/null; then
+        log_error "Docker is not installed. Cannot download Jellyfin."
+        return 1
+    fi
+
+    log_info "Pulling Jellyfin Docker image ($image_name)..."
+    if ! docker pull "$image_name" >> "$LOG_FILE" 2>&1; then
+        log_error "Failed to pull Jellyfin image $image_name"
+        return 1
+    fi
+
+    mkdir /var/jellyfin/cache
+    mkdir /var/jellyfin/config
+
+}
+
 build_docker_image() {
     local repo_dir="$1"     # Path to the repository to build from
     local image_name="$2"   # Docker image name with optional tag
@@ -1304,6 +1324,7 @@ fi
 if [[ "$FULL_INSTALLATION" = true  || "$PULL_IMAGES" = true ]]; then
   install_redis_docker
   install_onlyoffice
+  install_jellyfin
 fi
 
 if [ "$FULL_INSTALLATION" = true ]; then

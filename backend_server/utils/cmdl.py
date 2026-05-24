@@ -1678,7 +1678,7 @@ class DockerRun(Docker):
     def __init__(this,container_name,
                  mount:Optional[Dict[str,str]]=None,
                  envvars:Optional[Dict[str,str]] = None,
-                 port_forwarding:Optional[List[Tuple[int,int]]]=None,
+                 port_forwarding:Optional[List[Union[Tuple[int,int],Tuple[int,int,str]]]]=None,
                  image_name:str=None,
                  detach:bool=True,
                  remove:bool=True,
@@ -1697,7 +1697,7 @@ class DockerRun(Docker):
         flags = []
 
         if (mount is not None):
-            for volume,host_path in mount.items():
+            for volume,host_path in mount:
                 flags.extend(['-v',f"{volume}:{host_path}"])
 
         if (envvars is not None):
@@ -1706,7 +1706,18 @@ class DockerRun(Docker):
 
         if (port_forwarding is not None):
             for p in port_forwarding:
-                flags.extend(['-p',":".join([str(x) for x in p])])
+                prot = None
+                if (len(p) == 2):
+                    from_port, to_port = p
+                else:
+                    from_port, to_port,prot = p
+
+                new_flags = [
+                    "-p",
+                    f"{from_port}:{to_port}" if prot is None else f"{from_port}:{to_port}/{prot}"
+                ]
+
+                flags.extend(new_flags)
 
         if (image_name is not None):
             flags.extend(['--name',image_name])
