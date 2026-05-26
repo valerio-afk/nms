@@ -1369,6 +1369,10 @@ class NMSConfig(Logger):
 
         return shared_with_me
 
+    def get_share_information(this,path:str) -> Optional[Dict[str,Any]]:
+        share_info = this._cfg['shares'].get(path,None)
+
+        return share_info.copy() if share_info is not None else None
 
 
     #SYSTEM METHODS

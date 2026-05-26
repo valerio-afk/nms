@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from nms_shared.enums import UserPermissions
 from nms_shared.msg import ErrorMessages, SuccessMessages, WarningMessages
 from requests.structures import CaseInsensitiveDict
-from typing import Optional, List
+from typing import Optional, List, Union
 from email.utils import parsedate_to_datetime
 import os.path
 import re
@@ -254,11 +254,13 @@ def get_available_system_users(token:dict=Depends(verify_token)):
 
     return system_users
 
-@users.get("/get/all",response_model=List[UserProfile],summary="Get the list of all users")
-def get_all_users(token:dict=Depends(verify_token)) -> List[UserProfile]:
-    check_permission(token.get("username"), UserPermissions.USERS_ACCOUNT_MANAGE)
-
-    return CONFIG.users
+@users.get("/get/all",response_model=List[Union[UserProfile|str]],summary="Get the list of all users")
+def get_all_users(token:dict=Depends(verify_token)) -> List[Union[UserProfile|str]]:
+    try:
+        check_permission(token.get("username"), UserPermissions.USERS_ACCOUNT_MANAGE)
+        return CONFIG.users
+    except HTTPException as e:
+        return [u.username for u in CONFIG.users]
 
 @users.post("/set/fullname")
 def set_fullname(data:ChgFullnameData,token:dict=Depends(verify_token)) -> dict:

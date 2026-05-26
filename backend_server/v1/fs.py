@@ -480,6 +480,7 @@ def get_file_info(path:str) -> Optional[FileInfo]:
                 mimetype = mime_type.strip(),
                 real=True,
                 owner=owner,
+                shared=CONFIG.get_share_information(path),
                 creation_time=int(creation_time),
                 modification_time=modification_time
             )
@@ -671,7 +672,7 @@ def fs_share(share_conf:FileSharing,token:dict=Depends(verify_token)) -> SharedF
     share_token = CONFIG.share_file(
         path = str(path),
         expire_date=expire_date,
-        shared_with=shared_with,
+        share_with=shared_with,
     )
 
     CONFIG.flush_config()

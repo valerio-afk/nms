@@ -111,7 +111,8 @@ export const en = {
       "zip": "Zip",
       "unzip": "Unzip",
       "download": "Download",
-      "delete": "Delete"
+      "delete": "Delete",
+      "share": "Share"
     },
 
     "table": {
@@ -140,5 +141,29 @@ export const en = {
     "modified": "Modified",
     "editor": "Preview Editor",
     "not_available": "Preview not available for this file type."
+  },
+  "share": {
+    "title": "Share {{name}}",
+    "title_edit": "Edit Share: {{name}}",
+    "add_users": "Add Users",
+    "user_placeholder": "Search or type username...",
+    "can_edit": "Can Edit",
+    "add_btn": "Add",
+    "no_users": "This item will be shared publicly (visible to anyone with the link).",
+    "specified_users": "Shared with specified users:",
+    "timeless": "Timeless",
+    "expire_date": "Expiration Date",
+    "generate_btn": "Generate Shareable Link",
+    "update_btn": "Update Share",
+    "generating": "Generating Link...",
+    "link_label": "Shareable Link",
+    "copy_btn": "Copy Link",
+    "copied": "Copied!",
+    "close": "Close",
+    "revoke_btn": "Revoke Share",
+    "revoking": "Revoking...",
+    "error_empty_user": "Please enter a valid username",
+    "error_generate": "Failed to generate share link",
+    "error_revoke": "Failed to revoke share"
   }
 };

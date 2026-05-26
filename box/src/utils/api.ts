@@ -95,12 +95,18 @@ export async function logout(): Promise<void> {
 
 // Add more API calls here sequentially
 
+export interface FileSharedInfo {
+    expire_date: number | null;
+    share_with: Record<string, { can_edit: boolean }> | null;
+}
+
 export interface FileInfo {
     type: "dir" | "image" | "video" | "audio" | "text" | "zip" | "bin" | "pdf" | "word" | "spreadsheet" | "presentation" | "unk";
     name: string;
     size?: number;
     creation_time: number;
     real: boolean;
+    shared?: FileSharedInfo | null;
 }
 
 export interface FSBrowse {
@@ -237,4 +243,44 @@ export async function downloadFile(path: string): Promise<void> {
 
 export async function getOnlyOfficeConfig(path: string): Promise<any> {
     return await apiRequest<any>(`/fs/onlyoffice/${path}`, { method: 'GET' });
+}
+
+export interface SharingPermissions {
+    username: string;
+    can_edit: boolean;
+}
+
+export interface FileSharingPayload {
+    path: string;
+    sharing_permissions?: SharingPermissions[] | null;
+    expire?: number | null;
+}
+
+export interface FileSharingResponse {
+    token: string;
+}
+
+export async function shareFs(payload: FileSharingPayload): Promise<FileSharingResponse> {
+    return await apiRequest<FileSharingResponse>('/fs/share', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+    });
+}
+
+export async function revokeShare(path: string): Promise<void> {
+    await apiRequest(`/fs/share/${path}`, {
+        method: 'DELETE'
+    });
+}
+
+export async function getAllUsers(): Promise<string[]> {
+    const data = await apiRequest<any[]>('/users/get/all', { method: 'GET' });
+    return data.map(item => {
+        if (typeof item === 'string') {
+            return item;
+        } else if (item && typeof item === 'object' && typeof item.username === 'string') {
+            return item.username;
+        }
+        return '';
+    }).filter(Boolean);
 }

@@ -111,7 +111,8 @@ export const it = {
       "zip": "Comprimi",
       "unzip": "Estrai",
       "download": "Scarica",
-      "delete": "Elimina"
+      "delete": "Elimina",
+      "share": "Condividi"
     },
 
     "table": {
@@ -140,5 +141,29 @@ export const it = {
     "modified": "Modificato",
     "editor": "Editor di Anteprima",
     "not_available": "Anteprima non disponibile per questo tipo di file."
+  },
+  "share": {
+    "title": "Condividi {{name}}",
+    "title_edit": "Modifica Condivisione: {{name}}",
+    "add_users": "Aggiungi Utenti",
+    "user_placeholder": "Cerca o inserisci nome utente...",
+    "can_edit": "Può Modificare",
+    "add_btn": "Aggiungi",
+    "no_users": "Questo elemento sarà condiviso pubblicamente (visibile a chiunque abbia il link).",
+    "specified_users": "Condiviso con utenti specifici:",
+    "timeless": "Senza Scadenza",
+    "expire_date": "Data di Scadenza",
+    "generate_btn": "Genera Link di Condivisione",
+    "update_btn": "Aggiorna Condivisione",
+    "generating": "Generazione Link...",
+    "link_label": "Link di Condivisione",
+    "copy_btn": "Copia Link",
+    "copied": "Copiato!",
+    "close": "Chiudi",
+    "revoke_btn": "Revoca Condivisione",
+    "revoking": "Revoca in corso...",
+    "error_empty_user": "Inserisci un nome utente valido",
+    "error_generate": "Impossibile generare il link di condivisione",
+    "error_revoke": "Impossibile revocare la condivisione"
   }
 };

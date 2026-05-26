@@ -12,11 +12,12 @@ import {
     ChevronRight, ArrowUp, ArrowDown, ShieldAlert,
     FolderPlus, Upload, Edit2, Download, Trash2,
     MoveRight, CornerLeftUp, ArchiveRestore, Copy, Sparkles,
-    FileSpreadsheet, Presentation
+    FileSpreadsheet, Presentation, Share2
 } from 'lucide-react';
 import { ContextMenuContext } from '../App';
 import FilePreviewModal from './FilePreviewModal';
 import OnlyOfficeModal from './OnlyOfficeModal';
+import ShareModal from './ShareModal';
 import { useTranslation, Trans } from 'react-i18next';
 
 const humanReadableType = (type: FileInfo['type'], t: any): string => {
@@ -118,6 +119,10 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     const [previewFile, setPreviewFile] = useState<FileInfo | null>(null);
     const [isOnlyOfficeModalOpen, setIsOnlyOfficeModalOpen] = useState(false);
     const [onlyOfficeFile, setOnlyOfficeFile] = useState<FileInfo | null>(null);
+
+    // Share Modal State
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+    const [shareFile, setShareFile] = useState<FileInfo | null>(null);
 
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [isDraggingOverMain, setIsDraggingOverMain] = useState(false);
@@ -635,7 +640,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
 
     const isAnyModalOpen = isCreateFolderModalOpen || isRenameModalOpen || isDeleteModalOpen ||
         isZipModalOpen || isMoveModalOpen || isCopyModalOpen || isPreviewModalOpen ||
-        isUploadModalOpen || !!currentConflict;
+        isUploadModalOpen || isShareModalOpen || !!currentConflict;
 
     const handleDragStart = (e: React.DragEvent, fileName: string) => {
         if (isAnyModalOpen) {
@@ -1486,6 +1491,16 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                 currentPath={currentPath}
             />
 
+            <ShareModal
+                isOpen={isShareModalOpen}
+                onClose={() => {
+                    setIsShareModalOpen(false);
+                    setShareFile(null);
+                }}
+                file={shareFile}
+                currentPath={currentPath}
+            />
+
             {
                 <>
                     <div className="flex flex-wrap items-center gap-3 mb-6 pb-6 border-b border-gray-200 dark:border-zinc-800">
@@ -1512,6 +1527,20 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                         >
                             <Edit2 className="w-4 h-4" />
                             {t('browser.toolbar.rename')}
+                        </button>
+                        <button
+                            disabled={!singleSelected}
+                            onClick={() => {
+                                const file = browseData?.files.find(f => f.name === Array.from(selectedItems)[0]);
+                                if (file) {
+                                    setShareFile(file);
+                                    setIsShareModalOpen(true);
+                                }
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                        >
+                            <Share2 className="w-4 h-4" />
+                            {t('browser.toolbar.share')}
                         </button>
                         <button
                             disabled={noneSelected}
@@ -1590,6 +1619,18 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${singleSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
                         >
                             <Edit2 className="w-4 h-4" /> {t('browser.toolbar.rename')}
+                        </a>
+                        <a
+                            onClick={singleSelected ? () => {
+                                const file = browseData?.files.find(f => f.name === Array.from(selectedItems)[0]);
+                                if (file) {
+                                    setShareFile(file);
+                                    setIsShareModalOpen(true);
+                                }
+                            } : undefined}
+                            className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${singleSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                        >
+                            <Share2 className="w-4 h-4" /> {t('browser.toolbar.share')}
                         </a>
                         <a
                             onClick={noneSelected ? undefined : () => setIsCopyModalOpen(true)}

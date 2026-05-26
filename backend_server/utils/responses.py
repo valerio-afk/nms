@@ -196,6 +196,7 @@ class FileInfo(BaseModel):
     modification_time:str
     owner:str
     real:bool
+    shared:Optional[Dict[str,Any]]
 
 class SharedFileInfo(FileInfo):
     can_edit:bool
