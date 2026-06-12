@@ -284,3 +284,19 @@ export async function getAllUsers(): Promise<string[]> {
         return '';
     }).filter(Boolean);
 }
+
+export interface SharedFileInfo extends FileInfo {
+    can_edit: boolean;
+    relative_path: string;
+}
+
+export async function getSharedFiles(): Promise<SharedFileInfo[]> {
+    return await apiRequest<SharedFileInfo[]>('/fs/shared', {
+        method: 'GET'
+    });
+}
+
+export async function browseSharedFs(path: string): Promise<FSBrowse> {
+    const endpoint = `/fs/shared/${path}`;
+    return await apiRequest<FSBrowse>(endpoint, { method: 'GET' });
+}

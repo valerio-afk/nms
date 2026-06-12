@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useContext } from 'react';
-import { browseFs, mkdirFs, mvFs, cpFs, rmFs, zipFs, unzipFs, downloadFile, type FSBrowse, type FileInfo, ApiError, API_BASE_URL } from '../utils/api';
+import { browseFs, mkdirFs, mvFs, cpFs, rmFs, zipFs, unzipFs, downloadFile, getSharedFiles, browseSharedFs, type FSBrowse, type FileInfo, ApiError, API_BASE_URL } from '../utils/api';
 import Uppy from '@uppy/core';
 import Tus from '@uppy/tus';
 import DashboardModal from '@uppy/react/dashboard-modal';
@@ -12,7 +12,7 @@ import {
     ChevronRight, ArrowUp, ArrowDown, ShieldAlert,
     FolderPlus, Upload, Edit2, Download, Trash2,
     MoveRight, CornerLeftUp, ArchiveRestore, Copy, Sparkles,
-    FileSpreadsheet, Presentation, Share2
+    FileSpreadsheet, Presentation, Share2, Link2
 } from 'lucide-react';
 import { ContextMenuContext } from '../App';
 import FilePreviewModal from './FilePreviewModal';
@@ -120,9 +120,9 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     const [isOnlyOfficeModalOpen, setIsOnlyOfficeModalOpen] = useState(false);
     const [onlyOfficeFile, setOnlyOfficeFile] = useState<FileInfo | null>(null);
 
-    // Share Modal State
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     const [shareFile, setShareFile] = useState<FileInfo | null>(null);
+    const [isSharedView, setIsSharedView] = useState(false);
 
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [isDraggingOverMain, setIsDraggingOverMain] = useState(false);
@@ -313,13 +313,13 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
         });
     }, [browseData, sortField, sortDirection]);
 
-    const loadPath = async (path: string, updateUrl = true) => {
+    const loadPath = async (path: string, updateUrl: boolean = true) => {
         setLoading(true);
         setError(null);
-        setAccessRestricted(false);
         setAttemptedPath(path);
         setSelectedItems(new Set());
         setLastSelectedAnchor(null);
+        setIsSharedView(false);
         try {
             const data = await browseFs(path);
             setBrowseData(data);
@@ -349,6 +349,55 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                 }
             }
             setError(err instanceof Error ? err.message : 'Error loading files');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const loadSharedFiles = async () => {
+        setLoading(true);
+        setError(null);
+        setSelectedItems(new Set());
+        setLastSelectedAnchor(null);
+        try {
+            const files = await getSharedFiles();
+            setBrowseData({
+                path: '.',
+                files: files
+            });
+            setIsSharedView(true);
+            setCurrentPath('');
+
+            const url = new URL(window.location.href);
+            url.searchParams.delete('path');
+            const basePath = import.meta.env.BASE_URL || '/';
+            url.pathname = basePath;
+            window.history.pushState({}, '', url);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error loading shared files');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const loadSharedPath = async (path: string) => {
+        setLoading(true);
+        setError(null);
+        setSelectedItems(new Set());
+        setLastSelectedAnchor(null);
+        try {
+            const data = await browseSharedFs(path);
+            setBrowseData(data);
+            setIsSharedView(true);
+            setCurrentPath(path);
+
+            const url = new URL(window.location.href);
+            url.searchParams.delete('path');
+            const basePath = import.meta.env.BASE_URL || '/';
+            url.pathname = basePath;
+            window.history.pushState({}, '', url);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error loading shared path');
         } finally {
             setLoading(false);
         }
@@ -557,7 +606,10 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     const handleDownload = async () => {
         if (selectedItems.size !== 1) return;
         const item = Array.from(selectedItems)[0];
-        const itemPath = currentPath ? `${currentPath}/${item}` : item;
+        const fileObj = browseData?.files.find(f => f.name === item);
+        const itemPath = (isSharedView && fileObj && 'relative_path' in fileObj && (fileObj as any).relative_path)
+            ? (fileObj as any).relative_path
+            : (currentPath ? `${currentPath}/${item}` : item);
 
         setIsDownloading(true);
         setError(null);
@@ -657,7 +709,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     };
 
     const handleMainDragEnter = (e: React.DragEvent) => {
-        if (isAnyModalOpen) return;
+        if (isAnyModalOpen || isSharedView) return;
         e.preventDefault();
         e.stopPropagation();
         if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
@@ -666,7 +718,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     };
 
     const handleMainDragLeave = (e: React.DragEvent) => {
-        if (isAnyModalOpen) return;
+        if (isAnyModalOpen || isSharedView) return;
         e.preventDefault();
         e.stopPropagation();
         const rect = e.currentTarget.getBoundingClientRect();
@@ -680,7 +732,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     };
 
     const handleMainDragOver = (e: React.DragEvent) => {
-        if (isAnyModalOpen) return;
+        if (isAnyModalOpen || isSharedView) return;
         e.preventDefault();
         if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
             e.dataTransfer.dropEffect = 'copy';
@@ -688,7 +740,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     };
 
     const handleMainDrop = (e: React.DragEvent) => {
-        if (isAnyModalOpen) return;
+        if (isAnyModalOpen || isSharedView) return;
         e.preventDefault();
         e.stopPropagation();
         setIsDraggingOverMain(false);
@@ -710,7 +762,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     };
 
     const handleFolderDragEnter = (e: React.DragEvent, targetName: string) => {
-        if (isAnyModalOpen) return;
+        if (isAnyModalOpen || isSharedView) return;
         e.preventDefault();
         e.stopPropagation();
         if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
@@ -719,7 +771,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     };
 
     const handleFolderDragLeave = (e: React.DragEvent, targetName: string) => {
-        if (isAnyModalOpen) return;
+        if (isAnyModalOpen || isSharedView) return;
         e.preventDefault();
         e.stopPropagation();
         const rect = e.currentTarget.getBoundingClientRect();
@@ -733,7 +785,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     };
 
     const handleDragOver = (e: React.DragEvent, targetName?: string) => {
-        if (isAnyModalOpen) return;
+        if (isAnyModalOpen || isSharedView) return;
         e.preventDefault();
         e.stopPropagation();
         if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
@@ -747,7 +799,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     };
 
     const handleDrop = async (e: React.DragEvent, targetFile: FileInfo) => {
-        if (isAnyModalOpen) return;
+        if (isAnyModalOpen || isSharedView) return;
         e.preventDefault();
         e.stopPropagation();
         setIsDraggingOverMain(false);
@@ -861,6 +913,16 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
 
     const handleDoubleClick = (file: FileInfo) => {
         if (file.type === 'dir') {
+            if (isSharedView) {
+                // Use relative_path if available (SharedFileInfo from root list),
+                // otherwise construct from currentPath (subdirectories inside shared folder)
+                const relativePath = ('relative_path' in file && (file as any).relative_path)
+                    || (currentPath ? `${currentPath}/${file.name}` : file.name);
+                if (relativePath) {
+                    loadSharedPath(relativePath);
+                }
+                return;
+            }
             const nextPath = currentPath ? `${currentPath}/${file.name}` : file.name;
             loadPath(nextPath);
         } else {
@@ -884,38 +946,111 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     const renderBreadcrumbs = () => {
         if (!browseData) return null;
 
-        // path might be "." or "foo/bar" or "./foo/bar"
-        let pathString = browseData.path;
-        if (pathString.startsWith('./')) {
-            pathString = pathString.substring(2);
-        }
-
-        // Construct parts array starting with root
-        const parts = ['.'];
-        if (pathString && pathString !== '.') {
-            parts.push(...pathString.split('/').filter(Boolean));
-        }
-
         return (
-            <div className="flex flex-wrap items-center gap-1 text-sm font-medium text-gray-600 dark:text-gray-300 mb-6">
-                {parts.map((part, index) => {
-                    const isLast = index === parts.length - 1;
-                    const label = part === '.' ? 'Your files' : part;
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-6 w-full">
+                <div className="flex flex-wrap items-center gap-1 text-sm font-medium text-gray-600 dark:text-gray-300">
+                    {isSharedView ? (
+                        (() => {
+                            // browseData.path is '.' when at the shared root list,
+                            // or something like 'shares/owner/subdir' when browsing inside
+                            const pathString = browseData.path;
+                            const isSharedRoot = pathString === '.' || !currentPath;
 
-                    return (
-                        <div key={index} className="flex items-center gap-1">
-                            <button
-                                onClick={() => handleBreadcrumbClick(index, parts)}
-                                disabled={isLast}
-                                className={`hover:text-indigo-600 dark:hover:text-indigo-400 focus:outline-none transition-colors ${isLast ? 'text-gray-900 dark:text-gray-100 cursor-default' : 'cursor-pointer'
-                                    }`}
-                            >
-                                {label}
-                            </button>
-                            {!isLast && <ChevronRight className="w-4 h-4 text-gray-400" />}
-                        </div>
-                    );
-                })}
+                            if (isSharedRoot) {
+                                return (
+                                    <span className="text-gray-900 dark:text-gray-100 font-semibold">
+                                        {t('browser.breadcrumbs.shared_with_me')}
+                                    </span>
+                                );
+                            }
+
+                            // Build breadcrumb parts from currentPath
+                            const pathParts = currentPath.split('/').filter(Boolean);
+                            return (
+                                <>
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            onClick={loadSharedFiles}
+                                            className="hover:text-indigo-600 dark:hover:text-indigo-400 focus:outline-none transition-colors cursor-pointer"
+                                        >
+                                            {t('browser.breadcrumbs.shared_with_me')}
+                                        </button>
+                                        <ChevronRight className="w-4 h-4 text-gray-400" />
+                                    </div>
+                                    {pathParts.map((part, index) => {
+                                        const isLast = index === pathParts.length - 1;
+                                        return (
+                                            <div key={index} className="flex items-center gap-1">
+                                                <button
+                                                    onClick={() => {
+                                                        if (!isLast) {
+                                                            const subPath = pathParts.slice(0, index + 1).join('/');
+                                                            loadSharedPath(subPath);
+                                                        }
+                                                    }}
+                                                    disabled={isLast}
+                                                    className={`hover:text-indigo-600 dark:hover:text-indigo-400 focus:outline-none transition-colors ${isLast ? 'text-gray-900 dark:text-gray-100 cursor-default' : 'cursor-pointer'}`}
+                                                >
+                                                    {part}
+                                                </button>
+                                                {!isLast && <ChevronRight className="w-4 h-4 text-gray-400" />}
+                                            </div>
+                                        );
+                                    })}
+                                </>
+                            );
+                        })()
+                    ) : (
+                        (() => {
+                            let pathString = browseData.path;
+                            if (pathString.startsWith('./')) {
+                                pathString = pathString.substring(2);
+                            }
+                            const parts = ['.'];
+                            if (pathString && pathString !== '.') {
+                                parts.push(...pathString.split('/').filter(Boolean));
+                            }
+                            return parts.map((part, index) => {
+                                const isLast = index === parts.length - 1;
+                                const label = part === '.' ? t('browser.breadcrumbs.root') : part;
+
+                                return (
+                                    <div key={index} className="flex items-center gap-1">
+                                        <button
+                                            onClick={() => handleBreadcrumbClick(index, parts)}
+                                            disabled={isLast}
+                                            className={`hover:text-indigo-600 dark:hover:text-indigo-400 focus:outline-none transition-colors ${isLast ? 'text-gray-900 dark:text-gray-100 cursor-default' : 'cursor-pointer'
+                                                }`}
+                                        >
+                                            {label}
+                                        </button>
+                                        {!isLast && <ChevronRight className="w-4 h-4 text-gray-400" />}
+                                    </div>
+                                );
+                            });
+                        })()
+                    )}
+                </div>
+                <div>
+                    {isSharedView ? (
+                        <button
+                            onClick={() => {
+                                setIsSharedView(false);
+                                loadPath('');
+                            }}
+                            className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-850 dark:hover:text-indigo-300 focus:outline-none transition-colors cursor-pointer"
+                        >
+                            {t('browser.breadcrumbs.root')}
+                        </button>
+                    ) : (
+                        <button
+                            onClick={loadSharedFiles}
+                            className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-850 dark:hover:text-indigo-300 focus:outline-none transition-colors cursor-pointer"
+                        >
+                            {t('browser.breadcrumbs.shared_with_me')}
+                        </button>
+                    )}
+                </div>
             </div>
         );
     };
@@ -1499,85 +1634,90 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                 }}
                 file={shareFile}
                 currentPath={currentPath}
+                onShareChanged={() => isSharedView ? loadSharedFiles() : loadPath(currentPath, false)}
             />
 
             {
                 <>
                     <div className="flex flex-wrap items-center gap-3 mb-6 pb-6 border-b border-gray-200 dark:border-zinc-800">
-                        <button
-                            onClick={() => setIsCreateFolderModalOpen(true)}
-                            disabled={multiSelected}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
-                        >
-                            <FolderPlus className="w-4 h-4" />
-                            {t('browser.toolbar.create_folder')}
-                        </button>
-                        <button
-                            onClick={() => setIsUploadModalOpen(true)}
-                            disabled={multiSelected}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
-                        >
-                            <Upload className="w-4 h-4" />
-                            {t('browser.toolbar.upload')}
-                        </button>
-                        <button
-                            disabled={!singleSelected}
-                            onClick={openRenameModal}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
-                        >
-                            <Edit2 className="w-4 h-4" />
-                            {t('browser.toolbar.rename')}
-                        </button>
-                        <button
-                            disabled={!singleSelected}
-                            onClick={() => {
-                                const file = browseData?.files.find(f => f.name === Array.from(selectedItems)[0]);
-                                if (file) {
-                                    setShareFile(file);
-                                    setIsShareModalOpen(true);
-                                }
-                            }}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
-                        >
-                            <Share2 className="w-4 h-4" />
-                            {t('browser.toolbar.share')}
-                        </button>
-                        <button
-                            disabled={noneSelected}
-                            onClick={() => setIsCopyModalOpen(true)}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
-                        >
-                            <Copy className="w-4 h-4" />
-                            {t('browser.toolbar.copy')}
-                        </button>
-                        <button
-                            disabled={noneSelected}
-                            onClick={() => setIsMoveModalOpen(true)}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
-                        >
-                            <MoveRight className="w-4 h-4" />
-                            {t('browser.toolbar.move')}
-                        </button>
-                        <button
-                            disabled={noneSelected}
-                            onClick={() => setIsZipModalOpen(true)}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
-                        >
-                            <FileArchive className="w-4 h-4" />
-                            {t('browser.toolbar.zip')}
-                        </button>
-                        <button
-                            disabled={!isSingleZipSelected || isUnzipping}
-                            onClick={handleUnzip}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
-                        >
-                            {isUnzipping ? (
-                                <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                                <ArchiveRestore className="w-4 h-4" />
-                            )}
-                            {t('browser.toolbar.unzip')}
-                        </button>
+                        {!isSharedView && (
+                            <>
+                                <button
+                                    onClick={() => setIsCreateFolderModalOpen(true)}
+                                    disabled={multiSelected}
+                                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                                >
+                                    <FolderPlus className="w-4 h-4" />
+                                    {t('browser.toolbar.create_folder')}
+                                </button>
+                                <button
+                                    onClick={() => setIsUploadModalOpen(true)}
+                                    disabled={multiSelected}
+                                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                                >
+                                    <Upload className="w-4 h-4" />
+                                    {t('browser.toolbar.upload')}
+                                </button>
+                                <button
+                                    disabled={!singleSelected}
+                                    onClick={openRenameModal}
+                                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                                >
+                                    <Edit2 className="w-4 h-4" />
+                                    {t('browser.toolbar.rename')}
+                                </button>
+                                <button
+                                    disabled={!singleSelected}
+                                    onClick={() => {
+                                        const file = browseData?.files.find(f => f.name === Array.from(selectedItems)[0]);
+                                        if (file) {
+                                            setShareFile(file);
+                                            setIsShareModalOpen(true);
+                                        }
+                                    }}
+                                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                                >
+                                    <Share2 className="w-4 h-4" />
+                                    {t('browser.toolbar.share')}
+                                </button>
+                                <button
+                                    disabled={noneSelected}
+                                    onClick={() => setIsCopyModalOpen(true)}
+                                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                                >
+                                    <Copy className="w-4 h-4" />
+                                    {t('browser.toolbar.copy')}
+                                </button>
+                                <button
+                                    disabled={noneSelected}
+                                    onClick={() => setIsMoveModalOpen(true)}
+                                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                                >
+                                    <MoveRight className="w-4 h-4" />
+                                    {t('browser.toolbar.move')}
+                                </button>
+                                <button
+                                    disabled={noneSelected}
+                                    onClick={() => setIsZipModalOpen(true)}
+                                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                                >
+                                    <FileArchive className="w-4 h-4" />
+                                    {t('browser.toolbar.zip')}
+                                </button>
+                                <button
+                                    disabled={!isSingleZipSelected || isUnzipping}
+                                    onClick={handleUnzip}
+                                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-zinc-700 dark:text-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                                >
+                                    {isUnzipping ? (
+                                        <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                                    ) : (
+                                        <ArchiveRestore className="w-4 h-4" />
+                                    )}
+                                    {t('browser.toolbar.unzip')}
+                                </button>
+                            </>
+                        )}
                         <button
                             disabled={!singleSelected || isDownloading}
                             onClick={handleDownload}
@@ -1590,14 +1730,16 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             )}
                             {t('browser.toolbar.download')}
                         </button>
-                        <button
-                            disabled={noneSelected}
-                            onClick={() => setIsDeleteModalOpen(true)}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors"
-                        >
-                            <Trash2 className="w-4 h-4" />
-                            {t('browser.toolbar.delete')}
-                        </button>
+                        {!isSharedView && (
+                            <button
+                                disabled={noneSelected}
+                                onClick={() => setIsDeleteModalOpen(true)}
+                                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-800 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                                {t('browser.toolbar.delete')}
+                            </button>
+                        )}
                     </div>
                 </>
             }
@@ -1614,48 +1756,52 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
             <div className="overflow-x-auto">
                 {ctxMenuPosition && (
                     <div data-role="menu" className="absolute bg-white shadow-lg rounded-md border border-gray-200 w-40 py-1 z-50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" style={{ top: ctxMenuPosition.y, left: ctxMenuPosition.x }}>
-                        <a
-                            onClick={singleSelected ? openRenameModal : undefined}
-                            className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${singleSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
-                        >
-                            <Edit2 className="w-4 h-4" /> {t('browser.toolbar.rename')}
-                        </a>
-                        <a
-                            onClick={singleSelected ? () => {
-                                const file = browseData?.files.find(f => f.name === Array.from(selectedItems)[0]);
-                                if (file) {
-                                    setShareFile(file);
-                                    setIsShareModalOpen(true);
-                                }
-                            } : undefined}
-                            className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${singleSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
-                        >
-                            <Share2 className="w-4 h-4" /> {t('browser.toolbar.share')}
-                        </a>
-                        <a
-                            onClick={noneSelected ? undefined : () => setIsCopyModalOpen(true)}
-                            className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${!noneSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
-                        >
-                            <Copy className="w-4 h-4" /> {t('browser.toolbar.copy')}
-                        </a>
-                        <a
-                            onClick={noneSelected ? undefined : () => setIsMoveModalOpen(true)}
-                            className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${!noneSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
-                        >
-                            <MoveRight className="w-4 h-4" />{t('browser.toolbar.move')}
-                        </a>
-                        <a
-                            onClick={noneSelected ? undefined : () => setIsZipModalOpen(true)}
-                            className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${!noneSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
-                        >
-                            <FileArchive className="w-4 h-4" /> {t('browser.toolbar.zip')}
-                        </a>
-                        <a
-                            onClick={!isSingleZipSelected ? undefined : handleUnzip}
-                            className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${isSingleZipSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
-                        >
-                            <ArchiveRestore className="w-4 h-4" /> {t('browser.toolbar.unzip')}
-                        </a>
+                        {!isSharedView && (
+                            <>
+                                <a
+                                    onClick={singleSelected ? openRenameModal : undefined}
+                                    className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${singleSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                                >
+                                    <Edit2 className="w-4 h-4" /> {t('browser.toolbar.rename')}
+                                </a>
+                                <a
+                                    onClick={singleSelected ? () => {
+                                        const file = browseData?.files.find(f => f.name === Array.from(selectedItems)[0]);
+                                        if (file) {
+                                            setShareFile(file);
+                                            setIsShareModalOpen(true);
+                                        }
+                                    } : undefined}
+                                    className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${singleSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                                >
+                                    <Share2 className="w-4 h-4" /> {t('browser.toolbar.share')}
+                                </a>
+                                <a
+                                    onClick={noneSelected ? undefined : () => setIsCopyModalOpen(true)}
+                                    className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${!noneSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                                >
+                                    <Copy className="w-4 h-4" /> {t('browser.toolbar.copy')}
+                                </a>
+                                <a
+                                    onClick={noneSelected ? undefined : () => setIsMoveModalOpen(true)}
+                                    className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${!noneSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                                >
+                                    <MoveRight className="w-4 h-4" />{t('browser.toolbar.move')}
+                                </a>
+                                <a
+                                    onClick={noneSelected ? undefined : () => setIsZipModalOpen(true)}
+                                    className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${!noneSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                                >
+                                    <FileArchive className="w-4 h-4" /> {t('browser.toolbar.zip')}
+                                </a>
+                                <a
+                                    onClick={!isSingleZipSelected ? undefined : handleUnzip}
+                                    className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${isSingleZipSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                                >
+                                    <ArchiveRestore className="w-4 h-4" /> {t('browser.toolbar.unzip')}
+                                </a>
+                            </>
+                        )}
                         <a onClick={singleSelected ? handleDownload : undefined}
                             className={`flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-200 dark:text-white rounded-md ${singleSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
                         >
@@ -1674,12 +1820,16 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                         >
                             <Edit2 className="w-4 h-4" /> Edit on OnlyOffice
                         </a>
-                        <div className="h-px bg-slate-200 my-1"></div>
-                        <a
-                            onClick={noneSelected ? undefined : () => setIsDeleteModalOpen(true)}
-                            className={`flex items-center gap-2 px-4 py-2 text-sm rounded-md text-red-500 hover:bg-red-100 ${!noneSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
-                            <Trash2 className="w-4 h-4" /> {t('browser.toolbar.delete')}
-                        </a>
+                        {!isSharedView && (
+                            <>
+                                <div className="h-px bg-slate-200 my-1"></div>
+                                <a
+                                    onClick={noneSelected ? undefined : () => setIsDeleteModalOpen(true)}
+                                    className={`flex items-center gap-2 px-4 py-2 text-sm rounded-md text-red-500 hover:bg-red-100 ${!noneSelected ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
+                                    <Trash2 className="w-4 h-4" /> {t('browser.toolbar.delete')}
+                                </a>
+                            </>
+                        )}
                     </div>
                 )}
                 <table className="w-full text-left text-sm whitespace-nowrap">
@@ -1708,7 +1858,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                             sortedFiles.map((file, idx) => (
                                 <tr
                                     key={idx}
-                                    draggable
+                                    draggable={!isSharedView}
                                     onDragStart={(e) => handleDragStart(e, file.name)}
                                     onDragEnter={(e) => file.type === 'dir' && handleFolderDragEnter(e, file.name)}
                                     onDragLeave={(e) => file.type === 'dir' && handleFolderDragLeave(e, file.name)}
@@ -1734,7 +1884,19 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                             <span className={`font-medium ${file.type === 'dir' ? 'text-gray-900 dark:text-gray-100' : 'text-gray-700 dark:text-gray-300'}`}>
                                                 {file.name}
                                             </span>
-
+                                            {file.shared && !isSharedView && (
+                                                <button
+                                                    title={t('browser.toolbar.share')}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setShareFile(file);
+                                                        setIsShareModalOpen(true);
+                                                    }}
+                                                    className="flex items-center p-0.5 rounded text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors"
+                                                >
+                                                    <Link2 className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="py-3 px-4 text-right text-gray-500 dark:text-gray-400 tabular-nums">

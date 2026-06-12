@@ -162,6 +162,10 @@ def auth_otp_verify(data:OTPVerification) -> AuthToken:
     if (username is None):
         secrets = CONFIG.otp_secrets
 
+        import sys
+
+        print(secrets,file=sys.stderr)
+
         for uname,secret in secrets.items():
             totp = pyotp.TOTP(secret)
             if (totp.verify(data.otp)):

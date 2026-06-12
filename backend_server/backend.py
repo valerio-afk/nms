@@ -6,6 +6,8 @@ from contextlib import asynccontextmanager
 from logging import getLogger
 from nms_shared import ErrorMessages
 
+__version__ = "0.1rc1"
+
 @asynccontextmanager
 async def automount(app:FastAPI):
     from backend_server.utils.config import CONFIG
@@ -19,7 +21,7 @@ async def automount(app:FastAPI):
 
     yield
 
-app = FastAPI(lifespan=automount,root_path="/api")
+app = FastAPI(lifespan=automount,root_path="/api",title="NMS",version=__version__)
 
 app.include_router(v1)
 

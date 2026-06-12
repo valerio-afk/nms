@@ -330,7 +330,7 @@ class NMSConfig(Logger):
 
     @property
     def is_otp_configured(this) -> bool:
-        secrets = this.otp_secrets
+        secrets = this.otp_admin_secrets
         return len(secrets) > 0
 
     @property
@@ -338,10 +338,18 @@ class NMSConfig(Logger):
         return {k:v for k,v in this._tmp_secret.items()}
 
     @property
+    def otp_admin_secrets(this) -> Dict[str, str]:
+
+        return {u.username: secret
+                for u in this.admins
+                if (secret := this._cfg.get("users", {}).get(u.username).get("otp_secret")) is not None
+                }
+
+    @property
     def otp_secrets(this) -> Dict[str,str]:
 
         return {u.username:secret
-                for u in this.admins
+                for u in this.users
                 if (secret:=this._cfg.get("users",{}).get(u.username).get("otp_secret")) is not None
                 }
 
@@ -1358,8 +1366,8 @@ class NMSConfig(Logger):
                     expired_keys.append(p)
                     continue
 
-            if (d['shared_with'] is not None):
-                if (username in d['shared_with'].keys()):
+            if (d['share_with'] is not None):
+                if (username in d['share_with'].keys()):
                     shared_with_me[p] = d
             elif (include_all):
                 shared_with_me[p]=d
@@ -1370,9 +1378,15 @@ class NMSConfig(Logger):
         return shared_with_me
 
     def get_share_information(this,path:str) -> Optional[Dict[str,Any]]:
-        share_info = this._cfg['shares'].get(path,None)
+        path = Path(path)
 
-        return share_info.copy() if share_info is not None else None
+        for p in this._cfg.get("shares",{}).keys():
+            if (path.is_relative_to(p)):
+                share_info = this._cfg['shares'].get(p,None)
+                return share_info.copy() if share_info is not None else None
+
+        return None
+
 
 
     #SYSTEM METHODS

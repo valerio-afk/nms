@@ -204,6 +204,7 @@ NMS expects the following programs and system tools to be installed in your syst
 > * postfix
 > * lm-sensors
 > * inotify-tools
+> * coreutils
 
 > #### RedHat-based package names:
 > * python3
@@ -235,6 +236,7 @@ NMS expects the following programs and system tools to be installed in your syst
 > * mailx
 > * lm_sensors
 > * inotify-tools
+> * coreutils
 
 You should adapt the name of these packages for your distribution.
 

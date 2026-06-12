@@ -22,7 +22,9 @@ export default function FilePreviewModal({ isOpen, onClose, file, currentPath, o
         let isMounted = true;
 
         if (isOpen && file) {
-            const fullPath = currentPath ? `${currentPath}/${file.name}` : file.name;
+            const fullPath = (file && 'relative_path' in file && (file as any).relative_path)
+                ? (file as any).relative_path
+                : (currentPath ? `${currentPath}/${file.name}` : file.name);
 
             // Reset states
             setChecksum(t('preview.calculating'));
@@ -78,7 +80,9 @@ export default function FilePreviewModal({ isOpen, onClose, file, currentPath, o
 
     if (!isOpen || !file) return null;
 
-    const fullPath = currentPath ? `${currentPath}/${file.name}` : file.name;
+    const fullPath = (file && 'relative_path' in file && (file as any).relative_path)
+        ? (file as any).relative_path
+        : (currentPath ? `${currentPath}/${file.name}` : file.name);
     const canEditInOnlyOffice = ['text', 'word', 'spreadsheet', 'presentation'].includes(file.type);
 
     return (

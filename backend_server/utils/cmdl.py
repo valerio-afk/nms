@@ -2837,7 +2837,7 @@ class ReadLink(CommandLine):
 
     @staticmethod
     def from_dict(serialisation):
-        return SMARTCTL(
+        return ReadLink(
             serialisation.get("path", None),
         )
 
@@ -2867,5 +2867,22 @@ class Find(CommandLine):
             serialisation.get('name', None),
         )
 
+class MD5Sum(CommandLine):
+    def __init__(this,path:str,**kwargs):
+        cmd = ['md5sum',path]
+        this._path = path
 
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['path'] = this._path
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return MD5Sum(
+            serialisation.get("path", None),
+        )
 

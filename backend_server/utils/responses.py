@@ -204,7 +204,7 @@ class SharedFileInfo(FileInfo):
 
 class FSBrowse(BaseModel):
     path:str
-    files:List[FileInfo]
+    files:List[Union[FileInfo|SharedFileInfo]]
 
 class MkDirModel(BaseModel):
     path:str

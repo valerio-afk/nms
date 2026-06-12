@@ -125,7 +125,8 @@ export const en = {
     },
 
     "breadcrumbs": {
-      "root": "Your files"
+      "root": "Your files",
+      "shared_with_me": "Shared with me"
     }
   },
   "preview": {

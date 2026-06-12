@@ -1,3 +1,2 @@
-from .backend import app
+from .backend import app, __version__
 
-__version__ = "0.1rc1"

@@ -1,7 +1,9 @@
+import re
+
 from PIL import Image
 from fastapi.security import HTTPAuthorizationCredentials
 from backend_server.utils.cmdl import Chown, Chmod, LocalCommandLineTransaction, LS, Stat, MimeType, Mkdir, Move
-from backend_server.utils.cmdl import RemoveFile, Touch, SetfACL, Zip, Unpack, TarArchive, SevenZip, Copy
+from backend_server.utils.cmdl import RemoveFile, Touch, SetfACL, Zip, Unpack, TarArchive, SevenZip, Copy, MD5Sum
 from backend_server.utils.config import CONFIG, SECRET_KEY
 from backend_server.utils.responses import ErrorMessage, UserProfile, FileInfo, FSBrowse, MkDirModel, MvModel, Quota
 from backend_server.utils.responses import ZipFile, CpModel, SharedFileInfo, FileSharing, SharedFile
@@ -25,6 +27,7 @@ import jwt
 import os
 import pwd
 import subprocess
+import pytz
 
 
 verify_token = verify_token_factory()
@@ -389,7 +392,7 @@ def file_generator(path: str, chunk_size:int=1024**2, start: int = 0, end:Option
                 break
 
 def get_file_info(path:str) -> Optional[FileInfo]:
-    stat = Stat(path, "%n\n%s\n%F\n%W\n%y\n%U").execute()
+    stat = Stat(path, "%n\n%s\n%F\n%W\n%y\n%U",sudo=True).execute()
 
     if (stat.returncode == 0):
         fullpath, size, ftype, creation_time,modification_time,owner = (
@@ -402,7 +405,7 @@ def get_file_info(path:str) -> Optional[FileInfo]:
                 ftype = "dir"
                 mime_type = "inode/directory"
             case "regular file" | "regular empty file":
-                mime_type_cmd = MimeType(path).execute()
+                mime_type_cmd = MimeType(path,sudo=True).execute()
                 ftype = "bin"
                 mime_type = "application/octet-stream"
 
@@ -540,7 +543,7 @@ def ls_dir(path: Optional[str]=None, token:dict=Depends(verify_token)) -> FSBrow
 
     p = check_path_jail(user, path)
 
-    ls = LS(str(p)).execute()
+    ls = LS(str(p),sudo=True).execute()
 
     if (ls.returncode != 0):
         raise HTTPException(status_code=500)
@@ -573,7 +576,7 @@ def ls_shared(token:dict=Depends(verify_token)) -> List[SharedFileInfo]:
 
     mountpoint = CONFIG.mountpoint
 
-    for f,d in CONFIG.get_files_shared_with(user.username).items:
+    for f,d in CONFIG.get_files_shared_with(user.username).items():
         obj = get_file_info(str(f))
         if (obj is not None):
             full_path = Path(f)
@@ -588,7 +591,56 @@ def ls_shared(token:dict=Depends(verify_token)) -> List[SharedFileInfo]:
 
     files.sort(key=lambda x: x.name)
 
+    CONFIG.flush_config()
+
     return files
+
+
+@fs.get("/shared/{path:path}",response_model=FSBrowse,summary="Get the list of files in a shared directory shared with a specific user.")
+def ls_shared_dir(path:str, token:dict=Depends(verify_token)) -> FSBrowse:
+    check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
+    user = CONFIG.get_user(token.get("username",None))
+
+    if (not user):
+        raise HTTPException(status_code=401)
+
+    files: List[SharedFileInfo] = []
+
+    mountpoint = CONFIG.mountpoint
+    requested_path = Path(mountpoint) / path
+
+    shared_info:Optional[dict] = None
+
+    for f, d in CONFIG.get_files_shared_with(user.username).items():
+        share_path = Path(f)
+
+        if (requested_path.is_relative_to(share_path)):
+            shared_info = d
+            break
+
+
+    if (shared_info is None):
+        raise HTTPException(status_code=401)
+
+    ls = LS(str(requested_path)).execute()
+
+    for f in ls.stdout.splitlines():
+        current = requested_path.joinpath(f)
+
+        obj = get_file_info(str(current))
+
+        if (obj is not None):
+            files.append(
+                SharedFileInfo(**obj.model_dump(),
+                               can_edit=shared_info.get("can_edit", False),
+                               relative_path=str(current.relative_to(mountpoint))
+                               )
+            )
+
+    return FSBrowse(path=path,files=files)
+
+
+
 
 @fs.get("/checksum/{path:path}",response_model=str,summary="Get MD5 checksum of the specified file")
 def checksum(path: Optional[str]=None, token:dict=Depends(verify_token)) -> str:
@@ -603,15 +655,27 @@ def checksum(path: Optional[str]=None, token:dict=Depends(verify_token)) -> str:
 
     p = check_path_jail(user, path)
 
-    if (not os.path.exists(p)) or (not os.path.isfile(p)):
+    obj = get_file_info(str(p))
+
+    if ((obj is None) or (obj.type=="dir")):
         raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_FS_NOT_FILE.name,params=[str(p)]))
 
-    md5 = hashlib.md5()
-    with open(p, 'rb') as f:
-        for chunk in iter(lambda: f.read(1024*1024), b''):
-            md5.update(chunk)
+    md5 = MD5Sum(str(p),sudo=True).execute()
 
-    return md5.hexdigest()
+    if (md5.returncode!=0):
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_UNKNOWN.name))
+
+    output = md5.stdout
+
+    regex = re.compile(r"([a-fA-F0-9]+)[ ]+(.+)")
+    m = regex.match(output)
+
+    if (m is None):
+        raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_UNKNOWN.name))
+
+    return m[1]
+
+
 
 @fs.post("/mkdir",summary="Create a new directory within the user space.")
 def fs_mkdir(data:MkDirModel,token:dict=Depends(verify_token)) -> None:
@@ -809,8 +873,6 @@ def fs_upload(request:Request, token:dict=Depends(verify_token)) -> Response:
     parsed_metadata = parse_metadata(metadata)
     upload_id = CONFIG.init_upload(int(upload_length),parsed_metadata, user)
 
-    CONFIG.warning(parsed_metadata)
-
     location = request.url_for("chunk_upload", upload_id=upload_id)
 
 
@@ -860,15 +922,28 @@ def head_upload(upload_id: str,token:dict=Depends(verify_token)) -> Response:
     rel_path = meta.get("metadata", {}).get("path", ".")
     p = check_path_jail(user, rel_path)
 
+    upload_full_path = p.joinpath(fname)
 
-    if (not os.path.exists(upload_full_path:=p.joinpath(fname))):
-        Touch(str(upload_full_path)).execute()
+    ch_cmd = [
+        Chown(os.getuid(),os.getgid(),path=str(upload_full_path)),
+        Chmod(str(upload_full_path),"550"),
+    ]
+
+    tran = LocalCommandLineTransaction(*ch_cmd,privileged=True)
+
+    obj = get_file_info(str(upload_full_path))
+
+
+    if (obj is None):
+        Touch(str(upload_full_path),sudo=True).execute()
+        tran.run()
     else:
+        tran.run()
         if (meta.get("metadata", {}).get("overwrite", False) ):
             h = open(upload_full_path, "w+b") # truncate file
             h.close()
         else:
-            offset = upload_full_path.stat().st_size
+            offset = obj.size
             CONFIG.increment_upload_offset(upload_id, offset,reset=True)
 
     return Response(
@@ -911,9 +986,23 @@ async def chunk_upload(upload_id: str, request: Request, token:dict=Depends(veri
         chunk = await request.body()
         actual_upload_length = len(chunk)
 
-        with (open(complete_file_path,"r+b")) as f:
-            f.seek(upload_offset)
-            f.write(chunk)
+        subprocess.run(
+            [
+                "sudo",
+                "dd",
+                f"of={complete_file_path}",
+                "bs=1",
+                f"seek={upload_offset}",
+                "conv=notrunc",
+                "status=none",
+            ],
+            input=chunk,
+            check=True,
+        )
+
+        # with (open(complete_file_path,"r+b")) as f:
+        #     f.seek(upload_offset)
+        #     f.write(chunk)
 
     except Exception as e:
         CONFIG.error(e)
@@ -992,12 +1081,26 @@ def download_file(filename: str, token:dict=Depends(verify_token)) -> StreamingR
     if (not user):
         raise HTTPException(status_code=401)
 
-    p = check_path_jail(user, filename)
+    try:
+        p = check_path_jail(user, filename)
+        stat = Stat(str(p),format="%F",sudo=True).execute()
 
-    stat = Stat(str(p),format="%F",sudo=True).execute()
+        if ((stat.returncode != 0) or ("regular file" not in stat.stdout)):
+            raise HTTPException(status_code=400)
+    except HTTPException as e:
+        # here I need to check if this file is shared with this user
+        fullpath = (Path(CONFIG.mountpoint) / filename).resolve()
+        share_info = CONFIG.get_share_information(str(fullpath))
 
-    if (stat.returncode != 0) or ("regular file" not in stat.stdout):
-        raise HTTPException(status_code=400)
+        if (share_info is None):
+            raise HTTPException(status_code=401)
+
+        share_with = share_info.get("share_with", None)
+
+        if ((share_with is not None) and (user.username not in share_with.keys())):
+            raise e
+
+        p = fullpath
 
     fname = p.name
 
@@ -1209,11 +1312,17 @@ def preview_file(filename: str, request:Request, token:str) -> StreamingResponse
     match (file_info.type):
         case "text"|"pdf":
             mimetype = "text/plain" if file_info.type != "pdf" else "application/pdf"
-            generator = file_generator(path)
+            generator = file_generator_dd(path)
         case "image":
             mimetype = "image/png"
 
-            img = Image.open(path)
+            result = subprocess.run(
+                ["sudo", "cat", path],
+                stdout=subprocess.PIPE,
+                check=True
+            )
+
+            img = Image.open(BytesIO(result.stdout))
             img.thumbnail((500,500))
 
             buffer = BytesIO()
