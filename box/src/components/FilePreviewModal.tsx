@@ -15,7 +15,7 @@ interface FilePreviewModalProps {
 export default function FilePreviewModal({ isOpen, onClose, file, currentPath, onEditInOnlyOffice }: FilePreviewModalProps) {
     const { t } = useTranslation();
     const [checksum, setChecksum] = useState<string | null>(null);
-    const [previewContent, setPreviewContent] = useState<{ type: 'text' | 'image' | 'video' | 'audio' | 'pdf' | 'error' | 'unsupported', data?: string | null }>({ type: 'unsupported' });
+    const [previewContent, setPreviewContent] = useState<{ type: 'text' | 'zip' | 'image' | 'video' | 'audio' | 'pdf' | 'error' | 'unsupported', data?: string | null }>({ type: 'unsupported' });
     const [loadingPreview, setLoadingPreview] = useState(false);
 
     useEffect(() => {
@@ -41,7 +41,7 @@ export default function FilePreviewModal({ isOpen, onClose, file, currentPath, o
                 });
 
             // Fetch preview if applicable
-            if (file.type === 'video' || file.type === 'text' || file.type === 'image' || file.type === 'audio' || file.type === 'pdf') {
+            if (file.type === 'video' || file.type === 'text' || file.type === 'image' || file.type === 'audio' || file.type === 'pdf' || file.type === 'zip') {
                 getPreviewToken(fullPath)
                     .then(async (previewToken) => {
                         if (!isMounted) return;
@@ -50,12 +50,12 @@ export default function FilePreviewModal({ isOpen, onClose, file, currentPath, o
 
                         if (file.type === 'video' || file.type === 'image' || file.type === 'audio' || file.type === 'pdf') {
                             setPreviewContent({ type: file.type, data: url });
-                        } else if (file.type === 'text') {
+                        } else if (file.type === 'text' || file.type === 'zip') {
                             const res = await fetch(url);
-                            if (!res.ok) throw new Error('Failed to fetch text preview');
+                            if (!res.ok) throw new Error('Failed to fetch preview');
                             const text = await res.text();
                             if (!isMounted) return;
-                            setPreviewContent({ type: 'text', data: text });
+                            setPreviewContent({ type: file.type, data: text });
                         }
                     })
                     .catch(err => {
@@ -150,7 +150,7 @@ export default function FilePreviewModal({ isOpen, onClose, file, currentPath, o
                                 className="w-full outline-none"
                             />
                         </div>
-                    ) : previewContent.type === 'text' && previewContent.data !== null ? (
+                    ) : (previewContent.type === 'text' || previewContent.type === 'zip') && previewContent.data !== null ? (
                         <div className="w-full h-full text-left bg-white dark:bg-zinc-950 p-4 rounded-lg border border-gray-200 dark:border-zinc-800 shadow-sm overflow-auto max-h-[60vh]">
                             <pre className="text-sm font-mono text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">
                                 {previewContent.data}

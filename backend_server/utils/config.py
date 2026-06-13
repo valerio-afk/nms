@@ -1,7 +1,7 @@
 from pathlib import Path
 from backend_server.utils.cmdl import Chown, LocalCommandLineTransaction, Groups, ZPoolList, GetEntPasswd, ZFSSnapshot
 from backend_server.utils.cmdl import ZFSList, ZPoolStatus, LSBLK, ZFSGet,  ZFSGetQuota, Chmod, ZFSRollback, ZFSDestroy
-from backend_server.utils.cmdl import UserAdd, GetUserUID, ReadLink, Find, DockerRun, DockerStop, DockerInspect
+from backend_server.utils.cmdl import UserAdd, GetUserUID, ReadLink, Find, DockerRun, DockerStop, DockerInspect, Stat
 from backend_server.utils.enums import DistroFamilies
 from backend_server.utils.logger import Logger
 from backend_server.utils.responses import ErrorMessage, UserProfile, Quota
@@ -1358,12 +1358,19 @@ class NMSConfig(Logger):
     def get_files_shared_with(this, username:Optional[str], include_all:bool=False) -> Dict[str,Dict]:
         shared_with_me:Dict[str,Dict] = {}
 
-        expired_keys = []
+        to_be_removed = []
 
         for p, d in this._cfg.get('shares',{}).items():
+            stat = Stat(p,sudo=True).execute()
+
+            if (stat.returncode != 0):
+                #this to avoid to have shared files that either don't exist anymore or have been moved
+                to_be_removed.append(p)
+                continue
+
             if (d['expire_date'] is not None):
                 if (d['expire_date'] < datetime.now().timestamp()):
-                    expired_keys.append(p)
+                    to_be_removed.append(p)
                     continue
 
             if (d['share_with'] is not None):
@@ -1372,7 +1379,7 @@ class NMSConfig(Logger):
             elif (include_all):
                 shared_with_me[p]=d
 
-        for key in expired_keys:
+        for key in to_be_removed:
             del this._cfg['shares'][key]
 
         return shared_with_me

@@ -205,6 +205,7 @@ NMS expects the following programs and system tools to be installed in your syst
 > * lm-sensors
 > * inotify-tools
 > * coreutils
+> * atool
 
 > #### RedHat-based package names:
 > * python3
@@ -237,6 +238,7 @@ NMS expects the following programs and system tools to be installed in your syst
 > * lm_sensors
 > * inotify-tools
 > * coreutils
+> * atool
 
 You should adapt the name of these packages for your distribution.
 

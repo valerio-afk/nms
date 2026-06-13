@@ -2,7 +2,7 @@ import re
 
 from PIL import Image
 from fastapi.security import HTTPAuthorizationCredentials
-from backend_server.utils.cmdl import Chown, Chmod, LocalCommandLineTransaction, LS, Stat, MimeType, Mkdir, Move
+from backend_server.utils.cmdl import Chown, Chmod, LocalCommandLineTransaction, LS, Stat, MimeType, Mkdir, Move, ALS
 from backend_server.utils.cmdl import RemoveFile, Touch, SetfACL, Zip, Unpack, TarArchive, SevenZip, Copy, MD5Sum
 from backend_server.utils.config import CONFIG, SECRET_KEY
 from backend_server.utils.responses import ErrorMessage, UserProfile, FileInfo, FSBrowse, MkDirModel, MvModel, Quota
@@ -50,13 +50,16 @@ def verify_onlyoffice(credentials: HTTPAuthorizationCredentials = Depends(bearer
     return verify_onlyoffice_token(token)
 
 def verify_user_token_shared_files(credentials:HTTPAuthorizationCredentials = Depends(permissive_bearer)) -> Optional[Dict[str,Any]]:
+    if (credentials is None):
+        return None
+
     token = credentials.credentials
     try:
         return token_verification(token,"login")
     except HTTPException as e:
         return None
 
-def verify_anon_token(token:str):
+def verify_shared_file_token(token:str):
     requested_purpose = "fileshare"
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms="HS256")
@@ -101,7 +104,7 @@ onlyoffice = APIRouter(
 file_sharing = APIRouter(
     prefix='/filesharing',
     tags=['filesharing'],
-    dependencies=[Depends(verify_user_token_shared_files)]
+    dependencies=[Depends(verify_user_token_shared_files), Depends(verify_shared_file_token)]
 )
 
 TUS_VERSION = "1.0.0"
@@ -141,6 +144,21 @@ def check_path_jail(user:UserProfile,path:str,stat_last:bool=True) -> Path:
 
     return requested_path
 
+
+def check_shared_path(path: str, username: Optional[str] = None) -> Optional[Path]:
+    fullpath = (Path(CONFIG.mountpoint) / path).resolve()
+    share_info = CONFIG.get_share_information(str(fullpath))
+
+    if (share_info is None):
+        return None
+
+    share_with = share_info.get("share_with", None)
+
+    if ((share_with is not None) and (username not in share_with.keys())):
+        return None
+
+    return fullpath
+
 def shared_file_check_authorisation(
         filename:str,
         authentication_token:Optional[Dict[str,Any]],
@@ -161,10 +179,9 @@ def shared_file_check_authorisation(
     # - user-specific shares
     # - public shares
     #
-    # You mentioned expired shares are already filtered here.
-    #
+
     shared_with_user = CONFIG.get_files_shared_with(
-        user,
+        None if user is None else user.username,
         include_all=True
     )
 
@@ -252,7 +269,7 @@ def shared_file_check_authorisation(
     #
     if user is not None:
 
-        user_acl = matched_share_data.get("shared_with", {}).get(
+        user_acl = matched_share_data.get("share_with", {}).get(
             user.username
         )
 
@@ -267,7 +284,7 @@ def shared_file_check_authorisation(
         if anon_user_token is None:
             raise HTTPException(status_code=403)
 
-        anon_token_data = verify_anon_token(anon_user_token)
+        anon_token_data = verify_shared_file_token(anon_user_token)
 
         #
         # Token contains the path it grants access to.
@@ -653,7 +670,13 @@ def checksum(path: Optional[str]=None, token:dict=Depends(verify_token)) -> str:
     if (path is None):
         path = "."
 
-    p = check_path_jail(user, path)
+    try:
+        p = check_path_jail(user, path)
+    except HTTPException as e:
+        p = check_shared_path(path, user.username)
+        if (p is None):
+            raise e
+
 
     obj = get_file_info(str(p))
 
@@ -1073,6 +1096,9 @@ async def terminate_upload(upload_id: str, token:dict=Depends(verify_token)) -> 
         }
     )
 
+
+
+
 @fs.get("/item/{filename:path}")
 def download_file(filename: str, token:dict=Depends(verify_token)) -> StreamingResponse:
     check_permission(token.get("username"), UserPermissions.SERVICES_WEB_ACCESS)
@@ -1088,19 +1114,9 @@ def download_file(filename: str, token:dict=Depends(verify_token)) -> StreamingR
         if ((stat.returncode != 0) or ("regular file" not in stat.stdout)):
             raise HTTPException(status_code=400)
     except HTTPException as e:
-        # here I need to check if this file is shared with this user
-        fullpath = (Path(CONFIG.mountpoint) / filename).resolve()
-        share_info = CONFIG.get_share_information(str(fullpath))
-
-        if (share_info is None):
-            raise HTTPException(status_code=401)
-
-        share_with = share_info.get("share_with", None)
-
-        if ((share_with is not None) and (user.username not in share_with.keys())):
+        p = check_shared_path(filename, user.username)
+        if (p is None):
             raise e
-
-        p = fullpath
 
     fname = p.name
 
@@ -1131,6 +1147,7 @@ def onlyoffice_session(filename: str, request:Request, token:dict=Depends(verify
         p = check_path_jail(user, filename)
     except HTTPException:
         p,edit = shared_file_check_authorisation(filename, token)
+        CONFIG.warning(f" {user.username} can edit: {filename}: {edit}")
 
     stat = Stat(str(p),format="%F",sudo=True).execute()
 
@@ -1150,6 +1167,8 @@ def onlyoffice_session(filename: str, request:Request, token:dict=Depends(verify
         raw_key = stat.stdout
     else:
         raw_key = str(p)
+
+    CONFIG.warning(f"Onlyoffice key for {p}: {raw_key}")
 
     key = hashlib.md5(raw_key.encode()).hexdigest()
 
@@ -1269,7 +1288,13 @@ def get_preview_token(filename: str, token:dict=Depends(verify_token)) -> Respon
     if (not user):
         raise HTTPException(status_code=401)
 
-    p = check_path_jail(user, filename)
+    try:
+        p = check_path_jail(user, filename)
+    except HTTPException as e:
+        p = check_shared_path(filename, user.username)
+        if (p is None):
+            raise e
+
     path = str(p)
 
     file_info = get_file_info(path)
@@ -1295,7 +1320,14 @@ def preview_file(filename: str, request:Request, token:str) -> StreamingResponse
     if (not user):
         raise HTTPException(status_code=401)
 
-    p = check_path_jail(user, filename)
+    try:
+        p = check_path_jail(user, filename)
+    except HTTPException as e:
+        p = check_shared_path(filename, user.username)
+        if (p is None):
+            raise e
+
+
     path = str(p)
 
     file_info = get_file_info(path)
@@ -1313,6 +1345,16 @@ def preview_file(filename: str, request:Request, token:str) -> StreamingResponse
         case "text"|"pdf":
             mimetype = "text/plain" if file_info.type != "pdf" else "application/pdf"
             generator = file_generator_dd(path)
+        case "zip":
+            mimetype = "text/plain"
+            zip_content = ALS(path).execute()
+
+            if (zip_content.returncode!=0):
+                CONFIG.warning(f"Cannot LS this archive file: {file_info.type}")
+                raise HTTPException(status_code=400)
+
+            generator = zip_content.stdout
+
         case "image":
             mimetype = "image/png"
 
@@ -1540,125 +1582,212 @@ async def onlyoffice_callback(filename:str,request: Request) -> Dict:
 
 
 
+@file_sharing.get("/browse",response_model=List[SharedFileInfo],summary="Get the list of files shared via the sharing token.")
+def ls_anon_shared(
+        auth_token:Optional[dict] = Depends(verify_user_token_shared_files),
+        share_token:dict=Depends(verify_shared_file_token)) -> List[SharedFileInfo]:
+
+    authorised = False
+    can_edit = False
+
+    if (((share_with:=share_token.get("share_with",{})) is None) or (len(share_with)==0)):
+        authorised = True
+    else:
+        if (auth_token is not None):
+            user = CONFIG.get_user(auth_token.get("username", None))
+            if ((user is not None) and (user.username in share_with.keys())):
+                authorised = True
+                can_edit = share_with[user.username].get("can_edit", False)
+
+
+    if (not authorised):
+        raise HTTPException(status_code=401)
+
+
+    files: List[SharedFileInfo] = []
+
+    mountpoint = Path(CONFIG.mountpoint)
+    path: Optional[str] = share_token.get("path", None)
 
 
 
-@file_sharing.get("/browse/{filename:path}")
-def fs_shared_browse(
-    filename: str,
-    t: Optional[str] = None,
-    auth_token: Optional[dict] = Depends(verify_user_token_shared_files)
-) -> List[SharedFileInfo]:
+    if (path is not None):
+        requested_path = Path(path).resolve()
+        obj = get_file_info(path)
 
-    requested_path, can_edit = shared_file_check_authorisation(filename, auth_token,t)
-    mountpoint = Path(CONFIG.mountpoint).resolve()
+        if (obj.type == "dir"):
+            ls = LS(str(requested_path), sudo=True).execute()
+
+            for p in ls.stdout.splitlines():
+                full_path = (requested_path / p).resolve()
+                obj = get_file_info(str(full_path))
+
+                files.append(
+                    SharedFileInfo(
+                        **obj.model_dump(),
+                        relative_path=str(full_path.relative_to(mountpoint)),
+                        can_edit=True
+                    )
+                )
+                
+
+        else:
+            files.append(SharedFileInfo(**obj.model_dump(),
+                                relative_path=str(requested_path.relative_to(mountpoint)),
+                                can_edit=can_edit))
+
+    return files
+
+
 
     #
-    # Read metadata for the ACTUAL requested path.
     #
-    file_info = get_file_info(str(requested_path))
-
-    if file_info is None:
-        raise HTTPException(status_code=404)
-
+    # if (not user):
+    #     raise HTTPException(status_code=401)
     #
-    # Regular file -> return single item.
+    # files:List[SharedFileInfo] = []
     #
-    if file_info.type != "dir":
-        return [
-            SharedFileInfo(
-                **file_info.model_dump(),
-                relative_path=filename,
-                can_edit=can_edit
-            )
-        ]
-
+    # mountpoint = CONFIG.mountpoint
     #
-    # Directory listing
+    # for f,d in CONFIG.get_files_shared_with(user.username).items():
+    #     obj = get_file_info(str(f))
+    #     if (obj is not None):
+    #         full_path = Path(f)
     #
-    ls = LS(str(requested_path), sudo=True).execute()
+    #
+    #         files.append(
+    #             SharedFileInfo(**obj.model_dump(),
+    #                 can_edit = d.get("can_edit",False),
+    #                 relative_path =  str(full_path.relative_to(mountpoint))
+    #             )
+    #         )
+    #
+    # files.sort(key=lambda x: x.name)
+    #
+    # CONFIG.flush_config()
+    #
+    # return files
 
-    if ls.returncode != 0:
-        raise HTTPException(status_code=500)
-
-    files: List[FileInfo] = []
-
-    for f in ls.stdout.splitlines():
-
-        current = requested_path.joinpath(f).resolve()
-
-        #
-        # Prevent symlink escape during directory traversal.
-        #
-        if not current.is_relative_to(mountpoint):
-            continue
-
-        obj = get_file_info(str(current))
-
-        if obj is not None:
-            files.append(obj)
-
-    files.sort(key=lambda x: x.name)
-
-    return [
-        SharedFileInfo(
-            **d.model_dump(),
-            can_edit=can_edit,
-            relative_path=str(Path(filename, d.name))
-        )
-        for d in files
-    ]
-
-@file_sharing.get("/item/{filename:path}",summary="Allows to download a shared file")
-def download_shared_file (filename: str,
-    r:Request,
-    t: Optional[str] = None,
-    auth_token: Optional[dict] = Depends(verify_user_token_shared_files),
-
-) -> StreamingResponse:
-
-    requested_path, _ = shared_file_check_authorisation(filename, auth_token,t)
-
-    stat = Stat(str(requested_path),format="%F",sudo=True).execute()
-
-    if (stat.returncode != 0) or ("regular file" not in stat.stdout):
-        raise HTTPException(status_code=400)
-
-    fname = requested_path.name
-
-    if (len(fname) == 0):
-        raise HTTPException(status_code=500)
-
-    file_info = get_file_info(str(requested_path))
-
-    username = auth_token["username"] if "username" in auth_token else "Anonymous"
-
-    CONFIG.info(f"Shared file {filename} downloaded by {r.client.host} - User: {username}")
-
-    return StreamingResponse(
-        file_generator(str(requested_path)),
-        media_type=file_info.mimetype,
-        headers={"Content-Disposition": f'attachment; filename="{fname}"'}
-    )
-
-
-@file_sharing.head("/preview/{filename:path}",summary="Generate a token for preview (this is to accommodate <video>)")
-def get_preview_token_file_sharing(filename: str,
-        t: Optional[str] = None,
-        auth_token: Optional[dict] = Depends(verify_user_token_shared_files)
-  ) -> Response:
-
-    requested_path, _ = shared_file_check_authorisation(filename, auth_token, t)
-
-    file_info = get_file_info(str(requested_path))
-
-    if ((file_info is None) or (file_info.type == 'dir')):
-        raise HTTPException(status_code=400)
-
-    token = create_token(auth_token.get("username") if (auth_token is not None) else "Anonymous",filename,60)
-
-    return Response(
-        status_code=200,
-        headers={"X-Preview-Token": token}
-    )
+#
+#
+#
+#
+# @file_sharing.get("/browse/{filename:path}")
+# def fs_shared_browse(
+#     filename: str,
+#     t: Optional[str] = None,
+#     auth_token: Optional[dict] = Depends(verify_user_token_shared_files)
+# ) -> List[SharedFileInfo]:
+#
+#     requested_path, can_edit = shared_file_check_authorisation(filename, auth_token,t)
+#     mountpoint = Path(CONFIG.mountpoint).resolve()
+#
+#     #
+#     # Read metadata for the ACTUAL requested path.
+#     #
+#     file_info = get_file_info(str(requested_path))
+#
+#     if file_info is None:
+#         raise HTTPException(status_code=404)
+#
+#     #
+#     # Regular file -> return single item.
+#     #
+#     if file_info.type != "dir":
+#         return [
+#             SharedFileInfo(
+#                 **file_info.model_dump(),
+#                 relative_path=filename,
+#                 can_edit=can_edit
+#             )
+#         ]
+#
+#     #
+#     # Directory listing
+#     #
+#     ls = LS(str(requested_path), sudo=True).execute()
+#
+#     if ls.returncode != 0:
+#         raise HTTPException(status_code=500)
+#
+#     files: List[FileInfo] = []
+#
+#     for f in ls.stdout.splitlines():
+#
+#         current = requested_path.joinpath(f).resolve()
+#
+#         #
+#         # Prevent symlink escape during directory traversal.
+#         #
+#         if not current.is_relative_to(mountpoint):
+#             continue
+#
+#         obj = get_file_info(str(current))
+#
+#         if obj is not None:
+#             files.append(obj)
+#
+#     files.sort(key=lambda x: x.name)
+#
+#     return [
+#         SharedFileInfo(
+#             **d.model_dump(),
+#             can_edit=can_edit,
+#             relative_path=str(Path(filename, d.name))
+#         )
+#         for d in files
+#     ]
+#
+# @file_sharing.get("/item/{filename:path}",summary="Allows to download a shared file")
+# def download_shared_file (filename: str,
+#     r:Request,
+#     t: Optional[str] = None,
+#     auth_token: Optional[dict] = Depends(verify_user_token_shared_files),
+#
+# ) -> StreamingResponse:
+#
+#     requested_path, _ = shared_file_check_authorisation(filename, auth_token,t)
+#
+#     stat = Stat(str(requested_path),format="%F",sudo=True).execute()
+#
+#     if (stat.returncode != 0) or ("regular file" not in stat.stdout):
+#         raise HTTPException(status_code=400)
+#
+#     fname = requested_path.name
+#
+#     if (len(fname) == 0):
+#         raise HTTPException(status_code=500)
+#
+#     file_info = get_file_info(str(requested_path))
+#
+#     username = auth_token["username"] if "username" in auth_token else "Anonymous"
+#
+#     CONFIG.info(f"Shared file {filename} downloaded by {r.client.host} - User: {username}")
+#
+#     return StreamingResponse(
+#         file_generator(str(requested_path)),
+#         media_type=file_info.mimetype,
+#         headers={"Content-Disposition": f'attachment; filename="{fname}"'}
+#     )
+#
+#
+# @file_sharing.head("/preview/{filename:path}",summary="Generate a token for preview (this is to accommodate <video>)")
+# def get_preview_token_file_sharing(filename: str,
+#         t: Optional[str] = None,
+#         auth_token: Optional[dict] = Depends(verify_user_token_shared_files)
+#   ) -> Response:
+#
+#     requested_path, _ = shared_file_check_authorisation(filename, auth_token, t)
+#
+#     file_info = get_file_info(str(requested_path))
+#
+#     if ((file_info is None) or (file_info.type == 'dir')):
+#         raise HTTPException(status_code=400)
+#
+#     token = create_token(auth_token.get("username") if (auth_token is not None) else "Anonymous",filename,60)
+#
+#     return Response(
+#         status_code=200,
+#         headers={"X-Preview-Token": token}
+#     )
 

@@ -42,6 +42,7 @@ PACKAGES_APT=(
     lm-sensors
     inotify-tools
     coreutils
+    atool
 )
 
 PACKAGES_DNF=(
@@ -75,6 +76,7 @@ PACKAGES_DNF=(
     lm_sensors
     inotify-tools
     coreutils
+    atool
 )
 
 SERVICES_TO_DISABLE_APT=(

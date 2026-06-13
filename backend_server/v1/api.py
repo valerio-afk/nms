@@ -4,7 +4,7 @@ from .auth import auth
 from .net import net
 from .pool import pool
 from .disks import disks
-from .fs import fs, fs_preview, onlyoffice
+from .fs import fs, fs_preview, onlyoffice, file_sharing
 from .services import services
 from .users import users
 from .events import  events
@@ -20,5 +20,6 @@ v1.include_router(services)
 v1.include_router(fs)
 v1.include_router(fs_preview)
 v1.include_router(onlyoffice)
+v1.include_router(file_sharing)
 v1.include_router(users)
 v1.include_router(events)

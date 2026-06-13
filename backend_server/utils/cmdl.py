@@ -2886,3 +2886,24 @@ class MD5Sum(CommandLine):
             serialisation.get("path", None),
         )
 
+
+class ALS(CommandLine):
+    def __init__(this,path:str,**kwargs):
+        cmd = ['als',path]
+        this._path = path
+
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['path'] = this._path
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ALS(
+            serialisation.get("path", None),
+        )
+
+
