@@ -5,6 +5,10 @@ from .utils.responses import ErrorMessage
 from contextlib import asynccontextmanager
 from logging import getLogger
 from nms_shared import ErrorMessages
+from backend_server.utils.limiter import limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
+
 
 __version__ = "0.1rc1"
 
@@ -23,7 +27,15 @@ async def automount(app:FastAPI):
 
 app = FastAPI(lifespan=automount,root_path="/api",title="NMS",version=__version__)
 
+
+
 app.include_router(v1)
+
+app.state.limiter = limiter
+app.add_exception_handler(
+    RateLimitExceeded,
+    _rate_limit_exceeded_handler
+)
 
 # Custom exception handler
 @app.exception_handler(HTTPException)

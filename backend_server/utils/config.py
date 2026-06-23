@@ -18,6 +18,7 @@ from nms_shared.disks import Disk
 from nms_shared.enums import DiskStatus, UserPermissions
 from nms_shared.utils import match_permissions
 from typing import Optional, Dict, List, Any, Type, Tuple, Union
+from threading import Lock
 import base64
 import hashlib
 import json
@@ -26,6 +27,7 @@ import os
 import pytz
 import re
 import uuid
+import tempfile
 
 SECRET_KEY = os.environ.get("NMS_SECRET_KEY")
 
@@ -191,6 +193,7 @@ class NMSConfig(Logger):
             raise Exception("Invalid secret key. Please provide a secret key as environmental variable NMS_SECRET_KEY.")
 
         this._config_file = config_file
+        this._lock = Lock()
         this._cfg = {}
         this._tmp_secret = {}
         this._uploads={}
@@ -217,6 +220,7 @@ class NMSConfig(Logger):
         this._register_events()
 
         this.trigger_event(Events.SYSTEM_STARTUP)
+
 
     def _register_events(this) -> None:
         for uuid in this._cfg.get("events", {}).keys():
@@ -379,7 +383,8 @@ class NMSConfig(Logger):
 
     @vpn_public_ip.setter
     def vpn_public_ip(this,endpoint:str) -> None:
-        this._cfg["networking"]["vpn"]['endpoint'] = endpoint
+        with (this._lock):
+            this._cfg["networking"]["vpn"]['endpoint'] = endpoint
 
     @property
     def vpn_peer_names(this) -> List[str]:
@@ -421,7 +426,8 @@ class NMSConfig(Logger):
 
     @key_filename.setter
     def  key_filename(this,path):
-        this._cfg['pool']["encrypted"] = path
+        with (this._lock):
+            this._cfg['pool']["encrypted"] = path
 
     @property
     def pool_name(this) -> str:
@@ -554,7 +560,8 @@ class NMSConfig(Logger):
 
     @system_updates.setter
     def system_updates(this,updates:List[str]) -> None:
-        this._cfg['updates']['apt']['packages'] = updates
+        with (this._lock):
+            this._cfg['updates']['apt']['packages'] = updates
 
     @property
     def last_apt(this) -> int:
@@ -562,7 +569,8 @@ class NMSConfig(Logger):
 
     @last_apt.setter
     def last_apt(this,last:int) -> None:
-        this._cfg['updates']['apt']['last'] = last
+        with (this._lock):
+            this._cfg['updates']['apt']['last'] = last
 
     @property
     def systemd_services(this) -> List[str]:
@@ -578,7 +586,8 @@ class NMSConfig(Logger):
 
     @media_server_port.setter
     def media_server_port(this,port:int) -> None:
-        this._cfg['access']['services']['mediaserver']['port'] = port
+        with (this._lock):
+            this._cfg['access']['services']['mediaserver']['port'] = port
 
     @property
     def media_server_user(this) -> Optional[str]:
@@ -586,7 +595,8 @@ class NMSConfig(Logger):
 
     @media_server_user.setter
     def media_server_user(this, user:str) -> None:
-        this._cfg['access']['services']['mediaserver']['user'] = user
+        with (this._lock):
+            this._cfg['access']['services']['mediaserver']['user'] = user
 
     # USER PROPERTIES
 
@@ -622,14 +632,15 @@ class NMSConfig(Logger):
         return None
 
     def load_configuration_file(this) -> None:
-        this.info(f"Loading configuration file `{this.config_filename}`")
-        if os.path.exists(this.config_filename):
-            with open(this.config_filename, "r") as h:
-                this._cfg = json.load(h)
-                this.info(f"Configuration file `{this.config_filename}` loaded successfully")
-        else:
-            this.error(f"Configuration file `{this.config_filename}` not found")
-            raise FileNotFoundError()
+        with (this._lock):
+            this.info(f"Loading configuration file `{this.config_filename}`")
+            if os.path.exists(this.config_filename):
+                with open(this.config_filename, "r") as h:
+                    this._cfg = json.load(h)
+                    this.info(f"Configuration file `{this.config_filename}` loaded successfully")
+            else:
+                this.error(f"Configuration file `{this.config_filename}` not found")
+                raise FileNotFoundError()
 
     def create_default_config_file(this) -> None:
         this.info(f"Creating default configuration file")
@@ -723,7 +734,8 @@ class NMSConfig(Logger):
             },
         }
 
-        this._cfg = cfg
+        with (this._lock):
+            this._cfg = cfg
 
         this.init_pool()
 
@@ -737,25 +749,34 @@ class NMSConfig(Logger):
         LocalCommandLineTransaction(*cmds).run()
 
     def flush_config(this) -> None:
-        this.info(f"Flushing configuration file `{this.config_filename}`")
-        try:
-            with open(this.config_filename,"w") as h:
-                json.dump(this._cfg,h,indent=4)
+        with (this._lock):
+            this.info(f"Flushing configuration file `{this.config_filename}`")
+            try:
+                data = json.dumps(this._cfg,indent=4)
+
+                fd, tmp = tempfile.mkstemp(dir=os.path.dirname(this.config_filename),prefix=".config")
+
+                with os.fdopen(fd,"w") as f:
+                    f.write(data)
+
+                os.replace(tmp,this.config_filename)
+
                 this.info(f"Configuration file `{this.config_filename}` flushed correctly")
-        except Exception as e:
-            this.error(f"Unable to flush the configuration file `{this.config_filename}`: {str(e)}")
+            except Exception as e:
+                this.error(f"Unable to flush the configuration file `{this.config_filename}`: {str(e)}")
 
     # USERS METHODS
 
     def reset_otp(this,username:str) -> None:
-        tokens = [x for x in this._issued_tokens.keys()]
+        with (this._lock):
+            tokens = [x for x in this._issued_tokens.keys()]
 
-        for token in tokens:
-            payload = jwt.decode(token, SECRET_KEY, algorithms="HS256")
-            if payload["username"] == username:
-                this.revoke_token(token)
+            for token in tokens:
+                payload = jwt.decode(token, SECRET_KEY, algorithms="HS256")
+                if payload["username"] == username:
+                    this.revoke_token(token)
 
-        this._cfg['users'][username]['otp_secret'] = None
+            this._cfg['users'][username]['otp_secret'] = None
 
     def user_permissions(this,username:str)->List[str]:
         return [p for p in this._cfg.get("users", {}).get(username, {}).get('permissions', [])]
@@ -823,10 +844,12 @@ class NMSConfig(Logger):
             )
 
     def set_user_fullname(this,username:str,fullname:str) -> None:
-        this._cfg['users'][username]["fullname"] = fullname
+        with (this._lock):
+            this._cfg['users'][username]["fullname"] = fullname
 
     def change_username(this,old_username:str,new_username:str) -> None:
-        this._cfg['users'][new_username] = this._cfg['users'].pop(old_username)
+        with (this._lock):
+            this._cfg['users'][new_username] = this._cfg['users'].pop(old_username)
 
 
     def has_user_permission(this,username:str,perm:UserPermissions)->bool:
@@ -852,12 +875,13 @@ class NMSConfig(Logger):
         return all([this.has_user_permission(username, p) for p in UserPermissions])
 
     def add_user(this,username:str,fullname:Optional[str],permissions:List[str],uid:int) -> None:
-        this._cfg['users'][username] = {
-            "otp_secret": None,
-            "fullname": fullname,
-            "permissions": [],
-            "ssh_uid": uid
-        }
+        with (this._lock):
+            this._cfg['users'][username] = {
+                "otp_secret": None,
+                "fullname": fullname,
+                "permissions": [],
+                "ssh_uid": uid
+            }
 
         this.user_set_permissions(username,permissions)
 
@@ -879,15 +903,18 @@ class NMSConfig(Logger):
                 else:
                     service.permission_revoked(username)
 
-        this._cfg['users'][username]["permissions"] = collapsed_permissions
+        with (this._lock):
+            this._cfg['users'][username]["permissions"] = collapsed_permissions
 
     #AUTH/OTP METHODS
 
     def add_issued_token(this,token:str,expire_date:float) -> None:
-        this._issued_tokens[token] = expire_date
+        with (this._lock):
+            this._issued_tokens[token] = expire_date
 
     def revoke_token(this,token:str) -> None:
-        del this._issued_tokens[token]
+        with (this._lock):
+            del this._issued_tokens[token]
 
     def is_otp_configured_for(this,username:str)->bool:
         return this._cfg.get("users",{}).get(username,{}).get("otp_secret",None) is not None
@@ -899,36 +926,38 @@ class NMSConfig(Logger):
         elif (this.is_otp_configured):
             raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_AUTH_ALREADY_CONFIG.name))
 
-        this._tmp_secret[username] = secret
+        with (this._lock):
+            this._tmp_secret[username] = secret
 
 
     def save_temporary_otp(this,username:Optional[str]) -> str:
-        secret = this._tmp_secret[username]
+        with (this._lock):
+            secret = this._tmp_secret[username]
 
-        if (username is not None):
-            u = this._cfg.get("users",{}).get(username)
-            if (u is None):
-                raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name,params=[username]))
+            if (username is not None):
+                u = this._cfg.get("users",{}).get(username)
+                if (u is None):
+                    raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name,params=[username]))
 
-            this._cfg["users"][username]["otp_secret"] = secret
-            del this._tmp_secret[username]
-        else:
-            if (this.is_otp_configured):
-                raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_AUTH_ALREADY_CONFIG.name))
+                this._cfg["users"][username]["otp_secret"] = secret
+                del this._tmp_secret[username]
+            else:
+                if (this.is_otp_configured):
+                    raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_AUTH_ALREADY_CONFIG.name))
 
-            for u,d in this._cfg.get("users",{}).items():
-                if ((len(perms:=d.get("permissions",[]))>0) and perms[0]=="*"):
-                    username = u
+                for u,d in this._cfg.get("users",{}).items():
+                    if ((len(perms:=d.get("permissions",[]))>0) and perms[0]=="*"):
+                        username = u
 
-            if (username is None):
-                raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name,params=['admin user']))
+                if (username is None):
+                    raise HTTPException(status_code=500, detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name,params=['admin user']))
 
-            this._cfg["users"][username]["otp_secret"] = secret
-            del this._tmp_secret[None]
+                this._cfg["users"][username]["otp_secret"] = secret
+                del this._tmp_secret[None]
 
 
-        this.flush_config()
-        return username
+            this.flush_config()
+            return username
 
 
     #POOL METHODS
@@ -969,125 +998,128 @@ class NMSConfig(Logger):
 
             vdevs = d.get("pools",{}).get(pool_name,{}).get("vdevs",{}).get(pool_name,{}).get("vdevs",{})
 
-            if (len(vdevs)==1):
-                # check if raidz is enabled
-                value = list(vdevs.keys())[0]
+            with (this._lock):
+                if (len(vdevs)==1):
+                    # check if raidz is enabled
+                    value = list(vdevs.keys())[0]
 
-                if (vdevs[value]['vdev_type']=='raidz'):
-                    this._cfg['pool']['redundancy'] = True
-                    vdevs = vdevs[value].get("vdevs",{})
+                    if (vdevs[value]['vdev_type']=='raidz'):
+                        this._cfg['pool']['redundancy'] = True
+                        vdevs = vdevs[value].get("vdevs",{})
 
-            if (len(vdevs) > 0):
-                disks = [ sd for sd in vdevs.keys() ]
-                disks.sort()
+                if (len(vdevs) > 0):
+                    disks = [ sd for sd in vdevs.keys() ]
+                    disks.sort()
 
-                disks_in_pool = []
+                    disks_in_pool = []
 
-                lsblk = LSBLK()
-                lsblk_output = lsblk.execute()
+                    lsblk = LSBLK()
+                    lsblk_output = lsblk.execute()
 
-                if (lsblk_output.returncode != 0):
-                    return
+                    if (lsblk_output.returncode != 0):
+                        return
 
-                lsblk_json = json.loads(lsblk_output.stdout)
-                block_devices = lsblk_json.get("blockdevices",{})
+                    lsblk_json = json.loads(lsblk_output.stdout)
+                    block_devices = lsblk_json.get("blockdevices",{})
 
-                if (len(block_devices)==0):
-                    return
+                    if (len(block_devices)==0):
+                        return
 
-                this.warning(str(disks))
-                this.warning(str(block_devices))
+                    this.warning(str(disks))
+                    this.warning(str(block_devices))
 
-                for dev in disks:
-                    #check if dev is a symlink or a block special file
-                    find_result = Find("/dev/disk",name=dev,sudo=True).execute()
+                    for dev in disks:
+                        #check if dev is a symlink or a block special file
+                        find_result = Find("/dev/disk",name=dev,sudo=True).execute()
 
-                    if ((find_result is not None) and (find_result.returncode==0)):
-                        symlinks = find_result.stdout.splitlines()
+                        if ((find_result is not None) and (find_result.returncode==0)):
+                            symlinks = find_result.stdout.splitlines()
 
-                        if (len(symlinks)>0):
-                            #take first
-                            symlink = symlinks[0]
+                            if (len(symlinks)>0):
+                                #take first
+                                symlink = symlinks[0]
 
-                            readlink_result = ReadLink(symlink,sudo=True).execute()
+                                readlink_result = ReadLink(symlink,sudo=True).execute()
 
-                            if ((readlink_result is not None) and (readlink_result.returncode==0)):
-                                _,dev = os.path.split(readlink_result.stdout.strip())
+                                if ((readlink_result is not None) and (readlink_result.returncode==0)):
+                                    _,dev = os.path.split(readlink_result.stdout.strip())
 
-                    for dev_info in block_devices:
-                        if dev == dev_info['name']:
-                            disk_dev= Disk(name=dev_info['name'],
-                                 model=dev_info['model'],
-                                 serial=dev_info['serial'],
-                                 size=dev_info['size'],
-                                 path=dev_info['path'],
-                                 status=DiskStatus.ONLINE
-                                 )
-
-
-                            disks_in_pool.append(disk_dev)
+                        for dev_info in block_devices:
+                            if dev == dev_info['name']:
+                                disk_dev= Disk(name=dev_info['name'],
+                                     model=dev_info['model'],
+                                     serial=dev_info['serial'],
+                                     size=dev_info['size'],
+                                     path=dev_info['path'],
+                                     status=DiskStatus.ONLINE
+                                     )
 
 
+                                disks_in_pool.append(disk_dev)
 
-                this._cfg['pool']['disks'] = [d.serialise() for d in disks_in_pool]
 
 
-                this._cfg['pool']['name'] = pool_name
-                this._cfg['dataset'] = dataset_name
+                    this._cfg['pool']['disks'] = [d.serialise() for d in disks_in_pool]
 
-                pool_properties = ZFSGet(pool_name)
-                prop_output = pool_properties.execute()
 
-                if (prop_output.returncode == 0):
-                    d_prop = json.loads(prop_output.stdout)
-                    pool_properties = d_prop.get('datasets',{}).get(pool_name,{}).get("properties",{})
-                    if (len(pool_properties) > 0):
-                        # check compression
-                        this._cfg['pool']['compressed'] = True if (pool_properties['compression']['value'].lower() != "off") else False
-                        # check for encryption
-                        enc_enabled = pool_properties['encryption']['value'].lower() != "off"
+                    this._cfg['pool']['name'] = pool_name
+                    this._cfg['dataset'] = dataset_name
 
-                        if (enc_enabled):
-                            key_location = pool_properties['keylocation']['value']
-                            if key_location.startswith("file://"):
-                                key_location = key_location[len("file://"):]
+                    pool_properties = ZFSGet(pool_name)
+                    prop_output = pool_properties.execute()
 
-                            this._cfg['pool']['encrypted'] = key_location
+                    if (prop_output.returncode == 0):
+                        d_prop = json.loads(prop_output.stdout)
+                        pool_properties = d_prop.get('datasets',{}).get(pool_name,{}).get("properties",{})
+                        if (len(pool_properties) > 0):
+                            # check compression
+                            this._cfg['pool']['compressed'] = True if (pool_properties['compression']['value'].lower() != "off") else False
+                            # check for encryption
+                            enc_enabled = pool_properties['encryption']['value'].lower() != "off"
+
+                            if (enc_enabled):
+                                key_location = pool_properties['keylocation']['value']
+                                if key_location.startswith("file://"):
+                                    key_location = key_location[len("file://"):]
+
+                                this._cfg['pool']['encrypted'] = key_location
 
 
     def deinit_pool(this) -> None:
-        this._cfg['pool'] = {
-            "name": None,
-            "encrypted": None,
-            "redundancy": False,
-            "compressed": False,
-            "disks": [],
-            "tools": {
-                "scrub": {
-                    "ongoing": False,
-                    "last": None
-                },
+        with (this._lock):
+            this._cfg['pool'] = {
+                "name": None,
+                "encrypted": None,
+                "redundancy": False,
+                "compressed": False,
+                "disks": [],
+                "tools": {
+                    "scrub": {
+                        "ongoing": False,
+                        "last": None
+                    },
+                }
             }
-        }
 
-        this._cfg["dataset"] = None
+            this._cfg["dataset"] = None
 
     def config_pool(this, pool_name:str, dataset_name:str, redundancy:bool, encryption_key:Optional[str], compressed:bool, disks:List[Disk]) -> None:
-        this._cfg['pool'] = {
-            "name": pool_name,
-            "encrypted": encryption_key,
-            "redundancy": redundancy,
-            "compressed": compressed,
-            "disks": [d.serialise() for d in disks],
-            "tools": {
-                "scrub": {
-                    "ongoing": False,
-                    "last": None
-                },
+        with (this._lock):
+            this._cfg['pool'] = {
+                "name": pool_name,
+                "encrypted": encryption_key,
+                "redundancy": redundancy,
+                "compressed": compressed,
+                "disks": [d.serialise() for d in disks],
+                "tools": {
+                    "scrub": {
+                        "ongoing": False,
+                        "last": None
+                    },
+                }
             }
-        }
 
-        this._cfg["dataset"] = dataset_name
+            this._cfg["dataset"] = dataset_name
 
     def create_snapshot(this,snapshot_name:str) -> None:
         regex = re.compile("^[A-Za-z0-9_.:-]+$")
@@ -1129,52 +1161,62 @@ class NMSConfig(Logger):
 
 
     def scrub_started(this) -> None:
-        this._cfg['pool']['tools']['scrub']['ongoing'] = True
-        this._cfg['pool']['tools']['scrub']['last'] = datetime.now().timestamp()
+        with (this._lock):
+            this._cfg['pool']['tools']['scrub']['ongoing'] = True
+            this._cfg['pool']['tools']['scrub']['last'] = datetime.now().timestamp()
 
     def scrub_stopped(this):
-        this._cfg['pool']['tools']['scrub']['ongoing'] = False
+        with (this._lock):
+            this._cfg['pool']['tools']['scrub']['ongoing'] = False
 
     #DISK METHODS
     def add_disk(this,disk:Disk) -> None:
-        this._cfg['pool']['disks'].append(disk.serialise())
+        with (this._lock):
+            this._cfg['pool']['disks'].append(disk.serialise())
 
     def replace_disk(this, old_disk:Disk, new_disk:Disk) -> None:
         idx = None
 
-        for i,disk in enumerate(this._cfg['pool']['disks']):
-            paths = [disk.get('path')]
-            paths+= disk.get('physical_paths',[])
+        with (this._lock):
+            for i,disk in enumerate(this._cfg['pool']['disks']):
+                paths = [disk.get('path')]
+                paths+= disk.get('physical_paths',[])
 
-            if (old_disk.has_any_paths(paths)):
-                idx = i
-                break
+                if (old_disk.has_any_paths(paths)):
+                    idx = i
+                    break
 
-        if (idx is not None):
-            this._cfg['pool']['disks'][idx] = new_disk.serialise()
+            if (idx is not None):
+                this._cfg['pool']['disks'][idx] = new_disk.serialise()
 
     #NET METHODS
     def vpn_remove_peer(this,idx:int) -> None:
         peers = this.vpn_peer_names
         peers.remove(this.vpn_peer_names[idx])
-        this._cfg["networking"]['vpn']['peers'] = peers
+
+        with (this._lock):
+            this._cfg["networking"]['vpn']['peers'] = peers
 
     def vpn_add_peer(this,name:str)->int:
         peers = this.vpn_peer_names
         peers.append(name)
-        this._cfg["networking"]['vpn']['peers'] = peers
+
+        with (this._lock):
+            this._cfg["networking"]['vpn']['peers'] = peers
 
         return len(peers)
 
     def ap_config(this,ssid:str,password:Optional[str]=None,iface:Optional[str]=None) -> None:
-        this._cfg["networking"]['ap'] = {
-            "ssid": ssid,
-            "psk": password,
-            "iface": iface
-        }
+        with (this._lock):
+            this._cfg["networking"]['ap'] = {
+                "ssid": ssid,
+                "psk": password,
+                "iface": iface
+            }
 
     def ddns_provider_enabled(this,provider:str,enabled:bool) -> None:
-        this._cfg['ddns'][provider]['enabled'] = enabled
+        with (this._lock):
+            this._cfg['ddns'][provider]['enabled'] = enabled
 
     def ddns_config_set(this,provider:str,username:Optional[str],password:str) -> None:
         digest = hashlib.sha256(SECRET_KEY.encode()).digest()
@@ -1183,32 +1225,41 @@ class NMSConfig(Logger):
         fernet = Fernet(fernet_key)
         encrypted_password = fernet.encrypt(password.encode())
 
-        this._cfg['ddns'][provider]['username'] = username
-        this._cfg['ddns'][provider]['password'] = encrypted_password.decode("utf-8")
+        with (this._lock):
+
+            this._cfg['ddns'][provider]['username'] = username
+            this._cfg['ddns'][provider]['password'] = encrypted_password.decode("utf-8")
 
     def ddns_noip_set(this,username:str,password:str) -> None:
-        this.ddns_config_set("noip",username,password)
+        with (this._lock):
+            this.ddns_config_set("noip",username,password)
 
     def ddns_duckdns_set(this,domain:str,token:str) -> None:
-        this.ddns_config_set("duckdns",domain,token)
+        with (this._lock):
+            this.ddns_config_set("duckdns",domain,token)
 
     def ddns_dynv6_set(this,domain:str,token:str) -> None:
-        this.ddns_config_set("dynv6",domain,token)
+        with (this._lock):
+            this.ddns_config_set("dynv6",domain,token)
 
     def ddns_dnsexit_set(this,host:str,apikey:str) -> None:
-        this.ddns_config_set("dnsexit",host,apikey)
+        with (this._lock):
+            this.ddns_config_set("dnsexit",host,apikey)
 
     def ddns_dynu_set(this, username:str, password:str) -> None:
         digest = hashlib.md5(password.encode()).hexdigest()
 
-        this._cfg['ddns']["dynu"]['username'] = username
-        this._cfg['ddns']["dynu"]['password'] = digest
+        with (this._lock):
+            this._cfg['ddns']["dynu"]['username'] = username
+            this._cfg['ddns']["dynu"]['password'] = digest
 
     def ddns_freedns_set(this,token:str) -> None:
-        this.ddns_config_set("freedns",None,token)
+        with (this._lock):
+            this.ddns_config_set("freedns",None,token)
 
     def ddns_cloudns_set(this,token:str) -> None:
-        this.ddns_config_set("cloudns",None,token)
+        with (this._lock):
+            this.ddns_config_set("cloudns",None,token)
 
 
     def ddns_start(this,thread_cls:Type[DDNSServiceThread],provider:str,only_token:bool=False) -> None:
@@ -1286,30 +1337,33 @@ class NMSConfig(Logger):
 
     #FS METHODS
     def init_upload(this,length:int,metadata:Any,user:UserProfile) -> str:
-        upload_id = str(uuid.uuid4())
-        this._uploads[upload_id] = {
-            "length":length,
-            "offset":0,
-            "metadata": metadata,
-            "user": user
-        }
+        with (this._lock):
+            upload_id = str(uuid.uuid4())
+            this._uploads[upload_id] = {
+                "length":length,
+                "offset":0,
+                "metadata": metadata,
+                "user": user
+            }
 
-        return upload_id
+            return upload_id
 
 
     def get_upload_session(this, id:str) -> dict:
         return this._uploads.get(id)
 
     def increment_upload_offset(this, id: str, length:int, reset:bool=False) -> int:
-        if (reset):
-            this._uploads[id]["offset"] = length
-        else:
-            this._uploads[id]["offset"] += length
+        with (this._lock):
+            if (reset):
+                this._uploads[id]["offset"] = length
+            else:
+                this._uploads[id]["offset"] += length
 
-        return this._uploads[id]["offset"]
+            return this._uploads[id]["offset"]
 
     def delete_upload_session(this, id:str) -> None:
-        del this._uploads[id]
+        with (this._lock):
+            del this._uploads[id]
 
     def is_upload_complete(this,id:str) -> bool:
         return this._uploads[id]['offset'] == this._uploads[id]['length']
@@ -1333,14 +1387,15 @@ class NMSConfig(Logger):
         return False
 
     def share_file(this, path:str,expire_date:int,share_with:Optional[Dict[str,Dict]]) -> str:
-        shares = this._cfg['shares']
+        with (this._lock):
+            shares = this._cfg['shares']
 
-        token_data = {
-            "expire_date":expire_date,
-            "share_with":share_with
-        }
+            token_data = {
+                "expire_date":expire_date,
+                "share_with":share_with
+            }
 
-        shares[path] = token_data.copy()
+            shares[path] = token_data.copy()
 
         token_data['path'] = path
         token_data['purpose'] = "fileshare"
@@ -1362,79 +1417,91 @@ class NMSConfig(Logger):
         if old_username == new_username:
             return
 
-        shares = this._cfg['shares']
+        with (this._lock):
+            shares = this._cfg['shares']
 
-        old_h = Path(old_homedir)
-        new_h = Path(new_home_dir)
+            old_h = Path(old_homedir)
+            new_h = Path(new_home_dir)
 
-        # Iterate over a snapshot since we may rename keys
-        for p in list(shares.keys()):
-            share_info = shares[p]
+            # Iterate over a snapshot since we may rename keys
+            for p in list(shares.keys()):
+                share_info = shares[p]
 
-            # Rename user in share_with
-            share_with = share_info.get('share_with', {})
-            if (share_with is not None) and (old_username in share_with):
-                share_with[new_username] = share_with.pop(old_username)
+                # Rename user in share_with
+                share_with = share_info.get('share_with', {})
+                if (share_with is not None) and (old_username in share_with):
+                    share_with[new_username] = share_with.pop(old_username)
 
-            # Rename share path if it belongs to the user's home
-            curr_path = Path(p)
+                # Rename share path if it belongs to the user's home
+                curr_path = Path(p)
 
-            if curr_path.is_relative_to(old_h):
-                rel = curr_path.relative_to(old_h)
-                new_path = str(new_h / rel)
+                if curr_path.is_relative_to(old_h):
+                    rel = curr_path.relative_to(old_h)
+                    new_path = str(new_h / rel)
 
-                if new_path != p:
-                    if new_path in shares:
-                        raise ValueError(
-                            f"Cannot rename share '{p}' to '{new_path}': "
-                            "destination already exists"
-                        )
+                    if new_path != p:
+                        if new_path in shares:
+                            raise ValueError(
+                                f"Cannot rename share '{p}' to '{new_path}': "
+                                "destination already exists"
+                            )
 
-                    shares[new_path] = shares.pop(p)
+                        shares[new_path] = shares.pop(p)
 
 
 
 
 
     def remove_share_file(this,path:str) -> None:
-        del this._cfg['shares'][path]
+        with (this._lock):
+            del this._cfg['shares'][path]
 
     def get_files_shared_with(this, username:Optional[str], include_all:bool=False) -> Dict[str,Dict]:
         shared_with_me:Dict[str,Dict] = {}
 
         to_be_removed = []
 
-        for p, d in this._cfg.get('shares',{}).items():
-            stat = Stat(p,sudo=True).execute()
+        with (this._lock):
 
-            if (stat.returncode != 0):
-                #this to avoid to have shared files that either don't exist anymore or have been moved
-                to_be_removed.append(p)
-                continue
+            for p, d in this._cfg.get('shares',{}).items():
+                stat = Stat(p,sudo=True).execute()
 
-            if (d['expire_date'] is not None):
-                if (d['expire_date'] < datetime.now().timestamp()):
+                if (stat.returncode != 0):
+                    #this to avoid to have shared files that either don't exist anymore or have been moved
                     to_be_removed.append(p)
                     continue
 
-            if (d['share_with'] is not None):
-                if (username in d['share_with'].keys()):
-                    shared_with_me[p] = d
-            elif (include_all):
-                shared_with_me[p]=d
+                if (d['expire_date'] is not None):
+                    if (d['expire_date'] < datetime.now().timestamp()):
+                        to_be_removed.append(p)
+                        continue
 
-        for key in to_be_removed:
-            del this._cfg['shares'][key]
+                if (d['share_with'] is not None):
+                    if (username in d['share_with'].keys()):
+                        shared_with_me[p] = d
+                elif (include_all):
+                    shared_with_me[p]=d
 
-        return shared_with_me
+            for key in to_be_removed:
+                del this._cfg['shares'][key]
+
+            return shared_with_me
 
     def get_share_information(this,path:str) -> Optional[Dict[str,Any]]:
         path = Path(path)
 
-        for p in this._cfg.get("shares",{}).keys():
-            if (path.is_relative_to(p)):
-                share_info = this._cfg['shares'].get(p,None)
-                return share_info.copy() if share_info is not None else None
+        with (this._lock):
+            for p in this._cfg.get("shares",{}).keys():
+                if (path.is_relative_to(p)):
+                    share_info = this._cfg['shares'].get(p,None)
+
+                    if (share_info['expire_date'] is not None):
+                        if (share_info['expire_date'] < datetime.now().timestamp()):
+                            del this._cfg['shares'][p]
+                            this.flush_config()
+                            return None
+
+                    return share_info.copy() if share_info is not None else None
 
         return None
 
@@ -1444,37 +1511,41 @@ class NMSConfig(Logger):
     def new_nms_update(this,version:str,tarball_url:str) -> None:
         from backend_server import __version__ as ver
 
-        nms = this._cfg['updates'].get('releases')
-        new_update = False
+        with (this._lock):
+            nms = this._cfg['updates'].get('releases')
+            new_update = False
 
-        if (nms is None):
-            if (version != ver):
-                new_update = True
-        else:
-            if (nms.get('version') != ver):
-                new_update = True
+            if (nms is None):
+                if (version != ver):
+                    new_update = True
+            else:
+                if (nms.get('version') != ver):
+                    new_update = True
 
-        if (new_update):
-            this._cfg['updates']['releases'] = {
-                "version": version,
-                "tarball_url": tarball_url
-            }
+            if (new_update):
+                this._cfg['updates']['releases'] = {
+                    "version": version,
+                    "tarball_url": tarball_url
+                }
 
     def clean_nms_update(this) -> None:
-        this._cfg['updates']['releases'] = None
+        with (this._lock):
+            this._cfg['updates']['releases'] = None
 
     # EVENT METHODS
 
     def add_event(this,event_name:str,action_name:str,parameters:Dict[str,dict]) -> None:
         id = str(uuid.uuid4())
 
-        this._cfg['events'][id] = {
-            "name": event_name,
-            "action": action_name,
-            "enabled": True,
-        }
+        with (this._lock):
 
-        this._cfg['events'][id]['parameters'] = parameters
+            this._cfg['events'][id] = {
+                "name": event_name,
+                "action": action_name,
+                "enabled": True,
+            }
+
+            this._cfg['events'][id]['parameters'] = parameters
 
         this.register_event(id)
 
@@ -1500,13 +1571,24 @@ class NMSConfig(Logger):
         this.info(f"Event {uuid} unregistered successfully")
 
     def enable_event(this,uuid:str)->None:
-        if ((e:=this._cfg['events'].get(uuid)) is not None):
-            e["enabled"] = True
+        enabled = False
+        with (this._lock):
+            if ((e:=this._cfg['events'].get(uuid)) is not None):
+                enabled = True
+                e["enabled"] = True
+
+        if (enabled):
             this.register_event(uuid)
 
     def disable_event(this,uuid:str)->None:
-        if ((e:=this._cfg['events'].get(uuid)) is not None):
-            e["enabled"] = False
+        disabled = False
+
+        with (this._lock):
+            if ((e:=this._cfg['events'].get(uuid)) is not None):
+                e["enabled"] = False
+                disabled = True
+
+        if (disabled):
             this.unregister_event(uuid)
 
     def trigger_event(this,event:Events,ctx:Optional[Dict[str,Any]]=None) -> None:
@@ -1527,23 +1609,25 @@ class NMSConfig(Logger):
             this.trigger_event(Events(event['name']),ctx)
 
     def update_event_parameters(this,uuid:str, parameters:Dict[str,Any]) -> None:
-        current_parameters = this._cfg['events'].get(uuid).get("parameters",{}).copy()
+        with (this._lock):
+            current_parameters = this._cfg['events'].get(uuid).get("parameters",{}).copy()
 
-        if (len(current_parameters)==0):
-            raise AttributeError()
+            if (len(current_parameters)==0):
+                raise AttributeError()
 
-        for k1,k2 in zip(current_parameters.keys(),parameters.keys()):
-            if (k1!=k2):
-                raise KeyError(k2)
+            for k1,k2 in zip(current_parameters.keys(),parameters.keys()):
+                if (k1!=k2):
+                    raise KeyError(k2)
 
 
-        this._cfg['events'][uuid]['parameters'] = parameters
+            this._cfg['events'][uuid]['parameters'] = parameters
 
 
     def delete_event(this,uuid:str)->None:
         this.unregister_event(uuid)
-        if (this._cfg['events'].get(uuid) is not None):
-            del this._cfg['events'][uuid]
+        with (this._lock):
+            if (this._cfg['events'].get(uuid) is not None):
+                del this._cfg['events'][uuid]
 
 
 CONFIG = NMSConfig()

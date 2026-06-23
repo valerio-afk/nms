@@ -17,6 +17,7 @@ class ErrorMessages(Enum):
     E_SELINUX_PORT = "E_SELINUX_PORT"
     E_SYSTEMD_START = "E_SYSTEMD_START"
     E_SYSTEMD_STOP = "E_SYSTEMD_STOP"
+    E_TOO_MANY_REQ = "E_TOO_MANY_REQ"
 
     E_POOL_ALREADY_CONF = "E_POOL_ALREADY_CONF"
     E_POOL_NO_CONF = "E_POOL_NO_CONF"
@@ -289,6 +290,7 @@ ERROR_MESSAGES = {
     ErrorMessages.E_SELINUX_PORT: lambda info : _("Error while obtaining system information on ports: %(info)s") % {"info":info},
     ErrorMessages.E_SYSTEMD_START: lambda services,info : _("Error while starting the system service(s) %(services)s: %(info)s") % {"info":info,'services':services},
     ErrorMessages.E_SYSTEMD_STOP: lambda services,info : _("Error while stopping the system service(s) %(services)s: %(info)s") % {"info":info,'services':services},
+    ErrorMessages.E_TOO_MANY_REQ : lambda : _("Too many requests. Please wait one minute."),
 
     ErrorMessages.E_POOL_ALREADY_CONF : lambda: _("The disk array is already configured."),
     ErrorMessages.E_POOL_NO_CONF : lambda: _("Disk array not configured yet."),

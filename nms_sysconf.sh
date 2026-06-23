@@ -1119,6 +1119,10 @@ server
     server_name _;
     client_max_body_size 10M;
 
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
     location /
     {
         proxy_pass http://127.0.0.1:8080;
@@ -1245,7 +1249,9 @@ build_box_app() {
 
 
 PULL_IMAGES=false
+NGINX=false
 FULL_INSTALLATION=true
+
 
 # Parse arguments
 for arg in "$@"; do
@@ -1255,6 +1261,10 @@ for arg in "$@"; do
             ;;
         --pull-images)
             PULL_IMAGES=true
+            FULL_INSTALLATION=false
+            ;;
+        --reconf-nginx)
+            NGINX=true
             FULL_INSTALLATION=false
             ;;
         *)
@@ -1354,8 +1364,12 @@ if [ "$FULL_INSTALLATION" = true ]; then
   #Step 12 --- Noip dynamic updater script
   install_noip_duc "$family"
 
+fi
+
+if [[ "$FULL_INSTALLATION" = true  || "$NGINX" = true ]]; then
   #Step 13 --- Configure nginx as a reverse proxy
   configure_nginx_nms $family
+fi
 
   # Done
   IP=$(ip -o -4 addr show up scope global | awk '{split($4,a,"/"); print a[1]; exit}')
@@ -1363,4 +1377,3 @@ if [ "$FULL_INSTALLATION" = true ]; then
     log_info "Now you can use your browser and go to http://${IP}"
   fi
 
-fi

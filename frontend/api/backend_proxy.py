@@ -144,6 +144,9 @@ class BackEndProxy:
                     if (err.response.status_code == 401):
                         args = err.response.json()
                         abort(401,description=args)
+                    if (err.response.status_code == 429):
+                        show_flash(code=ErrorMessages.E_TOO_MANY_REQ.value)
+                        return None
                     if (err.response.status_code == 422):
                         error = f"URL: {err.request.url}\n"
                         error+= f"Data: {err.request.body}\n"

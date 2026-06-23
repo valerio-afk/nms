@@ -1,6 +1,7 @@
 from backend_server.utils.config import CONFIG, SECRET_KEY, _create_token
 from backend_server.utils.events import EventContext, Events
 from backend_server.utils.responses import OTPVerification, ErrorMessage, AuthToken
+from backend_server.utils.limiter import limiter
 from datetime import datetime
 from enum import Enum
 from fastapi import APIRouter, HTTPException, Request
@@ -146,7 +147,8 @@ def auth_new_secret(token:Optional[str]=Query(default=None)) -> AuthUri:
            responses={403: {"description": "Invalid token/OTP not configured"}},
            summary="Verify OTP"
            )
-def auth_otp_verify(data:OTPVerification) -> AuthToken:
+@limiter.limit("5/minute")
+def auth_otp_verify(data:OTPVerification,request:Request) -> AuthToken:
     temp_secrets = CONFIG.temporary_otp_secrets
 
     username = None
@@ -161,11 +163,6 @@ def auth_otp_verify(data:OTPVerification) -> AuthToken:
 
     if (username is None):
         secrets = CONFIG.otp_secrets
-
-        import sys
-
-        print(secrets,file=sys.stderr)
-
         for uname,secret in secrets.items():
             totp = pyotp.TOTP(secret)
             if (totp.verify(data.otp)):

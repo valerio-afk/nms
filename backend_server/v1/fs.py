@@ -1,33 +1,35 @@
-import re
-
 from PIL import Image
-from fastapi.security import HTTPAuthorizationCredentials
 from backend_server.utils.cmdl import Chown, Chmod, LocalCommandLineTransaction, LS, Stat, MimeType, Mkdir, Move, ALS
-from backend_server.utils.cmdl import RemoveFile, Touch, SetfACL, Zip, Unpack, TarArchive, SevenZip, Copy, MD5Sum
+from backend_server.utils.cmdl import RemoveFile, Touch, SetfACL, Zip, Unpack, TarArchive, SevenZip, Copy, MD5Sum, Truncate
 from backend_server.utils.config import CONFIG, SECRET_KEY
+from backend_server.utils.events import Events, EventContext
+from backend_server.utils.inet import get_local_ips
 from backend_server.utils.responses import ErrorMessage, UserProfile, FileInfo, FSBrowse, MkDirModel, MvModel, Quota
 from backend_server.utils.responses import ZipFile, CpModel, SharedFileInfo, FileSharing, SharedFile
-from backend_server.utils.events import Events, EventContext
 from backend_server.v1.auth import verify_token_factory, check_permission, create_token, token_verification, bearer
 from datetime import datetime,timedelta, UTC
 from email.utils import format_datetime
 from fastapi import HTTPException, APIRouter, Depends, Request, Response
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.security import  HTTPBearer
+from fastapi.security import HTTPAuthorizationCredentials
 from io import BytesIO
 from nms_shared import ErrorMessages
 from nms_shared.enums import UserPermissions
 from pathlib import Path
 from typing import Optional, List, Generator, Dict, Any, Tuple
+from urllib.parse import urlparse
 import base64
-import httpx
 import grp
 import hashlib
+import httpx
+import ipaddress
 import jwt
 import os
 import pwd
-import subprocess
 import pytz
+import re
+import subprocess
 
 
 verify_token = verify_token_factory()
@@ -72,10 +74,11 @@ def verify_shared_file_token(token:str):
             CONFIG.error(f"Purpose claim not matching ({purpose} != {requested_purpose})")
             raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_INVALID.name))
 
-        exp = payload.get("expire_date")
+        path = payload.get("path")
+        share_info = CONFIG.get_share_information(path)
 
-        if ((exp is not None) and (datetime.now(pytz.timezone("UTC")).timestamp() > exp)):
-            CONFIG.error("Token Expired")
+
+        if (share_info is None):
             raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_EXPIRED.name))
 
         payload['token'] = token
@@ -138,8 +141,8 @@ def check_path_jail(user:UserProfile,path:str,stat_last:bool=True) -> Path:
 
         if (type.strip().lower() == "symbolic link"):
             _, real_path = fname.split("->")
-            target = real_path.strip("'")
-            if not target.is_relative_to(home):
+            target = Path(real_path.strip("'"))
+            if not (target.is_relative_to(home)):
                 raise HTTPException(status_code=401)
 
     return requested_path
@@ -517,7 +520,7 @@ def make_onlyoffice_configuration(path:Path, request:Request, user:Optional[User
 
     file_info = get_file_info(p)
 
-    stat = Stat(p, "%D:%i",sudo=True).execute()
+    stat = Stat(p, "%D:%i:%s:%Y",sudo=True).execute()
 
     if (stat.returncode == 0):
         raw_key = stat.stdout
@@ -612,6 +615,35 @@ def make_onlyoffice_configuration(path:Path, request:Request, user:Optional[User
     only_office_config["token"] = token
 
     return only_office_config
+
+
+def is_allowed_onlyoffice_url(
+    url: str,
+    allowed_port: int = 8090
+) -> bool:
+
+    parsed = urlparse(url)
+
+    if parsed.scheme not in ("http", "https"):
+        return False
+
+    if parsed.port != allowed_port:
+        return False
+
+    if parsed.hostname is None:
+        return False
+
+    allowed_ips = get_local_ips()
+
+    try:
+        ip = ipaddress.ip_address(parsed.hostname)
+    except ValueError:
+        # hostname, e.g. "localhost"
+        if parsed.hostname != "localhost":
+            return False
+        return True
+
+    return str(ip) in allowed_ips
 
 @fs.delete(
     "/mountpoint",
@@ -1032,6 +1064,9 @@ def head_upload(upload_id: str,token:dict=Depends(verify_token)) -> Response:
 
     meta = CONFIG.get_upload_session(upload_id)
 
+    if (user.username != meta['user'].username):
+        raise HTTPException(status_code=401)
+
     offset = 0
 
     if (meta is None):
@@ -1065,8 +1100,7 @@ def head_upload(upload_id: str,token:dict=Depends(verify_token)) -> Response:
     else:
         tran.run()
         if (meta.get("metadata", {}).get("overwrite", False) ):
-            h = open(upload_full_path, "w+b") # truncate file
-            h.close()
+            Truncate(str(upload_full_path)).execute()
         else:
             offset = obj.size
             CONFIG.increment_upload_offset(upload_id, offset,reset=True)
@@ -1379,7 +1413,7 @@ def preview_file(filename: str, request:Request, token:str) -> StreamingResponse
             generator = buffer
             buffer.seek(0)
         case "video" | "audio":
-            revoke_token = False
+            #revoke_token = False <- this may incur in a bug but let's keep it commented for a time being - not critical
             response = FileResponse(
                 path,
                 media_type=file_info.mimetype or "application/octet-stream",
@@ -1544,6 +1578,12 @@ async def onlyoffice_callback(filename:str,request: Request) -> Dict:
     if status in (2,6):
         file_url = data["url"]
 
+        if (not is_allowed_onlyoffice_url(file_url)):
+            raise HTTPException(
+                403,
+                "Invalid OnlyOffice URL"
+            )
+
 
         path = Path(CONFIG.mountpoint, filename).resolve()
 
@@ -1552,13 +1592,13 @@ async def onlyoffice_callback(filename:str,request: Request) -> Dict:
         if ((mountpoint not in path.parents) and (path != mountpoint)):
             raise HTTPException(403, "Invalid path")
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             async with client.stream("GET", file_url) as r:
                 r.raise_for_status()
 
                 content_type = r.headers.get("content-type", "")
 
-                if "html" in content_type.lower():
+                if ("html" in content_type.lower()):
                     raise HTTPException(500, "Unexpected HTML response")
 
                 proc = subprocess.Popen(
@@ -1625,6 +1665,9 @@ def ls_anon_shared(
         if (rel_path is not None):
             requested_path /= rel_path
 
+        if (not requested_path.is_relative_to(Path(path).resolve())):
+            raise HTTPException(status_code=403)
+
         obj = get_file_info(path)
 
         if (obj.type == "dir"):
@@ -1638,7 +1681,7 @@ def ls_anon_shared(
                     SharedFileInfo(
                         **obj.model_dump(),
                         relative_path=str(full_path.relative_to(mountpoint)),
-                        can_edit=True
+                        can_edit=can_edit
                     )
                 )
                 
@@ -1692,11 +1735,8 @@ def onlyoffice_anon_shared(
     if (obj.type == "dir"):
         requested_path /= rel_path
 
-        if (not requested_path.is_relative_to(path)):
+        if ((not requested_path.is_relative_to(Path(path).resolve())) and (not requested_path.is_relative_to(Path(CONFIG.mountpoint).resolve()))):
             raise HTTPException(status_code=401)
-
-    CONFIG.warning(requested_path)
-
 
 
     return make_onlyoffice_configuration(requested_path,request,user,can_edit)

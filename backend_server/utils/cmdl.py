@@ -2999,3 +2999,76 @@ class LSCPU(CommandLine):
     def from_dict(serialisation):
         return LSCPU()
 
+
+class IP(CommandLine):
+    def __init__(this,one_line:bool=True,**kwargs):
+        cmd = ['ip']
+
+        if (one_line):
+            cmd.append("-o")
+
+        this._one_line = one_line
+
+        super().__init__(command=cmd, **kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['one_line'] = this._one_line
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return IP(
+            serialisation.get("one_line", None),
+        )
+
+class IPAddr(IP):
+    def __init__(this,subcmd:str,options:Optional[List[str]]=None,one_line:bool=True,**kwargs):
+        this._subcmd = subcmd
+        this._options = options
+
+        super().__init__(one_line,**kwargs)
+
+        this.append(["addr", subcmd])
+
+        if (options is not None):
+            this.append(options)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['subcmd'] = this._subcmd
+        d['options'] = this._options
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return IPAddr(
+            serialisation.get("subcmd", None),
+            serialisation("options",None)
+        )
+
+class Truncate(CommandLine):
+    def __init__(this,filename:str, size:Union[int,str] = 0,**kwargs):
+        cmd = ['truncate' ,'-s',str(size), filename]
+
+        this._filename = filename
+        this._size = size
+
+
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['filename'] = this._filename
+        d['size'] = this._size
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return Truncate(
+            serialisation.get("filename", None),
+            serialisation.get("size", None),
+        )

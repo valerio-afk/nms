@@ -4,7 +4,7 @@
 
 ![Python](https://img.shields.io/badge/python-3.14-blue)
 ![Platform](https://img.shields.io/badge/platform-linux-lightgrey)
-![License](https://img.shields.io/badge/license-GPLv3-green)
+![License](https://img.shields.io/badge/license-AGPL--3.0-green)
 
 A **lightweight**, **flexible** NAS solution written in Python that runs on **any Linux distribution and architecture**.
 
@@ -1028,14 +1028,15 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 ## 📜 License
 
-NMS is provided under [GNU GPL 3.0 license agreement](https://www.gnu.org/licenses/gpl-3.0.en.html).
-Specifically, this includes:
-* Flask Frontend
-* React Frontend (Box)
-* FastAPI backend
-* NMS shared library (nms_shared)
+The source code of this repository is licensed under the [GNU Affero General Public License version 3.0 (AGPL-3.0)](https://www.gnu.org/licenses/agpl-3.0.html).
 
-Other software distributed with this repository are:
+Under the AGPL-3.0 license, if you modify this software and make it available
+to users over a network, you must provide those users access to the
+corresponding source code of your modified version.
+
+Third-party components included in this repository are distributed under their
+respective licences:
+
 * Bootstrap 5.3.8: [MIT License](https://mit-license.org)
 * Morphdom 2.7.8: [MIT License](https://mit-license.org)
 * Showdown 2.1.0: [MIT License](https://mit-license.org)
