@@ -214,8 +214,9 @@ export function getPreviewUrl(path: string, previewToken: string): string {
     return url;
 }
 
-export async function downloadFile(path: string): Promise<void> {
-    const response = await getResponse(`/fs/item/${path}`, {
+export async function downloadFile(path: string, shareToken?: string): Promise<void> {
+    const query = shareToken ? `?share_token=${encodeURIComponent(shareToken)}` : '';
+    const response = await getResponse(`/fs/item/${path}${query}`, {
         method: 'GET'
     });
 
@@ -241,8 +242,13 @@ export async function downloadFile(path: string): Promise<void> {
     window.URL.revokeObjectURL(url);
 }
 
-export async function getOnlyOfficeConfig(path: string): Promise<any> {
-    return await apiRequest<any>(`/fs/onlyoffice/${path}`, { method: 'GET' });
+export async function getOnlyOfficeConfig(path: string, shareToken?: string): Promise<any> {
+    const query = shareToken ? `?share_token=${encodeURIComponent(shareToken)}` : '';
+    return await apiRequest<any>(`/fs/onlyoffice/${path}${query}`, { method: 'GET' });
+}
+
+export async function getOnlyOfficeConfigShared(path: string, shareToken: string): Promise<any> {
+    return await apiRequest<any>(`/filesharing/onlyoffice/${path}?token=${encodeURIComponent(shareToken)}`, { method: 'GET' });
 }
 
 export interface SharingPermissions {
@@ -299,4 +305,11 @@ export async function getSharedFiles(): Promise<SharedFileInfo[]> {
 export async function browseSharedFs(path: string): Promise<FSBrowse> {
     const endpoint = `/fs/shared/${path}`;
     return await apiRequest<FSBrowse>(endpoint, { method: 'GET' });
+}
+
+export async function browseFileSharing(shareToken: string, path?: string): Promise<SharedFileInfo[]> {
+    const subpath = path ? `/${path}` : '';
+    return await apiRequest<SharedFileInfo[]>(`/filesharing/browse${subpath}?token=${encodeURIComponent(shareToken)}`, {
+        method: 'GET'
+    });
 }

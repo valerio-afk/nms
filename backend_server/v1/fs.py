@@ -511,6 +511,108 @@ def get_file_info(path:str) -> Optional[FileInfo]:
     else:
         return None
 
+
+def make_onlyoffice_configuration(path:Path, request:Request, user:Optional[UserProfile]= None, edit=False) -> Dict:
+    p = str(path)
+
+    file_info = get_file_info(p)
+
+    stat = Stat(p, "%D:%i",sudo=True).execute()
+
+    if (stat.returncode == 0):
+        raw_key = stat.stdout
+    else:
+        raw_key = p
+
+    # CONFIG.warning(f"Onlyoffice key for {p}: {raw_key}")
+
+    key = hashlib.md5(raw_key.encode()).hexdigest()
+
+    # key = f"{p}:{file_info.modification_time}"
+
+    filetype = "txt"
+    documentType = file_info.type
+
+
+    if (documentType == "word"):
+        if ("openxmlformats" in file_info.mimetype):
+            filetype = "docx"
+        elif ("opendocument" in file_info.mimetype):
+            filetype = "odt"
+        elif ("ms" in file_info.mimetype):
+            filetype = "doc"
+        elif ("pdf" in file_info.mimetype):
+            filetype = "pdf"
+    elif (documentType == "presentation"):
+        documentType = "slide"
+        if ("openxmlformats" in file_info.mimetype):
+            filetype = "pptx"
+        elif ("opendocument" in file_info.mimetype):
+            filetype = "odp"
+        elif ("ms" in file_info.mimetype):
+            filetype = "ppt"
+
+    elif (documentType == "spreadsheet"):
+        documentType = "cell"
+        if ("openxmlformats" in file_info.mimetype):
+            filetype = "xlsx"
+        elif ("opendocument" in file_info.mimetype):
+            filetype = "ods"
+        elif ("ms" in file_info.mimetype):
+            filetype = "xls"
+
+
+    url_path = str(path.relative_to(CONFIG.mountpoint))
+
+    if (url_path.startswith("/")):
+        url_path = url_path[1:]
+
+
+    url = request.url_for(
+        "get_document",
+        filename=url_path
+    )
+
+    callback = request.url_for(
+        "onlyoffice_callback",
+        filename=url_path
+    )
+
+    only_office_config = {
+        "document": {
+            "fileType": filetype,
+            "key": key,
+            "title": file_info.name,
+            "url": str(url),
+            "permissions": {
+                "edit": edit,
+                "download": True,
+                "print": True,
+                "comment": edit,
+                "review": edit
+            }
+        },
+        "documentType": documentType,
+        "editorConfig": {
+            "mode": "edit" if edit else "view",
+            "callbackUrl": str(callback),
+            "user": {
+                "id": user.uid,
+                "name": user.visible_name if user.visible_name is not None else user.username,
+            } if user is not None else None
+        }
+    }
+
+    token = jwt.encode(
+        only_office_config,
+        CONFIG.ONLYOFFICE_CONF['jwt_secret'],
+        algorithm="HS256"
+    )
+
+    only_office_config["token"] = token
+
+    return only_office_config
+
 @fs.delete(
     "/mountpoint",
     responses={500: {"description": "Any internal errors"}},
@@ -1147,7 +1249,7 @@ def onlyoffice_session(filename: str, request:Request, token:dict=Depends(verify
         p = check_path_jail(user, filename)
     except HTTPException:
         p,edit = shared_file_check_authorisation(filename, token)
-        CONFIG.warning(f" {user.username} can edit: {filename}: {edit}")
+        # CONFIG.warning(f" {user.username} can edit: {filename}: {edit}")
 
     stat = Stat(str(p),format="%F",sudo=True).execute()
 
@@ -1159,102 +1261,7 @@ def onlyoffice_session(filename: str, request:Request, token:dict=Depends(verify
     if (len(fname) == 0):
         raise HTTPException(status_code=500)
 
-    file_info = get_file_info(str(p))
-
-    stat = Stat(str(p), "%D:%i",sudo=True).execute()
-
-    if (stat.returncode == 0):
-        raw_key = stat.stdout
-    else:
-        raw_key = str(p)
-
-    CONFIG.warning(f"Onlyoffice key for {p}: {raw_key}")
-
-    key = hashlib.md5(raw_key.encode()).hexdigest()
-
-    # key = f"{p}:{file_info.modification_time}"
-
-    filetype = "txt"
-    documentType = file_info.type
-
-    if (documentType == "word"):
-        if ("openxmlformats" in file_info.mimetype):
-            filetype = "docx"
-        elif ("opendocument" in file_info.mimetype):
-            filetype = "odt"
-        elif ("ms" in file_info.mimetype):
-            filetype = "doc"
-        elif ("pdf" in file_info.mimetype):
-            filetype = "pdf"
-    elif (documentType == "presentation"):
-        documentType = "slide"
-        if ("openxmlformats" in file_info.mimetype):
-            filetype = "pptx"
-        elif ("opendocument" in file_info.mimetype):
-            filetype = "odp"
-        elif ("ms" in file_info.mimetype):
-            filetype = "ppt"
-
-    elif (documentType == "spreadsheet"):
-        documentType = "cell"
-        if ("openxmlformats" in file_info.mimetype):
-            filetype = "xlsx"
-        elif ("opendocument" in file_info.mimetype):
-            filetype = "ods"
-        elif ("ms" in file_info.mimetype):
-            filetype = "xls"
-
-
-    url_path = str(p.relative_to(CONFIG.mountpoint))
-
-    if (url_path.startswith("/")):
-        url_path = url_path[1:]
-
-
-    url = request.url_for(
-        "get_document",
-        filename=url_path
-    )
-
-    callback = request.url_for(
-        "onlyoffice_callback",
-        filename=url_path
-    )
-
-    only_office_config = {
-        "document": {
-            "fileType": filetype,
-            "key": key,
-            "title": file_info.name,
-            "url": str(url),
-            "permissions": {
-                "edit": edit,
-                "download": True,
-                "print": True,
-                "comment": edit,
-                "review": edit
-            }
-        },
-        "documentType": documentType,
-        "editorConfig": {
-            "mode": "edit" if edit else "view",
-            "callbackUrl": str(callback),
-            "user": {
-                "id": user.uid,
-                "name": user.visible_name if user.visible_name is not None else user.username,
-            }
-        }
-    }
-
-    token = jwt.encode(
-        only_office_config,
-        CONFIG.ONLYOFFICE_CONF['jwt_secret'],
-        algorithm="HS256"
-    )
-
-    only_office_config["token"] = token
-
-    return only_office_config
+    return make_onlyoffice_configuration(p,request,user,edit)
 
 @fs.delete("/item/{filename:path}",summary="Delete a file/directory within the user space.")
 def fs_rm(filename: str, token:dict=Depends(verify_token)) -> None:
@@ -1583,7 +1590,9 @@ async def onlyoffice_callback(filename:str,request: Request) -> Dict:
 
 
 @file_sharing.get("/browse",response_model=List[SharedFileInfo],summary="Get the list of files shared via the sharing token.")
+@file_sharing.get("/browse/{rel_path:path}",response_model=List[SharedFileInfo],summary="Get the list of files shared via the sharing token.")
 def ls_anon_shared(
+        rel_path: Optional[str] = None,
         auth_token:Optional[dict] = Depends(verify_user_token_shared_files),
         share_token:dict=Depends(verify_shared_file_token)) -> List[SharedFileInfo]:
 
@@ -1613,6 +1622,9 @@ def ls_anon_shared(
 
     if (path is not None):
         requested_path = Path(path).resolve()
+        if (rel_path is not None):
+            requested_path /= rel_path
+
         obj = get_file_info(path)
 
         if (obj.type == "dir"):
@@ -1638,156 +1650,53 @@ def ls_anon_shared(
 
     return files
 
+@file_sharing.get("/onlyoffice/{rel_path:path}")
+def onlyoffice_anon_shared(
+        request:Request,
+        rel_path: str,
+        auth_token:Optional[dict] = Depends(verify_user_token_shared_files),
+        share_token:dict=Depends(verify_shared_file_token)) -> Optional[Dict]:
+
+    authorised = False
+    can_edit = False
+
+    user = None
+
+    if (((share_with := share_token.get("share_with", {})) is None) or (len(share_with) == 0)):
+        authorised = True
+
+    if (auth_token is not None):
+        user = CONFIG.get_user(auth_token.get("username", None))
+        if ((user is not None) and (user.username in share_with.keys())):
+            authorised = True
+            can_edit = share_with[user.username].get("can_edit", False)
+
+    if (not authorised):
+        raise HTTPException(status_code=401)
 
 
-    #
-    #
-    # if (not user):
-    #     raise HTTPException(status_code=401)
-    #
-    # files:List[SharedFileInfo] = []
-    #
-    # mountpoint = CONFIG.mountpoint
-    #
-    # for f,d in CONFIG.get_files_shared_with(user.username).items():
-    #     obj = get_file_info(str(f))
-    #     if (obj is not None):
-    #         full_path = Path(f)
-    #
-    #
-    #         files.append(
-    #             SharedFileInfo(**obj.model_dump(),
-    #                 can_edit = d.get("can_edit",False),
-    #                 relative_path =  str(full_path.relative_to(mountpoint))
-    #             )
-    #         )
-    #
-    # files.sort(key=lambda x: x.name)
-    #
-    # CONFIG.flush_config()
-    #
-    # return files
+    path: Optional[str] = share_token.get("path", None)
 
-#
-#
-#
-#
-# @file_sharing.get("/browse/{filename:path}")
-# def fs_shared_browse(
-#     filename: str,
-#     t: Optional[str] = None,
-#     auth_token: Optional[dict] = Depends(verify_user_token_shared_files)
-# ) -> List[SharedFileInfo]:
-#
-#     requested_path, can_edit = shared_file_check_authorisation(filename, auth_token,t)
-#     mountpoint = Path(CONFIG.mountpoint).resolve()
-#
-#     #
-#     # Read metadata for the ACTUAL requested path.
-#     #
-#     file_info = get_file_info(str(requested_path))
-#
-#     if file_info is None:
-#         raise HTTPException(status_code=404)
-#
-#     #
-#     # Regular file -> return single item.
-#     #
-#     if file_info.type != "dir":
-#         return [
-#             SharedFileInfo(
-#                 **file_info.model_dump(),
-#                 relative_path=filename,
-#                 can_edit=can_edit
-#             )
-#         ]
-#
-#     #
-#     # Directory listing
-#     #
-#     ls = LS(str(requested_path), sudo=True).execute()
-#
-#     if ls.returncode != 0:
-#         raise HTTPException(status_code=500)
-#
-#     files: List[FileInfo] = []
-#
-#     for f in ls.stdout.splitlines():
-#
-#         current = requested_path.joinpath(f).resolve()
-#
-#         #
-#         # Prevent symlink escape during directory traversal.
-#         #
-#         if not current.is_relative_to(mountpoint):
-#             continue
-#
-#         obj = get_file_info(str(current))
-#
-#         if obj is not None:
-#             files.append(obj)
-#
-#     files.sort(key=lambda x: x.name)
-#
-#     return [
-#         SharedFileInfo(
-#             **d.model_dump(),
-#             can_edit=can_edit,
-#             relative_path=str(Path(filename, d.name))
-#         )
-#         for d in files
-#     ]
-#
-# @file_sharing.get("/item/{filename:path}",summary="Allows to download a shared file")
-# def download_shared_file (filename: str,
-#     r:Request,
-#     t: Optional[str] = None,
-#     auth_token: Optional[dict] = Depends(verify_user_token_shared_files),
-#
-# ) -> StreamingResponse:
-#
-#     requested_path, _ = shared_file_check_authorisation(filename, auth_token,t)
-#
-#     stat = Stat(str(requested_path),format="%F",sudo=True).execute()
-#
-#     if (stat.returncode != 0) or ("regular file" not in stat.stdout):
-#         raise HTTPException(status_code=400)
-#
-#     fname = requested_path.name
-#
-#     if (len(fname) == 0):
-#         raise HTTPException(status_code=500)
-#
-#     file_info = get_file_info(str(requested_path))
-#
-#     username = auth_token["username"] if "username" in auth_token else "Anonymous"
-#
-#     CONFIG.info(f"Shared file {filename} downloaded by {r.client.host} - User: {username}")
-#
-#     return StreamingResponse(
-#         file_generator(str(requested_path)),
-#         media_type=file_info.mimetype,
-#         headers={"Content-Disposition": f'attachment; filename="{fname}"'}
-#     )
-#
-#
-# @file_sharing.head("/preview/{filename:path}",summary="Generate a token for preview (this is to accommodate <video>)")
-# def get_preview_token_file_sharing(filename: str,
-#         t: Optional[str] = None,
-#         auth_token: Optional[dict] = Depends(verify_user_token_shared_files)
-#   ) -> Response:
-#
-#     requested_path, _ = shared_file_check_authorisation(filename, auth_token, t)
-#
-#     file_info = get_file_info(str(requested_path))
-#
-#     if ((file_info is None) or (file_info.type == 'dir')):
-#         raise HTTPException(status_code=400)
-#
-#     token = create_token(auth_token.get("username") if (auth_token is not None) else "Anonymous",filename,60)
-#
-#     return Response(
-#         status_code=200,
-#         headers={"X-Preview-Token": token}
-#     )
+    if (path is None):
+        return None
 
+    shared_path = Path(path).resolve()
+
+    if (not shared_path.is_relative_to(CONFIG.mountpoint)):
+        raise HTTPException(status_code=401)
+
+    requested_path = Path(path).resolve()
+
+    obj = get_file_info(requested_path)
+
+    if (obj.type == "dir"):
+        requested_path /= rel_path
+
+        if (not requested_path.is_relative_to(path)):
+            raise HTTPException(status_code=401)
+
+    CONFIG.warning(requested_path)
+
+
+
+    return make_onlyoffice_configuration(requested_path,request,user,can_edit)

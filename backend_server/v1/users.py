@@ -319,6 +319,9 @@ def set_username(data:ChangeUsernameData,token:dict=Depends(verify_token)) -> di
 
     mountpoint = CONFIG.mountpoint
 
+    old_homedir = None
+    new_homedir = None
+
     if (mountpoint is not None):
         old_homedir = os.path.join(mountpoint,data.old_username)
         new_homedir = os.path.join(mountpoint, data.new_username)
@@ -337,6 +340,7 @@ def set_username(data:ChangeUsernameData,token:dict=Depends(verify_token)) -> di
                 raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_USER_NAME.name,params=[errors]))
 
     CONFIG.change_username(data.old_username,data.new_username)
+    CONFIG.change_username_in_share(data.old_username,data.new_username, old_homedir, new_homedir)
     CONFIG.flush_config()
 
     CONFIG.warning(f"Username change requested by {username}: {data.old_username} -> {data.new_username}")

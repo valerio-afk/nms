@@ -43,6 +43,7 @@ PACKAGES_APT=(
     inotify-tools
     coreutils
     atool
+    util-linux
 )
 
 PACKAGES_DNF=(
@@ -77,6 +78,7 @@ PACKAGES_DNF=(
     inotify-tools
     coreutils
     atool
+    util-linux
 )
 
 SERVICES_TO_DISABLE_APT=(

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useContext } from 'react';
-import { browseFs, mkdirFs, mvFs, cpFs, rmFs, zipFs, unzipFs, downloadFile, getSharedFiles, browseSharedFs, type FSBrowse, type FileInfo, ApiError, API_BASE_URL } from '../utils/api';
+import { browseFs, mkdirFs, mvFs, cpFs, rmFs, zipFs, unzipFs, downloadFile, getSharedFiles, browseSharedFs, browseFileSharing, type FSBrowse, type FileInfo, ApiError, API_BASE_URL } from '../utils/api';
 import Uppy from '@uppy/core';
 import Tus from '@uppy/tus';
 import DashboardModal from '@uppy/react/dashboard-modal';
@@ -61,9 +61,11 @@ const FileIcon = ({ type }: { type: FileInfo['type'] }) => {
 
 export interface FileBrowserProps {
     onAuthError?: (code?: string) => void;
+    shareToken?: string;
+    onShareAuthError?: () => void;
 }
 
-export default function FileBrowser({ onAuthError }: FileBrowserProps) {
+export default function FileBrowser({ onAuthError, shareToken, onShareAuthError }: FileBrowserProps) {
     const { t } = useTranslation();
     const { ctxMenuPosition, setCtxMenuPosition, handleContextMenuClick } = useContext(ContextMenuContext);
     const [currentPath, setCurrentPath] = useState<string>('');
@@ -403,6 +405,32 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
         }
     };
 
+    const loadShareLinkFiles = async (token: string, path: string = '') => {
+        setLoading(true);
+        setError(null);
+        setSelectedItems(new Set());
+        setLastSelectedAnchor(null);
+        setIsSharedView(true);
+        try {
+            const files = await browseFileSharing(token, path);
+            setBrowseData({
+                path: path || '.',
+                files: files
+            });
+            setCurrentPath(path);
+        } catch (err) {
+            if (err instanceof ApiError && err.status === 401) {
+                if (onShareAuthError) {
+                    onShareAuthError();
+                    return;
+                }
+            }
+            setError(err instanceof Error ? err.message : 'Error loading shared files');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const loadPickerPath = async (path: string) => {
         setPickerLoading(true);
         try {
@@ -422,6 +450,11 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     };
 
     useEffect(() => {
+        if (shareToken) {
+            loadShareLinkFiles(shareToken);
+            return;
+        }
+
         const getUrlPath = () => {
             const urlParams = new URLSearchParams(window.location.search);
             const queryPath = urlParams.get('path');
@@ -457,6 +490,12 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
     }, []);
+
+    useEffect(() => {
+        if (shareToken) {
+            loadShareLinkFiles(shareToken);
+        }
+    }, [shareToken]);
 
     // Load picker root when modal opens
     useEffect(() => {
@@ -614,7 +653,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
         setIsDownloading(true);
         setError(null);
         try {
-            await downloadFile(itemPath);
+            await downloadFile(itemPath, shareToken);
             setSelectedItems(new Set());
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error downloading file');
@@ -914,18 +953,32 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
     const handleDoubleClick = (file: FileInfo) => {
         if (file.type === 'dir') {
             if (isSharedView) {
-                // Use relative_path if available (SharedFileInfo from root list),
-                // otherwise construct from currentPath (subdirectories inside shared folder)
-                const relativePath = ('relative_path' in file && (file as any).relative_path)
-                    || (currentPath ? `${currentPath}/${file.name}` : file.name);
-                if (relativePath) {
-                    loadSharedPath(relativePath);
+                if (shareToken) {
+                    // Path must be relative to the share root for the endpoint.
+                    // currentPath already tracks the logical subfolder we're inside.
+                    const nextPath = currentPath ? `${currentPath}/${file.name}` : file.name;
+                    loadShareLinkFiles(shareToken, nextPath);
+                } else {
+                    // For the regular shared-with-me view, relative_path is the full
+                    // server path needed by loadSharedPath.
+                    const relativePath = ('relative_path' in file && (file as any).relative_path)
+                        || (currentPath ? `${currentPath}/${file.name}` : file.name);
+                    if (relativePath) {
+                        loadSharedPath(relativePath);
+                    }
                 }
                 return;
             }
             const nextPath = currentPath ? `${currentPath}/${file.name}` : file.name;
             loadPath(nextPath);
         } else {
+            if (shareToken) {
+                if (['text', 'word', 'spreadsheet', 'presentation'].includes(file.type)) {
+                    setOnlyOfficeFile(file);
+                    setIsOnlyOfficeModalOpen(true);
+                }
+                return;
+            }
             setPreviewFile(file);
             setIsPreviewModalOpen(true);
         }
@@ -970,7 +1023,13 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                 <>
                                     <div className="flex items-center gap-1">
                                         <button
-                                            onClick={loadSharedFiles}
+                                            onClick={() => {
+                                                if (shareToken) {
+                                                    loadShareLinkFiles(shareToken, '');
+                                                } else {
+                                                    loadSharedFiles();
+                                                }
+                                            }}
                                             className="hover:text-indigo-600 dark:hover:text-indigo-400 focus:outline-none transition-colors cursor-pointer"
                                         >
                                             {t('browser.breadcrumbs.shared_with_me')}
@@ -985,7 +1044,11 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                                                     onClick={() => {
                                                         if (!isLast) {
                                                             const subPath = pathParts.slice(0, index + 1).join('/');
-                                                            loadSharedPath(subPath);
+                                                            if (shareToken) {
+                                                                loadShareLinkFiles(shareToken, subPath);
+                                                            } else {
+                                                                loadSharedPath(subPath);
+                                                            }
                                                         }
                                                     }}
                                                     disabled={isLast}
@@ -1032,7 +1095,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                     )}
                 </div>
                 <div>
-                    {isSharedView ? (
+                    {shareToken ? null : isSharedView ? (
                         <button
                             onClick={() => {
                                 setIsSharedView(false);
@@ -1624,6 +1687,7 @@ export default function FileBrowser({ onAuthError }: FileBrowserProps) {
                 }}
                 file={onlyOfficeFile}
                 currentPath={currentPath}
+                shareToken={shareToken}
             />
 
             <ShareModal

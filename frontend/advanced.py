@@ -79,14 +79,16 @@ def widget_system_updates(hedaers:Optional[Dict]=None):
 
     return render_widget("apt", **apt)
 
-def widget_danger_zone():
+def widget_danger_zone() -> Optional[str]:
     permissions = session.get("user").get("permissions", [])
 
+    is_pool_configured = BACKEND.is_pool_configured
+
     perms = {
-        'format_pool': match_permissions(permissions, UserPermissions.POOL_CONF_FORMAT),
+        'format_pool': match_permissions(permissions, UserPermissions.POOL_CONF_FORMAT) and is_pool_configured,
         'format_disk': match_permissions(permissions, UserPermissions.POOL_DISKS_FORMAT),
-        'destroy': match_permissions(permissions, UserPermissions.POOL_CONF_DESTROY),
-        'recovery': match_permissions(permissions, UserPermissions.POOL_TOOLS_RECOVERY)
+        'destroy': match_permissions(permissions, UserPermissions.POOL_CONF_DESTROY) and is_pool_configured,
+        'recovery': match_permissions(permissions, UserPermissions.POOL_TOOLS_RECOVERY) and is_pool_configured
     }
 
 
@@ -96,7 +98,10 @@ def widget_danger_zone():
         disks = BACKEND.system_disks
         choices = [(d.path, d.name) for d in disks]
 
-    return render_widget("danger_zone",permissions=perms,disks=choices)
+    if (any(perms.values()) or (len(choices)>0)):
+        return render_widget("danger_zone",permissions=perms,disks=choices)
+    else:
+        return None
 
 
 def create_fields_event_action(event_name:str,
@@ -235,7 +240,7 @@ def advanced():
         advanced_widgets.append(widget_system_updates())
 
 
-    if (BACKEND.is_pool_configured and advanced):
+    if (advanced):
         advanced_widgets.append(widget_danger_zone())
 
     return render_template("advanced.html",

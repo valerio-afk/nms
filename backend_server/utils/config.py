@@ -828,6 +828,7 @@ class NMSConfig(Logger):
     def change_username(this,old_username:str,new_username:str) -> None:
         this._cfg['users'][new_username] = this._cfg['users'].pop(old_username)
 
+
     def has_user_permission(this,username:str,perm:UserPermissions)->bool:
         user_permissions = this.user_permissions(username)
 
@@ -1351,6 +1352,49 @@ class NMSConfig(Logger):
         )
 
         return token
+
+    def change_username_in_share(this,
+                                 old_username:str,
+                                 new_username:str,
+                                 old_homedir:str,
+                                 new_home_dir:str) -> None:
+
+        if old_username == new_username:
+            return
+
+        shares = this._cfg['shares']
+
+        old_h = Path(old_homedir)
+        new_h = Path(new_home_dir)
+
+        # Iterate over a snapshot since we may rename keys
+        for p in list(shares.keys()):
+            share_info = shares[p]
+
+            # Rename user in share_with
+            share_with = share_info.get('share_with', {})
+            if (share_with is not None) and (old_username in share_with):
+                share_with[new_username] = share_with.pop(old_username)
+
+            # Rename share path if it belongs to the user's home
+            curr_path = Path(p)
+
+            if curr_path.is_relative_to(old_h):
+                rel = curr_path.relative_to(old_h)
+                new_path = str(new_h / rel)
+
+                if new_path != p:
+                    if new_path in shares:
+                        raise ValueError(
+                            f"Cannot rename share '{p}' to '{new_path}': "
+                            "destination already exists"
+                        )
+
+                    shares[new_path] = shares.pop(p)
+
+
+
+
 
     def remove_share_file(this,path:str) -> None:
         del this._cfg['shares'][path]

@@ -41,6 +41,21 @@ function App() {
   const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
   const langMenuRef = useRef<HTMLDivElement>(null);
 
+  const [currentRoute, setCurrentRoute] = useState(() => window.location.pathname);
+  const [shareAuthRequired, setShareAuthRequired] = useState(false);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentRoute(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const isShareRoute = currentRoute.endsWith('/share');
+  const searchParams = new URLSearchParams(window.location.search);
+  const shareToken = searchParams.get('t') || searchParams.get('token') || '';
+
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
@@ -85,7 +100,7 @@ function App() {
   };
 
   useEffect(() => {
-    if (!isLoggedIn) return;
+    if (!isLoggedIn || isShareRoute) return;
 
     let isMounted = true;
 
@@ -106,9 +121,20 @@ function App() {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [isLoggedIn]);
+  }, [isLoggedIn, isShareRoute]);
 
-  if (!isLoggedIn) {
+  if (isShareRoute && shareAuthRequired) {
+    return <Login
+      initialError={authError}
+      onLoginSuccess={() => {
+        setIsLoggedIn(true);
+        setShareAuthRequired(false);
+        setAuthError(null);
+      }}
+    />;
+  }
+
+  if (!isShareRoute && !isLoggedIn) {
     return <Login
       initialError={authError}
       onLoginSuccess={() => {
@@ -130,15 +156,19 @@ function App() {
             </h1>
           </div>
 
-          <div className="flex-1 flex justify-center items-center hidden md:flex">
-            {((storage.used == 0) && (storage.total == 0)) || <StorageBar used={storage.used} total={storage.total} />}
-          </div>
+          {!isShareRoute && (
+            <div className="flex-1 flex justify-center items-center hidden md:flex">
+              {((storage.used == 0) && (storage.total == 0)) || <StorageBar used={storage.used} total={storage.total} />}
+            </div>
+          )}
 
           <div className="flex-1 flex items-center justify-end gap-4">
             {/* Add a compact storage bar for mobile devices */}
-            <div className="md:hidden">
-              {((storage.used == 0) && (storage.total == 0)) || <StorageBar used={storage.used} total={storage.total} />}
-            </div>
+            {!isShareRoute && (
+              <div className="md:hidden">
+                {((storage.used == 0) && (storage.total == 0)) || <StorageBar used={storage.used} total={storage.total} />}
+              </div>
+            )}
 
             <div className="relative" ref={langMenuRef}>
               <button
@@ -187,18 +217,24 @@ function App() {
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
 
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 dark:text-gray-200 dark:bg-zinc-800 rounded-lg hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">{t('app.logout')}</span>
-            </button>
+            {!isShareRoute && (
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 dark:text-gray-200 dark:bg-zinc-800 rounded-lg hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">{t('app.logout')}</span>
+              </button>
+            )}
           </div>
         </header>
 
         <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-8">
-          <FileBrowser onAuthError={handleAuthError} />
+          <FileBrowser
+            onAuthError={handleAuthError}
+            shareToken={isShareRoute ? shareToken : undefined}
+            onShareAuthError={isShareRoute ? () => setShareAuthRequired(true) : undefined}
+          />
         </main>
       </div>
     </ContextMenuContext.Provider>
