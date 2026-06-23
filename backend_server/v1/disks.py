@@ -33,7 +33,7 @@ def get_system_disks() -> List[Disk]:
     lsblk_output = lsblk.execute()
     lsblk_disks = json.loads(lsblk_output.stdout)
 
-    sata_disks = [x for x in lsblk_disks['blockdevices'] if x['tran'] in ['sata', 'spi']]
+    sata_disks = [x for x in lsblk_disks['blockdevices'] if x['tran'] in ['sata', 'spi','usb']]
 
     return [
         Disk(name=d['name'],
@@ -91,7 +91,7 @@ def format_disk(dev:str) -> None:
 
 def smartctl(device:str) -> SMART:
     cmd = SMARTCTL(device,sudo=True).execute()
-    smartctl_data = json.loads(cmd.stdout) if cmd.returncode == 0 else {}
+    smartctl_data = json.loads(cmd.stdout) if cmd.returncode != 0 else {}
 
     smart_support = smartctl_data.get("smart_support",{})
     smart_available = smart_support.get("available",False)

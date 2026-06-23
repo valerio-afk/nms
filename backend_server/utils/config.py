@@ -684,7 +684,7 @@ class NMSConfig(Logger):
                         "mediaserver" : {
                             "service_name" : "jellyfin_server",
                             "port": 8096,
-                            "media_username": None
+                            "user": None
                         }
                     }
             },

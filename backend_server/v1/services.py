@@ -20,7 +20,7 @@ services = APIRouter(
 
 def disable_all_access_services() -> None:
     for name, s in CONFIG.access_services.items():
-        if s.is_active:
+        if (s.is_active) and (name.lower != "ssh"):
             try:
                 s.disable()
             except:

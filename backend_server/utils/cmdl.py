@@ -275,7 +275,7 @@ class ZPoolExport(ZPoolCommand):
         return ZPoolExport(serialisation.get('tank_name',None))
 
 class ZPoolCreate(ZPoolCommand):
-    def __init__(this,disks,redundancy,encryption,compression,tank_name="tank"):
+    def __init__(this,disks,redundancy,encryption,compression,tank_name="tank",acltype:Optional[str]="posixacl"):
         cmd_revert = ["sudo", "zpool", "destroy", "-f", tank_name]
 
         super().__init__("create", revert_command=cmd_revert,sudo=True)
@@ -293,6 +293,9 @@ class ZPoolCreate(ZPoolCommand):
 
         if (compression):
             this.append(["-O", "compression=lz4"])
+
+        if (acltype is not None):
+            this.append(["-O", f"acltype={acltype}"])
 
         if (encryption is not None):
             this.append(["-O", "encryption=aes-256-gcm"])
@@ -409,9 +412,17 @@ class ZpoolGet(ZpoolJsonSubCommand):
 
 
 class ZFSCommand(RevertibleCommandLine):
-    def __init__(this, subcommand,**kwargs):
+    def __init__(this, subcommand, options:Optional[dict]=None,**kwargs):
         this._disks = None
         cmd = ["zfs", subcommand]
+
+        this._options = options
+
+        if (options is not None):
+            for k,v in options:
+                cmd.extend(["-o",f"{k}={v}"])
+
+
         super().__init__(cmd,**kwargs)
 
 class ZFSGetQuota(ZFSCommand):
@@ -427,6 +438,7 @@ class ZFSGetQuota(ZFSCommand):
         d = super().to_dict()
         d['pool'] = this._pool
         d['dataset'] = this._dataset
+        d['options'] = this._options
         return d
 
     @staticmethod
@@ -475,6 +487,30 @@ class ZFSSetQuota(ZFSCommand):
             serialisation.get('quota', None),
             serialisation.get('pool', None),
             serialisation.get('dataset',None)
+        )
+
+class ZFSSetACL(ZFSCommand):
+    def __init__(this, acltype:str,pool:str,**kwargs):
+        super().__init__("set",**kwargs)
+
+        this.append(f"acltype={acltype}")
+        this.append(f"{pool}")
+
+        this._pool = pool
+        this._acltype = acltype
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['pool'] = this._pool
+        d['acltype'] = this._acltype
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ZFSSetACL(
+            serialisation.get('acltype', None),
+            serialisation.get('quota', None),
+            serialisation.get('pool', None),
         )
 
 
@@ -549,7 +585,7 @@ class ZFSUnLoadKey(ZFSCommand):
 
 class ZFSCreate(ZFSCommand):
 
-    def __init__(this,pool="tank", dataset="data"):
+    def __init__(this,pool="tank", dataset="data", options:Optional[dict]=None):
         this._pool = pool
         this._dataset = dataset
 
@@ -557,7 +593,7 @@ class ZFSCreate(ZFSCommand):
 
         cmd_revert = ["sudo", "zfs", "destroy", fs]
 
-        super().__init__("create", revert_command=cmd_revert, sudo=True)
+        super().__init__("create", revert_command=cmd_revert, options=options, sudo=True)
 
         this.append(fs)
 
@@ -566,12 +602,13 @@ class ZFSCreate(ZFSCommand):
 
         d['pool'] = this._pool
         d['dataset'] = this._dataset
+        d['options'] = this._options
 
         return d
 
     @staticmethod
     def from_dict(serialisation):
-        return ZFSCreate(serialisation.get('pool',None),serialisation.get('dataset',None))
+        return ZFSCreate(serialisation.get('pool',None),serialisation.get('dataset',None), serialisation.get("options",None))
 
 class ZFSDestroy(ZFSCommand):
 
@@ -2906,4 +2943,59 @@ class ALS(CommandLine):
             serialisation.get("path", None),
         )
 
+
+class ALS(CommandLine):
+    def __init__(this,path:str,**kwargs):
+        cmd = ['als',path]
+        this._path = path
+
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['path'] = this._path
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ALS(
+            serialisation.get("path", None),
+        )
+
+
+class VCGENCMD(CommandLine):
+    def __init__(this,subcmd:str,**kwargs):
+        cmd = ['vcgencmd',subcmd]
+        this._subcmd = subcmd
+
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['subcmd'] = this._subcmd
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return ALS(
+            serialisation.get("subcmd", None),
+        )
+
+
+
+class LSCPU(CommandLine):
+    def __init__(this,**kwargs):
+        cmd = ['lscpu']
+        super().__init__(cmd,**kwargs)
+
+    def to_dict(this):
+        d = super().to_dict()
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return LSCPU()
 

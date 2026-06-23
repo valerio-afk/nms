@@ -11,10 +11,10 @@ TEMP_RANGE={
     'hdd': (20,45)
 }
 
-SATA_12_ENABLE = environ.get('SATA_12_ENABLE',25)
-SATA_34_ENABLE = environ.get('SATA_34_ENABLE',26)
-FAN_PWM = environ.get('FAN_PWM',13)
-FAN_SENSING = environ.get('FAN_PWM',23)
+SATA_12_ENABLE = int(environ.get('SATA_12_ENABLE',"25"))
+SATA_34_ENABLE = int(environ.get('SATA_34_ENABLE',"26"))
+FAN_PWM = int(environ.get('FAN_PWM',"13"))
+FAN_SENSING = int(environ.get('FAN_SENSING',"23"))
 
 
 GPIO.setmode(GPIO.BCM)

@@ -1,5 +1,5 @@
 from backend_server.utils.cmdl import Shutdown, Reboot, SystemCtlRestart, LocalCommandLineTransaction, JournalCtl
-from backend_server.utils.cmdl import TarArchive, LS, LMSensors
+from backend_server.utils.cmdl import TarArchive, LS, LMSensors, LSCPU, VCGENCMD
 from backend_server.utils.config import CONFIG
 from backend_server.utils.enums import DistroFamilies
 from backend_server.utils.events import EventContext, Events
@@ -54,10 +54,12 @@ def last_apt_time() -> Optional[int]:
     return None
 
 def get_cpu_name() -> Optional[str]:
-    with open("/proc/cpuinfo") as f:
-        for line in f:
-            if "model name" in line:
-                return line.split(": ")[1].strip()
+    cmd = LSCPU().execute()
+
+    if (cmd.returncode == 0):
+        for line in cmd.stdout.splitlines():
+            if "Model name" in line:
+                return line.split(":")[1].strip()
     return None
 
 def system_information() -> Dict[str, str]:
@@ -159,6 +161,42 @@ def hddtemp_parser(data:List[str]) -> List[Sensor]:
             value=temp_value,
             metric=SensorMetric.CELSIUS
         ))
+
+    return sensors
+
+def rpi_sensors():
+    sensors = []
+
+    temp = VCGENCMD("measure_temp",sudo=True).execute()
+    volt = VCGENCMD("measure_volts",sudo=True).execute()
+
+    if (temp.returncode == 0):
+        _,value = temp.stdout.strip().split("=")
+
+        if (len(value)>0):
+            value = value[0:-2]
+
+            sensors.append(Sensor(
+                device=SensorType.CPU,
+                name="SOC",
+                value=float(value),
+                metric = SensorMetric.CELSIUS
+            ))
+
+    if (volt.returncode == 0):
+        _,value = volt.stdout.strip().split("=")
+
+        if (len(value)>0):
+            value = value[0:-1]
+
+            sensors.append(Sensor(
+                device=SensorType.CPU,
+                name="SOC",
+                value=float(value),
+                metric = SensorMetric.VOLT
+            ))
+
+
 
     return sensors
 
@@ -431,6 +469,8 @@ def get_sensors() -> List[Sensor]:
                 value=smart.temperature,
                 metric=SensorMetric.CELSIUS
             ))
+
+    sensors += rpi_sensors()
 
     return sensors
 

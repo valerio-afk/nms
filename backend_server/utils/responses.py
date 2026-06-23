@@ -251,7 +251,7 @@ class Sensor(BaseModel):
 
 class SMARTPowerOnTime(BaseModel):
     hours:int
-    minutes:int
+    minutes:Optional[int] = Field(0)
 
 class SMARTAttribute(BaseModel):
     id:int

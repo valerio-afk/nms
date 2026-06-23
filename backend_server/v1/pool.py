@@ -78,7 +78,7 @@ def align_home_directories() -> None:
         ZFSSetQuota("backend", "none", CONFIG.pool_name, CONFIG.dataset_name, sudo=True), # just to be safe
     ]
 
-    trans = LocalCommandLineTransaction(*acl_cmd)
+    trans = LocalCommandLineTransaction(*acl_cmd,privileged=True)
     output = trans.run()
 
     if (not trans.success):
@@ -604,7 +604,7 @@ def pool_format(auth:Dict=Depends(verify_token_header_factory("format"))) -> Opt
 
     commands = [
         ZFSDestroy(pool, dataset),
-        ZFSCreate(pool, dataset)
+        ZFSCreate(pool, dataset,options={"acltype":"posixacl"}),
     ]
 
     trans = LocalCommandLineTransaction(*commands)

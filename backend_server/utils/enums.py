@@ -23,3 +23,4 @@ class SensorType(Enum):
 class SensorMetric(Enum):
     CELSIUS = '°C'
     RPM = 'RPM'
+    VOLT = 'V'
