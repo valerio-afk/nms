@@ -20,6 +20,7 @@ Despite its rich feature set, getting started is straightforward and requires mi
 ## 🌟 Key Features
 * 📦 [OpenZFS](https://openzfs.org/wiki/Main_Page) under the hood for robust file management
 * 👥 Multi-user system with finely-grained access control
+* 🔗 File sharing between authenticated and anonymous users
 * 💬 Notification system
 * 📃 Quota management
 * ⏰ Event management
