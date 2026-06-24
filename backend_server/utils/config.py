@@ -18,7 +18,7 @@ from nms_shared.disks import Disk
 from nms_shared.enums import DiskStatus, UserPermissions
 from nms_shared.utils import match_permissions
 from typing import Optional, Dict, List, Any, Type, Tuple, Union
-from threading import Lock
+from threading import RLock
 import base64
 import hashlib
 import json
@@ -193,7 +193,7 @@ class NMSConfig(Logger):
             raise Exception("Invalid secret key. Please provide a secret key as environmental variable NMS_SECRET_KEY.")
 
         this._config_file = config_file
-        this._lock = Lock()
+        this._lock = RLock()
         this._cfg = {}
         this._tmp_secret = {}
         this._uploads={}
@@ -825,11 +825,13 @@ class NMSConfig(Logger):
                 home_dir = tokens[5]
 
             uid = None
+            gid = None
 
             cmd = GetEntPasswd(username).execute()
             if (cmd.returncode == 0):
                 token = cmd.stdout.strip().split(":")
                 uid = int(token[2])
+                gid = int(token[3])
 
             return UserProfile(
                 username=username,
@@ -840,7 +842,8 @@ class NMSConfig(Logger):
                 admin=this.is_admin(username),
                 first_login_token=activation_token,
                 home_dir=home_dir,
-                uid=uid
+                uid=uid,
+                gid=gid
             )
 
     def set_user_fullname(this,username:str,fullname:str) -> None:

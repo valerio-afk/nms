@@ -13,7 +13,7 @@ from backend_server.v1.disks import smartctl, get_system_disks
 from backend_server.v1.net import net_counter
 from collections import OrderedDict
 from enum import Enum
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from nms_shared import ErrorMessages
 from nms_shared.constants import APT_LISTS
 from nms_shared.enums import LogFilter

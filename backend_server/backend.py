@@ -1,13 +1,13 @@
+from .utils.responses import ErrorMessage, WarningMessage
 from .v1.api import v1
+from backend_server.utils.limiter import limiter
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from .utils.responses import ErrorMessage
-from contextlib import asynccontextmanager
 from logging import getLogger
 from nms_shared import ErrorMessages
-from backend_server.utils.limiter import limiter
-from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 
 __version__ = "0.1rc1"
@@ -49,7 +49,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         exc_info=exc
     )
 
-    if isinstance(detail, ErrorMessage):
+    if isinstance(detail, (ErrorMessage,WarningMessage)):
         detail = detail.model_dump()
     return JSONResponse(
         status_code=exc.status_code,

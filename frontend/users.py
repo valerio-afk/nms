@@ -318,6 +318,27 @@ def change_username() -> Response:
     return redirect(url_for("main.users",q=username))
 
 
+@bp.route("/users/uid",methods=["POST"])
+def change_uid() -> Response:
+    username = request.form.get("username")
+
+    try:
+        validate_csrf(request.form.get("csrf_token"))
+    except ValidationError:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+    else:
+        uid = request.form.get("uid","")
+        try:
+            new_uid = int(uid)
+            BACKEND.change_uid(username,new_uid)
+        except ValueError:
+            show_flash(code=ErrorMessages.E_INVALID_VALUE.name,params=["UID",uid])
+
+        return redirect(url_for("main.users", q=username))
+
+    return redirect(url_for("main.users",q=username))
+
+
 @bp.route("/users/fullname",methods=["POST"])
 def change_fullname() -> Response:
     form = request.form

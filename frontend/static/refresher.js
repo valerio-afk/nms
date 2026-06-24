@@ -47,6 +47,7 @@ class PartialRefresher {
 
       (async () => {
         try {
+
           // If you need cookies/session auth, include credentials
           const response = await fetch(url, {
             method: 'GET',
@@ -96,12 +97,13 @@ class PartialRefresher {
 
                 const newEl = template.content.firstElementChild;
 
+
                 morphdom(el, newEl, {
                 onElUpdated: function(el) {
-                  setInterval(initializeToggleControls,100)
-                  setInterval(disableOnSubmit,100)
-                  setInterval(enablePasswordToggle,100)
-                  setInterval(refreshProgressBars,100)
+                  setTimeout(initializeToggleControls,100)
+                  setTimeout(disableOnSubmit,100)
+                  setTimeout(enablePasswordToggle,100)
+                  setTimeout(refreshProgressBars,100)
                 },
                 onBeforeElUpdated: function (fromEl, toEl) {
                     const active = document.activeElement;

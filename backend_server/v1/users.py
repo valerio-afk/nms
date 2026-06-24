@@ -2,12 +2,13 @@ import datetime
 import subprocess
 from .auth import check_permission
 from backend_server.utils.cmdl import LocalCommandLineTransaction, UserModAddGroup, GPasswdRemoveGroup, Stat, Cat
+from backend_server.utils.cmdl import UserModChangeUID, Find, GroupModChangeGID
 from backend_server.utils.cmdl import RSync, Chown, Mkdir, UserDel, GroupModChangeGroupName, GetEntShadow, GetEntPasswd
 from backend_server.utils.cmdl import ZFSSetQuota, UserModChangeUsername, SMBPasswd, RenameFile, UserModChangeHomeDir
 from backend_server.utils.config import CONFIG, create_system_user
 from backend_server.utils.events import EventContext, Events
 from backend_server.utils.responses import ChgFullnameData, ChangeQuotaData, ChangeUsernameData, SudoData, UserDelete
-from backend_server.utils.responses import NewUserProfile, WarningMessage, UserPermissionsData, Notification
+from backend_server.utils.responses import NewUserProfile, WarningMessage, UserPermissionsData, Notification, ChgUIDData
 from backend_server.utils.responses import UserProfile, AccessServiceCredentials, ErrorMessage, SuccessMessage
 from backend_server.v1.auth import verify_token_factory
 from dataclasses import  dataclass
@@ -271,6 +272,45 @@ def set_fullname(data:ChgFullnameData,token:dict=Depends(verify_token)) -> dict:
     CONFIG.flush_config()
 
     return {"detail": SuccessMessage(code=SuccessMessages.S_USER_FULLNAME.name)}
+
+@users.post("/set/uid")
+def set_fullname(data:ChgUIDData,token:dict=Depends(verify_token)) -> dict:
+    current_username = token.get("username")
+    allow_self_change(current_username,data.username)
+
+    user = CONFIG.get_user(current_username)
+
+    if (user is None):
+        raise HTTPException(status_code=500,
+                            detail=ErrorMessage(code=ErrorMessages.E_USER_NOT_FOUND.name, params=[current_username]))
+
+    cmd = UserModChangeUID(user.username,user.uid,data.uid,sudo=True).execute()
+
+    if (cmd.returncode != 0):
+        raise HTTPException(status_code=500,detail=ErrorMessage(code=ErrorMessages.E_USER_UID.name, params=[user.username,cmd.stderr]))
+
+
+    cmd2 = GroupModChangeGID(data.username,user.gid,data.uid,sudo=True).execute()
+
+    if (cmd2.returncode != 0):
+        raise HTTPException(status_code=500,detail=WarningMessage(code=WarningMessages.W_USER_GID.name,
+                                                                  params=[user.username,data.uid,user.gid,cmd2.stderr]))
+
+
+    cmd3 = Find(
+        path=user.home_dir,
+        tests={"gid":str(user.gid)},
+        exec=["chown","-h",f":{data.uid}", "{}"],
+        sudo=True
+    ).execute()
+
+    if (cmd3.returncode != 0):
+        raise HTTPException(status_code=500,detail=WarningMessage(code=WarningMessages.W_USER_GID_CHOWN.name, params=[user.username,data.uid,user.gid,cmd3.stderr]))
+
+
+
+
+    return {"detail": SuccessMessage(code=SuccessMessages.S_USER_UID.name)}
 
 @users.post("/set/quota")
 def set_quota(data:ChangeQuotaData,token:dict=Depends(verify_token)) -> dict:

@@ -18,6 +18,7 @@ class ErrorMessages(Enum):
     E_SYSTEMD_START = "E_SYSTEMD_START"
     E_SYSTEMD_STOP = "E_SYSTEMD_STOP"
     E_TOO_MANY_REQ = "E_TOO_MANY_REQ"
+    E_INVALID_VALUE = "E_INVALID_VALUE"
 
     E_POOL_ALREADY_CONF = "E_POOL_ALREADY_CONF"
     E_POOL_NO_CONF = "E_POOL_NO_CONF"
@@ -116,6 +117,7 @@ class ErrorMessages(Enum):
     E_USER_DELETE = "E_USER_DELETE"
     E_USER_LOGIN_RESET = "E_USER_LOGIN_RESET"
     E_USER_SYSTEM = "E_USER_SYSTEM"
+    E_USER_UID = "E_USER_UID"
 
     E_SYSTEM_UPDATES = "E_SYSTEM_UPDATES"
     E_SYSTEM_DIST = "E_SYSTEM_DIST"
@@ -155,6 +157,8 @@ class WarningMessages(Enum):
     W_POOL_DISK_OFFLINE = "W_POOL_DISK_OFFLINE"
     W_NEW_USER = "W_NEW_USER"
     W_USER_NO_UID = "W_USER_NO_UID"
+    W_USER_GID = "W_USER_GID"
+    W_USER_GID_CHOWN = "W_USER_GID_CHOWN"
 
 
     @staticmethod
@@ -211,6 +215,7 @@ class SuccessMessages(Enum):
     S_USER_PERM = "S_USER_PERM"
     S_DEL_USER = "S_DEL_USER"
     S_USER_LOGIN_RESET = "E_USER_LOGIN_RESET"
+    S_USER_UID = "E_USER_UID"
 
     S_EVENT_ADDED = "S_EVENT_ADDED"
     S_EVENT_ENABLED = "S_EVENT_ENABLED"
@@ -291,6 +296,7 @@ ERROR_MESSAGES = {
     ErrorMessages.E_SYSTEMD_START: lambda services,info : _("Error while starting the system service(s) %(services)s: %(info)s") % {"info":info,'services':services},
     ErrorMessages.E_SYSTEMD_STOP: lambda services,info : _("Error while stopping the system service(s) %(services)s: %(info)s") % {"info":info,'services':services},
     ErrorMessages.E_TOO_MANY_REQ : lambda : _("Too many requests. Please wait one minute."),
+    ErrorMessages.E_INVALID_VALUE : lambda prop, val : _("Invalid value for %(pop)s: %(val)s"),
 
     ErrorMessages.E_POOL_ALREADY_CONF : lambda: _("The disk array is already configured."),
     ErrorMessages.E_POOL_NO_CONF : lambda: _("Disk array not configured yet."),
@@ -397,6 +403,7 @@ ERROR_MESSAGES = {
     ErrorMessages.E_USER_DELETE: lambda user,info: _("Error occurred while deleting the user %(user)s: %(info)s.") % {'info':info,'user':user}, #<-----
     ErrorMessages.E_USER_LOGIN_RESET : lambda user,info: _("Error occurred while resetting the login credentials for %(user)s: %(info)s.") % {'info':info,'user':user}, #<-----
     ErrorMessages.E_USER_SYSTEM: lambda info: _("Error while retrieving the list of system users: %(info)s.") % {'info':info},
+    ErrorMessages.E_USER_UID: lambda username, info: _("Error while changing the uid for `%(username)s`: %(info)s.") % {'info':info,'username':username},
 
     ErrorMessages.E_SYSTEM_UPDATES: lambda: _("Unable to retrieve updates."),
     ErrorMessages.E_SYSTEM_DIST: lambda info: _("Error while creating distribution archive: %(info)s.") % {'info':info},
@@ -424,7 +431,9 @@ WARNING_MESSAGES = {
     WarningMessages.W_POOL_NEEDED : lambda : _("You need to configure your disk array before enabling any access services"),
     WarningMessages.W_POOL_DISK_OFFLINE : lambda : _("One or more of your disks in the array is offline. If redundancy is active, you can still use the array. Please, reinsert or replace your disk soon."),
     WarningMessages.W_NEW_USER : lambda user, info : _("User %(user)s has been created successfully. However, there has been some issues in setting their quota: %(info)s.") % {'user':user,"info":info},
-    WarningMessages.W_USER_NO_UID: lambda: _("Your user does not have a local user associated. Contact a system administrator to fix the issue in the Users tab.")
+    WarningMessages.W_USER_NO_UID: lambda: _("Your user does not have a local user associated. Contact a system administrator to fix the issue in the Users tab."),
+    WarningMessages.W_USER_GID: lambda username,uid,gid,info: _("The new uid for `%(username)s` is %(uid)s. However, the gid could not be changed and remains %(gid)s: %(info)s") % {"username":username, "uid":uid,"gid":gid, "info":info},
+    WarningMessages.W_USER_GID_CHOWN : lambda username,uid,gid,info: _("UID and GID for `%(username)s` has been successfully changed to %(uid)s:%(gid)s. However, files will keep maintaining the previous GID and needs to be changed manually via SSH: %(info)s") % {"username":username, "uid":uid,"gid":gid, "info":info},
 }
 
 SUCCESS_MESSAGES = {
@@ -468,6 +477,8 @@ SUCCESS_MESSAGES = {
     SuccessMessages.S_USER_QUOTA : lambda : _("User quota set successfully."),
     SuccessMessages.S_USER_NAME : lambda : _("Username changed successfully."),
     SuccessMessages.S_USER_SUDO : lambda : _("User's system privileges changed successfully."),
+    SuccessMessages.S_USER_UID : lambda : _("User ID changed successfully."),
+
     SuccessMessages.S_NEW_USER : lambda user : _("User %(user)s created successfully.") % {'user':user} ,
     SuccessMessages.S_DEL_USER: lambda user: _("User %(user)s deleted successfully.") % {'user': user},
     SuccessMessages.S_USER_PERM : lambda : _("Permissions changed successfully."),
@@ -477,6 +488,7 @@ SUCCESS_MESSAGES = {
     SuccessMessages.S_EVENT_DISABLED : lambda uuid : _("Event %(uuid)s disabled successfully.") % {'uuid':uuid},
     SuccessMessages.S_EVENT_DELETED : lambda uuid : _("Event %(uuid)s deleted successfully.") % {'uuid':uuid},
     SuccessMessages.S_EVENT_UPDATED : lambda uuid : _("Event %(uuid)s updated successfully.") % {'uuid':uuid},
+
 }
 
 INFO_MESSAGES = {

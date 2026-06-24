@@ -140,6 +140,7 @@ class UserProfile(NewUserProfile):
     first_login_token: Optional[str] = Field(None)
     home_dir: Optional[str] = Field(None)
     uid:Optional[int] = Field(None)
+    gid: Optional[int] = Field(None)
     notifications:int = Field(0)
 
 class Notification(BaseModel):
@@ -164,6 +165,11 @@ class ChangeUsernameData(BaseModel):
 class ChgFullnameData(BaseModel):
     username:str
     fullname:str
+
+class ChgUIDData(BaseModel):
+    username:str
+    uid:int
+
 
 class SudoData(BaseModel):
     username:str

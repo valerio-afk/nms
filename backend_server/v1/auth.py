@@ -113,7 +113,8 @@ class AuthUri(BaseModel):
             response_model=AuthUri,responses={403: {"description": "OPT Secret already configured"}},
             summary="Set a new OTP for the admin user (or with the use with a valid token)"
             )
-def auth_new_secret(token:Optional[str]=Query(default=None)) -> AuthUri:
+@limiter.limit("5/minute")
+def auth_new_secret(request:Request,token:Optional[str]=Query(default=None)) -> AuthUri:
     if ((token is None) and CONFIG.is_otp_configured):
         CONFIG.error("OTP is already configured")
         raise HTTPException(status_code=403, detail=ErrorMessage(code=ErrorMessages.E_AUTH_ALREADY_CONFIG.name))

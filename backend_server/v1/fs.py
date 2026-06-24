@@ -758,12 +758,16 @@ def ls_shared_dir(path:str, token:dict=Depends(verify_token)) -> FSBrowse:
     files: List[SharedFileInfo] = []
 
     mountpoint = CONFIG.mountpoint
-    requested_path = Path(mountpoint) / path
+    requested_path:Path = Path(mountpoint) / path
+    requested_path = requested_path.resolve()
+
+    if (not requested_path.is_relative_to(Path(mountpoint).resolve())):
+        raise HTTPException(status_code=401)
 
     shared_info:Optional[dict] = None
 
     for f, d in CONFIG.get_files_shared_with(user.username).items():
-        share_path = Path(f)
+        share_path = Path(f).resolve()
 
         if (requested_path.is_relative_to(share_path)):
             shared_info = d
@@ -1553,9 +1557,12 @@ def fs_quota(token:dict=Depends(verify_token)) -> Quota:
 
 @onlyoffice.get("/file/{filename:path}",name="get_document")
 def get_document(filename: str,token:dict=Depends(verify_onlyoffice)) -> Response:
-    path = str(Path(CONFIG.mountpoint,filename))
+    path = Path(CONFIG.mountpoint,filename).resolve()
 
-    file_info = get_file_info(path)
+    if (not path.is_relative_to(Path(CONFIG.mountpoint).resolve())):
+        raise HTTPException(status_code=401)
+
+    file_info = get_file_info(str(path))
 
     return StreamingResponse(
         file_generator_dd(str(path)),
@@ -1735,7 +1742,7 @@ def onlyoffice_anon_shared(
     if (obj.type == "dir"):
         requested_path /= rel_path
 
-        if ((not requested_path.is_relative_to(Path(path).resolve())) and (not requested_path.is_relative_to(Path(CONFIG.mountpoint).resolve()))):
+        if ((not requested_path.is_relative_to(Path(path).resolve())) or (not requested_path.is_relative_to(Path(CONFIG.mountpoint).resolve()))):
             raise HTTPException(status_code=401)
 
 

@@ -32,7 +32,7 @@ class CommandLine(ABC):
 
     @property
     def command(this) -> List[str]:
-        return this._command
+        return this._command.copy()
 
     @property
     def cwd(this) ->str:
@@ -803,7 +803,11 @@ class Chmod(RevertibleCommandLine):
         return Chmod(serialisation.get('flags',None),serialisation.get('path',None),sudo=serialisation.get('sudo',False))
 
 class Chown(RevertibleCommandLine):
-    def __init__(this,uid:Optional[str|int],gid:Optional[str|int],path:str,flags:Optional[List[str]]= None,sudo=False):
+    def __init__(this,
+                 uid:Optional[str|int],
+                 gid:Optional[str|int],
+                 path:str,
+                 flags:Optional[List[str]]= None,sudo=False):
         this._uid = uid
         this._gid = gid
         this._path = path
@@ -1169,7 +1173,7 @@ class LSBLK(CommandLine):
 class ApplyPatch(RevertibleCommandLine):
     BACK_EXT = ".bkp"
 
-    def __init__(this, patch_file, file_to_patch=None,strip:int=0, **kwargs):
+    def __init__(this, patch_file:str, file_to_patch:str,strip:int=0, **kwargs):
         super().__init__(["patch",f"-p{strip}",file_to_patch],**kwargs)
         this._file_to_patch = file_to_patch
         this._patch_file = patch_file
@@ -1216,7 +1220,7 @@ class ApplyPatch(RevertibleCommandLine):
         )
 
 class UserModChangeUsername(RevertibleCommandLine):
-    def __init__(this,old,new):
+    def __init__(this,old:str,new:str):
         cmd = ['usermod', '-l', new, old]
         revert_cmd = ['usermod', '-l', old, new]
         super().__init__(cmd,revert_cmd,sudo=True)
@@ -1237,6 +1241,60 @@ class UserModChangeUsername(RevertibleCommandLine):
             serialisation.get('old',None),
             serialisation.get('new', None),
         )
+
+class UserModChangeUID(RevertibleCommandLine):
+    def __init__(this,username:str,old:int,new:int, **kwargs):
+        cmd = ['usermod', '-u', str(new), username]
+        revert_cmd = ['usermod', '-u', str(old), username]
+        super().__init__(cmd,revert_cmd,**kwargs)
+
+        this._username = username
+        this._old = old
+        this._new = new
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['username'] = this._username
+        d['old'] = this._old
+        d['new'] = this._new
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return UserModChangeUsername(
+            serialisation.get('username',None),
+            serialisation.get('old',None),
+            serialisation.get('new', None),
+        )
+
+
+class GroupModChangeGID(RevertibleCommandLine):
+    def __init__(this, group_name:str, old:int, new:int, **kwargs):
+        cmd = ['groupmod', '-g', str(new), group_name]
+        revert_cmd = ['groupmod', '-g', str(old), group_name]
+        super().__init__(cmd, revert_cmd, **kwargs)
+
+        this._group_name = group_name
+        this._old = old
+        this._new = new
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['group_name'] = this._group_name
+        d['old'] = this._old
+        d['new'] = this._new
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return GroupModChangeGID(
+            serialisation.get('group_name', None),
+            serialisation.get('old', None),
+            serialisation.get('new', None),
+        )
+
 
 class GroupModChangeGroupName(RevertibleCommandLine):
     def __init__(this,old,new):
@@ -2879,14 +2937,31 @@ class ReadLink(CommandLine):
         )
 
 class Find(CommandLine):
-    def __init__(this,path:str,name:Optional[str]=None,**kwargs):
+    def __init__(this,path:str,
+                 name:Optional[str]=None,
+                 tests: Optional[Dict[str,str]] = None,
+                 exec: Optional[List[str]] = None,
+                 single_exec: bool = True,
+                 **kwargs):
         cmd = ['find',path]
 
         if (name is not None):
             cmd.extend(['-name',name])
 
+        if (tests is not None):
+            for k, v in tests.items():
+                cmd.extend([f'-{k}', v])
+
+        if (exec is not None):
+            cmd.append("-exec")
+            cmd.extend(exec)
+            cmd.append("+" if single_exec else ";")
+
         this._path = path
         this._name = name
+        this._tests = tests
+        this._exec = exec
+        this._single_exec = single_exec
 
         super().__init__(cmd,**kwargs)
 
@@ -2894,15 +2969,23 @@ class Find(CommandLine):
         d = super().to_dict()
         d['path'] = this._path
         d['name'] = this._name
+        d['tests'] = this._tests
+        d['exec'] = this._exec
+        d['single_exec'] = this._single_exec
 
         return d
 
     @staticmethod
     def from_dict(serialisation):
-        return SMARTCTL(
+        return Find(
             serialisation.get("path", None),
             serialisation.get('name', None),
+            serialisation.get("tests", None),
+            serialisation.get("exec", None),
+            serialisation.get("single_exec", True),
         )
+
+
 
 class MD5Sum(CommandLine):
     def __init__(this,path:str,**kwargs):
@@ -3072,3 +3155,5 @@ class Truncate(CommandLine):
             serialisation.get("filename", None),
             serialisation.get("size", None),
         )
+
+

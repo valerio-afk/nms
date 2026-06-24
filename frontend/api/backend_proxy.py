@@ -748,6 +748,9 @@ class BackEndProxy:
     def set_user_quota(this,username:str,quota:str) -> None:
         this._request("users/set/quota",RequestMethod.POST,body_params={"username": username, "quota": quota})
 
+    def change_uid(this,username:str,uid:int) -> None:
+        this._request("users/set/uid",RequestMethod.POST,body_params={"username": username, "uid": uid})
+
     def change_username(this,old_username:str,new_username:str) -> None:
         this._request("users/set/username",
                       RequestMethod.POST,
