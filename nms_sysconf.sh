@@ -672,9 +672,9 @@ install_jellyfin() {
         return 1
     fi
 
-    mkdir /var/jellyfin
-    mkdir /var/jellyfin/cache
-    mkdir /var/jellyfin/config
+    mkdir -p /var/jellyfin
+    mkdir -p /var/jellyfin/cache
+    mkdir -p /var/jellyfin/config
 
 }
 
