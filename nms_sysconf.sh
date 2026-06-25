@@ -1135,6 +1135,20 @@ server
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
+
+        proxy_intercept_errors on;
+	      error_page 502 = /splash.html;
+    }
+
+    location = /splash.html
+    {
+      root /nms;
+      internal;
+
+      add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0";
+      add_header Pragma "no-cache";
+
+      expires off;
     }
 
     location /api/

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>NMS Booting</title>
+
+<script>
+const originalUrl = window.location.href;
+
+setInterval(async () => {
+    try {
+        const response = await fetch(originalUrl, {
+            method: "HEAD",
+            cache: "no-store"
+        });
+
+        if (response.ok) {
+            window.location.href = originalUrl;
+        }
+    }
+    catch (e) {
+        // still booting
+    }
+}, 3000);
+</script>
+
+<style>
+html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+
+    background:
+        radial-gradient(circle at center,
+            #2A2854 0%,
+            #1d1848 40%,
+            #17103C 100%);
+
+    font-family: system-ui, sans-serif;
+    color: white;
+}
+
+body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.container {
+    text-align: center;
+}
+
+.logo {
+    font-size: clamp(4rem, 12vw, 8rem);
+    font-weight: 800;
+    letter-spacing: 0.15em;
+
+    color: white;
+
+    text-shadow:
+        0 0 10px rgba(255,255,255,0.3),
+        0 0 30px rgba(103,100,181,0.5),
+        0 0 60px rgba(103,100,181,0.4);
+
+    animation: pulse 3s ease-in-out infinite;
+}
+
+.subtitle {
+    margin-top: 1rem;
+    font-size: 1.3rem;
+    color: rgba(255,255,255,0.75);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.loading {
+    margin-top: 3rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+
+    color: rgba(255,255,255,0.85);
+    font-size: 1rem;
+    letter-spacing: 0.15em;
+}
+
+.dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ffffff;
+    animation: bounce 1.5s infinite;
+}
+
+.dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+.status {
+    margin-top: 4rem;
+    color: rgba(255,255,255,0.35);
+    font-size: 0.85rem;
+    letter-spacing: 0.2em;
+}
+
+.glow-ring {
+    position: absolute;
+    width: 500px;
+    height: 500px;
+    border-radius: 50%;
+
+    background:
+        radial-gradient(
+            circle,
+            rgba(103,100,181,0.15),
+            rgba(103,100,181,0.05),
+            transparent 70%
+        );
+
+    animation: ring 6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%,100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.03);
+    }
+}
+
+@keyframes bounce {
+    0%,80%,100% {
+        transform: translateY(0);
+        opacity: 0.4;
+    }
+
+    40% {
+        transform: translateY(-8px);
+        opacity: 1;
+    }
+}
+
+@keyframes ring {
+    0%,100% {
+        transform: scale(0.95);
+        opacity: 0.6;
+    }
+
+    50% {
+        transform: scale(1.05);
+        opacity: 1;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="glow-ring"></div>
+
+<div class="container">
+    <div class="logo">NMS</div>
+
+    <div class="subtitle">
+        NAS Management System
+    </div>
+
+    <div class="loading">
+        BOOTING
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+    </div>
+
+    <div class="status">
+        Initialising services
+    </div>
+</div>
+
+</body>
+</html>

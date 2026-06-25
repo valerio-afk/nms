@@ -91,10 +91,10 @@ class SystemService:
     def set(this, property:str, value:Any) -> None:
         getattr(this,f"set_{property}")(value)
 
-        hooks = this._change_hooks.get(property,[])
-
-        for callback in hooks:
-            callback(this)
+        # # hooks = this._change_hooks.get(property,[])
+        #
+        # for callback in hooks:
+        #     callback(this)
 
     @property
     def is_active(this) -> bool:
@@ -553,7 +553,7 @@ class NFSService(SystemService):
 
         for l in exports:
             if (not l.startswith("#")):
-                if (this.mountpoint) and (this.mountpoint in l):
+                if (this.mountpoint is not None) and (this.mountpoint in l):
                     parts = [p.strip() for p in l.split()]
                     hosts = parts[1:]
 
@@ -578,7 +578,7 @@ class NFSService(SystemService):
 
         for i,l in enumerate(exports):
             if (not l.startswith("#")):
-                if (this.mountpoint in l):
+                if (this.mountpoint is not None) and (this.mountpoint in l):
                     new_exports[i] = new_line
                     break
         else:
