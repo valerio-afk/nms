@@ -453,6 +453,7 @@ class NMSUpdate(NMSThread):
 
     def run(this) -> None:
         from backend_server.utils.config import CONFIG
+        CONFIG.warning("NMS Update Started")
         release = CONFIG.nms_updates
 
         tarball_url = release.get("tarball_url")
@@ -508,7 +509,7 @@ class NMSUpdate(NMSThread):
 
 
         if (not trans.success):
-            errors = "\n".join([o['stderr'] for o in output])
+            errors = "\n".join([ f"#{e+1}: {o['stderr']}" for e,o in enumerate(output)])
             raise HTTPException(status_code=500,
                                 detail=ErrorMessage(code=ErrorMessages.E_APT_GET.name, params=[errors]))
 

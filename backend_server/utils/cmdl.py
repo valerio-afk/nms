@@ -10,13 +10,18 @@ import socket
 import subprocess
 import time
 
-class CommandLine(ABC):
+
+
+
+class RevertibleCommandLine(ABC):
     def __init__(this,command:List[str],
+                 revert_command:Optional[List[str]]=None,
                  sudo:bool=False,
                  mask_output:bool=False,
                  cwd:Optional[str]=None,
                  wait:Optional[int]=0):
         this._command = command
+        this._revert_command = revert_command
         this._sudo = sudo
         this._mask_output=mask_output
         this._cwd = os.getcwd() if cwd is None else cwd
@@ -31,8 +36,12 @@ class CommandLine(ABC):
             raise TypeError("The `cmd` parameter must be either a list or a string")
 
     @property
-    def command(this) -> List[str]:
-        return this._command.copy()
+    def command(this) -> Optional[List[str]]:
+        return this._command.copy() if this._command is not None else None
+
+    @property
+    def revert_command(this)  -> Optional[List[str]]:
+        return this._revert_command.copy() if this._revert_command is not None else None
 
     @property
     def cwd(this) ->str:
@@ -62,8 +71,9 @@ class CommandLine(ABC):
 
         return output
 
-    def execute(this,**kwargs)-> Optional[CompletedProcess[str]]:
-        return this._execute(this.command)
+    def execute(this, revert=False):
+        cmd = this.command if not revert else this.revert_command
+        return this._execute(cmd)
 
     def to_dict(this) -> Dict[str,Any]:
         return {"__class__":this.__class__.__name__}
@@ -77,20 +87,10 @@ class CommandLine(ABC):
         pass
 
 
-class RevertibleCommandLine(CommandLine):
-    def __init__(this, command, revert_command = None,**kwargs):
-        super().__init__(command,**kwargs)
+class CommandLine(RevertibleCommandLine):
+    def __init__(this, command, **kwargs):
+        super().__init__(command,revert_command=None,**kwargs)
 
-        this._revert_command = revert_command
-
-
-    @property
-    def revert_command(this):
-        return this._revert_command
-
-    def execute(this,revert=False,**kwargs):
-        cmd = this.command if not revert else this.revert_command
-        return this._execute(cmd)
 
 
 
@@ -910,6 +910,7 @@ class LocalCommandLineTransaction(CommandLineTransaction):
         for t in this._cmds:
             this._invoke_hooks(CommandLineTransaction.Hooks.PRE_COMMAND,command=t,revert=False)
             o = t.execute()
+
             masked_output = subprocess.CompletedProcess(args=o.args,
                                         returncode=o.returncode,
                                         stdout=o.stdout if not t.mask_output else "*"*5,
@@ -1056,7 +1057,7 @@ class SystemCtlRestart(SystemCtl):
         super().__init__(service,"restart")
 
     def to_dict(this):
-        d = CommandLine.to_dict(this)
+        d = this.to_dict()
         d['service'] = this._service
         return d
 
