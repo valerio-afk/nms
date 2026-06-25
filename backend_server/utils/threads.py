@@ -1,6 +1,7 @@
-from abc import abstractmethod, ABC
+from abc import abstractmethod
 from backend_server.utils.cmdl import LocalCommandLineTransaction, NPMRun, DNFCheckUpdate, DNFUpgrade, BashScript, Stat
 from backend_server.utils.cmdl import ZPoolStatus, APTGetUpdate, APTGetUpgrade, TarArchive, Chown, Chmod, RemoveFile
+from backend_server.utils.cmdl import PIPInstall
 from backend_server.utils.responses import ErrorMessage, SuccessMessage
 from fastapi import HTTPException
 from nms_shared import ErrorMessages, SuccessMessages
@@ -488,9 +489,11 @@ class NMSUpdate(NMSThread):
 
         cwd = os.getcwd()
         install_script = os.path.join(cwd, "nms_sysconf.sh")
+        requirements = os.path.join(cwd, "requirements.txt")
 
         cmds = [
             TarArchive(cwd,tmp_path,action=TarArchive.TarAction.EXTRACT,strip_components=1),
+            PIPInstall(requirements=requirements),
             BashScript(install_script,["--only-pkg","--pull-images", "--reconf-nginx"],sudo=True),
             NPMRun("build",cwd=os.path.join(cwd,"box")),
             Chown("backend","www-data",cwd,['-R']),
@@ -513,6 +516,8 @@ class NMSUpdate(NMSThread):
 
         CONFIG.clean_nms_update()
         CONFIG.flush_config()
+
+
 
         this._cb()
 

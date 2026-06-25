@@ -3157,3 +3157,33 @@ class Truncate(CommandLine):
         )
 
 
+class PIPInstall(CommandLine):
+    def __init__(this,packages:Optional[List]=None,requirements:Optional[str]=None,**kwargs):
+        cmd = ['/opt/python3/bin/pip', 'install']
+
+        if (requirements is not None):
+            cmd.extend(['-r',requirements])
+
+        if (packages is not None):
+            cmd.extend(packages)
+
+        this._packages = packages
+        this._requirements = requirements
+
+        super().__init__(cmd,**kwargs)
+
+
+    def to_dict(this):
+        d = super().to_dict()
+        d['packages'] = this._packages
+        d['requirements'] = this._requirements
+
+        return d
+
+    @staticmethod
+    def from_dict(serialisation):
+        return PIPInstall(
+            serialisation.get("packages", None),
+            serialisation.get("requirements", None),
+        )
+
