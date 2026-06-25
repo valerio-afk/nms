@@ -44,6 +44,7 @@ PACKAGES_APT=(
     coreutils
     atool
     util-linux
+    python3-dev
 )
 
 PACKAGES_DNF=(
@@ -79,6 +80,7 @@ PACKAGES_DNF=(
     coreutils
     atool
     util-linux
+    python3-devel
 )
 
 SERVICES_TO_DISABLE_APT=(

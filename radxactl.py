@@ -3,6 +3,11 @@ from os import environ
 import time
 import requests
 import threading
+import sys
+import atexit
+import socket
+
+atexit.register(GPIO.cleanup)
 
 FAN_PULSE_COUNT = 0
 
@@ -17,6 +22,7 @@ FAN_PWM = int(environ.get('FAN_PWM',"13"))
 FAN_SENSING = int(environ.get('FAN_SENSING',"23"))
 
 
+
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(SATA_12_ENABLE, GPIO.OUT)
 GPIO.setup(SATA_34_ENABLE, GPIO.OUT)
@@ -24,17 +30,29 @@ GPIO.setup(SATA_34_ENABLE, GPIO.OUT)
 GPIO.setup(FAN_PWM, GPIO.OUT)
 GPIO.setup(FAN_SENSING, GPIO.IN,pull_up_down=GPIO.PUD_UP)
 
+print(f"SATA Port 1&2 Enable GPIO: {SATA_12_ENABLE}",file=sys.stderr)
+print(f"SATA Port 3&4 Enable GPIO: {SATA_34_ENABLE}",file=sys.stderr)
+print(f"Fan PWM GPIO: {FAN_PWM}",file=sys.stderr)
+print(f"Fan Sensing GPIO: {FAN_SENSING}",file=sys.stderr)
+
+
 PWM_MNGT = GPIO.PWM(FAN_PWM, 1000)
 PWM_MNGT.start(100)
 
+def notify_ready():
+    sock = environ.get("NOTIFY_SOCKET")
+    if sock:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        s.connect(sock)
+        s.sendall(b"READY=1")
+        s.close()
 
 def pwm_sensing_thread():
     while True:
         count = 0
         time.sleep(1)
         rpm = (count / 2) * 60
-        print(f"RPM: {rpm}")
-        with open("/run/gpio_fan") as f:
+        with open("/run/gpio_fan","w") as f:
             f.write(f"GPIO Fan: {rpm} RPM\n")
 
 
@@ -94,12 +112,12 @@ GPIO.add_event_detect(FAN_SENSING, GPIO.FALLING, callback=pwm_pulse_count)
 GPIO.output(SATA_12_ENABLE, GPIO.HIGH)
 GPIO.output(SATA_34_ENABLE, GPIO.HIGH)
 
-t1 = threading.Thread(target=pwm_sensing_thread, daemon=True)
+t1 = threading.Thread(target=pwm_sensing_thread)
 t1.start()
 
-t2 = threading.Thread(target=temp_monitor, daemon=True)
+t2 = threading.Thread(target=temp_monitor)
 t2.start()
 
+time.sleep(2)
 
-
-
+notify_ready()

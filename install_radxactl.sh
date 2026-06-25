@@ -93,11 +93,14 @@ cat <<EOF > "$SERVICE_FILE"
 [Unit]
 Description=Radxa Controller Service
 DefaultDependencies=no
-After=local-fs.target
-Before=multi-user.target
+
+After=sysinit.target
+Before=zfs-import-cache.service
+Before=zfs-import-scan.service
+Before=zfs-mount.service
 
 [Service]
-Type=simple
+Type=notify
 ExecStart=/usr/bin/python3 ${INSTALL_DIR}/${SCRIPT_NAME}
 Restart=always
 RestartSec=2
@@ -110,7 +113,7 @@ Environment=FAN_SENSING=${FAN_SENSING}
 User=root
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=sysinit.target
 EOF
 
 echo "Systemd service created at $SERVICE_FILE"

@@ -51,6 +51,6 @@ class Disk (BaseModel):
                 check=True,
             )
             symlinks = result.stdout.split()
-            return sorted(["/dev/" + s for s in symlinks if s.startswith("disk/by-path/")])
+            return sorted(["/dev/" + s for s in symlinks])
         except subprocess.CalledProcessError:
             return this.cached_physical_paths
