@@ -1,5 +1,5 @@
 <form method="POST" action="{{ url_for('main.ddns_conf',provider=name)}}" class="disable-on-submit">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if not properties.enabled %}
     <div class="mb-3 row">
         <div class="col-6 col-form-label"><label for="ddns_{{ name }}_username">{{ _("Domain") }}</label></div>
