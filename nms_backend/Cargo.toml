@@ -1,0 +1,10 @@
+[package]
+name = "nms_backend"
+version = "0.1.0"
+edition = "2024"
+
+[lints.rust]
+non_snake_case = "allow"
+non_camel_case_types = "allow"
+
+[dependencies]
