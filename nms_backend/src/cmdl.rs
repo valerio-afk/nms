@@ -9,6 +9,8 @@ pub mod rpi;
 pub mod net;
 pub mod package_mngt;
 pub mod passwd;
+pub mod docker;
+pub mod zfs;
 use std::process::{Command,Stdio};
 use std::io::Write;
 

@@ -20,12 +20,14 @@ pub struct FileSystemPermissions
     pub others:Option<POSIXPermissions>
 }
 
-pub enum FileOwner
+pub enum OSUser
 {
     ID(u32),
     Name(String),
     Empty
 }
+
+pub type OSGroup = OSUser;
 
 pub enum StatFormat
 {
@@ -460,32 +462,32 @@ pub fn Chmod<'a,'b>(permissions:&FileSystemPermissions,
     )
 }
 
-fn chown_owner_formatter(u:&FileOwner,g:&FileOwner) -> String
+fn chown_owner_formatter(u:&OSUser,g:&OSUser) -> String
 {
     let mut fmt:String = String::new();
 
     match u
     {
-        FileOwner::ID(id) => fmt.push_str(format!("{id}").as_str()),
-        FileOwner::Name(n) => fmt.push_str(format!("{n}").as_str()),
-        FileOwner::Empty => (),
+        OSUser::ID(id) => fmt.push_str(format!("{id}").as_str()),
+        OSUser::Name(n) => fmt.push_str(format!("{n}").as_str()),
+        OSUser::Empty => (),
     }
 
     match g
     {
-        FileOwner::ID(id) => fmt.push_str(format!(":{id}").as_str()),
-        FileOwner::Name(n) => fmt.push_str(format!(":{n}").as_str()),
-        FileOwner::Empty => (),
+        OSUser::ID(id) => fmt.push_str(format!(":{id}").as_str()),
+        OSUser::Name(n) => fmt.push_str(format!(":{n}").as_str()),
+        OSUser::Empty => (),
     }
 
     return fmt;
 }
 
 pub fn Chown<'a,'b>(
-                    user:&FileOwner,
-                    group:&FileOwner,
-                    old_user:&FileOwner,
-                    old_group:&FileOwner,
+                    user:&OSUser,
+                    group:&OSUser,
+                    old_user:&OSUser,
+                    old_group:&OSUser,
                     filename:&String,
                     recursive:bool,
                     config:Option<&'b CmdConfig<'a>>
@@ -510,7 +512,7 @@ pub fn Chown<'a,'b>(
         {
             Some(Box::new(Chown(
                 old_user, old_group,
-                &FileOwner::Empty, &FileOwner::Empty,
+                &OSUser::Empty, &OSUser::Empty,
                 filename,
                 recursive,
                 config

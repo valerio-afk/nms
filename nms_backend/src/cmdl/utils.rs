@@ -317,3 +317,20 @@ pub fn LMSensors<'a,'b>(config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
         config
     )
 }
+
+pub fn WipeFS<'a,'b> (device:&str,all:bool,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+{
+    let mut args:Vec<String> = Vec::new();
+
+    if all { args.push("-a".to_string()); }
+
+    args.push(device.to_string());
+
+    CommandLine::new(
+        "wipefs",
+        Some(args),
+        None,
+        None,
+        config
+    )
+}
