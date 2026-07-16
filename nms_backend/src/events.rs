@@ -1,40 +1,122 @@
-use core::time;
+use uuid::Uuid;
 use std::collections::HashMap;
-use std::sync::{Arc,mpsc};
+use std::sync::{Arc,mpsc,Mutex};
 use std::sync::atomic::{AtomicBool,Ordering};
 use std::thread;
+use std::time::Duration;
 use tracing::{debug,info,warn};
+use chrono::Local;
+ 
+use crate::thread_wrapper::{ThreadWrapper, WrappedThread};
 
+pub mod actions;
 
-type ContextData = HashMap<ContextVariables,String>;
-type EventCallback = Box<dyn Fn(ContextData)+Send>;
+pub type ContextData = HashMap<ContextVariables,String>;
+pub type EventCallback = Box<dyn Fn(&Option<ContextData>)+Send>;
+pub type EventData = (Trigger,Option<ContextData>);
+
+#[derive(Eq, Hash, PartialEq, Clone)]
 pub enum Events
 {
-    SystemStartup(ContextData),
-    SystemReboot(ContextData),
-    SystemPoweroff(ContextData),
-    SystemShutdown(ContextData),
-    SystemSystemd(ContextData),
-    SystemUpdates(ContextData),
-    SystemUpgrade(ContextData),
-    SystemNMSUpdates(ContextData),
-    SystemNMSUpgrade(ContextData),
-    Timer(ContextData),
-    PoolMount(ContextData),
-    PoolUnmont(ContextData),
-    UserLoggedIn(ContextData),
-    UserCreated(ContextData),
-    UserDeleted(ContextData),
-    AccessEnabled(ContextData),
-    AccessDisabled(ContextData),
-    VPNEnabled(ContextData),
-    VPNDisabled(ContextData),
-    FileCreated(ContextData),
-    FileDeleted(ContextData),
-    FileModified(ContextData),
-    FileShared(ContextData),
+    SystemStartup,
+    SystemReboot,
+    SystemPoweroff,
+    SystemShutdown,
+    SystemSystemd,
+    SystemUpdates,
+    SystemUpgrade,
+    SystemNMSUpdates,
+    SystemNMSUpgrade,
+    Timer,
+    PoolMount,
+    PoolUnmont,
+    UserLoggedIn,
+    UserCreated,
+    UserDeleted,
+    AccessEnabled,
+    AccessDisabled,
+    VPNEnabled,
+    VPNDisabled,
+    FileCreated,
+    FileDeleted,
+    FileModified,
+    FileShared
 }
 
+pub enum EventParameters
+{
+    Timer(u64),
+    None // just to silence the compiler with irrifutable bla bla bla
+}
+
+impl std::fmt::Display for Events
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result 
+    {
+        match self
+        {
+            Events::SystemStartup => write!(f,"SystemStartup"),
+            Events::SystemReboot => write!(f,"SystemReboot"),
+            Events::SystemPoweroff => write!(f,"SystemPoweroff"),
+            Events::SystemShutdown => write!(f,"SystemShutdown"),
+            Events::SystemSystemd => write!(f,"SystemSystemd"),
+            Events::SystemUpdates => write!(f,"SystemUpdates"),
+            Events::SystemUpgrade => write!(f,"SystemUpgrade"),
+            Events::SystemNMSUpdates => write!(f,"SystemNMSUpdates"),
+            Events::SystemNMSUpgrade => write!(f,"SystemNMSUpgrade"),
+            Events::Timer => write!(f,"Timer"),
+            Events::PoolMount => write!(f,"PoolMount"),
+            Events::PoolUnmont => write!(f,"PoolUnmont"),
+            Events::UserLoggedIn => write!(f,"UserLoggedIn"),
+            Events::UserCreated => write!(f,"UserCreated"),
+            Events::UserDeleted => write!(f,"UserDeleted"),
+            Events::AccessEnabled => write!(f,"AccessEnabled"),
+            Events::AccessDisabled => write!(f,"AccessDisabled"),
+            Events::VPNEnabled => write!(f,"VPNEnabled"),
+            Events::VPNDisabled => write!(f,"VPNDisabled"),
+            Events::FileCreated => write!(f,"FileCreated"),
+            Events::FileDeleted => write!(f,"FileDeleted"),
+            Events::FileModified => write!(f,"FileModified"),
+            Events::FileShared => write!(f,"FileShared"),
+        }
+    }
+}
+
+impl Events
+{
+    pub fn get_context_variables(&self) -> Vec<ContextVariables>
+    {
+        let mut ctx_var : Vec<ContextVariables> = vec![ContextVariables::ISOTimestamp];
+        let inotfy_ctx = vec![
+            ContextVariables::IsDir,
+            ContextVariables::Path,
+            ContextVariables::Filename,
+            ContextVariables::HomeOwner
+        ];
+        
+        match self
+        {
+            Events::SystemUpdates => ctx_var.push(ContextVariables::Packages),
+            Events::SystemUpgrade => ctx_var.push(ContextVariables::Packages),
+            Events::UserLoggedIn => ctx_var.push(ContextVariables::TriggerUser),
+            Events::UserCreated => ctx_var.extend(vec![ContextVariables::TriggerUser,ContextVariables::Account]),
+            Events::UserDeleted => ctx_var.extend(vec![ContextVariables::TriggerUser,ContextVariables::Account]),
+            Events::AccessEnabled => ctx_var.extend(vec![ContextVariables::TriggerUser,ContextVariables::Account,ContextVariables::Service]),
+            Events::AccessDisabled => ctx_var.extend(vec![ContextVariables::TriggerUser,ContextVariables::Account,ContextVariables::Service]),
+            Events::VPNEnabled => ctx_var.push(ContextVariables::TriggerUser),
+            Events::VPNDisabled => ctx_var.push(ContextVariables::TriggerUser),
+            Events::FileShared  => ctx_var.extend(vec![ContextVariables::TriggerUser,ContextVariables::Account,ContextVariables::Token]),
+            Events::FileCreated => ctx_var.extend(inotfy_ctx),
+            Events::FileModified => ctx_var.extend(inotfy_ctx),
+            Events::FileDeleted => ctx_var.extend(inotfy_ctx),
+            _ => ()
+        }
+
+        return ctx_var;
+    }
+}
+
+#[derive(Eq, Hash, PartialEq)]
 pub enum ContextVariables
 {
     TriggerUser,
@@ -75,54 +157,42 @@ impl std::fmt::Display for ContextVariables
     }
 }
 
-pub enum EventAction
+pub struct EventAction
 {
-    Internal
-    {
-        callback:EventCallback
-    },
-
-    UserDefined
-    {
-        uuid:String,
-        callback:EventCallback
-    }
+    uuid:String,
+    callback:EventCallback
 }
+
+
 
 pub struct EventManager
 {
-    registered_actions:Arc<HashMap<Events,Vec<EventAction>>>,
-    tx:Option<mpsc::Sender<Events>>,
-    rx:Option<mpsc::Receiver<Events>>,
+    registered_actions:Arc<Mutex<HashMap<Events,Vec<EventAction>>>>,
+    tx:Mutex<Option<mpsc::Sender<EventData>>>,
     running_state:Arc<AtomicBool>,
-    thread:Option<thread::JoinHandle<()>>
+    main_thread:Mutex<Option<thread::JoinHandle<()>>>,
+    threads:Mutex<HashMap<String,Arc<WrappedThread>>>
 }
 
-impl EventManager
+pub enum Trigger
 {
-    pub fn new() -> EventManager
-    {
-        EventManager
-        { 
-            registered_actions: Arc::new(HashMap::new()),
-            tx: None, 
-            rx: None,
-            running_state: Arc::new(AtomicBool::new(false)),
-            thread: None
-        }
-    }
+    Event(Events),
+    Action(String)
+}
 
-    pub fn start(&mut self)
-    {
-        let (tx,rx) = mpsc::channel::<Events>();
 
-        self.tx = Some(tx);
-        self.rx = Some(rx);
+impl ThreadWrapper for EventManager
+{
+    fn start(self: &Arc<Self>)
+    {
+        let (tx,rx) = mpsc::channel::<EventData>();
+
+        *self.tx.lock().unwrap() = Some(tx);
 
         self.running_state.store(true, Ordering::Relaxed);
 
                 
-        let thread_running_state = Arc::clone(&self.running_state);
+        let this = Arc::clone(&self);
 
         let t = thread::Builder::new()
             .name("Event Manager".to_string())
@@ -130,32 +200,217 @@ impl EventManager
                 move || 
                 {
                     info!("Event Manager Started");
-                    while thread_running_state.load(Ordering::Relaxed)
+
+                    while this.running_state.load(Ordering::Relaxed)
                     {
-                        thread::sleep(time::Duration::from_secs(5));
-                        debug!("Looping");
+                        let event_data = rx.recv_timeout(Duration::from_secs(1));
+
+                        if let Ok((trigger,ctx)) = event_data
+                        {
+                            let mut uuids:Vec<&str> = Vec::new();
+
+                            
+
+                            let map = this.registered_actions.lock().unwrap();
+
+                            if let Trigger::Event(ev) = trigger
+                            {
+                                debug!("Received {ev}");
+                                if let Some(lst) = map.get(&ev)
+                                {
+                                    for action in lst
+                                    {
+                                        uuids.push(&action.uuid);
+                                        (action.callback)(&ctx);
+                                    }
+                                }
+
+                                if uuids.len()==0
+                                {
+                                    debug!("No action found for {ev}.");
+                                }
+                                else 
+                                {
+                                        debug!("{ev} dispatched to: {}.",uuids.join(", "));
+                                }
+                            }
+                            else if let Trigger::Action(uuid) = &trigger
+                            {
+                                debug!("Received trigger for {uuid}");
+
+                                for (_,lst) in map.iter()
+                                {
+                                    for action in lst
+                                    {
+                                        
+                                        if action.uuid == *uuid
+                                        {
+                                            (action.callback)(&ctx);
+                                            debug!("Event dispatched for {uuid}");
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                        }
                     }
                     warn!("Event Manager Stopped");
                 }
             ).expect("Unable to start event manager.");
 
-        self.thread = Some(t);
+        *self.main_thread.lock().unwrap() = Some(t);
 
     }
 
-    pub fn stop(&mut self)
+    fn stop(self:&Arc<Self>)
     {
         self.running_state.store(false,Ordering::Relaxed);
         
-        self.tx.take();
-        self.rx.take();
+        self.tx.lock().unwrap().take();
+
+        for (_,t) in self.threads.lock().unwrap().iter()
+        {
+            t.stop();
+        }
+        
     }
 
-    pub fn join(&mut self)
+    fn join(self:&Arc<Self>)
     {
-        if let Some(th) = self.thread.take()
+        if let Some(th) = self.main_thread.lock().unwrap().take()
         {
-            th.join();
+            let _ = th.join();
+        }
+
+        for (_,t) in self.threads.lock().unwrap().iter()
+        {
+            t.join();
         }
     }
+
+    fn is_running(self:&Arc<Self>) -> bool 
+    {
+        self.running_state.load(Ordering::Relaxed)
+    }
+
 }
+
+impl EventManager
+{
+    pub fn new() -> Arc<EventManager>
+    {
+        Arc::new(EventManager
+        { 
+            registered_actions: Arc::new(Mutex::new(HashMap::new())),
+            tx: Mutex::new(None),
+            running_state: Arc::new(AtomicBool::new(false)),
+            main_thread: Mutex::new(None),
+            threads: Mutex::new(HashMap::new())
+        })
+    }
+
+    
+
+    pub fn trigger(self:&Arc<Self>, trigger:Trigger,ctx:Option<HashMap<ContextVariables,String>>)
+    {
+
+        if let Some(tx) = self.tx.lock().unwrap().as_ref()
+        {
+            let mut map:HashMap<ContextVariables,String>;
+            if let Some(m) = ctx
+            {
+                map = m;
+            }
+            else 
+            {
+                map = HashMap::new();
+            }
+
+            map.entry(ContextVariables::ISOTimestamp).or_insert(Local::now().to_rfc3339());
+            let _ = tx.send((trigger,Some(map)));
+        }
+    }
+
+    pub fn register_action(
+        self:&Arc<Self>,
+        event:Events,
+        action:EventCallback,
+        uuid:Option<String>,
+        event_params:Option<Vec<EventParameters>>
+    )
+    {
+        let mut map = self.registered_actions.lock().unwrap();
+        //let mut map = lock.unwrap();
+        let mut v = map.get_mut(&event);
+
+        let action_uuid:String = {
+
+            match uuid
+            {
+                None => Uuid::new_v4().to_string(),
+                Some(x) => x
+            }
+        };
+
+        let new_action = EventAction{
+            uuid:action_uuid.clone(),
+            callback: action
+        };
+
+        if let Some(lst) = &mut v
+        {
+            lst.push(new_action);
+        }
+        else 
+        {
+            let lst:Vec<EventAction> = vec![new_action];
+            map.insert(event.clone(), lst);
+        }
+
+        if event == Events::Timer
+        {
+            let mut secs:u64 = 0;
+
+            if let Some(args) = event_params
+            {
+                for a in args
+                {
+                    if let EventParameters::Timer(s) = a
+                    {
+                        secs = s;
+                    }
+                }
+            }
+
+            if secs == 0
+            {
+                panic!("You must specify an amount of seconds >0 as an event parameter for Timer");
+            }
+
+            let mngt = Arc::clone(&self);
+            let thread_uuid = action_uuid.clone();
+
+            let timing_thread = WrappedThread::new(
+                Box::new(move |this:&Arc<WrappedThread>| {
+                    while this.is_running() 
+                    {
+                        thread::sleep(Duration::from_secs(secs));
+                        mngt.trigger(
+                            Trigger::Action(thread_uuid.clone()),
+                            None
+                        );
+                    }
+                }),
+                Some(action_uuid.clone())
+            );           
+
+            timing_thread.start();
+            self.threads.lock().unwrap().insert(action_uuid.clone(), timing_thread);
+
+        }
+                    
+        debug!("Add a new event callback action {} for the event {}",action_uuid, event.to_string());
+    }
+}
+

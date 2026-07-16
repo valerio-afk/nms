@@ -464,7 +464,7 @@ pub fn ZFS<'a,'b>(action:ZFSActions,revertible:bool,config:Option<&'b CmdConfig<
             }
         ZFSActions::Destroy(p,snapshot) => 
             {
-                let mut fs:String;
+                let fs:String;
 
                 if let Some(tag) = snapshot
                 {
