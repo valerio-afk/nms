@@ -12,7 +12,7 @@ pub mod passwd;
 pub mod docker;
 pub mod zfs;
 pub mod notify;
-use std::process::{ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::io::Write;
 
 type Destructor<'a,T> = Box<dyn Fn(&T) + 'a>;
@@ -50,7 +50,7 @@ pub struct CommandOutput
 pub trait Executable
 {
     fn run(self:&Self) -> Option<CommandOutput>;
-    fn spawn(self:&Self) -> (ChildStdin,ChildStdout);
+    fn spawn(self:&Self) -> std::io::Result<Child>;
     fn execute(self:&Self,revert:bool) -> Option<CommandOutput>;
 
 }
@@ -58,7 +58,7 @@ pub trait Executable
 trait ExecutableInternal
 {
     fn execute_cmd(self:&Self)  -> Option<CommandOutput>;
-    fn spawn_cmd(self:&Self) -> (ChildStdin,ChildStdout);
+    fn spawn_cmd(self:&Self) -> std::io::Result<Child>;
     fn parse_cmd(self:&Self) -> Command;
 }
 
@@ -130,7 +130,7 @@ impl Executable for CommandLine<'_,'_>
         }
     }
 
-    fn spawn(self:&Self) -> (ChildStdin,ChildStdout)
+    fn spawn(self:&Self) -> std::io::Result<Child>
     {
         self.spawn_cmd()
     }
@@ -170,25 +170,22 @@ impl<'a,'b> ExecutableInternal for CommandLine<'a,'b>
             cmd.current_dir(path);
         }
 
+        //tracing::debug!("Command to be executed: {cmd:?}");
+
         return cmd;
     }
 
-    fn spawn_cmd(self:&Self) -> (ChildStdin,ChildStdout) 
+    fn spawn_cmd(self:&Self) -> std::io::Result<Child>
     {
   
         let mut cmd = self.parse_cmd();
 
-        let mut child = cmd.stdin(Stdio::piped())
+        cmd.stdin(Stdio::piped())
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped())
                     .spawn()
-                    .expect("Failed to spawn {self.command}");
 
-
-        let stdin = child.stdin.take().expect("Failed to get stdin for {self.command}");
-        let stdout = child.stdout.take().expect("Failed to get stdout for {self.command}");
-        
-        (stdin,stdout)  
+         
     }
 
     fn execute_cmd(self:&Self)  -> Option<CommandOutput>

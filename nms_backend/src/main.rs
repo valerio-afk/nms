@@ -1,14 +1,22 @@
-use core::time;
-use std::thread;
-use tracing::{Level,info,error,debug};
+use tracing::{Level,error,debug};
 use tracing_subscriber::FmtSubscriber;
+use backend::get_backend;
+use backend::utils::detect_distro_family;
+use backend::api::get_api;
+use std::sync::{Arc};
+use axum::{Router};
 
-use crate::events::{ContextData, ContextVariables::ISOTimestamp, EventManager, EventParameters, Events, Trigger};
-use thread_wrapper::ThreadWrapper;
+
+
+//use {cmdl::coreutils::{Touch, RM}, events::{ContextData, ContextVariables::ISOTimestamp, EventManager, EventParameters, Events, Trigger}};
+//use cmdl::Executable;
+//use thread_wrapper::ThreadWrapper;
 
 pub mod cmdl;
 pub mod events;
 pub mod thread_wrapper;
+pub mod backend;
+
 
 fn logger_init()
 {
@@ -26,57 +34,87 @@ fn logger_init()
 }
 
 
-fn main() 
+#[tokio::main]
+async fn main() 
 {
     logger_init();
 
-    let manager = EventManager::new();
+    let backend = get_backend();
+
+    let app = Router::new()
+        .merge(get_api())
+        .with_state(Arc::clone(&backend));
+
+    debug!("OS Family detected: {}",detect_distro_family());
+        
+
+
+    let addr = backend.get_bind_addr();
 
     
-    manager.register_action(Events::SystemStartup,        
-            Box::new(move | _ctx:&Option<ContextData> | 
-            {
-                info!("I am here baby");
-            }),
-            None,None
-    );
 
-    manager.register_action(Events::SystemPoweroff, 
-        Box::new(
-            move | ctx:&Option<ContextData> | 
-            {
-                if let Some(map) = ctx
-                {
-                    if let Some(timestamp) = map.get(&ISOTimestamp)
-                    {
-                        error!("Bye Bye at {}",timestamp);
-                        return;
-                    }
-                }
+    let listener = tokio::net::TcpListener::bind(
+        addr.to_string()
+    ).await;
 
-                error!("Bye Bye");
-            }
-        ),Some("0123-4567-89ab-cdef".to_string()),None
-    );
+    match listener
+    {
+        Ok(t) => axum::serve(t,app).await.unwrap(),        
+        Err(e) => error!("Unable to serve backend: {}",e),
+    }
 
-    manager.register_action(
-        Events::Timer,
-            Box::new(move | _ctx:&Option<ContextData> | { debug!("Heatbeat")}) ,
-        None, Some(vec![EventParameters::Timer(3)]));
 
-    manager.start();
+    // let manager = EventManager::new();
 
-    thread::sleep(time::Duration::from_secs(5));
+    
+    // manager.register_action(Events::SystemStartup,        
+    //         Box::new(move | _tx:&Option<ContextData> | 
+    //         {
+    //             info!("I am here baby");
+    //         }),
+    //         None,None
+    // );
 
-    manager.trigger(Trigger::Event(Events::SystemStartup),None);
+    // manager.register_action(Events::SystemPoweroff, 
+    //     Box::new(
+    //         move | ctx:&Option<ContextData> | 
+    //         {
+    //             if let Some(map) = ctx
+    //             {
+    //                 if let Some(timestamp) = map.get(&ISOTimestamp)
+    //                 {
+    //                     error!("Bye Bye at {}",timestamp);
+    //                     return;
+    //                 }
+    //             }
 
-    thread::sleep(time::Duration::from_secs(7));
+    //             error!("Bye Bye");
+    //         }
+    //     ),Some("0123-4567-89ab-cdef".to_string()),None
+    // );
 
-    manager.trigger(Trigger::Event(Events::SystemPoweroff),None);
+    // manager.register_action(
+    //     Events::Timer,
+    //         Box::new(move | _ctx:&Option<ContextData> | { debug!("Heatbeat")}) ,
+    //     None, Some(vec![EventParameters::Timer(3)]));
 
-    thread::sleep(time::Duration::from_secs(2));
+    // manager.start();
 
-    manager.stop();
+    // thread::sleep(time::Duration::from_secs(5));
 
-    manager.join();
+    // manager.trigger(Trigger::Event(Events::SystemStartup),None);
+
+    // Touch(&"a.txt".to_string(), None).run();
+
+    // thread::sleep(time::Duration::from_secs(7));
+
+    // manager.trigger(Trigger::Event(Events::SystemPoweroff),None);
+
+    // RM(&"a.txt".to_string(),false,false,None).run();
+
+    // thread::sleep(time::Duration::from_secs(2));
+
+    // manager.stop();
+
+    // manager.join();
 }

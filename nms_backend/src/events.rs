@@ -1,13 +1,22 @@
 use uuid::Uuid;
 use std::collections::HashMap;
+use std::io::{BufRead, BufReader};
+use std::os::fd::AsFd;
 use std::sync::{Arc,mpsc,Mutex};
 use std::sync::atomic::{AtomicBool,Ordering};
 use std::thread;
 use std::time::Duration;
-use tracing::{debug,info,warn};
+use std::path::Path;
+use tracing::{debug,info,warn,error};
 use chrono::Local;
+use nix::poll::{poll, PollFd, PollFlags};
+use serde::{Serialize,Deserialize};
  
 use crate::thread_wrapper::{ThreadWrapper, WrappedThread};
+use crate::cmdl::{CmdConfig, Executable};
+use crate::cmdl::coreutils::{Stat,StatFormat};
+use crate::cmdl::notify::{INotifyEvents,INotifyWait};
+
 
 pub mod actions;
 
@@ -15,7 +24,7 @@ pub type ContextData = HashMap<ContextVariables,String>;
 pub type EventCallback = Box<dyn Fn(&Option<ContextData>)+Send>;
 pub type EventData = (Trigger,Option<ContextData>);
 
-#[derive(Eq, Hash, PartialEq, Clone)]
+#[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum Events
 {
     SystemStartup,
@@ -180,6 +189,211 @@ pub enum Trigger
     Action(String)
 }
 
+impl EventManager
+{
+    fn start_inotify_thread(self: &Arc<Self>,path:&str)
+    {
+        let config: CmdConfig = CmdConfig::new(
+            true,
+            true,
+            None,
+            None
+        );
+
+        let manager = Arc::clone(&self);
+        let thread_name = "INotifyThread".to_string();
+        let thread_path = path.to_string();
+
+
+        let th = WrappedThread::new(
+            Box::new(
+                move |this:&Arc<WrappedThread>|
+                {
+                    let cmd = INotifyWait(
+                        &thread_path, 
+                        true, 
+                        true, 
+                        vec![INotifyEvents::Create,INotifyEvents::Delete,INotifyEvents::Modify], 
+                        Some(&"%e%0%w%0%f".to_string()), 
+                        Some(&config)
+                    );
+
+                    let result = cmd.spawn();
+                    
+                    if let Err(e) = result
+                    {
+                        error!("Unable to start inotifywait: {e}");
+                    }
+                    else 
+                    {  
+                        let mut child = result.unwrap();  
+                        let stdout = child.stdout.take().unwrap();
+
+                        let mut reader = BufReader::new(stdout);    
+
+                        info!("Started");
+
+                        while this.is_running()
+                        {
+                            {
+                                let fd = reader.get_ref().as_fd();
+                                let mut fds = [PollFd::new(fd,PollFlags::POLLIN)];
+                                let ready = poll(&mut fds,3000u16);
+
+                                
+
+                                match ready
+                                {
+                                    Ok(num) => 
+                                    {
+                                        if num == 0 { continue; }
+                                    }
+                                    Err(_) => {continue;}
+                                }
+
+                            }
+                            
+
+                            if let Ok(Some(status)) = child.try_wait()
+                            {
+                                error!("inotifywait ended unexpectedly: {status}");
+                                break;
+                            }
+
+
+                            let mut line = String::new();
+                            let n = reader.read_line(&mut line);
+
+                            match n
+                            {
+                                Ok(bytes) => 
+                                {
+                                    if bytes == 0 
+                                    {
+                                        thread::sleep(std::time::Duration::from_secs(2));
+                                        error!("Bytes received: {bytes}"); continue; 
+                                    }
+                                }
+                                Err(err) =>
+                                {
+                                    error!("Error while reading the stdout from inotifywait: {err}");
+                                    break;
+                                }
+                            }
+
+
+                            let tokens:Vec<&str> = line.split("\0").collect();
+
+                            if tokens.len() == 3
+                            {
+                                let event = tokens[0];
+                                let path = tokens[1];
+                                let name = tokens[2];
+
+                                let is_dir =  if let Some(_) = event.find("ISDIR") { "1" } else { "0" };
+                            
+                                let event_to_trigger:Option<INotifyEvents> = {
+                                    if let Some(_) = event.find("CREATE") { Some(INotifyEvents::Create) }
+                                    else if let Some(_) = event.find("MODIFY") { Some(INotifyEvents::Modify) }
+                                    else if let Some(_) = event.find("DELETE") { Some(INotifyEvents::Delete) }
+                                    else {None}
+                                };
+
+                                if let Some(e) = event_to_trigger
+                                {
+                                    let mut ctx: HashMap<ContextVariables,String> = HashMap::new();
+
+                                    ctx.insert(ContextVariables::IsDir, is_dir.to_string());
+                                    ctx.insert(ContextVariables::Path, path.to_string());
+                                    ctx.insert(ContextVariables::Filename, name.to_string());
+
+                                    //TODO: implement line thread.py:222 with call to get_home_owner                            
+                                    //ctx.insert(ContextVariables::HomeOwner, "");
+
+                                    let perform_stat = 
+                                    {
+                                        match e
+                                        {
+                                            INotifyEvents::Delete => false,
+                                            _ => true
+                                        }
+                                    };
+
+                                    if perform_stat
+                                    {
+                                        let pth = Path::new(path).join(name);
+                                        let stat = Stat(&pth.to_string_lossy().to_string(),Some(
+                                                vec![
+                                                    StatFormat::PermissionsOctal,
+                                                    StatFormat::Filler(" "),
+                                                    StatFormat::User,
+                                                    StatFormat::Filler(" "),
+                                                    StatFormat::GroupName,
+                                                ]
+                                            ),
+                                            None
+                                        );
+
+                                        let result = stat.run();
+
+                                        let mut user = String::new();
+                                        let mut group = String::new();
+                                        let mut permissions = String::new();
+
+                                        if let Some(output) = result
+                                        {
+                                            if output.status_code == 0
+                                            {
+                                                let tokens:Vec<&str> = output.stdout.split(" ").collect();
+
+                                                if tokens.len()==3
+                                                {
+                                                    user = tokens[0].to_string();
+                                                    group = tokens[1].to_string();
+                                                    permissions = tokens[2].to_string();
+                                                }
+                                            }
+                                        }
+
+                                        ctx.insert(ContextVariables::User,user);
+                                        ctx.insert(ContextVariables::Group,group);
+                                        ctx.insert(ContextVariables::Permissions,permissions);
+                                    }    
+
+                                    let event_trigger:Events = {
+                                        match e
+                                        {
+                                            INotifyEvents::Create => Events::FileCreated,
+                                            INotifyEvents::Modify => Events::FileModified,
+                                            INotifyEvents::Delete => Events::FileDeleted,
+                                        }
+                                    };                   
+
+                                    //TODO: introduce delayed actions when uploading a file
+                                    manager.trigger(
+                                        Trigger::Event(event_trigger),
+                                        Some(ctx)
+                                    );
+                                }
+                                
+                            }
+
+
+                        }
+                    }
+                    warn!("Ended");
+                }
+            ),
+            Some(thread_name.clone())
+        );
+
+        th.start();
+
+        let mut map = self.threads.lock().unwrap();
+        map.insert(thread_name, th);
+    }
+}
+
 
 impl ThreadWrapper for EventManager
 {
@@ -191,6 +405,7 @@ impl ThreadWrapper for EventManager
 
         self.running_state.store(true, Ordering::Relaxed);
 
+        self.start_inotify_thread("/nms/nms_backend");
                 
         let this = Arc::clone(&self);
 

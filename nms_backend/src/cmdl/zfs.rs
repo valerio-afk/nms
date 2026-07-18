@@ -76,8 +76,8 @@ impl<'a> std::fmt::Display for ZFSQuota<'a>
 
 pub struct ZFSArgs<'a>
 {
-    pool:&'a str,
-    dataset: &'a str
+    pub pool:&'a str,
+    pub dataset: &'a str
 }
 
 impl<'a> std::fmt::Display for ZFSArgs<'a>
@@ -421,6 +421,9 @@ pub fn ZFS<'a,'b>(action:ZFSActions,revertible:bool,config:Option<&'b CmdConfig<
                         args.push(props.iter().map(|s| s.to_string()).collect());
                     }
                 }
+
+                args.push("-t".to_string());
+                args.push(p.list_type.to_string());
             }
         ZFSActions::LoadKey(p) =>
             {
