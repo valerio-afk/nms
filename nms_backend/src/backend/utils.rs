@@ -1,15 +1,17 @@
-use std::error::Error;
+use std::path::{Path, PathBuf};
 use std::fs::read_to_string;
 use std::collections::HashMap;
 use std::sync::OnceLock;
+use regex::Regex;
 use core::result::Result;
 use super::Quota;
 use crate::cmdl::{CmdConfig, Executable};
-use crate::cmdl::passwd::Groups;
+use crate::cmdl::coreutils::{Stat,Cat};
 use crate::cmdl::zfs::{ZFS, ZFSActions, ZFSArgs};
 
 static DISTRO_FAMILY:OnceLock<DistroFamily> = OnceLock::new();
 static SUDO_GROUP:OnceLock<&'static str> = OnceLock::new();
+const MBOX_BASEPATH:&str = "/var/mail";
 
 #[derive(PartialEq)]
 pub enum DistroFamily
@@ -90,7 +92,7 @@ pub fn sudo_group() -> &'static str
     })
 }
 
-fn get_quota_for_all(pool:&str, dataset:&str) -> Result<HashMap<String,Quota>,String>
+pub fn get_quota_for_all(pool:&str, dataset:&str) -> Result<HashMap<String,Quota>,String>
 {
     let config = CmdConfig::new(true, true, None, None);
     let output = ZFS(
@@ -116,13 +118,13 @@ fn get_quota_for_all(pool:&str, dataset:&str) -> Result<HashMap<String,Quota>,St
                 let uname = tokens[0].trim();
                 let used:Option<u64> = match tokens[1].trim().parse::<u64>()
                 {
-                    Result(q) => Some(q),
+                    Ok(q) => Some(q),
                     Err(_) => None
                 };
 
                 let limit:Option<u64> = match tokens[2].trim().parse::<u64>()
                 {
-                    Result(q) => Some(q),
+                    Ok(q) => Some(q),
                     Err(_) => None
                 };
 
@@ -137,4 +139,60 @@ fn get_quota_for_all(pool:&str, dataset:&str) -> Result<HashMap<String,Quota>,St
     }
 
     return Err("Unable to execute zfs".to_string());
+}
+
+pub fn check_admin_permission(perm: &Option<Vec<String>>) -> bool
+{
+    return false;
+}
+
+pub fn get_notifications_count(username:&str) -> u32
+{
+    let mut n_notifications:u32 = 0;
+
+    let cfg = CmdConfig::new(true,true,None,None);
+    let mail_file: PathBuf = Path::new(MBOX_BASEPATH).join(username);
+    let stat_result = Stat(mail_file.to_str().unwrap(),None,Some(&cfg)).run();
+
+    if let Some(stat) = stat_result
+    {
+        if stat.status_code == 0
+        {
+            let cat_result = Cat(Some(mail_file.to_str().unwrap()),Some(&cfg)).run();
+
+            if let Some(cat) = cat_result
+            {
+                if cat.status_code == 0
+                {
+                    let pattern = Regex::new(r"^From[^:](.*)$");
+
+                    if let Ok(re) = pattern
+                    {
+                        for l in cat.stdout.lines()
+                        {
+                            if re.is_match(l)
+                            { 
+                                n_notifications+=1; 
+                            }
+                            else if l.find("X-Notification-Read").is_some()
+                            {
+                                let tokens:Vec<&str> = l.trim().split(":").collect();
+
+                                if tokens.len()==2
+                                {
+                                    if let Ok(n) = tokens[1].trim().parse::<u32>()
+                                    {
+                                        if n==1 {n_notifications-=1;}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+    return n_notifications;
 }

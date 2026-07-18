@@ -9,9 +9,9 @@ use crate::events::actions::UserDefinedActions;
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CfgPool
 {
-    name: String,
-    dataset: String,
-    encryption_key: Option<String>,
+    pub name: String,
+    pub dataset: String,
+    pub encryption_key: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

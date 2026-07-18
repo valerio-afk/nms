@@ -72,3 +72,26 @@ pub fn Groups<'a,'b>(
         config
     )
 }
+
+pub fn GetEntPasswd<'a,'b>(
+    username:Option<&str>,
+    config:Option<&'b CmdConfig<'a>>
+) -> CommandLine<'a,'b>
+{
+    let mut args:Vec<String> = vec![
+        "passwd".to_string()
+    ];
+
+    if let Some(uname) = username
+    {
+        args.push(uname.to_string());
+    }
+
+    CommandLine::new(
+        "getent",
+        Some(args),
+        None,
+        None,
+        config
+    )
+}

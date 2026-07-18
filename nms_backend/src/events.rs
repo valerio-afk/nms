@@ -21,7 +21,7 @@ use crate::cmdl::notify::{INotifyEvents,INotifyWait};
 pub mod actions;
 
 pub type ContextData = HashMap<ContextVariables,String>;
-pub type EventCallback = Box<dyn Fn(&Option<ContextData>)+Send>;
+pub type EventCallback = Arc<dyn Fn(&Option<ContextData>)+Send+Sync>;
 pub type EventData = (Trigger,Option<ContextData>);
 
 #[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -52,6 +52,7 @@ pub enum Events
     FileShared
 }
 
+#[derive(Clone)]
 pub enum EventParameters
 {
     Timer(u64),
@@ -171,7 +172,6 @@ pub struct EventAction
     uuid:String,
     callback:EventCallback
 }
-
 
 
 pub struct EventManager
@@ -549,7 +549,7 @@ impl EventManager
 
     pub fn register_action(
         self:&Arc<Self>,
-        event:Events,
+        event:&Events,
         action:EventCallback,
         uuid:Option<String>,
         event_params:Option<Vec<EventParameters>>
@@ -557,7 +557,7 @@ impl EventManager
     {
         let mut map = self.registered_actions.lock().unwrap();
         //let mut map = lock.unwrap();
-        let mut v = map.get_mut(&event);
+        let mut v = map.get_mut(event);
 
         let action_uuid:String = {
 
@@ -583,7 +583,7 @@ impl EventManager
             map.insert(event.clone(), lst);
         }
 
-        if event == Events::Timer
+        if event == &Events::Timer
         {
             let mut secs:u64 = 0;
 
@@ -626,6 +626,20 @@ impl EventManager
         }
                     
         debug!("Add a new event callback action {} for the event {}",action_uuid, event.to_string());
+    }
+
+    pub fn register_multiple_events
+    (
+        self:&Arc<Self>,
+        events:&[&Events],
+        action:EventCallback,
+        event_params:Option<Vec<EventParameters>>
+    )
+    {
+        for e in events
+        {
+            self.register_action(e, Arc::clone(&action), None, event_params.clone());
+        }
     }
 }
 

@@ -302,13 +302,13 @@ pub fn LS<'a,'b>(path:&String,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'
     );
 }
 
-pub fn Cat<'a,'b>(path:Option<&String>, config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn Cat<'a,'b>(path:Option<&str>, config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
 {
     if let Some(p) = path
     {
        return CommandLine::new(
             "cat",
-            Some(vec![p.clone()]),
+            Some(vec![p.to_string()]),
             None,
             None,
             config
@@ -568,7 +568,7 @@ pub fn Touch<'a,'b>(filename:&String,config:Option<&'b CmdConfig<'a>>) -> Comman
         config)
 }
 
-pub fn Stat<'a,'b,'c>(filename:&String,format:Option<Vec<StatFormat<'c>>>,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn Stat<'a,'b,'c>(filename:&str,format:Option<Vec<StatFormat<'c>>>,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
 {
     let mut args:Vec<String> = Vec::new();
 
@@ -578,7 +578,7 @@ pub fn Stat<'a,'b,'c>(filename:&String,format:Option<Vec<StatFormat<'c>>>,config
         args.extend(fmt.iter().map(|x|x.to_string()).collect::<Vec<String>>());
     }
 
-    args.push(filename.clone());
+    args.push(filename.to_string());
 
     CommandLine::new(
         "stat",

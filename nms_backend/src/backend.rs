@@ -1,9 +1,17 @@
 use config::Config;
+use utils::{get_quota_for_all, sudo_group};
+use std::path::{Path,PathBuf};
 use std::fs;
 use std::net::SocketAddrV4;
 use std::error::Error;
 use std::sync::{OnceLock,Mutex,Arc};
+use std::collections::HashMap;
 use tracing::{info,error,warn};
+
+use crate::backend::utils::{check_admin_permission, get_notifications_count};
+use crate::cmdl::{CmdConfig, Executable};
+use crate::cmdl::passwd::{Groups,GetEntPasswd};
+use crate::events::{ContextData, EventManager, Events};
 
 
 pub mod config;
@@ -13,6 +21,7 @@ pub mod utils;
 static BACKEND:OnceLock<Arc<Backend>> = OnceLock::new();
 static NMS_CONFIG_FILE:&str = "nms.conf.json";
 
+#[derive(Clone)]
 pub struct Quota
 {
     pub quota:Option<u64>,
@@ -23,36 +32,45 @@ pub struct User
 {
     pub username:String,
     pub visible_name:Option<String>,
-    pub permissions: Vec<String>,
+    pub permissions: Option<Vec<String>>,
     pub quota:Option<Quota>,
     pub sudo: bool,
     pub admin:bool,
     pub first_login_token:Option<String>,
-    pub home_dir: Option<Path>,
+    pub home_dir: Option<PathBuf>,
     pub uid:Option<u32>,
     pub gid:Option<u32>,
     pub notifications:u32,
 }
 
-
 pub struct Backend
 {
     config:Mutex<Config>,
-    users:Mutex<Vec<User>>
+    users:Mutex<Vec<User>>,
+    event_manager:Arc<EventManager>
 }
 
 impl Backend
 {
     fn new() -> Arc<Self>
     {
-        let backend = Backend{
+        let backend = Arc::new(Backend{
                 config:Mutex::new(Config::default()),
-                users:Mutex::new(vec![])
-        };
+                users:Mutex::new(vec![]),
+                event_manager: EventManager::new()
+        });
+
 
         backend.reload_users();
+        let th_backend = Arc::clone(&backend);
 
-        return Arc::new(backend);
+        backend.event_manager.register_multiple_events (
+            &[&Events::UserCreated,&Events::UserDeleted],
+            Arc::new(move |_ctx:&Option<ContextData> | th_backend.reload_users()),
+            None
+        );
+
+        return backend;
     }
 
     fn reload_users(self:&Arc<Self>)
@@ -63,16 +81,51 @@ impl Backend
 
             if let Ok(cfg) = self.config.lock()
             {
-                for (uname, prop) in cfg
+                let quota_info:Option<HashMap<String,Quota>> = {
+                    if let Some(pool) = &cfg.pool
+                    {
+                        match get_quota_for_all(&pool.name, &pool.dataset)
+                        {
+                            Ok(map) => Some(map),
+                            Err(e) => {
+                                error!("Unable to read quota information: {e}");
+                                None
+                            }
+                        }
+                    } 
+                    else
+                    {
+                        warn!("Unable to obtain quota information as pool is not configured");
+                        None
+                    }
+                };
+
+                for (uname, prop) in &cfg.users
                 {
                     //quota detection
 
+                    let quota:Option<Quota> = match quota_info
+                    {
+                        Some(ref map) => match map.get(uname)
+                            {
+                                Some(opt) => Some(opt.clone()),
+                                None=> None
+                            }
+                        _ => None
+                    };
 
 
                     // sudo detection
+                    let cmd_cfg = CmdConfig::new(
+                        true,
+                        true,
+                        None,
+                        None
+                    );
+
                     let mut sudo:bool = false;
 
-                    if let Some(group_output) = Groups(uname,Some(&config)).run()
+                    if let Some(group_output) = Groups(&uname,Some(&cmd_cfg)).run()
                     {
                         if group_output.status_code == 0
                         {
@@ -84,14 +137,52 @@ impl Backend
                     }
 
                     //first token
+                    let mut home_dir:Option<String> = None;
+                    let mut uid:Option<u32> = None;
+                    let mut gid:Option<u32> = None;
 
                     //get home - uid - gid
+                    if let Some(output) = GetEntPasswd(Some(uname.as_str()), Some(&cmd_cfg)).run()
+                    {
+                        if output.status_code == 0
+                        {
+                            let tokens:Vec<&str> = output.stdout.split(":").collect();
 
-                    //return
+                            if tokens.len()>5
+                            {
+                                uid = Some(tokens[2].parse::<u32>().unwrap());
+                                gid = Some(tokens[3].parse::<u32>().unwrap());
+                                home_dir = Some(tokens[5].to_string());
+                            }
+                        }
+                    }
+                    
+                    users.push(
+                        User{
+                            username: uname.to_string(),
+                            visible_name: prop.fullname.clone(),
+                            permissions: prop.permissions.clone(),
+                            quota:quota,
+                            sudo:sudo,
+                            admin: check_admin_permission(&prop.permissions),
+                            first_login_token: None,
+                            home_dir: {
+                                match home_dir
+                                {
+                                    Some(p) => Some(Path::new(&p).to_path_buf()),
+                                    None => None
+                                }
+                            },
+                            uid: uid,
+                            gid:gid,
+                            notifications:get_notifications_count(uname)
+                        }
+                    )
                 }
             }
         }
     }
+
 
     pub fn is_otp_configured(self:&Arc<Self>) -> bool
     {
