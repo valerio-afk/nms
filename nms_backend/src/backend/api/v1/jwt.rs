@@ -1,9 +1,25 @@
 use uuid::Uuid;
 use chrono::Utc;
-use jsonwebtoken::{encode, EncodingKey, Header};
+use jsonwebtoken::{encode, decode, EncodingKey, DecodingKey, Header,Validation};
 use serde::{Deserialize,Serialize};
-
+use axum::Json;
+use crate::backend::api::v1::msg::StatusMessage;
 use crate::backend::config::CfgToken;
+use super::msg::{WrappedResponse, ErrorMessages};
+
+
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PermissiveTokenParameter
+{
+    pub token: Option<String>
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct TokenParameter
+{
+    pub token: String
+}
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub enum TokenPurposes
@@ -66,4 +82,34 @@ pub fn create_token
         )?,
         claims:claims
     })
+}
+
+pub fn token_verification(
+    token:&str,
+    requested_purpose:TokenPurposes,
+    secret:&[u8]
+) -> Result<JWTClaim,Json<WrappedResponse>>
+{
+    let malformed_err = ErrorMessages::E_AUTH_MALFORMED.wrap(None).to_json();
+
+    let result = decode::<JWTClaim>(
+        &token,
+        &DecodingKey::from_secret(secret),
+        &Validation::default()
+    );
+
+    if result.is_err() {return Err(malformed_err); }
+
+    let jwt = result.unwrap().claims;
+
+    let claims = &jwt.claims;
+
+    if claims.purpose != requested_purpose { return Err(malformed_err); }
+
+    if claims.expire_date >= Utc::now().timestamp()
+    {
+        return Err(ErrorMessages::E_AUTH_EXPIRED.wrap(None).to_json());
+    }
+
+    Ok(jwt)   
 }

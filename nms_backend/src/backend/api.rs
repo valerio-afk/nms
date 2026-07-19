@@ -4,7 +4,7 @@ use axum::Router;
 use v1::v1_api;
 
 use crate::backend::Backend;
-mod v1;
+pub mod v1;
 
 
 pub fn get_api() -> Router<Arc<Backend>>

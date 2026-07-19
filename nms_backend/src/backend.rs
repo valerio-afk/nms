@@ -6,11 +6,14 @@ use std::net::SocketAddrV4;
 use std::error::Error;
 use std::sync::{OnceLock,Mutex,Arc};
 use std::collections::HashMap;
+use axum::Json;
 use tracing::{info,error,warn};
 
 use permissions::is_admin;
-use jwt::{create_token,Token,TokenPurposes};
+use api::v1::jwt::{create_token,token_verification,Token,TokenPurposes};
+use api::v1::msg::ErrorMessages;
 use utils::get_notifications_count;
+use crate::backend::api::v1::msg::{StatusMessage, WrappedResponse};
 use crate::backend::config::CfgToken;
 use crate::cmdl::{CmdConfig, Executable};
 use crate::cmdl::passwd::{Groups,GetEntPasswd};
@@ -21,7 +24,6 @@ pub mod config;
 pub mod api;
 pub mod utils;
 pub mod permissions;
-pub mod jwt;
 
 static BACKEND:OnceLock<Arc<Backend>> = OnceLock::new();
 static NMS_CONFIG_FILE:&str = "nms.conf.json";
@@ -185,7 +187,7 @@ impl Backend
                                 if prop.otp_secret.is_some() { None }
                                 else
                                 {
-                                    let previous_issued_tokens = cfg.find_tokens_by_purpose(jwt::TokenPurposes::FirstLogin, Some(uname));
+                                    let previous_issued_tokens = cfg.find_tokens_by_purpose(TokenPurposes::FirstLogin, Some(uname));
 
                                     if previous_issued_tokens.len() == 0
                                     {
@@ -289,6 +291,8 @@ impl Backend
 
         *cfg = serde_json::from_str(&json)?;
 
+        cfg.cleanup_tokens();
+
         Ok(())
     }
 
@@ -327,6 +331,34 @@ impl Backend
 
             Ok(())
         }
+    }
+
+    pub fn verify_token(self:&Self, token:&str,requested_purpose:TokenPurposes) -> Result<CfgToken,Json<WrappedResponse>>
+    {
+        let claims = token_verification(token, requested_purpose, self.secret_key.as_bytes())?;
+
+        if let Ok(cfg) = self.config.lock()
+        {
+            if !cfg.is_token_issued(&claims.uuid)
+            {
+                return Err(ErrorMessages::E_AUTH_REVOKED.wrap(None).to_json());
+            }
+        }
+
+        Ok(claims.claims)
+    }
+
+    pub fn has_otp_secret(self:&Self,username:&String) -> bool
+    {
+        if let Ok(cfg) = self.config.lock()
+        {
+            if let Some(user) = cfg.get_user(username)
+            {
+                return user.otp_secret.is_some();
+            }
+        }
+
+        return false;
     }
 }
 

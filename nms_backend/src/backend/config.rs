@@ -1,7 +1,8 @@
 use serde::{Deserialize,Serialize};
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
-use super::jwt::TokenPurposes;
+use chrono::Utc;
+use super::api::v1::jwt::TokenPurposes;
 use super::utils::{DistroFamily, detect_distro_family};
 use crate::events::Events;
 use crate::events::actions::UserDefinedActions;
@@ -36,7 +37,7 @@ pub enum AccessService
     Docker(CfgDockerService)
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize,Clone)]
 pub struct CfgUser
 {
     #[serde(default)]
@@ -249,6 +250,15 @@ impl Default for Config
 
 impl Config
 {
+    pub fn cleanup_tokens(self:&mut Self)
+    {
+        if let Some(map) = &mut self.released_tokens
+        {
+            let now = Utc::now().timestamp();
+            map.retain(|_,v| v.expire_date>=now );
+        }
+    }
+
     pub fn find_tokens_by_purpose(self:&Self, purpose: TokenPurposes,username:Option<&String>) -> HashMap<String, CfgToken>
     {
         if let Some(map) = &self.released_tokens
@@ -273,6 +283,8 @@ impl Config
 
     pub fn approve_token(self:&mut Self, uuid:String,token:CfgToken)
     {
+        self.cleanup_tokens();
+
         if self.released_tokens.is_none()
         {
             self.released_tokens = Some(HashMap::new());
@@ -283,10 +295,31 @@ impl Config
 
     pub fn revoke_token(self:&mut Self, uuid:&String)
     {
+        self.cleanup_tokens();
+
         if let Some(m) = &mut self.released_tokens
         {
             let _ = m.remove(uuid);
         }
+    }
+
+    pub fn get_token(self:&Self,uuid:&String) -> Option<CfgToken>
+    {
+        match &self.released_tokens
+        {
+            Some(m) => m.get(uuid).cloned(),
+            None=> None
+        }        
+    }
+
+    pub fn is_token_issued(self:&Self,uuid:&String) -> bool
+    {
+        self.get_token(uuid).is_some()
+    }
+
+    pub fn get_user(self:&Self,username:&String) -> Option<CfgUser>
+    {
+        self.users.get(username).cloned()
     }
 }
 
