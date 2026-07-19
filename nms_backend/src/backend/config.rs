@@ -1,7 +1,8 @@
 use serde::{Deserialize,Serialize};
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
-use crate::backend::utils::{DistroFamily, detect_distro_family};
+use super::jwt::TokenPurposes;
+use super::utils::{DistroFamily, detect_distro_family};
 use crate::events::Events;
 use crate::events::actions::UserDefinedActions;
 
@@ -168,12 +169,14 @@ pub struct CfgUserDefinedEvents
     parameters: CfgActionParameters
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct CfgTokens
+
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CfgToken
 {
-    purpose: String,
-    username: Option<String>,
-    expire_date: u64
+    pub purpose: TokenPurposes,
+    pub username: Option<String>,
+    pub expire_date: i64
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -210,7 +213,7 @@ pub struct Config
 
     pub events:Option<HashMap<String,CfgUserDefinedEvents>>,
 
-    pub released_tokens:Option<HashMap<String,CfgTokens>>,
+    pub released_tokens:Option<HashMap<String,CfgToken>>,
 
 }
 
@@ -241,6 +244,49 @@ impl Default for Config
             events: None, 
             released_tokens: None 
         }    
+    }
+}
+
+impl Config
+{
+    pub fn find_tokens_by_purpose(self:&Self, purpose: TokenPurposes,username:Option<&String>) -> HashMap<String, CfgToken>
+    {
+        if let Some(map) = &self.released_tokens
+        {
+            map
+            .iter()
+            .filter(|&(_,value)| value.purpose == purpose )
+            .filter(|&(_, value)| {
+                match username {
+                    Some(u) => {
+                        if let Some(uname) = &value.username { uname == u }
+                        else { false }
+                    }
+                    None => true,
+                }
+            })
+            .map(|(k,v)| (k.clone(),v.clone()) )
+            .collect()
+        }
+        else {HashMap::new()}
+    }
+
+    pub fn approve_token(self:&mut Self, uuid:String,token:CfgToken)
+    {
+        if self.released_tokens.is_none()
+        {
+            self.released_tokens = Some(HashMap::new());
+        }
+
+        self.released_tokens.as_mut().unwrap().insert(uuid,token);
+    }
+
+    pub fn revoke_token(self:&mut Self, uuid:&String)
+    {
+        if let Some(m) = &mut self.released_tokens
+        {
+            let _ = m.remove(uuid);
+        }
     }
 }
 

@@ -141,11 +141,6 @@ pub fn get_quota_for_all(pool:&str, dataset:&str) -> Result<HashMap<String,Quota
     return Err("Unable to execute zfs".to_string());
 }
 
-pub fn check_admin_permission(perm: &Option<Vec<String>>) -> bool
-{
-    return false;
-}
-
 pub fn get_notifications_count(username:&str) -> u32
 {
     let mut n_notifications:u32 = 0;

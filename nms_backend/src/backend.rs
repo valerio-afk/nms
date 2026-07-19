@@ -8,7 +8,10 @@ use std::sync::{OnceLock,Mutex,Arc};
 use std::collections::HashMap;
 use tracing::{info,error,warn};
 
-use crate::backend::utils::{check_admin_permission, get_notifications_count};
+use permissions::is_admin;
+use jwt::{create_token,Token,TokenPurposes};
+use utils::get_notifications_count;
+use crate::backend::config::CfgToken;
 use crate::cmdl::{CmdConfig, Executable};
 use crate::cmdl::passwd::{Groups,GetEntPasswd};
 use crate::events::{ContextData, EventManager, Events};
@@ -17,6 +20,8 @@ use crate::events::{ContextData, EventManager, Events};
 pub mod config;
 pub mod api;
 pub mod utils;
+pub mod permissions;
+pub mod jwt;
 
 static BACKEND:OnceLock<Arc<Backend>> = OnceLock::new();
 static NMS_CONFIG_FILE:&str = "nms.conf.json";
@@ -47,7 +52,8 @@ pub struct Backend
 {
     config:Mutex<Config>,
     users:Mutex<Vec<User>>,
-    event_manager:Arc<EventManager>
+    event_manager:Arc<EventManager>,
+    secret_key:String
 }
 
 impl Backend
@@ -57,15 +63,16 @@ impl Backend
         let backend = Arc::new(Backend{
                 config:Mutex::new(Config::default()),
                 users:Mutex::new(vec![]),
-                event_manager: EventManager::new()
+                event_manager: EventManager::new(),
+                secret_key: "prova".to_string()
         });
 
-
+        backend.read_config();        
         backend.reload_users();
         let th_backend = Arc::clone(&backend);
 
         backend.event_manager.register_multiple_events (
-            &[&Events::UserCreated,&Events::UserDeleted],
+            &[&Events::UserCreated,&Events::UserDeleted, &Events::UserModified],
             Arc::new(move |_ctx:&Option<ContextData> | th_backend.reload_users()),
             None
         );
@@ -79,7 +86,7 @@ impl Backend
         {
             users.clear();
 
-            if let Ok(cfg) = self.config.lock()
+            if let Ok(mut cfg) = self.config.lock()
             {
                 let quota_info:Option<HashMap<String,Quota>> = {
                     if let Some(pool) = &cfg.pool
@@ -99,6 +106,9 @@ impl Backend
                         None
                     }
                 };
+
+                let mut tokens_uuid_to_revoke:Vec<String> = Vec::new();
+                let mut token_to_approve:Option<(String, CfgToken)> = None;
 
                 for (uname, prop) in &cfg.users
                 {
@@ -164,8 +174,67 @@ impl Backend
                             permissions: prop.permissions.clone(),
                             quota:quota,
                             sudo:sudo,
-                            admin: check_admin_permission(&prop.permissions),
-                            first_login_token: None,
+                            admin: {
+                                match &prop.permissions
+                                {
+                                    Some(perms) => is_admin(&perms),
+                                    None => false
+                                }
+                            },
+                            first_login_token: {
+                                if prop.otp_secret.is_some() { None }
+                                else
+                                {
+                                    let previous_issued_tokens = cfg.find_tokens_by_purpose(jwt::TokenPurposes::FirstLogin, Some(uname));
+
+                                    if previous_issued_tokens.len() == 0
+                                    {
+                                        //need to create a new token to avoid that the user gets locked out
+                                        let t = create_token(
+                                            Some(uname.to_string()),
+                                            TokenPurposes::FirstLogin,
+                                            60*60*24, //24 hours
+                                            self.secret_key.as_bytes()
+                                        );
+
+                                        match t
+                                        {
+                                            Ok(tok) => {
+                                                token_to_approve = Some((tok.uuid.clone(),tok.claims));
+                                                Some(tok.uuid)
+                                            }
+                                            Err(e) => {
+                                                error!("Error while generating first login token for {uname}: {e}");
+                                                None
+                                            }
+                                        }
+                                    }
+                                    else 
+                                    {
+                                        //if more tokens are found as first login token for this user, issue the most recent one and revoke the others.
+                                        let mut vectorised_prev_tokens:Vec<(&String,&CfgToken)> = Vec::new();
+
+                                        for (k,v) in &previous_issued_tokens
+                                        {
+                                            vectorised_prev_tokens.push((&k,&v));
+                                        }
+
+                                        vectorised_prev_tokens.sort_by(
+                                            |(_,a), (_,b)| {
+                                            b.expire_date.cmp(&a.expire_date)
+                                        });
+
+                                        let tokes_to_revoke = &vectorised_prev_tokens[1..];
+
+                                        for (uuid,_) in tokes_to_revoke.iter()
+                                        {
+                                            tokens_uuid_to_revoke.push(uuid.to_string());
+                                        }
+
+                                        Some(vectorised_prev_tokens[0].0.clone())
+                                    }
+                                }
+                            },
                             home_dir: {
                                 match home_dir
                                 {
@@ -179,8 +248,20 @@ impl Backend
                         }
                     )
                 }
+
+                if let Some((uuid,claims)) = token_to_approve
+                {
+                    cfg.approve_token(uuid,claims);
+                }
+
+                for uuid in tokens_uuid_to_revoke
+                {
+                    cfg.revoke_token(&uuid);
+                }
             }
         }
+
+        self.flush_config();
     }
 
 
