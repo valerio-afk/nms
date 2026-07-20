@@ -1,4 +1,7 @@
 use strum::{EnumString,Display,EnumIter,IntoEnumIterator};
+use serde_json::Value;
+use super::msg::{StatusMessage,ErrorMessages};
+use crate::backend::HTTPError;
 
 #[derive(Display,EnumString,EnumIter)]
 pub enum UserPermissions
@@ -152,6 +155,24 @@ impl UserPermissions
         return p.iter().any(|x| self.is_allowed(x));
     }
 }
+
+pub fn check_permission<T>(user_permissions:&Option<Vec<T>>, perm: UserPermissions) -> Result<(),HTTPError>
+where T: AsRef<str>
+{
+    if let Some(u_perm) = user_permissions
+    {
+        if perm.is_any_allowed(&u_perm)
+        {
+            return Ok(())
+        }
+    }
+    
+    
+    return Err(ErrorMessages::E_NO_PERM.wrap_with_status_code(Some(vec![Value::String(perm.to_string())])))
+    
+}
+
+
 
 
 pub fn is_admin<T>(perm:&[T]) -> bool

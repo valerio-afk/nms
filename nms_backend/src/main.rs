@@ -1,10 +1,12 @@
-use tracing::{Level,error,debug};
+use tracing::{Level,debug};
 use tracing_subscriber::FmtSubscriber;
 use backend::get_backend;
 use backend::utils::detect_distro_family;
 use backend::api::get_api;
 use std::sync::{Arc};
 use axum::{Router};
+
+use crate::backend::msg::{LoggerMessages,LogErrors};
 
 
 
@@ -60,7 +62,7 @@ async fn main()
     match listener
     {
         Ok(t) => axum::serve(t,app).await.unwrap(),        
-        Err(e) => error!("Unable to serve backend: {}",e),
+        Err(e) => LoggerMessages::Error(LogErrors::ServerCannotStart(&e.to_string())).log(),
     }
 
 

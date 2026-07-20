@@ -146,6 +146,36 @@ pub enum ContextVariables
     Token
 }
 
+pub struct ContextBuilder
+{
+    map:HashMap<ContextVariables,String>
+}
+
+impl ContextBuilder
+{
+    pub fn new() -> Self
+    {
+        ContextBuilder { map: HashMap::new() }
+    }
+
+    pub fn from(var:ContextVariables, value:String) -> Self
+    {
+        ContextBuilder::new().push(var, value)
+    }
+
+    pub fn push(mut self, var:ContextVariables, value:String) -> Self
+    {
+        self.map.insert(var, value);
+        return self;
+    }
+
+    pub fn finish(self) -> Option<HashMap<ContextVariables,String>>
+    {
+        if self.map.is_empty() { None }
+        else {Some(self.map)}
+    }
+}
+
 impl std::fmt::Display for ContextVariables
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result 

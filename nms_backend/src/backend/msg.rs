@@ -1,0 +1,371 @@
+use axum::{Json,http::{StatusCode}};
+use std::fmt::Display;
+use serde::{Serialize};
+use serde_json::Value;
+use tracing::{info,warn,error};
+use strum::EnumProperty;
+use super::HTTPError;
+
+pub trait StatusMessage:Clone
+{
+    fn wrap(self:&Self,params:Option<Vec<Value>>) -> WrappedResponse;
+    fn wrap_with_status_code(self:&Self,params:Option<Vec<Value>>) -> HTTPError;
+}
+
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "type")]
+pub enum MessageTypes
+{
+    #[serde(rename="error")]
+    Error(ErrorMessages),
+
+    #[serde(rename="warning")]
+    Warning,
+
+    #[serde(rename="success")]
+    Success
+}
+
+#[derive(Debug, Serialize)]
+pub struct MessageResponse
+{
+    #[serde(flatten)]
+    code:MessageTypes,
+    params:Option<Vec<Value>>
+}
+
+#[derive(Debug, Serialize)]
+pub struct WrappedResponse
+{
+    detail:MessageResponse
+}
+
+impl WrappedResponse
+{
+    pub fn to_json(self) -> Json<WrappedResponse>
+    {
+        Json(self)
+    }
+}
+
+#[derive(Debug, Serialize, Clone, EnumProperty)]
+pub enum ErrorMessages
+{
+    E_UNKNOWN,
+    E_UNKNOWN_RESPONSE,
+    E_PROPERTY,
+    E_CSRF,
+    E_UNKNOWN_METHOD,
+    E_READ_FILE,
+    E_SELINUX_PORT,
+    E_SYSTEMD_START,
+    E_SYSTEMD_STOP,
+    E_TOO_MANY_REQ,
+    E_INVALID_VALUE,
+    
+    #[strum(props(status_code="401"))]
+    E_NO_PERM,
+
+    E_POOL_ALREADY_CONF,
+    E_POOL_NO_CONF,
+    E_POOL_CONFIG,
+    E_POOL_DISK_UNAVAL,
+    E_POOL_NEW,
+    E_POOL_DESTROY,
+    E_POOL_REDUNDANCY_MIN,
+    E_POOL_EXPAND,
+    E_POOL_EXPAND_INFO,
+    E_POOL_EXPAND_STATUS,
+    E_POOL_KEY,
+    E_POOL_KEY_IMPORT,
+    E_POOL_LIST,
+    E_POOL_RECOVERY,
+    E_POOL_DISKS,
+    E_POOL_DISK_REPLACE,
+    E_POOL_ATTACH,
+    E_POOL_DETACH,
+    E_POOL_MOUNT,
+    E_POOL_UNMOUNT,
+    E_POOL_MOUNTED,
+    E_POOL_UNMOUNTED,
+    E_POOL_SCRUB,
+    E_POOL_RM_MOUNTPOINT,
+    E_POOL_INVALID_MOUNTPOINT,
+    E_POOL_MOUNT_STATUS,
+    E_POOL_MOUNTPOINT,
+    E_POOL_FORMAT,
+    E_POOL_CAPACITY,
+    E_POOL_OPENED,
+    E_POOL_DISK_MISSING,
+    E_POOL_CORRUPTED,
+    E_POOL_OUTDATED,
+    E_POOL_SNAPSHOT_NAME,
+    E_POOL_SNAPSHOT_CREATE,
+    E_POOL_SNAPSHOT_DELETE,
+    E_POOL_SNAPSHOTS,
+    E_POOL_SNAPSHOT_ROLLBACK,
+
+    #[strum(props(status_code="403"))]
+    E_AUTH_ALREADY_CONFIG,
+    
+    #[strum(props(status_code="401"))]
+    E_AUTH_INVALID,
+
+    #[strum(props(status_code="401"))]
+    E_AUTH_EXPIRED,
+
+    #[strum(props(status_code="401"))]
+    E_AUTH_REVOKED,
+    
+    #[strum(props(status_code="400"))]
+    E_AUTH_MALFORMED,
+    E_AUTH_NOT_CONF,
+    E_AUTH_WRONG_OTP,
+
+    E_DISK_ATTACH,
+    E_DISK_FORMAT,
+    E_DISK_SELF_TEST,
+
+    E_FS_CH_PERM,
+
+    E_APT_GET,
+    E_APT_UNK,
+
+    E_ACCESS_ENABLED,
+    E_ACCESS_DISABLED,
+    E_ACCESS_DISABLING,
+    E_ACCESS_SERV_UNK,
+    E_ACCESS_PROP,
+
+    E_NET_CHANGE_STATE,
+    E_NET_CONNECTION_STATUS,
+    E_NET_INVALID_NETMASK,
+    E_NET_INVALID_IP_ADDRESS,
+    E_NET_INVALID_GATEWAY,
+    E_NET_INVALID_DNS,
+    E_NET_WIFI_LIST,
+    E_NET_WIFI_CONNECT,
+    E_NET_WIFI_DEV,
+    E_NET_AP,
+    E_NET_VPN_NOTCONF,
+    E_NET_VPN_STATE,
+    E_NET_VPN_KEY,
+    E_NET_VPN_GEN_PRIVATE,
+    E_NET_VPN_GEN_PUBLIC,
+    E_NET_VPN_CONF,
+    E_NET_VPN_USER,
+    E_NET_VPN_USER_INVALID,
+    E_NET_VPN_IP_MAX,
+    E_NET_DDNS_INVALID,
+    E_NET_DDNS_SERVICE,
+    E_NET_DDNS_CONFIG,
+
+    #[strum(props(status_code="404"))]
+    E_USER_NOT_FOUND,
+
+    E_USER_PASSWD,
+    E_USER_QUOTA,
+    E_USER_NAME,
+    E_USER_SUDO,
+    E_NEW_USER,
+    E_PERM_ADMIN,
+    E_DEL_ADMIN,
+    E_USER_COPY_FILES,
+    E_USER_DELETE,
+    E_USER_LOGIN_RESET,
+    E_USER_SYSTEM,
+    E_USER_UID,
+
+    E_SYSTEM_UPDATES,
+    E_SYSTEM_DIST,
+
+    E_FS_NOT_FILE,
+    E_FS_ZIP,
+    E_FS_UNZIP,
+    E_REL_PATH,
+    E_FS_COPY,
+    E_FS_MOVE,
+    E_FS_MKDIR,
+
+    E_EVENT_INVALID,
+    E_ACTION_INVALID,
+    E_EVENT_INVALID_ACTION,
+    E_EVENT_INVALID_PARAM
+}
+
+impl StatusMessage for ErrorMessages
+{
+    fn wrap(self:&Self,params:Option<Vec<Value>>) -> WrappedResponse
+    {
+        WrappedResponse { 
+            detail: MessageResponse 
+            { 
+                code: MessageTypes::Error(self.clone()),
+                params:params
+            }
+        }    
+    }
+    fn wrap_with_status_code(self:&Self,params:Option<Vec<Value>>) -> HTTPError
+    {
+        let status_code_str:&'static str = {
+            match self.get_str("status_code")
+            {
+                Some(value) => value,
+                None => "500"
+            }
+        };
+
+        let status_code:u16 = match status_code_str.parse::<u16>() {
+            Ok(code) => code,
+            Err(_) => 500
+        };
+
+        (
+            match StatusCode::from_u16(status_code)
+            {
+                Ok(status) => status,
+                Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            },
+            self.wrap(params).to_json()
+        )
+    }
+}
+
+
+
+
+pub enum LogErrors<'a>
+{
+    ServerCannotStart(&'a String),
+    FirstLoginToken(&'a str,&'a String),
+    LoginToken(&'a str,&'a String),
+    AnyOTPCheck(&'a String),
+    TokenRevoked(&'a str),
+    CfgLock(&'a String),
+    CfgRead(&'a String),
+    CfgWrite(&'a String),
+    CfgMove(&'a String),
+    TmpSecretsLock(&'a String),
+    AdminOTPAlreadyConf,
+    OTPAlreadyConf(&'a Option<String>),
+    AdminUserList(&'a String),
+    SecretEncoding(&'a String),
+    NewTOTPURI(&'a String),
+    TmpOTPVerification(&'a String),
+    OTPInit(&'a Option<String>,&'a String,),
+    OTPWrong,
+}
+
+impl<'a> Display for LogErrors<'a>
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result 
+    {
+
+        match self
+        {
+            LogErrors::ServerCannotStart(e) => write!(f,"Unable to serve backend: {}",e),
+            LogErrors::FirstLoginToken(uname, e) => write!(f,"Error while generating first login token for {}: {}",uname,e),
+            LogErrors::LoginToken(uname, e) => write!(f,"Error while generating login token for {}: {}",uname,e),
+            LogErrors::AnyOTPCheck(e) => write!(f,"Unable to determine if any OTP is configured (return true for safety reasons): {}", e),
+            LogErrors::TokenRevoked(uuid) => write!(f,"An attempt to login with a revoken token has been made: {}",uuid),
+            LogErrors::CfgLock(e) => write!(f,"Unable to access configuration file: {}",e),
+            LogErrors::CfgRead(e) => write!(f,"Unable to read configuration file: {}",e),
+            LogErrors::CfgWrite(e) => write!(f,"Unable to write configuration file: {}",e),
+            LogErrors::CfgMove(e) => write!(f,"Unable to move configuration file: {}",e),
+            LogErrors::TmpSecretsLock(e) => write!(f,"Unable to get temporary secrets: {}",e),
+            LogErrors::AdminOTPAlreadyConf => write!(f,"Attempting to reset already configured secret for an admin user"),
+            LogErrors::OTPAlreadyConf(username) => match username
+            {
+                Some(u) =>  write!(f,"Attempting to reset already configured secret for {}",u),
+                None =>  write!(f,"Attempting to reset already configured secret for a user"),
+            }            
+            LogErrors::AdminUserList(e) => write!(f,"Unable to retrieve the list of admin users: {}",e),
+            LogErrors::SecretEncoding(e) => write!(f,"Unable to encode secret key: {}",e),
+            LogErrors::NewTOTPURI(e) => write!(f,"Unable to generate new TOTP provisioning URL: {}",e),
+            LogErrors::TmpOTPVerification(e) => write!(f,"Unable to verifiy temporary OTP: {}",e),
+            LogErrors::OTPInit(uname, e) => match uname
+            {
+                Some(u) =>  write!(f,"Unable to initialise OTP verification for {}: {}",u, e),
+                None =>  write!(f,"Unable to initialise OTP verification: {}", e)
+
+            }
+            LogErrors::OTPWrong => write!(f,"Login attempt failed"),
+
+        }
+    }
+}
+
+
+pub enum LogWarnings<'a>
+{
+    CfgDefault,
+    ZfsQuota(&'a str),
+    ZfsQuotaNoPool,
+
+    TmpSecretNotFound(&'a str),
+}
+
+impl<'a> Display for LogWarnings<'a>
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result 
+    {
+
+        match self
+        {
+            LogWarnings::CfgDefault => write!(f,"Creating a new configuration file with default values"),
+            LogWarnings::ZfsQuota(msg) => write!(f,"Unable to retrieve ZFS quota information: {}",msg),
+            LogWarnings::ZfsQuotaNoPool => write!(f,"Unable to obtain quota information as pool is not configured"),
+            LogWarnings::TmpSecretNotFound(uuid) => write!(f,"Temporary secret {} not found",uuid),
+        }
+    }
+}
+
+
+pub enum LogInfos<'a>
+{
+    NewCfg,
+    BackendStarted,
+    OTPSecretConf(&'a String),
+    OTPSecretGen(&'a Option<String>)
+    
+}
+
+impl<'a> Display for LogInfos<'a>
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result 
+    {
+
+        match self
+        {
+            LogInfos::NewCfg => write!(f,"New configuration file created"),
+            LogInfos::BackendStarted => write!(f,"NMS backend started"),
+            LogInfos::OTPSecretConf(uname) => write!(f,"OTP secret configured successfully for {}",uname),
+            LogInfos::OTPSecretGen(username) => match username
+            {
+                Some(u) =>  write!(f,"New OTP secret successfully generated for {}",u),
+                None =>  write!(f,"New OTP secret successfully generated"),
+            }
+        }
+    }
+}
+
+pub enum LoggerMessages<'a>
+{
+    Error(LogErrors<'a>),
+    Warning(LogWarnings<'a>),
+    Info(LogInfos<'a>),
+}
+
+impl<'a> LoggerMessages<'a>
+{
+    pub fn log(&self)
+    {
+        match self
+        {
+            LoggerMessages::Error(e) => error!("{}",e.to_string()),
+            LoggerMessages::Warning(w) => warn!("{}",w.to_string()),
+            LoggerMessages::Info(info) => info!("{}",info.to_string()),
+        }
+    }
+}

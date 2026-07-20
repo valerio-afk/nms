@@ -2,10 +2,10 @@ use uuid::Uuid;
 use chrono::Utc;
 use jsonwebtoken::{encode, decode, EncodingKey, DecodingKey, Header,Validation};
 use serde::{Deserialize,Serialize};
-use axum::Json;
 use crate::backend::api::v1::msg::StatusMessage;
 use crate::backend::config::CfgToken;
-use super::msg::{WrappedResponse, ErrorMessages};
+use super::msg::{ErrorMessages};
+use super::HTTPError;
 
 
 
@@ -88,9 +88,8 @@ pub fn token_verification(
     token:&str,
     requested_purpose:TokenPurposes,
     secret:&[u8]
-) -> Result<JWTClaim,Json<WrappedResponse>>
+) -> Result<JWTClaim,HTTPError>
 {
-    let malformed_err = ErrorMessages::E_AUTH_MALFORMED.wrap(None).to_json();
 
     let result = decode::<JWTClaim>(
         &token,
@@ -98,17 +97,20 @@ pub fn token_verification(
         &Validation::default()
     );
 
-    if result.is_err() {return Err(malformed_err); }
+    if result.is_err() {return Err(ErrorMessages::E_AUTH_MALFORMED.wrap_with_status_code(None)); }
 
     let jwt = result.unwrap().claims;
 
     let claims = &jwt.claims;
 
-    if claims.purpose != requested_purpose { return Err(malformed_err); }
+    if claims.purpose != requested_purpose 
+    {
+        return Err(ErrorMessages::E_AUTH_INVALID.wrap_with_status_code(None));
+    }
 
     if claims.expire_date >= Utc::now().timestamp()
     {
-        return Err(ErrorMessages::E_AUTH_EXPIRED.wrap(None).to_json());
+        return Err(ErrorMessages::E_AUTH_EXPIRED.wrap_with_status_code(None));
     }
 
     Ok(jwt)   

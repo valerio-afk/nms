@@ -1,15 +1,13 @@
 use axum::Router;
 use std::sync::Arc;
-use axum::{Json,http::StatusCode};
-use msg::{WrappedResponse};
-
 use crate::backend::Backend;
 
 mod auth;
-pub mod msg;
-pub mod jwt;
 
-type FastAPIComp<T> = Result<Json<T>, (StatusCode, Json<WrappedResponse>)>; //this type is to make it more compatible with the current frontend
+pub use crate::backend::FastAPIComp;
+pub use crate::backend::jwt;
+pub use crate::backend::msg;
+
 
 pub fn v1_api() -> Router<Arc<Backend>>
 {
