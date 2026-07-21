@@ -17,6 +17,7 @@ from traceback import format_exc
 from typing import Optional, List, Any, Dict, Literal, Union, Tuple
 import datetime
 import werkzeug.exceptions
+import sys;
 
 def parse_disks_from_request(d:Optional[List[dict]]) -> List[Disk]:
     if (d is not None):
@@ -139,19 +140,22 @@ class BackEndProxy:
         try:
             response.raise_for_status()
         except HTTPError as err:
+
             if (not ignore_exception):
                 try:
+
                     if (err.response.status_code == 401):
                         args = err.response.json()
                         abort(401,description=args)
                     if (err.response.status_code == 429):
                         show_flash(code=ErrorMessages.E_TOO_MANY_REQ.value)
                         return None
-                    if (err.response.status_code == 422):
+                    if (err.response.status_code in (415,422)):
                         error = f"URL: {err.request.url}\n"
                         error+= f"Data: {err.request.body}\n"
                         error+= f"Headers: {err.request.headers.values()}\n\n"
                         error+= f"Response: {response.raw.data}"
+
                         raise Exception(error)
 
                     err_message = err.response.json()
@@ -168,6 +172,7 @@ class BackEndProxy:
                 except (RuntimeError,werkzeug.exceptions.Unauthorized) as err:
                     raise err
                 except Exception as e:
+                    print(str(e), file=sys.stderr)
                     show_flash(code=ErrorMessages.E_UNKNOWN.name)
                     flash(f"{format_exc()}\n\n{str(e)}","error")
 
@@ -204,7 +209,6 @@ class BackEndProxy:
 
     def _get_bool_property_request(this, tag:str, property:str,coerce_to:bool=False) -> bool:
         r = this._get_property_request(tag, property)
-
         return r if isinstance(r, bool) else coerce_to
 
     #OTHER PROPERTIES
@@ -482,6 +486,7 @@ class BackEndProxy:
     def login(this, otp:str) -> bool:
         duration = BackEndProxy.TOKEN_LONGEVITY
         token = this.verify_otp(otp)
+
         if (token is not None):
             this.set_session_token("login",token)
 

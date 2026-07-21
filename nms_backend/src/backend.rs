@@ -2,6 +2,7 @@ use api::v1::jwt::{create_token,token_verification,TokenPurposes};
 use axum::http::StatusCode;
 use axum::Json;
 use config::Config;
+use serde::Serialize;
 use crate::backend::api::v1::msg::{StatusMessage, WrappedResponse};
 use crate::backend::config::{CfgToken};
 use crate::backend::jwt::JWTClaim;
@@ -34,7 +35,7 @@ pub mod jwt;
 static BACKEND:OnceLock<Arc<Backend>> = OnceLock::new();
 static NMS_CONFIG_FILE:&str = "nms.conf.json";
 
-#[derive(Clone)]
+#[derive(Clone,Debug, Serialize)]
 pub struct Quota
 {
     pub quota:Option<u64>,
@@ -49,6 +50,7 @@ pub struct TemporarySecret
     secret:String
 }
 
+#[derive(Clone, Debug,Serialize)]
 pub struct User
 {
     pub username:String,
@@ -164,7 +166,7 @@ impl Backend
 // Auth-related Methods
 impl Backend
 {
-    pub fn verify_token(self:&Arc<Self>, token:&str,requested_purpose:TokenPurposes) -> Result<CfgToken,HTTPError>
+    pub fn verify_token(self:&Arc<Self>, token:&str,requested_purpose:TokenPurposes) -> Result<JWTClaim,HTTPError>
     {
         let claims = token_verification(token, requested_purpose, self.secret_key.as_bytes())?;
 
@@ -176,7 +178,7 @@ impl Backend
             }
         }
 
-        Ok(claims.claims)
+        Ok(claims)
     }
 
     pub fn push_token(self:&Arc<Self>, token:JWTClaim) -> Result<(),HTTPError>
@@ -209,6 +211,29 @@ impl Backend
             {
                 LoggerMessages::Error(LogErrors::CfgLock(&e.to_string())).log();
                 return Err(ErrorMessages::E_UNKNOWN.wrap_with_status_code(None));
+            }
+        }
+    }
+
+    pub fn is_otp_configured_for(self:&Arc<Self>,username:&str) -> Result<bool,HTTPError>
+    {
+        match self.config.lock()
+        {
+            Ok(cfg) => {
+                for (uname,cfg_u) in &cfg.users
+                {
+                    if uname == username
+                    {
+                        return Ok(cfg_u.otp_secret.is_some());
+                    }
+                }
+
+                Err(ErrorMessages::E_USER_NOT_FOUND.wrap_with_status_code(Some(vec![Value::String(username.to_string())])))
+            }
+            Err(e) => 
+            {
+                LoggerMessages::Error(LogErrors::CfgLock(&e.to_string())).log();
+                Err(ErrorMessages::E_UNKNOWN.wrap_with_status_code(None))
             }
         }
     }
@@ -279,99 +304,83 @@ impl Backend
 
     pub fn get_temporary_secrets(self:&Arc<Self>) -> Result<Vec<TemporarySecret>,HTTPError>
     {
-        let mut tmp = vec![];
+        let secrets = self.tmp_secrets.lock().map_err(|e|
+            {
+                LoggerMessages::Error(LogErrors::TmpSecretsLock(&e.to_string())).log();
+                ErrorMessages::E_UNKNOWN.wrap_with_status_code(None)
+            }
+        )?;
 
-        let secrets = self.tmp_secrets.lock();
-
-        if let Err(e) = secrets
-        {
-            LoggerMessages::Error(LogErrors::TmpSecretsLock(&e.to_string())).log();
-            return Err(ErrorMessages::E_UNKNOWN.wrap_with_status_code(None));
-        }
-
-        for (_,v) in secrets.unwrap().iter()
-        {
-            tmp.push(v.clone());
-        }     
-
-        Ok(tmp)
+        Ok(secrets.values().cloned().collect())
     }
 
     pub fn save_temporary_secret(self:&Arc<Self>,uuid:&String) -> Result<String,HTTPError>
     {
-        let res_secrets = &mut self.tmp_secrets.lock();
+        let is_otp_configured = self.is_otp_configured(); //moved here to avoid deadlocks
 
-        if let Err(e) = res_secrets
-        {
-            LoggerMessages::Error(LogErrors::TmpSecretsLock(&e.to_string())).log();
-            return Err(ErrorMessages::E_UNKNOWN.wrap_with_status_code(None));
-        }
-
-        let secrets = res_secrets.as_mut().unwrap();
-
-        let secret = secrets.get(uuid);
-
-        if secret.is_none()
-        {
-            LoggerMessages::Warning(LogWarnings::TmpSecretNotFound(uuid)).log();
-            return Err(ErrorMessages::E_AUTH_INVALID.wrap_with_status_code(None));
-        }
-
-        let tmp_sec = secret.unwrap();
-
-        let res_cfg = self.config.lock();
-
-        if let Ok(mut cfg) = res_cfg
-        {
-            // this happens for a new user or a user has reset their credentials
-            if let Some(username) = &tmp_sec.username
+        let secrets = &mut self.tmp_secrets.lock().map_err(|e|
             {
-                let u = cfg.users.get_mut(username);
-                match u
-                {
-                    Some(user) =>
-                    {
-                        let tmp_sec = secrets.remove(uuid).unwrap();
-                        user.otp_secret = Some(tmp_sec.secret);
-                        return Ok(tmp_sec.username.unwrap());
-                    }
-                    None =>
-                    {
-                        return Err(ErrorMessages::E_USER_NOT_FOUND.wrap_with_status_code(None))
-                    }
-                }
+                LoggerMessages::Error(LogErrors::TmpSecretsLock(&e.to_string())).log();
+                ErrorMessages::E_UNKNOWN.wrap_with_status_code(None)
+            })?;
+
+        
+
+        let secret = match secrets.get(uuid)
+        {
+            Some(s) => s,
+            None => {
+                LoggerMessages::Warning(LogWarnings::TmpSecretNotFound(uuid)).log();
+                return Err(ErrorMessages::E_AUTH_INVALID.wrap_with_status_code(None));
             }
-            else //this happens when no admin has access (eg first time boot)
-            {
-                if !self.is_otp_configured()
-                {
-                    
-                    for u in self.get_admin_users()?
-                    {
-                        if let Some(cfg_u) = cfg.users.get_mut(&u.username)
-                        {
-                            if cfg_u.otp_secret.is_none()
-                            {
-                                let tmp_sec = secrets.remove(uuid).unwrap();
-                                cfg_u.otp_secret = Some(tmp_sec.secret);
-                                
+        };
 
-                                LoggerMessages::Info(LogInfos::OTPSecretConf(&u.username)).log();
-                                return Ok(u.username.clone());
-                            }
+
+        let cfg = &mut self.config.lock().map_err(|e|{
+            LoggerMessages::Error(LogErrors::CfgLock(&e.to_string())).log();
+            ErrorMessages::E_UNKNOWN.wrap_with_status_code(None)
+        })?;
+
+        
+        // this happens for a new user or a user has reset their credentials
+        if let Some(username) = &secret.username
+        {
+            let u = cfg.users.get_mut(username);
+            match u
+            {
+                Some(user) =>
+                {
+                    let tmp_sec = secrets.remove(uuid).unwrap();
+                    user.otp_secret = Some(tmp_sec.secret);
+                    return Ok(tmp_sec.username.unwrap());
+                }
+                None => return Err(ErrorMessages::E_USER_NOT_FOUND.wrap_with_status_code(None))
+
+            }
+        }
+        else //this happens when no admin has access (eg first time boot)
+        {
+            if !is_otp_configured
+            {
+                for u in self.get_admin_users()?
+                {
+                    if let Some(cfg_u) = cfg.users.get_mut(&u.username)
+                    {
+                        if cfg_u.otp_secret.is_none()
+                        {
+                            let tmp_sec = secrets.remove(uuid).unwrap();
+                            cfg_u.otp_secret = Some(tmp_sec.secret);
+                            
+
+                            LoggerMessages::Info(LogInfos::OTPSecretConf(&u.username)).log();
+                            return Ok(u.username.clone());
                         }
                     }
                 }
-
-                LoggerMessages::Error(LogErrors::AdminOTPAlreadyConf).log();
-                return Err(ErrorMessages::E_AUTH_ALREADY_CONFIG.wrap_with_status_code(None));
-
             }
-        }
-        else
-        {
-            LoggerMessages::Error(LogErrors::CfgLock(&res_cfg.err().unwrap().to_string())).log();
-            return Err(ErrorMessages::E_UNKNOWN.wrap_with_status_code(None));
+
+            LoggerMessages::Error(LogErrors::AdminOTPAlreadyConf).log();
+            return Err(ErrorMessages::E_AUTH_ALREADY_CONFIG.wrap_with_status_code(None));
         }
     }
 
@@ -550,7 +559,7 @@ impl Backend
 
                                         vectorised_prev_tokens.sort_by(
                                             |(_,a), (_,b)| {
-                                            b.expire_date.cmp(&a.expire_date)
+                                            b.exp.cmp(&a.exp)
                                         });
 
                                         let tokes_to_revoke = &vectorised_prev_tokens[1..];
@@ -597,22 +606,12 @@ impl Backend
 
     pub fn get_admin_users(self:&Arc<Self>) -> Result<Vec<Arc<User>>,HTTPError>
     {
-        match &self.users.lock()
-        {
-            Ok(users) =>
-            {
-                //let mut v:Vec<&User> = Vec::new();
+        let users = &self.users.lock().map_err(|e|{
+            LoggerMessages::Error(LogErrors::AdminUserList(&e.to_string())).log();
+            ErrorMessages::E_UNKNOWN.wrap_with_status_code(None)
+        })?;
 
-                Ok(
-                    users.iter().filter(|u| u.admin).cloned().collect()
-                )
-            }
-            Err(e) =>
-            {
-                LoggerMessages::Error(LogErrors::AdminUserList(&e.to_string())).log();
-                Err(ErrorMessages::E_UNKNOWN.wrap_with_status_code(None))
-            }
-        }
+        Ok(users.iter().filter(|u| u.admin).cloned().collect())
     }
 
     pub fn get_user(self:&Arc<Self>,username:&str) -> Result<Arc<User>,HTTPError>

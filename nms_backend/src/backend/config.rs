@@ -177,7 +177,7 @@ pub struct CfgToken
 {
     pub purpose: TokenPurposes,
     pub username: Option<String>,
-    pub expire_date: i64
+    pub exp: i64
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -255,7 +255,7 @@ impl Config
         if let Some(map) = &mut self.released_tokens
         {
             let now = Utc::now().timestamp();
-            map.retain(|_,v| v.expire_date>=now );
+            map.retain(|_,v| v.exp>=now );
         }
     }
 

@@ -1,14 +1,17 @@
 use axum::{Json, Router, extract::{Path,State,Query, Form}, routing::{get,patch, post}};
-use crate::{backend::{Backend, jwt::JWTClaim, permissions::{UserPermissions, check_permission}}};
+use axum_auth::AuthBearer;
+use crate::backend::{self, Backend, HTTPError, jwt::JWTClaim, permissions::{UserPermissions, check_permission}};
 use crate::events::{Events,ContextVariables,Trigger, ContextBuilder};
 use super::jwt::{PermissiveTokenParameter,TokenPurposes,create_token};
 use serde_json::{Value};
 use serde::{Deserialize, Serialize};
-use std::{collections::hash_map, sync::Arc};
+use std::sync::Arc;
 use super::FastAPIComp;
 use super::msg::{StatusMessage,ErrorMessages, LogErrors, LoggerMessages, LogInfos};
 use std::error::Error;
 use totp_rs::{Algorithm, Secret, TOTP};
+
+const LOGIN_LIFETIME:i64 = 30*60;
 
 
 
@@ -57,7 +60,7 @@ fn verify_otp<'a>(otp:&'a str,secret:String,username:&'a Option<String>) -> Resu
         {
             match TOTP::new(
                 Algorithm::SHA1,
-                8,                  // digits
+                6,                  // digits
                 1,                  // skew
                 30,                 // period
                 secret,
@@ -123,7 +126,7 @@ async fn auth_new_secret
     {
         let claims = backend.verify_token(&tok, TokenPurposes::FirstLogin)?;
 
-        username = claims.username;
+        username = claims.claims.username;
 
         if let Some(ref u) = username
         {
@@ -143,7 +146,7 @@ async fn auth_new_secret
 
 
 
-    let secret = Secret::generate_secret();
+    let secret = Secret::generate_secret().to_encoded();
     let secret_string = secret.to_string();
     let secret_bytes = secret.to_bytes();
 
@@ -158,7 +161,7 @@ async fn auth_new_secret
 
     let totp = TOTP::new(
         Algorithm::SHA1,
-        8,                  // digits
+        6,                  // digits
         1,                  // skew
         30,                 // period
         secret_bytes.unwrap(),
@@ -190,7 +193,7 @@ async fn auth_new_secret
 async fn auth_otp_verify
 (
     State(backend):State<Arc<Backend>>,
-    Form(otp):Form<OPTVerificationForm>
+    Json(otp):Json<OPTVerificationForm>
 ) -> FastAPIComp<AuthTokenResponse>
 {
     let mut username:Option<String> = None;
@@ -201,14 +204,18 @@ async fn auth_otp_verify
     {
         for tmp in tmp_secrets
         {
+            tracing::error!("Risky zone?");
             match verify_otp(&otp.otp, tmp.secret, &tmp.username)
             {
                 Ok(res) =>
                 {
                     if res
                     {
+                        tracing::debug!("Is deadlock here?");
                         username = Some(backend.save_temporary_secret(&tmp.uuid)?);
+                        tracing::debug!("No");
                         backend.flush_config();
+                        tracing::debug!("No x2");
                         break;
                     } 
                 }
@@ -247,9 +254,9 @@ async fn auth_otp_verify
 
 
     match create_token(
-        username, 
+        username.clone(), 
         TokenPurposes::Login, 
-        60*30, //30 mins
+        LOGIN_LIFETIME, //30 mins
         backend.secret_key.as_bytes()
     )
     {
@@ -258,7 +265,7 @@ async fn auth_otp_verify
             let response = Json(AuthTokenResponse {
                 token: tok.encoded_claims,
                 username: tok.claims.username.clone().unwrap(),
-                expire_date: tok.claims.expire_date
+                expire_date: tok.claims.exp
             });
 
             backend.event_manager.trigger(
@@ -271,17 +278,83 @@ async fn auth_otp_verify
                 claims: tok.claims
             });
 
+            backend.flush_config();
+
             return Ok(response);
         }
         Err(e) => {
-            LoggerMessages::Error(LogErrors::LoginToken(&user.username, &e.to_string())).log();
+            LoggerMessages::Error(LogErrors::LoginToken(&username, &e.to_string())).log();
             return Err(ErrorMessages::E_UNKNOWN.wrap_with_status_code(None));
         }
     }
-
-
-
 }
+
+async fn auth_token_refresh(
+    AuthBearer(token): AuthBearer,
+    State(backend):State<Arc<Backend>>
+) -> FastAPIComp<AuthTokenResponse>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login)?;
+    let username = jwt.claims.username.clone();
+
+    match create_token(
+        jwt.claims.username, 
+        TokenPurposes::Login, 
+        LOGIN_LIFETIME, //30 mins
+        backend.secret_key.as_bytes()
+    )
+    {
+        Ok(new_tok) => {
+
+            let response = Json(AuthTokenResponse {
+                token: new_tok.encoded_claims,
+                username: new_tok.claims.username.clone().unwrap(),
+                expire_date: new_tok.claims.exp
+            });
+
+            backend.revoke_token(&jwt.uuid);
+
+            backend.push_token(JWTClaim{
+                uuid: new_tok.uuid,
+                claims: new_tok.claims
+            });
+
+            backend.flush_config();
+
+            return Ok(response);
+        }
+        Err(e) => {
+            LoggerMessages::Error(LogErrors::LoginToken(&username, &e.to_string())).log();
+            return Err(ErrorMessages::E_UNKNOWN.wrap_with_status_code(None));
+        }
+    }    
+}
+
+async fn auth_logout(
+    AuthBearer(token): AuthBearer,
+    State(backend):State<Arc<Backend>>
+) -> Result<(),HTTPError>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login)?;
+    backend.revoke_token(&jwt.uuid);
+
+    Ok(())
+}
+
+async fn auth_verify_first_login_token(
+    Query(token): Query<String>,
+    State(backend): State<Arc<Backend>>
+) -> Result<bool,HTTPError>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::FirstLogin)?;
+
+    match jwt.claims.username
+    {
+        Some(u) => Ok(backend.is_otp_configured_for(&u)?),
+        None=> Err(ErrorMessages::E_AUTH_MALFORMED.wrap_with_status_code(None))
+    }
+}
+
 
 pub fn get_route() -> Router<Arc<Backend>>
 {
@@ -290,5 +363,6 @@ pub fn get_route() -> Router<Arc<Backend>>
         .route("/otp/get/{property}", get(get_auth_property))
         .route("/otp",patch(auth_new_secret))
         .route("/otp",post(auth_otp_verify))
+        .route("/otp/refresh",post(auth_token_refresh))
     )
 }

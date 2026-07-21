@@ -1,10 +1,13 @@
-use tracing::{Level,debug};
+use tracing::{Level,debug,debug_span, Span};
 use tracing_subscriber::FmtSubscriber;
 use backend::get_backend;
 use backend::utils::detect_distro_family;
 use backend::api::get_api;
+use tower_http::classify::ServerErrorsFailureClass;
+use tower_http::trace::TraceLayer;
 use std::sync::{Arc};
-use axum::{Router};
+use std::time::Duration;
+use axum::{Router, extract::{Request, MatchedPath}};
 
 use crate::backend::msg::{LoggerMessages,LogErrors};
 
@@ -45,6 +48,25 @@ async fn main()
 
     let app = Router::new()
         .merge(get_api())
+        .layer(
+            TraceLayer::new_for_http().make_span_with(
+                |request: &Request<_>|
+                {
+                    let matched_path = request
+                        .extensions()
+                        .get::<MatchedPath>()
+                        .map(MatchedPath::as_str);
+
+                    debug_span!("http_request",
+                        method = ?request.method(),
+                        path = matched_path
+                    )
+                }
+            ).on_failure( 
+                |_error: ServerErrorsFailureClass, _latency: Duration, _span: &Span| {
+                        tracing::error!("something went wrong")
+            })
+        )
         .with_state(Arc::clone(&backend));
 
     debug!("OS Family detected: {}",detect_distro_family());

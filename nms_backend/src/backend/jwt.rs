@@ -4,6 +4,7 @@ use jsonwebtoken::{encode, decode, EncodingKey, DecodingKey, Header,Validation};
 use serde::{Deserialize,Serialize};
 use crate::backend::api::v1::msg::StatusMessage;
 use crate::backend::config::CfgToken;
+use crate::backend::msg::{LoggerMessages,LogErrors};
 use super::msg::{ErrorMessages};
 use super::HTTPError;
 
@@ -63,7 +64,7 @@ pub fn create_token
     { 
         purpose,
         username,
-        expire_date 
+        exp: expire_date 
     };
 
     let token = JWTClaim 
@@ -91,15 +92,17 @@ pub fn token_verification(
 ) -> Result<JWTClaim,HTTPError>
 {
 
-    let result = decode::<JWTClaim>(
+    let tok = decode::<JWTClaim>(
         &token,
         &DecodingKey::from_secret(secret),
         &Validation::default()
-    );
+    ).map_err(|e|{
+        LoggerMessages::Error(LogErrors::UnexpectedJWT(&e.to_string())).log();
+        ErrorMessages::E_AUTH_MALFORMED.wrap_with_status_code(None)
+    })?;
 
-    if result.is_err() {return Err(ErrorMessages::E_AUTH_MALFORMED.wrap_with_status_code(None)); }
 
-    let jwt = result.unwrap().claims;
+    let jwt = tok.claims;
 
     let claims = &jwt.claims;
 
@@ -108,7 +111,7 @@ pub fn token_verification(
         return Err(ErrorMessages::E_AUTH_INVALID.wrap_with_status_code(None));
     }
 
-    if claims.expire_date >= Utc::now().timestamp()
+    if claims.exp >= Utc::now().timestamp()
     {
         return Err(ErrorMessages::E_AUTH_EXPIRED.wrap_with_status_code(None));
     }

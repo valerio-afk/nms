@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::backend::Backend;
 
 mod auth;
+mod users;
 
 pub use crate::backend::FastAPIComp;
 pub use crate::backend::jwt;
@@ -13,7 +14,9 @@ pub fn v1_api() -> Router<Arc<Backend>>
 {
     Router::new().nest(
         "/v1",
-        Router::new().merge(auth::get_route())
+        Router::new()
+            .merge(auth::get_route())
+            .merge(users::get_route())
     )
     
 }

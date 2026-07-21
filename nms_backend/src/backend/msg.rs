@@ -239,7 +239,7 @@ pub enum LogErrors<'a>
 {
     ServerCannotStart(&'a String),
     FirstLoginToken(&'a str,&'a String),
-    LoginToken(&'a str,&'a String),
+    LoginToken(&'a Option<String>,&'a String),
     AnyOTPCheck(&'a String),
     TokenRevoked(&'a str),
     CfgLock(&'a String),
@@ -255,6 +255,7 @@ pub enum LogErrors<'a>
     TmpOTPVerification(&'a String),
     OTPInit(&'a Option<String>,&'a String,),
     OTPWrong,
+    UnexpectedJWT(&'a String)
 }
 
 impl<'a> Display for LogErrors<'a>
@@ -266,7 +267,11 @@ impl<'a> Display for LogErrors<'a>
         {
             LogErrors::ServerCannotStart(e) => write!(f,"Unable to serve backend: {}",e),
             LogErrors::FirstLoginToken(uname, e) => write!(f,"Error while generating first login token for {}: {}",uname,e),
-            LogErrors::LoginToken(uname, e) => write!(f,"Error while generating login token for {}: {}",uname,e),
+            LogErrors::LoginToken(uname, e) => match uname
+            {
+                Some(u) => write!(f,"Error while generating login token for {}: {}",u,e),
+                None => write!(f,"Error while generating login token: {}",e),
+            }
             LogErrors::AnyOTPCheck(e) => write!(f,"Unable to determine if any OTP is configured (return true for safety reasons): {}", e),
             LogErrors::TokenRevoked(uuid) => write!(f,"An attempt to login with a revoken token has been made: {}",uuid),
             LogErrors::CfgLock(e) => write!(f,"Unable to access configuration file: {}",e),
@@ -291,6 +296,7 @@ impl<'a> Display for LogErrors<'a>
 
             }
             LogErrors::OTPWrong => write!(f,"Login attempt failed"),
+            LogErrors::UnexpectedJWT(e) => write!(f,"Unexpected JWT: {}",e),
 
         }
     }
