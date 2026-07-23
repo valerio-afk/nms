@@ -3,6 +3,7 @@ use axum::http::StatusCode;
 use axum::Json;
 use config::Config;
 use serde::Serialize;
+use std::path::Path;
 use crate::backend::api::v1::msg::{StatusMessage, WrappedResponse};
 use crate::backend::config::{CfgToken};
 use crate::backend::jwt::JWTClaim;
@@ -10,6 +11,7 @@ use crate::cmdl::{CmdConfig, Executable};
 use crate::cmdl::passwd::{Groups,GetEntPasswd};
 use crate::events::{ContextData, EventManager, Events, EventParameters};
 use crate::thread_wrapper::ThreadWrapper;
+use crate::vfs::VFS;
 use msg::{ErrorMessages,LoggerMessages,LogWarnings,LogErrors, LogInfos};
 use permissions::is_admin;
 use serde_json::Value;
@@ -17,7 +19,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
 use std::net::SocketAddrV4;
-use std::path::{Path,PathBuf};
+use std::path::PathBuf;
 use std::sync::{OnceLock,Mutex,Arc, RwLock};
 use utils::{get_quota_for_all, sudo_group};
 use utils::get_notifications_count;
@@ -73,7 +75,8 @@ pub struct Backend
     users:Mutex<Vec<Arc<RwLock<User>>>>,
     tmp_secrets:Mutex<HashMap<String,TemporarySecret>>,
     event_manager:Arc<EventManager>,
-    secret_key:String
+    secret_key:String,
+    mount: RwLock<Option<VFS>>,
 }
 
 impl Backend
@@ -85,7 +88,8 @@ impl Backend
                 users:Mutex::new(vec![]),
                 tmp_secrets: Mutex::new(HashMap::new()),
                 event_manager: EventManager::new(),
-                secret_key: "prova".to_string()
+                secret_key: "prova".to_string(),
+                mount: RwLock::new(None)
         });
 
         backend.read_config();        
@@ -482,6 +486,46 @@ impl Backend
         }
 
         None
+    }
+
+    fn get_pool_identifier(self:&Arc<Self>) -> Option<(String,String)>
+    {
+        if let Ok(cfg) = self.config.lock()
+        {
+            if let Some(pool) = &cfg.pool
+            {
+                return Some((pool.name.clone(),pool.dataset.clone()));
+            }
+        }
+
+        None
+    }
+
+    fn is_mounted(self:&Arc<Self>) -> bool
+    {
+        if let Ok(l) = self.mount.read()
+        {
+            return l.is_some();
+        }
+
+        false
+    }
+
+    fn mountpoint(self:&Arc<Self>) -> Option<PathBuf>
+    {
+        if self.is_mounted()
+        {
+            if let Ok(mount) = self.mount.read()
+            {
+                if let Some(vfs) = &*mount
+                {
+                    return Some(vfs.basepath());
+                }
+            }
+        }
+
+        None
+
     }
 
 }

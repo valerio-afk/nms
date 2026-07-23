@@ -1,4 +1,3 @@
-use axum::ServiceExt;
 use tracing::{Level,debug,debug_span, Span};
 use tracing_subscriber::FmtSubscriber;
 use backend::get_backend;
@@ -22,7 +21,7 @@ pub mod cmdl;
 pub mod events;
 pub mod thread_wrapper;
 pub mod backend;
-
+pub mod vfs;
 
 fn logger_init()
 {

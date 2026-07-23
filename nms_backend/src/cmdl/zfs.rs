@@ -120,8 +120,18 @@ impl std::fmt::Display for ZFSListType
 
 pub struct ZFSListArgs<'a>
 {
-    properties:Option<&'a [&'a str]>,
-    list_type: ZFSListType
+    properties: Option<&'a [&'a str]>,
+    list_type: Option<ZFSListType>,
+    dataset:Option<&'a str>
+
+}
+
+impl<'a> ZFSListArgs<'a>
+{
+    pub fn new(properties:Option<&'a [&'a str]>,list_type:Option<ZFSListType>,dataset:Option<&'a str>) -> Self
+    {
+        ZFSListArgs { properties, list_type, dataset }
+    }
 }
 
 pub struct ZFSLoadKeyArgs<'a>
@@ -422,8 +432,16 @@ pub fn ZFS<'a,'b>(action:ZFSActions,revertible:bool,config:Option<&'b CmdConfig<
                     }
                 }
 
-                args.push("-t".to_string());
-                args.push(p.list_type.to_string());
+                if let Some(t) = p.list_type
+                {
+                    args.push("-t".to_string());
+                    args.push(t.to_string());
+                }
+
+                if let Some(n) = p.dataset
+                {
+                    args.push(n.to_string());
+                }
             }
         ZFSActions::LoadKey(p) =>
             {

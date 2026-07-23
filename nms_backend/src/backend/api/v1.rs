@@ -5,6 +5,7 @@ use crate::backend::Backend;
 mod auth;
 mod users;
 mod system;
+mod pool;
 
 pub use crate::backend::FastAPIComp;
 pub use crate::backend::jwt;
