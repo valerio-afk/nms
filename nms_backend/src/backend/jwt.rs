@@ -1,6 +1,6 @@
 use uuid::Uuid;
 use chrono::Utc;
-use jsonwebtoken::{encode, decode, EncodingKey, DecodingKey, Header,Validation};
+use jsonwebtoken::{encode, decode, EncodingKey, DecodingKey, Header,Validation, errors::{Error,ErrorKind}};
 use serde::{Deserialize,Serialize};
 use crate::backend::api::v1::msg::StatusMessage;
 use crate::backend::config::CfgToken;
@@ -58,7 +58,7 @@ pub fn create_token
 {
 
     let expire_date = Utc::now().timestamp() + duration;
-    let uuid = Uuid::new_v4();
+    let uuid = Uuid::new_v4().to_string();
 
     let claims:CfgToken = CfgToken 
     { 
@@ -69,13 +69,13 @@ pub fn create_token
 
     let token = JWTClaim 
     {
-        uuid:Uuid::new_v4().to_string(),
+        uuid: uuid.clone(),
         claims: claims.clone()
     };
 
     Ok(Token
     {
-        uuid: uuid.to_string(),
+        uuid: uuid,
         encoded_claims: encode(
             &Header::default(),
             &token,
@@ -96,9 +96,16 @@ pub fn token_verification(
         &token,
         &DecodingKey::from_secret(secret),
         &Validation::default()
-    ).map_err(|e|{
-        LoggerMessages::Error(LogErrors::UnexpectedJWT(&e.to_string())).log();
-        ErrorMessages::E_AUTH_MALFORMED.wrap_with_status_code(None)
+    ).map_err(|e:Error| {
+        match e.kind()
+        {
+            ErrorKind::ExpiredSignature => ErrorMessages::E_AUTH_EXPIRED.wrap_with_status_code(None),
+            _ =>
+            {
+                LoggerMessages::Error(LogErrors::UnexpectedJWT(&format!("{}",e))).log();
+                ErrorMessages::E_AUTH_MALFORMED.wrap_with_status_code(None)
+            }
+        }
     })?;
 
 
@@ -109,11 +116,6 @@ pub fn token_verification(
     if claims.purpose != requested_purpose 
     {
         return Err(ErrorMessages::E_AUTH_INVALID.wrap_with_status_code(None));
-    }
-
-    if claims.exp >= Utc::now().timestamp()
-    {
-        return Err(ErrorMessages::E_AUTH_EXPIRED.wrap_with_status_code(None));
     }
 
     Ok(jwt)   

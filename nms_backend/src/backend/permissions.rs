@@ -1,7 +1,9 @@
+use std::sync::{RwLock,Arc};
+
 use strum::{EnumString,Display,EnumIter,IntoEnumIterator};
 use serde_json::Value;
 use super::msg::{StatusMessage,ErrorMessages};
-use crate::backend::HTTPError;
+use crate::backend::{HTTPError, User};
 
 #[derive(Display,EnumString,EnumIter)]
 pub enum UserPermissions
@@ -156,14 +158,16 @@ impl UserPermissions
     }
 }
 
-pub fn check_permission<T>(user_permissions:&Option<Vec<T>>, perm: UserPermissions) -> Result<(),HTTPError>
-where T: AsRef<str>
+pub fn check_permission(user:&Arc<RwLock<User>>, perm: UserPermissions) -> Result<(),HTTPError>
 {
-    if let Some(u_perm) = user_permissions
+    if let Ok(u) = user.read()
     {
-        if perm.is_any_allowed(&u_perm)
+        if let Some(u_perm) = &u.permissions
         {
-            return Ok(())
+            if perm.is_any_allowed(&u_perm)
+            {
+                return Ok(())
+            }
         }
     }
     

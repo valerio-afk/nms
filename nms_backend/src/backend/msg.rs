@@ -255,6 +255,7 @@ pub enum LogErrors<'a>
     TmpOTPVerification(&'a String),
     OTPInit(&'a Option<String>,&'a String,),
     OTPWrong,
+    UserReadLock(&'a String),
     UnexpectedJWT(&'a String)
 }
 
@@ -286,6 +287,7 @@ impl<'a> Display for LogErrors<'a>
                 None =>  write!(f,"Attempting to reset already configured secret for a user"),
             }            
             LogErrors::AdminUserList(e) => write!(f,"Unable to retrieve the list of admin users: {}",e),
+            LogErrors::UserReadLock(e) => write!(f,"Unable to get read lock for: {}",e),
             LogErrors::SecretEncoding(e) => write!(f,"Unable to encode secret key: {}",e),
             LogErrors::NewTOTPURI(e) => write!(f,"Unable to generate new TOTP provisioning URL: {}",e),
             LogErrors::TmpOTPVerification(e) => write!(f,"Unable to verifiy temporary OTP: {}",e),
@@ -310,6 +312,7 @@ pub enum LogWarnings<'a>
     ZfsQuotaNoPool,
 
     TmpSecretNotFound(&'a str),
+    EMStopped,
 }
 
 impl<'a> Display for LogWarnings<'a>
@@ -323,6 +326,7 @@ impl<'a> Display for LogWarnings<'a>
             LogWarnings::ZfsQuota(msg) => write!(f,"Unable to retrieve ZFS quota information: {}",msg),
             LogWarnings::ZfsQuotaNoPool => write!(f,"Unable to obtain quota information as pool is not configured"),
             LogWarnings::TmpSecretNotFound(uuid) => write!(f,"Temporary secret {} not found",uuid),
+            LogWarnings::EMStopped => write!(f,"Event Manager stopped"),
         }
     }
 }
@@ -333,7 +337,8 @@ pub enum LogInfos<'a>
     NewCfg,
     BackendStarted,
     OTPSecretConf(&'a String),
-    OTPSecretGen(&'a Option<String>)
+    OTPSecretGen(&'a Option<String>),
+    EMStarted,
     
 }
 
@@ -351,7 +356,8 @@ impl<'a> Display for LogInfos<'a>
             {
                 Some(u) =>  write!(f,"New OTP secret successfully generated for {}",u),
                 None =>  write!(f,"New OTP secret successfully generated"),
-            }
+            },
+            LogInfos::EMStarted => write!(f,"Event Manager started"),
         }
     }
 }

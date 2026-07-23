@@ -24,3 +24,4 @@ pyeventmanager >= 0.6.0
 httpx >= 0.28.1
 pytz >= 2025.2
 slowapi >= 0.1.10
+cachetools >= 7.1.5

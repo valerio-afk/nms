@@ -1,6 +1,6 @@
-use axum::{Json, Router, extract::{Path,State,Query, Form}, routing::{get,patch, post}};
+use axum::{Json, Router, extract::{Path,State,Query}, routing::{get,patch, post}};
 use axum_auth::AuthBearer;
-use crate::backend::{self, Backend, HTTPError, jwt::JWTClaim, permissions::{UserPermissions, check_permission}};
+use crate::backend::{Backend, HTTPError, jwt::JWTClaim, permissions::{UserPermissions, check_permission}};
 use crate::events::{Events,ContextVariables,Trigger, ContextBuilder};
 use super::jwt::{PermissiveTokenParameter,TokenPurposes,create_token};
 use serde_json::{Value};
@@ -10,6 +10,10 @@ use super::FastAPIComp;
 use super::msg::{StatusMessage,ErrorMessages, LogErrors, LoggerMessages, LogInfos};
 use std::error::Error;
 use totp_rs::{Algorithm, Secret, TOTP};
+use tower_governor::{
+    GovernorLayer, governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor,
+};
+use crate::backend::api::BackendPropertyResponse;
 
 const LOGIN_LIFETIME:i64 = 30*60;
 
@@ -22,14 +26,6 @@ enum AuthProperties
     IsConfigured
 }
 
-
-#[derive(Debug,Serialize)]
-struct AuthPropertyResponse
-{
-    property:AuthProperties,
-    
-    value:Value,
-}
 
 #[derive(Debug,Serialize)]
 struct AuthUriResponse
@@ -97,9 +93,9 @@ fn verify_otp<'a>(otp:&'a str,secret:String,username:&'a Option<String>) -> Resu
 async fn get_auth_property(
     Path(property):Path<AuthProperties>,
     State(backend): State<Arc<Backend>>
-) -> Json<AuthPropertyResponse>
+) -> Json<BackendPropertyResponse<AuthProperties>>
 {
-    Json(AuthPropertyResponse {
+    Json(BackendPropertyResponse {
         property: property,
         value: Value::Bool(backend.is_otp_configured())
     })
@@ -204,18 +200,14 @@ async fn auth_otp_verify
     {
         for tmp in tmp_secrets
         {
-            tracing::error!("Risky zone?");
             match verify_otp(&otp.otp, tmp.secret, &tmp.username)
             {
                 Ok(res) =>
                 {
                     if res
                     {
-                        tracing::debug!("Is deadlock here?");
                         username = Some(backend.save_temporary_secret(&tmp.uuid)?);
-                        tracing::debug!("No");
                         backend.flush_config();
-                        tracing::debug!("No x2");
                         break;
                     } 
                 }
@@ -249,7 +241,7 @@ async fn auth_otp_verify
 
     let user = backend.get_user(&username.as_ref().unwrap())?;
 
-    check_permission(&user.permissions, UserPermissions::ClientDashboardAccess)?;
+    check_permission(&user, UserPermissions::ClientDashboardAccess)?;
 
 
 
@@ -333,12 +325,12 @@ async fn auth_token_refresh(
 async fn auth_logout(
     AuthBearer(token): AuthBearer,
     State(backend):State<Arc<Backend>>
-) -> Result<(),HTTPError>
+) -> FastAPIComp<()>
 {
     let jwt = backend.verify_token(&token, TokenPurposes::Login)?;
     backend.revoke_token(&jwt.uuid);
 
-    Ok(())
+    Ok(Json(()))
 }
 
 async fn auth_verify_first_login_token(
@@ -358,11 +350,23 @@ async fn auth_verify_first_login_token(
 
 pub fn get_route() -> Router<Arc<Backend>>
 {
-    Router::new().nest("/auth",
-        Router::new()
-        .route("/otp/get/{property}", get(get_auth_property))
+    let governor_limited = GovernorConfigBuilder::default()
+        .per_second(1)
+        .burst_size(5)
+        .key_extractor(SmartIpKeyExtractor)
+        .finish()
+        .unwrap();
+
+    let limited_endpoints = Router::new()
         .route("/otp",patch(auth_new_secret))
         .route("/otp",post(auth_otp_verify))
         .route("/otp/refresh",post(auth_token_refresh))
+        .layer(GovernorLayer::new (governor_limited));
+
+    Router::new().nest("/auth",
+        Router::new()
+        .route("/otp/get/{property}", get(get_auth_property))
+        .route("/logout",post(auth_logout))
+        .merge(limited_endpoints)
     )
 }

@@ -12,6 +12,7 @@ use chrono::Local;
 use nix::poll::{poll, PollFd, PollFlags};
 use serde::{Serialize,Deserialize};
  
+use crate::backend::msg::{LogInfos, LogWarnings, LoggerMessages};
 use crate::thread_wrapper::{ThreadWrapper, WrappedThread};
 use crate::cmdl::{CmdConfig, Executable};
 use crate::cmdl::coreutils::{Stat,StatFormat};
@@ -446,7 +447,7 @@ impl ThreadWrapper for EventManager
             .spawn(
                 move || 
                 {
-                    info!("Event Manager Started");
+                    LoggerMessages::Info(LogInfos::EMStarted).log();
 
                     while this.running_state.load(Ordering::Relaxed)
                     {
@@ -456,13 +457,10 @@ impl ThreadWrapper for EventManager
                         {
                             let mut uuids:Vec<&str> = Vec::new();
 
-                            
-
                             let map = this.registered_actions.lock().unwrap();
 
                             if let Trigger::Event(ev) = trigger
                             {
-                                debug!("Received {ev}");
                                 if let Some(lst) = map.get(&ev)
                                 {
                                     for action in lst
@@ -472,18 +470,17 @@ impl ThreadWrapper for EventManager
                                     }
                                 }
 
-                                if uuids.len()==0
+                                // if uuids.len()==0
+                                // {
+                                //     debug!("No action found for {ev}.");
+                                // }
+                                if uuids.len()>0
                                 {
-                                    debug!("No action found for {ev}.");
-                                }
-                                else 
-                                {
-                                        debug!("{ev} dispatched to: {}.",uuids.join(", "));
+                                    debug!("{ev} dispatched to: {}.",uuids.join(", "));
                                 }
                             }
                             else if let Trigger::Action(uuid) = &trigger
                             {
-                                debug!("Received trigger for {uuid}");
 
                                 for (_,lst) in map.iter()
                                 {
@@ -493,7 +490,6 @@ impl ThreadWrapper for EventManager
                                         if action.uuid == *uuid
                                         {
                                             (action.callback)(&ctx);
-                                            debug!("Event dispatched for {uuid}");
                                             break;
                                         }
                                     }
@@ -502,7 +498,7 @@ impl ThreadWrapper for EventManager
 
                         }
                     }
-                    warn!("Event Manager Stopped");
+                    LoggerMessages::Warning(LogWarnings::EMStopped).log();
                 }
             ).expect("Unable to start event manager.");
 

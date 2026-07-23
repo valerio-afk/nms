@@ -4,6 +4,7 @@ use crate::backend::Backend;
 
 mod auth;
 mod users;
+mod system;
 
 pub use crate::backend::FastAPIComp;
 pub use crate::backend::jwt;
@@ -17,6 +18,7 @@ pub fn v1_api() -> Router<Arc<Backend>>
         Router::new()
             .merge(auth::get_route())
             .merge(users::get_route())
+            .merge(system::get_route())
     )
     
 }

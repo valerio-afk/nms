@@ -8,7 +8,8 @@ use crate::backend::config::{CfgToken};
 use crate::backend::jwt::JWTClaim;
 use crate::cmdl::{CmdConfig, Executable};
 use crate::cmdl::passwd::{Groups,GetEntPasswd};
-use crate::events::{ContextData, EventManager, Events};
+use crate::events::{ContextData, EventManager, Events, EventParameters};
+use crate::thread_wrapper::ThreadWrapper;
 use msg::{ErrorMessages,LoggerMessages,LogWarnings,LogErrors, LogInfos};
 use permissions::is_admin;
 use serde_json::Value;
@@ -17,7 +18,7 @@ use std::error::Error;
 use std::fs;
 use std::net::SocketAddrV4;
 use std::path::{Path,PathBuf};
-use std::sync::{OnceLock,Mutex,Arc};
+use std::sync::{OnceLock,Mutex,Arc, RwLock};
 use utils::{get_quota_for_all, sudo_group};
 use utils::get_notifications_count;
 use uuid::Uuid;
@@ -69,7 +70,7 @@ pub struct User
 pub struct Backend
 {
     config:Mutex<Config>,
-    users:Mutex<Vec<Arc<User>>>,
+    users:Mutex<Vec<Arc<RwLock<User>>>>,
     tmp_secrets:Mutex<HashMap<String,TemporarySecret>>,
     event_manager:Arc<EventManager>,
     secret_key:String
@@ -96,6 +97,22 @@ impl Backend
             Arc::new(move |_ctx:&Option<ContextData> | th_backend.reload_users()),
             None
         );
+
+        let th_backend = Arc::clone(&backend);
+
+        backend.event_manager.register_action(
+            &Events::Timer,
+            Arc::new(
+                move |_ctx:&Option<ContextData> |
+                {
+                    th_backend.update_users();
+                }
+            ),
+            None,
+            Some(vec![EventParameters::Timer(3)])
+        );
+
+        backend.event_manager.start();
 
         return backend;
     }
@@ -256,14 +273,28 @@ impl Backend
                 {
                     Ok(cfg) =>
                     {
-                        for admin in users.iter().filter(|&u| u.admin )
+                        for user in users.iter()
                         {
-                            if let Some(u) = cfg.get_user(&admin.username)
+                            match user.read()
                             {
-                                if u.otp_secret.is_some()
+                                Ok(u) =>
                                 {
-                                    configured=true;
-                                    break;
+                                    if u.admin
+                                    {
+                                        if let Some(u) = cfg.get_user(&u.username)
+                                        {
+                                            if u.otp_secret.is_some()
+                                            {
+                                                configured=true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                Err(e) =>
+                                {
+                                    LoggerMessages::Error(LogErrors::AnyOTPCheck(&e.to_string())).log();
+                                    configured = true;
                                 }
                             }
                         }
@@ -364,16 +395,26 @@ impl Backend
             {
                 for u in self.get_admin_users()?
                 {
-                    if let Some(cfg_u) = cfg.users.get_mut(&u.username)
+                    match u.read()
                     {
-                        if cfg_u.otp_secret.is_none()
+                        Ok(usr) => 
                         {
-                            let tmp_sec = secrets.remove(uuid).unwrap();
-                            cfg_u.otp_secret = Some(tmp_sec.secret);
-                            
+                            if let Some(cfg_u) = cfg.users.get_mut(&usr.username)
+                            {
+                                if cfg_u.otp_secret.is_none()
+                                {
+                                    let tmp_sec = secrets.remove(uuid).unwrap();
+                                    cfg_u.otp_secret = Some(tmp_sec.secret);
 
-                            LoggerMessages::Info(LogInfos::OTPSecretConf(&u.username)).log();
-                            return Ok(u.username.clone());
+                                    LoggerMessages::Info(LogInfos::OTPSecretConf(&usr.username)).log();
+                                    return Ok(usr.username.clone())
+                                }
+                            }
+                        }
+                        Err(e) =>
+                        {
+                            LoggerMessages::Error(LogErrors::UserReadLock(&e.to_string()));
+                            return Err(ErrorMessages::E_UNKNOWN.wrap_with_status_code(None))
                         }
                     }
                 }
@@ -415,35 +456,68 @@ impl Backend
 }
 
 
+// Pool-related Methods
+impl Backend
+{
+    fn get_quota_info(self:&Arc<Self>,log:bool) -> Option<HashMap<String,Quota>>
+    {
+        if let Ok(cfg) = self.config.lock()
+        {
+            if let Some(pool) = &cfg.pool
+            {
+                match get_quota_for_all(&pool.name, &pool.dataset)
+                {
+                    Ok(map) => {return Some(map);}
+                    Err(e) => {
+                        if log {LoggerMessages::Warning(LogWarnings::ZfsQuota(&e)).log();}
+                        return None;
+                    }
+                }
+            } 
+            else
+            {
+                if log {LoggerMessages::Warning(LogWarnings::ZfsQuotaNoPool).log();}
+                return None;
+            }
+        }
+
+        None
+    }
+
+}
+
+
 // User-related Methods
 impl Backend
 {
+    fn update_users(self:&Arc<Self>)
+    {
+        
+        if let Some(map) = &mut self.get_quota_info(false)
+        {
+            if let Ok(users) = self.users.lock()
+            {
+                for u in users.iter()
+                {
+                    if let Ok(mut user) = u.write()
+                    {
+                        user.quota = map.remove(&user.username); 
+                        user.notifications = get_notifications_count(&user.username);
+                    }                 
+                }
+            }
+        }
+    }
+
     fn reload_users(self:&Arc<Self>)
     {
         if let Ok(mut users) = self.users.lock()
         {
             users.clear();
+            let quota_info = self.get_quota_info(true);
 
             if let Ok(mut cfg) = self.config.lock()
             {
-                let quota_info:Option<HashMap<String,Quota>> = {
-                    if let Some(pool) = &cfg.pool
-                    {
-                        match get_quota_for_all(&pool.name, &pool.dataset)
-                        {
-                            Ok(map) => Some(map),
-                            Err(e) => {
-                                LoggerMessages::Warning(LogWarnings::ZfsQuota(&e)).log();
-                                None
-                            }
-                        }
-                    } 
-                    else
-                    {
-                        LoggerMessages::Warning(LogWarnings::ZfsQuotaNoPool).log();
-                        None
-                    }
-                };
 
                 let mut tokens_uuid_to_revoke:Vec<String> = Vec::new();
                 let mut token_to_approve:Option<(String, CfgToken)> = None;
@@ -585,7 +659,7 @@ impl Backend
                             notifications:get_notifications_count(uname)
                         };
                     
-                    users.push(Arc::new(user));
+                    users.push(Arc::new(RwLock::new(user)));
                     
                 }
 
@@ -604,27 +678,42 @@ impl Backend
         self.flush_config();
     }
 
-    pub fn get_admin_users(self:&Arc<Self>) -> Result<Vec<Arc<User>>,HTTPError>
+    pub fn get_admin_users(self:&Arc<Self>) -> Result<Vec<Arc<RwLock<User>>>,HTTPError>
     {
-        let users = &self.users.lock().map_err(|e|{
+        let users = self.users.lock().map_err(|e|{
             LoggerMessages::Error(LogErrors::AdminUserList(&e.to_string())).log();
             ErrorMessages::E_UNKNOWN.wrap_with_status_code(None)
         })?;
 
-        Ok(users.iter().filter(|u| u.admin).cloned().collect())
+        Ok(
+            users
+            .iter()
+            .filter_map(
+                |u|
+                {
+                    if u.read().map(|x|x.admin).unwrap_or(false)
+                    {Some(Arc::clone(u))}
+                    else {None}
+                }
+            )
+            .collect()
+        )
     }
 
-    pub fn get_user(self:&Arc<Self>,username:&str) -> Result<Arc<User>,HTTPError>
+    pub fn get_user(self:&Arc<Self>,username:&str) -> Result<Arc<RwLock<User>>,HTTPError>
     {
         match &self.users.lock()
         {
             Ok(users) =>
             {
-                for u in users.iter()
+                for user in users.iter()
                 {
-                    if u.username == username
-                    {
-                        return Ok(Arc::clone(u));
+                    if let Ok(u) = user.read()
+                    {    
+                        if u.username == username
+                        {
+                            return Ok(Arc::clone(&user));
+                        }
                     }
                 }
 

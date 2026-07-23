@@ -291,6 +291,7 @@ impl Config
         }
 
         self.released_tokens.as_mut().unwrap().insert(uuid,token);
+        
     }
 
     pub fn revoke_token(self:&mut Self, uuid:&String)

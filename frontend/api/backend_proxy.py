@@ -1,5 +1,5 @@
 from io import BytesIO
-
+from cachetools import TTLCache, cached
 from flask import flash, session, abort
 from flask_babel import _, format_datetime
 from requests.structures import CaseInsensitiveDict
@@ -18,6 +18,8 @@ from typing import Optional, List, Any, Dict, Literal, Union, Tuple
 import datetime
 import werkzeug.exceptions
 import sys;
+
+cache = TTLCache(maxsize=100, ttl=60)
 
 def parse_disks_from_request(d:Optional[List[dict]]) -> List[Disk]:
     if (d is not None):
@@ -137,6 +139,8 @@ class BackEndProxy:
 
         response = fn(url, **req_params)
 
+        import sys; print(response.raw.data,file=sys.stderr)
+
         try:
             response.raise_for_status()
         except HTTPError as err:
@@ -147,10 +151,13 @@ class BackEndProxy:
                     if (err.response.status_code == 401):
                         args = err.response.json()
                         abort(401,description=args)
-                    if (err.response.status_code == 429):
+                    elif (err.response.status_code == 500):
+                        flash(f"{str(err.response.raw.data)}", "error")
+                        return None
+                    elif (err.response.status_code == 429):
                         show_flash(code=ErrorMessages.E_TOO_MANY_REQ.value)
                         return None
-                    if (err.response.status_code in (415,422)):
+                    elif (err.response.status_code in (415,422)):
                         error = f"URL: {err.request.url}\n"
                         error+= f"Data: {err.request.body}\n"
                         error+= f"Headers: {err.request.headers.values()}\n\n"
@@ -228,8 +235,10 @@ class BackEndProxy:
         return tasks
 
 
+
     #AUTH PROPERTIES
     @property
+    # @cached(cache)
     def is_authenticated(this) -> bool:
         if (this.bearer_token is None):
             return False

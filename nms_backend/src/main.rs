@@ -1,3 +1,4 @@
+use axum::ServiceExt;
 use tracing::{Level,debug,debug_span, Span};
 use tracing_subscriber::FmtSubscriber;
 use backend::get_backend;
@@ -63,8 +64,8 @@ async fn main()
                     )
                 }
             ).on_failure( 
-                |_error: ServerErrorsFailureClass, _latency: Duration, _span: &Span| {
-                        tracing::error!("something went wrong")
+                |error: ServerErrorsFailureClass, _latency: Duration, _span: &Span| {
+                        tracing::error!("{}",error);
             })
         )
         .with_state(Arc::clone(&backend));
@@ -83,7 +84,7 @@ async fn main()
 
     match listener
     {
-        Ok(t) => axum::serve(t,app).await.unwrap(),        
+        Ok(t) => axum::serve(t,app.into_make_service_with_connect_info::<std::net::SocketAddr>()).await.unwrap(),        
         Err(e) => LoggerMessages::Error(LogErrors::ServerCannotStart(&e.to_string())).log(),
     }
 
