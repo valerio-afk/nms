@@ -1,6 +1,7 @@
 use api::v1::jwt::{create_token,token_verification,TokenPurposes};
 use axum::http::StatusCode;
 use axum::Json;
+use chrono::TimeDelta;
 use config::Config;
 use serde::Serialize;
 use std::path::Path;
@@ -9,11 +10,13 @@ use crate::backend::config::{CfgToken};
 use crate::backend::jwt::JWTClaim;
 use crate::cmdl::{CmdConfig, Executable};
 use crate::cmdl::passwd::{Groups,GetEntPasswd};
+use crate::cmdl::zfs::{ZFSActions, ZFSListArgs, ZFSListType, ZPool, ZPoolActions, ZFS};
 use crate::events::{ContextData, EventManager, Events, EventParameters};
 use crate::thread_wrapper::ThreadWrapper;
-use crate::vfs::VFS;
+use crate::vfs::{Capacity, VFS};
 use msg::{ErrorMessages,LoggerMessages,LogWarnings,LogErrors, LogInfos};
 use permissions::is_admin;
+use regex::RegexBuilder;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::error::Error;
@@ -37,6 +40,17 @@ pub mod jwt;
 
 static BACKEND:OnceLock<Arc<Backend>> = OnceLock::new();
 static NMS_CONFIG_FILE:&str = "nms.conf.json";
+
+
+pub fn propagate_error<E:Error>(msg:ErrorMessages, err:E) -> HTTPError
+{
+    msg.wrap_with_status_code(Some(vec![Value::String(err.to_string())]))
+}
+
+pub fn propagate_unknown_error<E:Error>(err:E) -> HTTPError
+{
+    propagate_error(ErrorMessages::E_UNKNOWN, err)
+}
 
 #[derive(Clone,Debug, Serialize)]
 pub struct Quota
@@ -69,6 +83,30 @@ pub struct User
     pub notifications:u32,
 }
 
+#[derive(Debug, Serialize)]
+pub struct PoolExtensionStatus
+{
+    pub is_running:bool,
+    pub eta:Option<i64>,
+    pub progress:Option<f32>
+}
+
+
+impl PoolExtensionStatus
+{
+    pub fn new(is_running:bool, eta:Option<i64>,progress:Option<f32>) -> Self
+    {
+        PoolExtensionStatus { is_running, eta, progress }
+    }
+}
+
+pub struct PoolProperties
+{
+    redundancy:bool,
+    encryption:bool,
+    compression:bool
+}
+
 pub struct Backend
 {
     config:Mutex<Config>,
@@ -77,6 +115,7 @@ pub struct Backend
     event_manager:Arc<EventManager>,
     secret_key:String,
     mount: RwLock<Option<VFS>>,
+    pool_properties: RwLock<Option<PoolProperties>>
 }
 
 impl Backend
@@ -89,10 +128,28 @@ impl Backend
                 tmp_secrets: Mutex::new(HashMap::new()),
                 event_manager: EventManager::new(),
                 secret_key: "prova".to_string(),
-                mount: RwLock::new(None)
+                mount: RwLock::new(None),
+                pool_properties:RwLock::new(None)
         });
 
-        backend.read_config();        
+        if let Err(e) = backend.read_config()
+        {
+            LoggerMessages::Error(LogErrors::CfgRead(&e.to_string())).log();
+            LoggerMessages::Warning(LogWarnings::CfgDefault).log();
+            match backend._flush_config()
+            {
+                Ok(()) => LoggerMessages::Info(LogInfos::NewCfg).log(),
+                Err(e) => {
+                    LoggerMessages::Error(LogErrors::CfgWrite(&e.to_string())).log();
+                    std::process::exit(1)
+                }
+            }
+        }
+
+        LoggerMessages::Info(LogInfos::BackendStarted).log();    
+
+
+
         backend.reload_users();
         let th_backend = Arc::clone(&backend);
 
@@ -146,7 +203,7 @@ impl Backend
         Ok(())
     }
 
-    pub fn flush_config(self:&Arc<Self>) -> Result<(),Box<dyn Error + '_>>
+    fn _flush_config(self:&Arc<Self>) -> Result<(),std::io::Error>
     {
         let mut tmp_file = NMS_CONFIG_FILE.to_string();
         tmp_file.push('~');
@@ -156,7 +213,7 @@ impl Backend
         if let Err(e) = result
         {
             LoggerMessages::Error(LogErrors::CfgRead(&e.to_string())).log();
-            return Err(Box::new(e));
+            return Err(e.into());
         }
         else 
         {
@@ -167,20 +224,22 @@ impl Backend
             if let Err(e) = result
             {
                 LoggerMessages::Error(LogErrors::CfgWrite(&e.to_string())).log();
-                return Err(Box::new(e));
+                return Err(e.into());
             }
 
-            match fs::rename(tmp_file, NMS_CONFIG_FILE)
+            if let Err(e) = fs::rename(tmp_file, NMS_CONFIG_FILE)
             {
-                Err(e) => {
-                    LoggerMessages::Error(LogErrors::CfgMove(&e.to_string())).log();
-                    return Err(Box::new(e));
-                },
-                _ => ()
+                LoggerMessages::Error(LogErrors::CfgMove(&e.to_string())).log();
+                return Err(e.into());
             }
 
             Ok(())
         }
+    }
+
+    pub fn flush_config(self:&Arc<Self>) -> Result<(),HTTPError>
+    {
+        self._flush_config().map_err(|e| propagate_unknown_error(e))
     }
 }
 
@@ -525,9 +584,182 @@ impl Backend
         }
 
         None
-
     }
 
+    fn is_pool_configured(self:&Arc<Self>) -> bool
+    {
+        self.get_pool_identifier().is_some()
+    }
+
+    fn is_pool_present(self:&Arc<Self>) -> bool
+    {
+        if self.is_pool_configured()
+        {
+            if let Some(output) = ZPool(
+                ZPoolActions::Status(&self.get_pool_identifier().unwrap().0),
+                false,None).run()
+            {
+                return output.status_code == 0;
+            }
+        }
+
+        false
+    }
+
+    fn is_any_pool_present(self:&Arc<Self>) -> bool
+    {
+
+        if let Some(output) = ZFS(
+            ZFSActions::List(
+                ZFSListArgs::new(None, Some(ZFSListType::Filesystem), None)
+            ), 
+            false,None).run()
+        {
+            if output.status_code == 0
+            {
+                if let Ok(zfs_list) = serde_json::from_str::<Value>(&output.stdout)
+                {
+                    let datasets = &zfs_list["datasets"];
+                    if datasets.is_object()
+                    {
+                        return datasets.as_object().iter().len()>0;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    fn pool_capacity(self:&Arc<Self>) -> Result<Capacity,HTTPError>
+    {
+        let vfs = self
+            .mount
+            .read()
+            .map_err(|e| ErrorMessages::E_POOL_CAPACITY.wrap_with_status_code(Some(vec![Value::String(e.to_string())])))?;
+
+        match &(*vfs)
+        {
+            Some(v) => Ok(v.capacity.clone()),
+            None => Err(ErrorMessages::E_POOL_MOUNTED.wrap_with_status_code(None))
+        }
+    }
+
+    fn get_expansion_status(self:&Arc<Self>) -> Result<PoolExtensionStatus,HTTPError>
+    {
+        if self.is_pool_configured()
+        {
+            return Err(ErrorMessages::E_POOL_NO_CONF.wrap_with_status_code(None));
+        } 
+
+        if !self.has_redundancy()
+        {
+            return Ok(PoolExtensionStatus::new(false,None,None));
+        }
+
+        let pool_name = self.get_pool_identifier().unwrap().0;
+
+        if let Some(output) = ZPool(
+            ZPoolActions::Status(&pool_name),
+            false,
+            None
+        ).run()
+        {
+            if output.status_code != 0
+            {
+                return Err(ErrorMessages::E_POOL_EXPAND_STATUS.wrap_with_status_code(Some(vec![Value::String(output.stderr)])));
+            }
+
+            let msg = output.stdout;
+
+
+            //Case 1: percentage + ETA Available
+            let re_with_eta = RegexBuilder::new(r"([\d.]+)%\s+done,\s+([\d:]+)\s+to\s+go")
+                              .case_insensitive(false)
+                              .build()
+                              .map_err(|e| propagate_error(ErrorMessages::E_POOL_EXPAND_STATUS, e))?;
+            
+            if let Some(m) = re_with_eta.captures(&msg)
+            {
+                let perc:f32 = m[1]
+                                .parse::<f32>()
+                                .map_err(|e| propagate_error(ErrorMessages::E_POOL_EXPAND_STATUS, e))?;
+
+                let time:Vec<&str> = m[2].split(":").collect();
+
+                return Ok(
+                    PoolExtensionStatus { 
+                        is_running: true, 
+                        eta: {
+                            if time.len() ==3
+                            {
+                                let h = time[0].parse::<i64>().unwrap();
+                                let m = time[1].parse::<i64>().unwrap();
+                                let s = time[2].parse::<i64>().unwrap();
+
+                                let d = TimeDelta::hours(h) + TimeDelta::minutes(m) + TimeDelta::seconds(s);
+
+                                Some(d.num_seconds())
+
+                            }
+                            else { None }
+                        }, 
+                        progress: Some(perc)
+                    }
+                );
+            }
+
+            //CASE 2: percentace + no ETA
+            let re_no_eta = RegexBuilder::new(r"([\d.]+)%\s+done,.*no\s+estimated\s+time")
+                              .case_insensitive(false)
+                              .build()
+                              .map_err(|e| propagate_error(ErrorMessages::E_POOL_EXPAND_STATUS, e))?;
+
+            if let Some(m) = re_with_eta.captures(&msg)
+            {
+                let perc:f32 = m[1].parse::<f32>().map_err(|e| propagate_error(ErrorMessages::E_POOL_EXPAND_STATUS, e))?;
+
+                return Ok(
+                    PoolExtensionStatus { is_running: true, eta: None, progress: Some(perc) }
+                );
+            }
+
+            //CASE 3: completed
+            let re_completed = RegexBuilder::new(r"expand:\s+expanded")
+                              .case_insensitive(false)
+                              .build()
+                              .map_err(|e| propagate_error(ErrorMessages::E_POOL_EXPAND_STATUS, e))?;
+            if re_completed.is_match(&msg)
+            {
+                return Ok(
+                    PoolExtensionStatus { is_running: false, eta: None, progress: Some(100.0) }
+                );
+            }
+
+            return Ok(
+                    PoolExtensionStatus { is_running: true, eta: None, progress: None }
+            );
+
+        }
+        else 
+        {
+            Err(ErrorMessages::E_POOL_EXPAND_STATUS.wrap_with_status_code(
+                Some(
+                    vec![Value::String("Failed to start zfs pool".to_string())]
+                    )
+                )
+            )    
+        }
+    }
+
+    fn has_redundancy(self:&Arc<Self>)->bool
+    {
+        if let Ok(r) = self.pool_properties.read()
+        {
+            !r.is_none() && r.as_ref().unwrap().redundancy
+        }
+        else {false} 
+    }
 }
 
 
@@ -719,7 +951,7 @@ impl Backend
             }
         }
 
-        self.flush_config();
+        let _ = self._flush_config();
     }
 
     pub fn get_admin_users(self:&Arc<Self>) -> Result<Vec<Arc<RwLock<User>>>,HTTPError>
@@ -775,24 +1007,6 @@ impl Backend
 pub fn get_backend() -> Arc<Backend>
 {
     BACKEND.get_or_init(|| {
-        //read configuration file
-        let backend = Backend::new();
-        {
-
-            if let Err(e) = backend.read_config()
-            {
-                LoggerMessages::Error(LogErrors::CfgRead(&e.to_string())).log();
-                LoggerMessages::Warning(LogWarnings::CfgDefault).log();
-                match backend.flush_config()
-                {
-                    Ok(()) => LoggerMessages::Info(LogInfos::NewCfg).log(),
-                    Err(_) => std::process::exit(1)
-                }
-            }
-
-            LoggerMessages::Info(LogInfos::BackendStarted).log();
-        }
-
-        backend
+        Backend::new()
     }).clone()
 }

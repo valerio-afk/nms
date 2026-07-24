@@ -20,6 +20,7 @@ pub fn v1_api() -> Router<Arc<Backend>>
             .merge(auth::get_route())
             .merge(users::get_route())
             .merge(system::get_route())
+            .merge(pool::get_route())
     )
     
 }

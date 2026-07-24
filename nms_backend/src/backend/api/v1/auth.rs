@@ -1,6 +1,6 @@
 use axum::{Json, Router, extract::{Path,State,Query}, routing::{get,patch, post}};
 use axum_auth::AuthBearer;
-use crate::backend::{Backend, HTTPError, jwt::JWTClaim, permissions::{UserPermissions, check_permission}};
+use crate::backend::{Backend, jwt::JWTClaim, permissions::{UserPermissions, check_permission}};
 use crate::events::{Events,ContextVariables,Trigger, ContextBuilder};
 use super::jwt::{PermissiveTokenParameter,TokenPurposes,create_token};
 use serde_json::{Value};
@@ -207,7 +207,7 @@ async fn auth_otp_verify
                     if res
                     {
                         username = Some(backend.save_temporary_secret(&tmp.uuid)?);
-                        backend.flush_config();
+                        backend.flush_config()?;
                         break;
                     } 
                 }
@@ -247,7 +247,7 @@ async fn auth_otp_verify
 
     match create_token(
         username.clone(), 
-        TokenPurposes::Login, 
+        otp.purpose, 
         LOGIN_LIFETIME, //30 mins
         backend.secret_key.as_bytes()
     )
@@ -268,9 +268,9 @@ async fn auth_otp_verify
             backend.push_token(JWTClaim{
                 uuid: tok.uuid,
                 claims: tok.claims
-            });
+            })?;
 
-            backend.flush_config();
+            backend.flush_config()?;
 
             return Ok(response);
         }
@@ -304,14 +304,14 @@ async fn auth_token_refresh(
                 expire_date: new_tok.claims.exp
             });
 
-            backend.revoke_token(&jwt.uuid);
+            backend.revoke_token(&jwt.uuid)?;
 
             backend.push_token(JWTClaim{
                 uuid: new_tok.uuid,
                 claims: new_tok.claims
-            });
+            })?;
 
-            backend.flush_config();
+            backend.flush_config()?;
 
             return Ok(response);
         }
@@ -328,7 +328,7 @@ async fn auth_logout(
 ) -> FastAPIComp<()>
 {
     let jwt = backend.verify_token(&token, TokenPurposes::Login)?;
-    backend.revoke_token(&jwt.uuid);
+    backend.revoke_token(&jwt.uuid)?;
 
     Ok(Json(()))
 }
@@ -336,13 +336,13 @@ async fn auth_logout(
 async fn auth_verify_first_login_token(
     Query(token): Query<String>,
     State(backend): State<Arc<Backend>>
-) -> Result<bool,HTTPError>
+) -> FastAPIComp<bool>
 {
     let jwt = backend.verify_token(&token, TokenPurposes::FirstLogin)?;
 
     match jwt.claims.username
     {
-        Some(u) => Ok(backend.is_otp_configured_for(&u)?),
+        Some(u) => Ok(Json(backend.is_otp_configured_for(&u)?)),
         None=> Err(ErrorMessages::E_AUTH_MALFORMED.wrap_with_status_code(None))
     }
 }
@@ -366,6 +366,7 @@ pub fn get_route() -> Router<Arc<Backend>>
     Router::new().nest("/auth",
         Router::new()
         .route("/otp/get/{property}", get(get_auth_property))
+        .route("/token/first_login",get(auth_verify_first_login_token))
         .route("/logout",post(auth_logout))
         .merge(limited_endpoints)
     )
