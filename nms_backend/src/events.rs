@@ -375,7 +375,7 @@ impl EventManager
 
                                         if let Some(output) = result
                                         {
-                                            if output.status_code == 0
+                                            if output.exit_code == 0
                                             {
                                                 let tokens:Vec<&str> = output.stdout.split(" ").collect();
 

@@ -1,25 +1,50 @@
 use std::collections::HashMap;
+use std::string::ToString;
+use strum::Display;
 
 use super::*;
 
-//["lsblk", "-J", "-b", "-o", "NAME,MODEL,SERIAL,TYPE,TRAN,SIZE,PATH"]
+const LSBLK_DEFAULT_PROPERTIES: &[LsblkProperties] = &[
+            LsblkProperties::NAME,
+            LsblkProperties::MODEL,
+            LsblkProperties::SERIAL,
+            LsblkProperties::TYPE,
+            LsblkProperties::TRAN,
+            LsblkProperties::SIZE,
+            LsblkProperties::PATH
+];  
 
+#[derive(Display, Debug)]
 pub enum LsblkProperties
 {
     ALIGNMENT,
+
+    #[strum(to_string="ID-LINK")]
     IDLINK,
     ID,
+
+    #[strum(to_string="ID-LINK")]
     DISCALN,
     DAX,
+
+    #[strum(to_string="DISC-GRAN")]
     DISCGRAN,
+
+    #[strum(to_string="DISK-SEQ")]
     DISKSEQ,
+
+    #[strum(to_string="DISC-MAX")]
     DISCMAX,
+
+    #[strum(to_string="DISC-ZERO")]
     DISCZERO,
     FSAVAIL,
     FSROOTS,
     FSSIZE,
     FSTYPE,
     FSUSED,
+
+    #[strum(to_string="FSUSE%")]
     FSUSE_P,
     FSVER,
     GROUP,
@@ -27,13 +52,21 @@ pub enum LsblkProperties
     HOTPLUG,
     KNAME,
     LABEL,
+
+    #[strum(to_string="LOG-SEC")]
     LOGSEC,
+
+    #[strum(to_string="MAJ:MIN")]
     MAJ_MIN,
+
+    #[strum(to_string="MIN-IO")]
     MINIO,
     MODE,
     MODEL,
     MQ,
     NAME,
+
+    #[strum(to_string="OPT-IO")]
     OPTIO,
     OWNER,
     PARTFLAGS,
@@ -43,6 +76,8 @@ pub enum LsblkProperties
     PARTTYPENAME,
     PARTUUID,
     PATH,
+
+    #[strum(to_string="PHY-SEC")]
     PHYSEC,
     PKNAME,
     PTTYPE,
@@ -53,6 +88,8 @@ pub enum LsblkProperties
     RM,
     RO,
     ROTA,
+
+    #[strum(to_string="RQ-SIZE")]
     RQSIZE,
     SCHED,
     SERIAL,
@@ -69,92 +106,34 @@ pub enum LsblkProperties
     WSAME,
     WWN,
     ZONED,
+
+    #[strum(to_string="ZONE-SZ")]
     ZONESZ,
+
+    #[strum(to_string="ZONE-WGRAN")]
     ZONEWGRAN,
+
+    #[strum(to_string="ZONE-APP")]
     ZONEAPP,
+
+    #[strum(to_string="ZONE-NR")]
     ZONENR,
+
+    #[strum(to_string="ZONE-OMAX")]
     ZONEOMAX,
+
+    #[strum(to_string="ZONE-AMAX")]
     ZONEAMAX,
 }
 
-impl std::fmt::Display for LsblkProperties 
+impl LsblkProperties
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result 
+    pub fn default() -> Option<&'static [LsblkProperties]>
     {
-        match self 
-        {
-            LsblkProperties::ALIGNMENT => write!(f,"ALIGNMENT"),
-            LsblkProperties::IDLINK => write!(f,"ID-LINK"),
-            LsblkProperties::ID => write!(f,"ID"),
-            LsblkProperties::DISCALN => write!(f,"DISC-ALN"),
-            LsblkProperties::DAX => write!(f,"DAX"),
-            LsblkProperties::DISCGRAN => write!(f,"DISC-GRAN"),
-            LsblkProperties::DISKSEQ => write!(f,"DISK-SEQ"),
-            LsblkProperties::DISCMAX => write!(f,"DISC-MAX"),
-            LsblkProperties::DISCZERO => write!(f,"DISC-ZERO"),
-            LsblkProperties::FSAVAIL => write!(f,"FSAVAIL"),
-            LsblkProperties::FSROOTS => write!(f,"FSROOTS"),
-            LsblkProperties::FSSIZE => write!(f,"FSSIZE"),
-            LsblkProperties::FSTYPE => write!(f,"FSTYPE"),
-            LsblkProperties::FSUSED => write!(f,"FSUSED"),
-            LsblkProperties::FSUSE_P => write!(f,"FSUSE%"),
-            LsblkProperties::FSVER => write!(f,"FSVER"),
-            LsblkProperties::GROUP => write!(f,"GROUP"),
-            LsblkProperties::HCTL => write!(f,"HCTL"),
-            LsblkProperties::HOTPLUG => write!(f,"HOTPLUG"),
-            LsblkProperties::KNAME => write!(f,"KNAME"),
-            LsblkProperties::LABEL => write!(f,"LABEL"),
-            LsblkProperties::LOGSEC => write!(f,"LOG-SEC"),
-            LsblkProperties::MAJ_MIN => write!(f,"MAJ:MIN"),
-            LsblkProperties::MINIO => write!(f,"MIN-IO"),
-            LsblkProperties::MODE => write!(f,"MODE"),
-            LsblkProperties::MODEL => write!(f,"MODEL"),
-            LsblkProperties::MQ => write!(f,"MQ"),
-            LsblkProperties::NAME => write!(f,"NAME"),
-            LsblkProperties::OPTIO => write!(f,"OPT-IO"),
-            LsblkProperties::OWNER => write!(f,"OWNER"),
-            LsblkProperties::PARTFLAGS => write!(f,"PARTFLAGS"),
-            LsblkProperties::PARTLABEL => write!(f,"PARTLABEL"),
-            LsblkProperties::PARTN => write!(f,"PARTN"),
-            LsblkProperties::PARTTYPE => write!(f,"PARTTYPE"),
-            LsblkProperties::PARTTYPENAME => write!(f,"PARTTYPENAME"),
-            LsblkProperties::PARTUUID => write!(f,"PARTUUID"),
-            LsblkProperties::PATH => write!(f,"PATH"),
-            LsblkProperties::PHYSEC => write!(f,"PHY-SEC"),
-            LsblkProperties::PKNAME => write!(f,"PKNAME"),
-            LsblkProperties::PTTYPE => write!(f,"PTTYPE"),
-            LsblkProperties::PTUUID => write!(f,"PTUUID"),
-            LsblkProperties::RA => write!(f,"RA"),
-            LsblkProperties::RAND => write!(f,"RAND"),
-            LsblkProperties::REV => write!(f,"REV"),
-            LsblkProperties::RM => write!(f,"RM"),
-            LsblkProperties::RO => write!(f,"RO"),
-            LsblkProperties::ROTA => write!(f,"ROTA"),
-            LsblkProperties::RQSIZE => write!(f,"RQ-SIZE"),
-            LsblkProperties::SCHED => write!(f,"SCHED"),
-            LsblkProperties::SERIAL => write!(f,"SERIAL"),
-            LsblkProperties::SIZE => write!(f,"SIZE"),
-            LsblkProperties::START => write!(f,"START"),
-            LsblkProperties::STATE => write!(f,"STATE"),
-            LsblkProperties::SUBSYSTEMS => write!(f,"SUBSYSTEMS"),
-            LsblkProperties::MOUNTPOINT => write!(f,"MOUNTPOINT"),
-            LsblkProperties::MOUNTPOINTS => write!(f,"MOUNTPOINTS"),
-            LsblkProperties::TRAN => write!(f,"TRAN"),
-            LsblkProperties::TYPE => write!(f,"TYPE"),
-            LsblkProperties::UUID => write!(f,"UUID"),
-            LsblkProperties::VENDOR => write!(f,"VENDOR"),
-            LsblkProperties::WSAME => write!(f,"WSAME"),
-            LsblkProperties::WWN => write!(f,"WWN"),
-            LsblkProperties::ZONED => write!(f,"ZONED"),
-            LsblkProperties::ZONESZ => write!(f,"ZONE-SZ"),
-            LsblkProperties::ZONEWGRAN => write!(f,"ZONE-WGRAN"),
-            LsblkProperties::ZONEAPP => write!(f,"ZONE-APP"),
-            LsblkProperties::ZONENR => write!(f,"ZONE-NR"),
-            LsblkProperties::ZONEOMAX => write!(f,"ZONE-OMAX"),
-            LsblkProperties::ZONEAMAX => write!(f,"ZONE-AMAX"),
-        }
+        return Some(LSBLK_DEFAULT_PROPERTIES);
     }
 }
+
 
 pub enum SmartctlTest
 {
@@ -197,6 +176,7 @@ impl std::fmt::Display for SmartctlActions
 
 pub fn LSBLK<'a,'b>(
     properties:Option<&[LsblkProperties]>,
+    path:Option<&String>,
     config:Option<&'b CmdConfig<'a>>
 ) -> CommandLine<'a,'b>
 {
@@ -211,6 +191,11 @@ pub fn LSBLK<'a,'b>(
         args.push(
             prop.iter().map(|x:&LsblkProperties| x.to_string()).collect::<Vec<String>>().join(",")
         );
+    }
+
+    if let Some(p) = path
+    {
+        args.push(p.to_string())
     }
 
     CommandLine::new(
@@ -234,10 +219,10 @@ pub fn LSCPU<'a,'b>(config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
 }
 
 pub fn Find<'a,'b>(
-    path:&String,
-    name:Option<&String>,
+    path:String,
+    name:Option<String>,
     tests:Option<&HashMap<String,String>>,
-    exec:Option<&[&String]>,
+    exec:Option<Vec<String>>,
     single_exec:bool,
     config:Option<&'b CmdConfig<'a>>
 ) -> CommandLine<'a,'b>
@@ -263,11 +248,11 @@ pub fn Find<'a,'b>(
     {
         if e.len()>0
         {
-            args.push("-name".to_string());
+            args.push("-exec".to_string());
             
-            for &arg in e
+            for arg in e
             {
-                args.push(arg.clone());
+                args.push(arg);
             }
 
             args.push(
@@ -328,6 +313,26 @@ pub fn WipeFS<'a,'b> (device:&str,all:bool,config:Option<&'b CmdConfig<'a>>) -> 
 
     CommandLine::new(
         "wipefs",
+        Some(args),
+        None,
+        None,
+        config
+    )
+}
+
+pub fn UdevAdmInfo<'a,'b> (name:&str,query:Option<&str>,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+{
+    let mut args:Vec<String> = vec!["info".to_string(),"--json=short".to_string()];
+
+    if let Some(q) = query
+    {
+        args.push(format!("--query={}",q))
+    }
+
+    args.push(format!("--name={}",name));
+
+    CommandLine::new(
+        "udevadm",
         Some(args),
         None,
         None,

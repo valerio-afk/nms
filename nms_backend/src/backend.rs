@@ -1,28 +1,34 @@
 use api::v1::jwt::{create_token,token_verification,TokenPurposes};
 use axum::http::StatusCode;
 use axum::Json;
+use base64::prelude::*;
 use chrono::TimeDelta;
 use config::Config;
-use serde::Serialize;
-use std::path::Path;
 use crate::backend::api::v1::msg::{StatusMessage, WrappedResponse};
 use crate::backend::config::{CfgToken};
+use crate::backend::dev::DiskState;
 use crate::backend::jwt::JWTClaim;
 use crate::cmdl::{CmdConfig, Executable};
+use crate::cmdl::coreutils::Cat;
 use crate::cmdl::passwd::{Groups,GetEntPasswd};
 use crate::cmdl::zfs::{ZFSActions, ZFSListArgs, ZFSListType, ZPool, ZPoolActions, ZFS};
 use crate::events::{ContextData, EventManager, Events, EventParameters};
 use crate::thread_wrapper::ThreadWrapper;
 use crate::vfs::{Capacity, VFS};
+use dev::Device;
 use msg::{ErrorMessages,LoggerMessages,LogWarnings,LogErrors, LogInfos};
 use permissions::is_admin;
 use regex::RegexBuilder;
 use serde_json::Value;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
+use std::io::Read;
 use std::net::SocketAddrV4;
+use std::path::Path;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::{OnceLock,Mutex,Arc, RwLock};
 use utils::{get_quota_for_all, sudo_group};
 use utils::get_notifications_count;
@@ -31,12 +37,13 @@ use uuid::Uuid;
 pub type HTTPError = (StatusCode, Json<WrappedResponse>);
 pub type FastAPIComp<T> = Result<Json<T>, HTTPError>; //this type is to make it more compatible with the current frontend
 
-pub mod config;
 pub mod api;
-pub mod utils;
-pub mod permissions;
-pub mod msg;
+pub mod config;
+pub mod dev;
 pub mod jwt;
+pub mod msg;
+pub mod permissions;
+pub mod utils;
 
 static BACKEND:OnceLock<Arc<Backend>> = OnceLock::new();
 static NMS_CONFIG_FILE:&str = "nms.conf.json";
@@ -52,7 +59,7 @@ pub fn propagate_unknown_error<E:Error>(err:E) -> HTTPError
     propagate_error(ErrorMessages::E_UNKNOWN, err)
 }
 
-#[derive(Clone,Debug, Serialize)]
+#[derive(Clone,Debug,Serialize)]
 pub struct Quota
 {
     pub quota:Option<u64>,
@@ -100,11 +107,21 @@ impl PoolExtensionStatus
     }
 }
 
+#[derive(Debug, Serialize)]
 pub struct PoolProperties
 {
     redundancy:bool,
     encryption:bool,
     compression:bool
+}
+
+#[derive(Debug, Serialize)]
+pub struct Pool
+{
+    pub name:String,
+    pub disks:Vec<Device>,
+    pub message:Option<String>,
+    pub state:Option<String>,
 }
 
 pub struct Backend
@@ -599,7 +616,7 @@ impl Backend
                 ZPoolActions::Status(&self.get_pool_identifier().unwrap().0),
                 false,None).run()
             {
-                return output.status_code == 0;
+                return output.exit_code == 0;
             }
         }
 
@@ -615,7 +632,7 @@ impl Backend
             ), 
             false,None).run()
         {
-            if output.status_code == 0
+            if output.exit_code == 0
             {
                 if let Ok(zfs_list) = serde_json::from_str::<Value>(&output.stdout)
                 {
@@ -665,7 +682,7 @@ impl Backend
             None
         ).run()
         {
-            if output.status_code != 0
+            if output.exit_code != 0
             {
                 return Err(ErrorMessages::E_POOL_EXPAND_STATUS.wrap_with_status_code(Some(vec![Value::String(output.stderr)])));
             }
@@ -715,7 +732,7 @@ impl Backend
                               .build()
                               .map_err(|e| propagate_error(ErrorMessages::E_POOL_EXPAND_STATUS, e))?;
 
-            if let Some(m) = re_with_eta.captures(&msg)
+            if let Some(m) = re_no_eta.captures(&msg)
             {
                 let perc:f32 = m[1].parse::<f32>().map_err(|e| propagate_error(ErrorMessages::E_POOL_EXPAND_STATUS, e))?;
 
@@ -752,6 +769,149 @@ impl Backend
         }
     }
 
+    fn get_importable_pools(self:&Arc<Self>) -> Result<Vec<Pool>,HTTPError>
+    {
+        let zpool_output = ZPool(
+            ZPoolActions::Import(None), 
+        false, 
+            CmdConfig::default()
+        )
+        .run()
+        .unwrap()
+        .is_success()
+        .map_err( 
+            |e| propagate_unknown_error(e)
+        )?;
+
+        let mut current_pool:Option<Pool> = None;
+        let mut pools:Vec<Pool> = Vec::new();
+        let mut in_config:bool = false;
+        let mut read_status_action:bool = false;
+
+        let pool_re = RegexBuilder::new(r"\s*pool:\s+(\S+)")
+                                    .case_insensitive(true)
+                                    .build()
+                                    .unwrap();
+
+        let disk_re = RegexBuilder::new(r"(\S+)\s+(ONLINE|DEGRADED|FAULTED|OFFLINE|UNAVAIL)")
+                            .case_insensitive(true)
+                            .build()
+                            .unwrap();
+
+        let skip_vdev_re = RegexBuilder::new(r"(mirror|raidz)\S*")
+                                .case_insensitive(true)
+                                .build()
+                                .unwrap();
+        
+
+        for line in zpool_output.stdout.lines()
+        {
+            let l = line.trim();
+
+            if let Some(m) = pool_re.captures(l)
+            {
+                if let Some(p) = current_pool
+                {
+                    pools.push(p);
+                }
+
+                current_pool = Some(
+                    Pool 
+                    { 
+                        name: m[1].to_string(), 
+                        disks: Vec::new(), 
+                        message: Some(String::new()), 
+                        state: None
+                    }
+                );
+                continue;
+            }
+
+            if l=="config:"
+            {
+                in_config=true;
+                read_status_action=false;
+                continue;
+            }
+
+            if let Some(pool) = &mut current_pool
+            {
+
+                if l.starts_with("status:") || l.starts_with("action:")
+                {
+                    
+                    read_status_action = true;
+                    let tok:Vec<&str> = l.split(":").collect();
+                    if tok.len() == 2
+                    {
+                        if let Some(message) = pool.message.as_mut()
+                        {
+                            message.push_str(" ");
+                            message.push_str(tok[1].trim());
+                        }
+                    }
+                    continue;
+                }
+                else if read_status_action
+                {
+                    if l.len()>0
+                    {
+                        if let Some(message) = pool.message.as_mut()
+                        {
+                            message.push_str(" ");
+                            message.push_str(l.trim());
+                        }          
+                    }
+                    continue;
+                }
+            
+
+                if l.starts_with("state:")
+                {
+                    let tok:Vec<&str> = l.split(":").collect();
+                    if tok.len() == 2
+                    {
+                        pool.state = Some(tok[1].trim().to_string());   
+                    }
+                    continue;
+                }
+
+                if !in_config { continue; }
+
+                if let Some(d) = disk_re.captures(l)
+                {
+                    let dev = d[1].trim();
+                    let state = d[2].trim();
+
+                    if !skip_vdev_re.is_match(dev) && (dev!=pool.name)
+                    {
+                        pool.disks.push( 
+                            Device::from_subpath(
+                                dev,
+                                DiskState::from_str(state).map_err(|e| propagate_unknown_error(e))?
+                            )
+                            .or_else
+                            (
+                                |_| Ok(Device::new_offline(dev))
+                            )?
+                        )
+                    }
+
+                }
+            }
+
+        }
+
+        if let Some(p) = current_pool // this can happen for the last one (e.g., when there's just one)
+        {
+            pools.push(p);
+        }
+
+        return Ok(pools);
+                
+    }
+
+
     fn has_redundancy(self:&Arc<Self>)->bool
     {
         if let Ok(r) = self.pool_properties.read()
@@ -759,6 +919,62 @@ impl Backend
             !r.is_none() && r.as_ref().unwrap().redundancy
         }
         else {false} 
+    }
+
+    fn has_encryption(self:&Arc<Self>)->bool
+    {
+        if let Ok(r) = self.pool_properties.read()
+        {
+            !r.is_none() && r.as_ref().unwrap().encryption
+        }
+        else {false} 
+    }
+
+    fn has_compression(self:&Arc<Self>)->bool
+    {
+        if let Ok(r) = self.pool_properties.read()
+        {
+            !r.is_none() && r.as_ref().unwrap().compression
+        }
+        else {false} 
+    }
+
+    fn get_key(self:&Arc<Self>)->Result<Option<String>,HTTPError>
+    {
+        if self.has_encryption()
+        {    
+
+            if let Some(cfg_pool) = &self
+                .config
+                .lock()
+                .map_err(|e| propagate_error(ErrorMessages::E_POOL_KEY,e))?
+                .pool
+            {
+                if let Some(key_path) = &cfg_pool.encryption_key
+                {
+                    let mut cat = Cat(
+                        Some(key_path), 
+                        Some(&CmdConfig::new(true,true,None,None))
+                    )
+                    .spawn()
+                    .map_err(|e| propagate_error(ErrorMessages::E_POOL_KEY,e))?;
+
+                    let exit_code = cat.wait().map_err(|e| propagate_error(ErrorMessages::E_POOL_KEY,e))?;
+
+                    if !exit_code.success()
+                    {
+                        return Err(ErrorMessages::E_POOL_KEY.wrap_with_status_code(None));
+                    }
+
+                    let mut key_buffer:Vec<u8> = Vec::new();
+                    cat.stdout.unwrap().read_to_end(&mut key_buffer).map_err(|e| propagate_error(ErrorMessages::E_POOL_KEY,e))?;
+
+                    return Ok(Some(BASE64_STANDARD.encode(key_buffer)));
+                }
+            }
+        }
+        
+        return Ok(None);
     }
 }
 
@@ -825,7 +1041,7 @@ impl Backend
 
                     if let Some(group_output) = Groups(&uname,Some(&cmd_cfg)).run()
                     {
-                        if group_output.status_code == 0
+                        if group_output.exit_code == 0
                         {
                             if let Some(_) = group_output.stdout.find(sudo_group())
                             {
@@ -842,7 +1058,7 @@ impl Backend
                     //get home - uid - gid
                     if let Some(output) = GetEntPasswd(Some(uname.as_str()), Some(&cmd_cfg)).run()
                     {
-                        if output.status_code == 0
+                        if output.exit_code == 0
                         {
                             let tokens:Vec<&str> = output.stdout.split(":").collect();
 
@@ -1009,4 +1225,37 @@ pub fn get_backend() -> Arc<Backend>
     BACKEND.get_or_init(|| {
         Backend::new()
     }).clone()
+}
+
+mod test
+{
+    #[allow(unused)]
+    use super::*;
+
+    #[test]
+    fn importable_pools_test() -> Result<(), HTTPError>
+    {
+        let p = get_backend().get_importable_pools()?;
+
+        println!("{:?}",p);
+
+        Ok(())
+    }
+
+    #[test]
+    fn key_base64_test() -> Result<(), Box<dyn Error>>
+    {
+        let mut cat = Cat(Some("/root/tank.key"), Some(&CmdConfig::new(true,true,None,None))).spawn()?;
+
+        let exit_code = cat.wait()?;
+
+        if exit_code.code().unwrap() != 0 {panic!("Status code: {}",exit_code)}
+        let mut buf:Vec<u8> = Vec::new();
+        let stdout = cat.stdout.unwrap().read_to_end(&mut buf);
+
+        println!("{}",BASE64_STANDARD.encode(buf));
+
+
+        Ok(())
+    }
 }

@@ -33,7 +33,7 @@ impl Capacity
         
         if let Some(output) = cmd.run()
         {
-            if output.status_code != 0 { return Err(Some(output.stderr)); }
+            if output.exit_code != 0 { return Err(Some(output.stderr)); }
             let zpool_list:Value = serde_json::from_str(&output.stdout).map_err(|x| Some(x.to_string()))?;
 
             if let Value::Object(prop) = &zpool_list["pools"][pool_name]["properties"]
@@ -84,7 +84,7 @@ impl VFS
 
         if let Some(output) = cmd.run()
         {
-            if output.status_code != 0 { return Err(Some(output.stderr)); }
+            if output.exit_code != 0 { return Err(Some(output.stderr)); }
 
             let zfs_list:Value = serde_json::from_str(&output.stdout).map_err(|x| Some(x.to_string()))?;
 

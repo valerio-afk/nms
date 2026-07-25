@@ -302,7 +302,7 @@ pub fn LS<'a,'b>(path:&String,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'
     );
 }
 
-pub fn Cat<'a,'b>(path:Option<&str>, config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn Cat<'a,'b,S:AsRef<str>+ToString>(path:Option<S>, config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
 {
     if let Some(p) = path
     {

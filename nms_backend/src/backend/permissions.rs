@@ -1,11 +1,10 @@
 use std::sync::{RwLock,Arc};
-
 use strum::{EnumString,Display,EnumIter,IntoEnumIterator};
 use serde_json::Value;
 use super::msg::{StatusMessage,ErrorMessages};
 use crate::backend::{HTTPError, User};
 
-#[derive(Display,EnumString,EnumIter)]
+#[derive(Display,EnumString,EnumIter, PartialEq)]
 pub enum UserPermissions
 {
 
@@ -193,6 +192,8 @@ mod test
 {
     #[allow(unused)]
     use super::*;
+    #[allow(unused)]
+    use std::str::FromStr;
     #[test]
     fn permissions_test()
     {

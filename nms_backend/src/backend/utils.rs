@@ -94,45 +94,44 @@ pub fn sudo_group() -> &'static str
 
 pub fn get_quota_for_all(pool:&str, dataset:&str) -> Result<HashMap<String,Quota>,String>
 {
-    let config = CmdConfig::new(true, true, None, None);
     let output = ZFS(
         ZFSActions::GetQuota(ZFSArgs{
             pool, dataset
         }),
         false,
-        Some(&config)
-    ).run();
+        CmdConfig::default()
+    )
+    .run()
+    .unwrap()
+    .is_success()
+    .map_err(|e| e.to_string() )?;
 
-    if let Some(o) = output
+
+    let mut map:HashMap<String,Quota> = HashMap::new();
+
+    for line in output.stdout.lines()
     {
-        if o.status_code != 0 { return Err(format!("Unable to get quota (status code: {}): {}",o.status_code,o.stderr)); }
+        let tokens:Vec<&str> = line.splitn(3,"\t").collect();
 
-        let mut map:HashMap<String,Quota> = HashMap::new();
-
-        for line in o.stdout.lines()
+        if tokens.len() == 3
         {
-            let tokens:Vec<&str> = line.splitn(3,"\t").collect();
-
-            if tokens.len() == 3
+            let uname = tokens[0].trim();
+            let used:Option<u64> = match tokens[1].trim().parse::<u64>()
             {
-                let uname = tokens[0].trim();
-                let used:Option<u64> = match tokens[1].trim().parse::<u64>()
-                {
-                    Ok(q) => Some(q),
-                    Err(_) => None
-                };
+                Ok(q) => Some(q),
+                Err(_) => None
+            };
 
-                let limit:Option<u64> = match tokens[2].trim().parse::<u64>()
-                {
-                    Ok(q) => Some(q),
-                    Err(_) => None
-                };
+            let limit:Option<u64> = match tokens[2].trim().parse::<u64>()
+            {
+                Ok(q) => Some(q),
+                Err(_) => None
+            };
 
-                map.insert(uname.to_string(),Quota {
-                    quota:limit,
-                    used: used
-                });
-            }
+            map.insert(uname.to_string(),Quota {
+                quota:limit,
+                used: used
+            });
         }
 
         return Ok(map);
@@ -151,13 +150,13 @@ pub fn get_notifications_count(username:&str) -> u32
 
     if let Some(stat) = stat_result
     {
-        if stat.status_code == 0
+        if stat.exit_code == 0
         {
             let cat_result = Cat(Some(mail_file.to_str().unwrap()),Some(&cfg)).run();
 
             if let Some(cat) = cat_result
             {
-                if cat.status_code == 0
+                if cat.exit_code == 0
                 {
                     let pattern = Regex::new(r"^From[^:](.*)$");
 

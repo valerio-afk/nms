@@ -1,4 +1,3 @@
-
 pub mod coreutils;
 pub mod others;
 pub mod compression;
@@ -12,8 +11,10 @@ pub mod passwd;
 pub mod docker;
 pub mod zfs;
 pub mod notify;
+
 use std::process::{Child, Command, Stdio};
 use std::io::Write;
+use std::fmt;
 
 type Destructor<'a,T> = Box<dyn Fn(&T) + 'a>;
 
@@ -21,6 +22,13 @@ trait CmdFlag<T>
 {
     fn flag(value:&T) -> &'static str;
 }
+
+const CMD_CONFIG_DEFAULT:CmdConfig<'static> = CmdConfig{
+    sudo: true,
+    strict:true,
+    stdin:None,
+    cwd:None
+};
 
 pub struct CommandLine<'a,'b>
 {
@@ -39,13 +47,56 @@ pub struct CmdConfig<'a>
     cwd:Option<String>
 }
 
+impl<'a> CmdConfig<'a>
+{
+    pub fn default() -> Option<&'a CmdConfig<'a>>
+    {
+        Some(&CMD_CONFIG_DEFAULT)
+    }
+}
+
+#[derive(Debug)]
+pub struct ExitCodeError
+{
+    exit_code:i32,
+    stderr: String
+}
+
+impl fmt::Display for ExitCodeError
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
+    {
+        write!(f,"{} ({})",self.stderr,self.exit_code)
+    }
+}
+
+impl std::error::Error for ExitCodeError {}
+
 #[derive(Debug)]
 pub struct CommandOutput
 {
-    pub status_code:i32,
+    pub exit_code:i32,
     pub stdout:String,
     pub stderr:String
 }
+
+impl CommandOutput
+{
+    pub fn check_status(self, code:i32 ) -> Result<Self,ExitCodeError>
+    {
+        if self.exit_code == code {Ok(self)}
+        else {Err(
+            ExitCodeError { exit_code: self.exit_code, stderr: self.stderr.to_string() }
+        )}
+    }
+
+    pub fn is_success(self) -> Result<Self,ExitCodeError>
+    {
+        self.check_status(0)
+    }
+}
+
+
 
 pub trait Executable
 {
@@ -73,6 +124,7 @@ impl<'a> CmdConfig<'a>
             cwd:cwd
         }
     }
+
 }
 
 impl<'a,'b> CommandLine<'a,'b>
@@ -226,7 +278,7 @@ impl<'a,'b> ExecutableInternal for CommandLine<'a,'b>
         match output
         {
             Ok(o) => Some(CommandOutput{
-                status_code: if strict { o.status.code().unwrap() } else { 0 },
+                exit_code: if strict { o.status.code().unwrap() } else { 0 },
                 stdout: String::from_utf8_lossy(&o.stdout).to_string(),
                 stderr: String::from_utf8_lossy(&o.stderr).to_string()
             }),

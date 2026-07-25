@@ -1,9 +1,12 @@
 use crate::backend::{Backend, FastAPIComp, propagate_unknown_error};
 use crate::backend::api::BackendPropertyResponse;
+use crate::backend::permissions::{UserPermissions, check_permission};
+use crate::backend::jwt::TokenPurposes;
 use std::sync::Arc;
 use axum::{Json, Router};
 use axum::routing::get;
 use axum::extract::{State,Path};
+use axum_auth::AuthBearer;
 use serde_json::Value;
 use serde::{Deserialize, Serialize};
 
@@ -58,9 +61,14 @@ enum PoolProperties
 
 async fn get_pool_property(
     Path(property):Path<PoolProperties>,
+    AuthBearer(token): AuthBearer,
     State(backend): State<Arc<Backend>>
 ) -> FastAPIComp<BackendPropertyResponse<PoolProperties>>
 {
+    let jwt = backend.verify_token(&token, TokenPurposes::Login)?;
+    let user = backend.get_user(&jwt.claims.username.unwrap())?;
+
+    check_permission(&user, UserPermissions::PoolConfGetInfo)?;
 
     Ok(Json(BackendPropertyResponse {
         property: property.clone(),
@@ -83,6 +91,12 @@ async fn get_pool_property(
             PoolProperties::IsPresent => Value::Bool(backend.is_pool_present()),
             PoolProperties::AnyPoolPresent => Value::Bool(backend.is_any_pool_present()),
             PoolProperties::ExpansionStatus => serde_json::to_value(backend.get_expansion_status()?).map_err(|e| propagate_unknown_error(e))?,
+            PoolProperties::PoolList => serde_json::to_value(backend.get_importable_pools()?).map_err(|e| propagate_unknown_error(e))?,
+            PoolProperties::EncryptionKey => match backend.get_key()?
+            {
+                Some(key) => Value::String(key),
+                None => Value::Null
+            }
             _ => Value::Null
         }
     }))

@@ -46,7 +46,7 @@ pub enum ZPoolActions<'a>
     Replace(ZPoolReplaceArgs<'a>),
     Add(ZPoolAddArgs<'a>),
     Destroy(ZPoolDestroyArgs<'a>),
-    Import(ZPoolImportArgs<'a>),
+    Import(Option<ZPoolImportArgs<'a>>),
     Export(&'a str),
     Create(ZPoolCreateArgs<'a>),
     Scrub,
@@ -140,20 +140,6 @@ pub struct ZFSLoadKeyArgs<'a>
     key_path:&'a str,
 }
 
-// pub struct ZFSCreateArgs<'a>
-// {
-//     pool:&'a str,
-//     dataset:&'a str,
-//     options:Option<&'a [&'a str]>
-// }
-
-// pub struct ZFSDestroyArgs<'a>
-// {
-//     pool:&'a str,
-//     dataset:&'a str,
-//     snapshot:Option<&'a str>
-// }
-
 pub struct ZFSSnapshotArgs<'a>
 {
     pool:&'a str,
@@ -212,10 +198,10 @@ pub fn ZPool<'a,'b>(
             if revertible
             {
                 rev_cmd = Some(ZPool(ZPoolActions::Import(
-                    ZPoolImportArgs{
+                    Some(ZPoolImportArgs{
                         pool: pool,
                         force:true
-                    }
+                    })
                 ),false,config));
             }
         },
@@ -258,16 +244,19 @@ pub fn ZPool<'a,'b>(
         }
 
         ZPoolActions::Import(params) => {
-                args.push("add".to_string());
-                if params.force
+                args.push("import".to_string());
+                if let Some(p) = &params
                 {
-                    args.push("-f".to_string());
-                }
-                args.push(params.pool.to_string());
+                    if p.force
+                    {
+                        args.push("-f".to_string());
+                    }
+                    args.push(p.pool.to_string());
 
-                if revertible
-                {
-                    rev_cmd = Some(ZPool(ZPoolActions::Export(params.pool),false,config));
+                    if revertible 
+                    {
+                        rev_cmd = Some(ZPool(ZPoolActions::Export(params.unwrap().pool),false,config));
+                    }
                 }
         }
 
