@@ -322,15 +322,15 @@ pub fn ZPool<'a,'b>(
                 match action
                 {
                     ZPoolActions::List(pool) => {
-                        args.push("export".to_string());
+                        args.push("list".to_string());
                         args.push(pool.to_string());
                     },
                     ZPoolActions::Status(pool) => {
-                        args.push("export".to_string());
+                        args.push("status".to_string());
                         args.push(pool.to_string());
                     },
                     ZPoolActions::Get(pool) => {
-                        args.push("export".to_string());
+                        args.push("get".to_string());
                         args.push(pool.to_string());
                     },
                     _ => ()

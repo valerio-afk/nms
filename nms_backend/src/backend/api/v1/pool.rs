@@ -10,6 +10,26 @@ use axum_auth::AuthBearer;
 use serde_json::Value;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug,Serialize)]
+struct PoolFlags
+{
+    encryption:bool,
+    redundancy:bool,
+    compression:bool
+}
+
+impl PoolFlags
+{
+    pub fn from_backend(backend:Arc<Backend>) -> PoolFlags
+    {
+        PoolFlags{
+            encryption : backend.has_encryption(),
+            redundancy : backend.has_redundancy(),
+            compression : backend.has_compression(),
+        }
+    }
+}
+
 #[derive(Clone,Debug,Deserialize, Serialize)]
 enum PoolProperties
 {
@@ -97,7 +117,22 @@ async fn get_pool_property(
                 Some(key) => Value::String(key),
                 None => Value::Null
             }
-            _ => Value::Null
+            PoolProperties::StatusId => match backend.get_pool_status_id()
+            {
+                Some(id) => Value::String(id),
+                None => Value::Null
+            }
+            PoolProperties::LastScrubReport => match backend.get_last_scrub_report()
+            {
+                Some(report) => serde_json::to_value(report).map_err(|e| propagate_unknown_error(e))?,
+                None => Value::Null
+            }
+            PoolProperties::ScrubInfo => match backend.get_current_scrub_info()
+            {
+                Some(info) => serde_json::to_value(info).map_err(|e| propagate_unknown_error(e))?,
+                None => Value::Null
+            }
+            PoolProperties::PoolSettings => serde_json::to_value(PoolFlags::from_backend(backend)).map_err(|e| propagate_unknown_error(e))?,
         }
     }))
 }

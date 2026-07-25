@@ -46,7 +46,7 @@ def get_system_disks() -> List[Disk]:
         for d in sata_disks
     ]
 
-def get_disks() -> List[Disk]:
+def     get_disks() -> List[Disk]:
     from .pool import get_pool_disks
 
     pool_disks = get_pool_disks()

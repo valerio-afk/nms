@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 use regex::Regex;
 use core::result::Result;
+use chrono::{DateTime};
 use super::Quota;
 use crate::cmdl::{CmdConfig, Executable};
 use crate::cmdl::coreutils::{Stat,Cat};
@@ -90,6 +91,30 @@ pub fn sudo_group() -> &'static str
             _ => "wheel"
         }
     })
+}
+
+
+pub fn str_to_i64 (s:Option<&str>) -> Option<i64>
+{
+    if let Some(t) = s
+    {
+        match t.parse::<i64>()
+        {
+            Ok(int) => return Some(int),
+            _ => ()
+        }
+    }
+
+    None
+}
+pub fn ts_to_str(ts:Option<i64>) -> String
+{
+    if let Some(timestamp) = ts && let Some(dt) = DateTime::from_timestamp_secs(timestamp)
+    {
+        return dt.format("%c").to_string();
+    }
+
+    return "-".to_string()
 }
 
 pub fn get_quota_for_all(pool:&str, dataset:&str) -> Result<HashMap<String,Quota>,String>

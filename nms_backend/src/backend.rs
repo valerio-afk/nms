@@ -2,7 +2,7 @@ use api::v1::jwt::{create_token,token_verification,TokenPurposes};
 use axum::http::StatusCode;
 use axum::Json;
 use base64::prelude::*;
-use chrono::TimeDelta;
+use chrono::{TimeDelta};
 use config::Config;
 use crate::backend::api::v1::msg::{StatusMessage, WrappedResponse};
 use crate::backend::config::{CfgToken};
@@ -30,7 +30,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{OnceLock,Mutex,Arc, RwLock};
-use utils::{get_quota_for_all, sudo_group};
+use utils::{get_quota_for_all, sudo_group,ts_to_str,str_to_i64};
 use utils::get_notifications_count;
 use uuid::Uuid;
 
@@ -122,6 +122,47 @@ pub struct Pool
     pub disks:Vec<Device>,
     pub message:Option<String>,
     pub state:Option<String>,
+}
+
+
+#[derive(Debug, Serialize)]
+pub struct LastScrubReport
+{
+    pub started:String,
+    pub ended: String,
+    pub errors: String
+}
+
+impl LastScrubReport
+{
+    pub fn new(started:Option<i64>, ended:Option<i64>, errors:Option<&str>) -> LastScrubReport
+    {
+        LastScrubReport 
+        { 
+            started: ts_to_str(started),
+            ended: ts_to_str(ended), 
+            errors: errors.or(Some("-")).unwrap().to_string()
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct ScrubLiveInfo
+{
+    pub ongoing:bool,
+    pub last: Option<i64>,
+}
+
+impl ScrubLiveInfo
+{
+    pub fn new(ongoing:bool, last:Option<i64>) -> ScrubLiveInfo
+    {
+        ScrubLiveInfo 
+        { 
+            ongoing,
+            last
+        }
+    }
 }
 
 pub struct Backend
@@ -616,11 +657,39 @@ impl Backend
                 ZPoolActions::Status(&self.get_pool_identifier().unwrap().0),
                 false,None).run()
             {
-                return output.exit_code == 0;
+                return output.is_success().is_ok();
             }
         }
 
         false
+    }
+
+    fn get_pool_status_id(self:&Arc<Self>) -> Option<String>
+    {
+        if self.is_pool_configured()
+        {
+            if let Some(output) = ZPool(
+                ZPoolActions::Status(&self.get_pool_identifier().unwrap().0),
+                false,None
+            )
+            .run()
+            {
+                if output.exit_code == 0
+                {
+                    let status:Value = serde_json::from_str(&output.stdout)
+                        .or(serde_json::from_str("{}"))
+                        .unwrap();
+
+                    match &status["pools"][self.get_pool_identifier().unwrap().0]["msgid"]
+                    {
+                        Value::String(id) => return Some(id.to_string()),
+                        _ => ()
+                    }
+                }
+            }           
+        }
+
+        None
     }
 
     fn is_any_pool_present(self:&Arc<Self>) -> bool
@@ -973,8 +1042,79 @@ impl Backend
                 }
             }
         }
-        
         return Ok(None);
+    }
+
+    fn get_last_scrub_report(self:&Arc<Self>)->Option<LastScrubReport>
+    {        
+        if self.is_pool_configured()
+        {
+            let pool_name = self.get_pool_identifier().unwrap().0;
+            let zpool_output = ZPool(
+                ZPoolActions::Status(&pool_name), 
+                false, 
+                CmdConfig::default()
+            ).run();
+
+            if let Some(output) = zpool_output
+            {
+                let m:Value = serde_json::from_str(&output.stdout).or::<Value>(Ok(Value::Null)).unwrap();
+
+                if let Value::Object(scan_stats) = &m["pools"][pool_name]["scan_stats"]
+                {
+                    if scan_stats["function"].as_str().unwrap() == "SCRUB"
+                    {
+                        return Some(LastScrubReport::new(
+                            str_to_i64(scan_stats["started"].as_str()),
+                            str_to_i64(scan_stats["started"].as_str()),
+                            scan_stats["errors"].as_str(),
+                        ));
+                    }
+                }
+            }
+
+
+        }
+
+        None
+    }
+
+    fn get_current_scrub_info(self:&Arc<Self>)->Option<ScrubLiveInfo>
+    {        
+        if self.is_pool_configured()
+        {
+            let pool_name = self.get_pool_identifier().unwrap().0;
+            let zpool_output = ZPool(
+                ZPoolActions::Status(&pool_name), 
+                false, 
+                CmdConfig::default()
+            ).run();
+
+            if let Some(output) = zpool_output
+            {
+                let m:Value = serde_json::from_str(&output.stdout).or::<Value>(Ok(Value::Null)).unwrap();
+
+                if let Value::Object(scan_stats) = &m["pools"][pool_name]["scan_stats"]
+                {
+                    let ongoing: bool = scan_stats["function"].as_str().unwrap() == "SCANNING";
+                    let time:Option<i64> = {
+                        if let Some(int) = str_to_i64(scan_stats["end_time"].as_str())
+                        {
+                            if int > 0 { Some(int) }
+                            else {None}
+                        }
+                        else {str_to_i64(scan_stats["start_time"].as_str())}                       
+                    };
+
+
+                    return Some( ScrubLiveInfo::new(ongoing, time));
+                }
+            }
+
+
+        }
+
+        None
     }
 }
 
