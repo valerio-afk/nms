@@ -6,7 +6,7 @@ use chrono::{TimeDelta};
 use config::Config;
 use crate::backend::api::v1::msg::{StatusMessage, WrappedResponse};
 use crate::backend::config::{CfgToken};
-use crate::backend::dev::DiskState;
+use crate::backend::dev::{Device, DiskState};
 use crate::backend::jwt::JWTClaim;
 use crate::cmdl::{CmdConfig, Executable};
 use crate::cmdl::coreutils::Cat;
@@ -15,7 +15,6 @@ use crate::cmdl::zfs::{ZFSActions, ZFSListArgs, ZFSListType, ZPool, ZPoolActions
 use crate::events::{ContextData, EventManager, Events, EventParameters};
 use crate::thread_wrapper::ThreadWrapper;
 use crate::vfs::{Capacity, VFS};
-use dev::Device;
 use msg::{ErrorMessages,LoggerMessages,LogWarnings,LogErrors, LogInfos};
 use permissions::is_admin;
 use regex::RegexBuilder;
@@ -30,7 +29,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{OnceLock,Mutex,Arc, RwLock};
-use utils::{get_quota_for_all, sudo_group,ts_to_str,str_to_i64};
+use utils::{get_quota_for_all, sudo_group,ts_to_str,str_to_i64, get_system_disks};
 use utils::get_notifications_count;
 use uuid::Uuid;
 
@@ -112,7 +111,8 @@ pub struct PoolProperties
 {
     redundancy:bool,
     encryption:bool,
-    compression:bool
+    compression:bool,
+    attached_disks:Vec<Device>
 }
 
 #[derive(Debug, Serialize)]
@@ -1115,6 +1115,53 @@ impl Backend
         }
 
         None
+    }
+
+    fn get_pool_disks(self:&Arc<Self>) -> Vec<Device>
+    {
+        if self.is_pool_configured()
+        {
+            if let Ok(guard) = self.pool_properties.read() && let Some(pool_pros) = &(*guard)
+            {
+                return pool_pros.attached_disks.clone();
+            }
+        }
+
+        return Vec::new();
+    }
+}
+
+//Device-related Methods
+impl Backend
+{
+    fn get_disks(self:&Arc<Self>) -> Vec<Device>
+    {
+        let mut pool_disks = self.get_pool_disks();
+        let mut system_disks = get_system_disks();
+
+        let mut detected_disks:Vec<Device> = Vec::new();
+
+        for sysdisk in system_disks.iter()
+        {
+            for pooldisk in pool_disks.iter()
+            {
+                if sysdisk == pooldisk
+                {
+                    detected_disks.push(pooldisk.clone());
+                }
+            }
+        }
+
+        pool_disks.retain(|v| !detected_disks.contains(v));
+        system_disks.retain(|v| !detected_disks.contains(v));
+
+        detected_disks.extend(pool_disks);
+        detected_disks.extend(system_disks);
+
+        detected_disks.sort_by_key(|a| a.name.clone() );
+
+        return detected_disks;
+        
     }
 }
 

@@ -108,16 +108,16 @@ def dashboard() -> str:
 
     if (current_user.get("main_pages",{}).get("disks",False)):
         dashboard_widgets.append(widget_disk_overview(True))
-
+    #
     if (current_user.get("main_pages", {}).get("network", False)):
         dashboard_widgets.append(widget_network_overview(True))
-
-    if (current_user.get("main_pages", {}).get("access", False)):
-        dashboard_widgets.append(widget_access_overview(True))
-
-    if (current_user.get("main_pages", {}).get("advanced", False)):
-        dashboard_widgets.append(widget_sys_info(True))
-        dashboard_widgets.append(widget_sensors(True))
+    #
+    # if (current_user.get("main_pages", {}).get("access", False)):
+    #     dashboard_widgets.append(widget_access_overview(True))
+    #
+    # if (current_user.get("main_pages", {}).get("advanced", False)):
+    #     dashboard_widgets.append(widget_sys_info(True))
+    #     dashboard_widgets.append(widget_sensors(True))
 
     user = session['user']
     visible_name = user.get("visible_name")

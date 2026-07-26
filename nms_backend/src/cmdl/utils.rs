@@ -176,7 +176,7 @@ impl std::fmt::Display for SmartctlActions
 
 pub fn LSBLK<'a,'b>(
     properties:Option<&[LsblkProperties]>,
-    path:Option<&String>,
+    dev_path:Option<&String>,
     config:Option<&'b CmdConfig<'a>>
 ) -> CommandLine<'a,'b>
 {
@@ -193,7 +193,7 @@ pub fn LSBLK<'a,'b>(
         );
     }
 
-    if let Some(p) = path
+    if let Some(p) = dev_path
     {
         args.push(p.to_string())
     }

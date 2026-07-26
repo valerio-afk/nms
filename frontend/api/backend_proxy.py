@@ -17,7 +17,7 @@ from traceback import format_exc
 from typing import Optional, List, Any, Dict, Literal, Union, Tuple
 import datetime
 import werkzeug.exceptions
-import sys;
+import sys
 
 cache = TTLCache(maxsize=100, ttl=60)
 
@@ -31,7 +31,7 @@ def parse_disks_from_request(d:Optional[List[dict]]) -> List[Disk]:
                 size=disk.get("size"),
                 status=DiskStatus(disk.get("status")),
                 path=disk.get("path")
-            ) for disk in d
+            ) for disk in d.get("value",[])
         ]
 
     return []
@@ -139,7 +139,6 @@ class BackEndProxy:
 
         response = fn(url, **req_params)
 
-        import sys; print(response.raw.data,file=sys.stderr)
 
         try:
             response.raise_for_status()
@@ -157,11 +156,12 @@ class BackEndProxy:
                     elif (err.response.status_code == 429):
                         show_flash(code=ErrorMessages.E_TOO_MANY_REQ.value)
                         return None
-                    elif (err.response.status_code in (415,422)):
-                        error = f"URL: {err.request.url}\n"
+                    elif (err.response.status_code in (415,422,400)):
+                        error = f"URL: {err.request.url} ({url})\n"
                         error+= f"Data: {err.request.body}\n"
                         error+= f"Headers: {err.request.headers.values()}\n\n"
-                        error+= f"Response: {response.raw.data}"
+                        error+= f"Response: [{err.response.status_code}] {response.raw.data}"
+                        error+= format_exc()
 
                         raise Exception(error)
 

@@ -2,6 +2,7 @@ use crate::backend::{Backend, FastAPIComp, propagate_unknown_error};
 use crate::backend::api::BackendPropertyResponse;
 use crate::backend::permissions::{UserPermissions, check_permission};
 use crate::backend::jwt::TokenPurposes;
+use super::disks::CompatibleDisk;
 use std::sync::Arc;
 use axum::{Json, Router};
 use axum::routing::get;
@@ -76,7 +77,10 @@ enum PoolProperties
     LastScrubReport,
 
     #[serde(rename = "scrub_info")]
-    ScrubInfo
+    ScrubInfo,
+
+    #[serde(rename = "disks")]
+    PoolDisks
 }
 
 async fn get_pool_property(
@@ -133,6 +137,9 @@ async fn get_pool_property(
                 None => Value::Null
             }
             PoolProperties::PoolSettings => serde_json::to_value(PoolFlags::from_backend(backend)).map_err(|e| propagate_unknown_error(e))?,
+            PoolProperties::PoolDisks => serde_json::to_value(
+                backend.get_pool_disks().iter().map(|d| CompatibleDisk::from_device(d)).collect::<Vec<CompatibleDisk>>()
+            ).map_err(|e| propagate_unknown_error(e))?,
         }
     }))
 }

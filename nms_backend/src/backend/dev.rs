@@ -1,12 +1,13 @@
 use std::unreachable;
 use strum::{EnumString, FromRepr};
-use serde::Serialize;
-use serde_json::{Value};
+use serde::{Serialize};
+use serde_json::{Value,Map};
+use serde_repr::Serialize_repr;
 use crate::cmdl::Executable;
 use crate::cmdl::utils::Find;
 use crate::cmdl::utils::{LSBLK, LsblkProperties,UdevAdmInfo};
 
-#[derive(Debug, Serialize,FromRepr, PartialEq,EnumString, Clone)]
+#[derive(Debug, Serialize_repr,FromRepr, PartialEq,EnumString, Clone)]
 #[repr(i32)]
 #[strum(ascii_case_insensitive)]
 pub enum DiskState
@@ -22,7 +23,7 @@ pub enum DiskState
     UNKNOWN = -100
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct Device
 {
     pub name:String,
@@ -64,6 +65,35 @@ impl std::error::Error for DeviceError
 }
 
 
+fn get_dev_paths(device_name:&str) -> Vec<String>
+{
+    let mut paths:Vec<String> = Vec::new();
+
+    if let Some(udev_output) = UdevAdmInfo(device_name, Some("all"), None).run()
+    {
+        if udev_output.exit_code == 0
+        {
+            let d:Value = serde_json::from_str(&udev_output.stdout).unwrap_or(Value::Null);
+
+            if let Value::String(name) = &d["DEVNAME"]
+            {
+                paths.push(name.to_string());
+            }
+
+            if let Value::String(symlinks) = &d["DEVLINKS"]
+            {
+                for symlink in symlinks.split(" ")
+                {
+                    paths.push(symlink.trim().to_string());
+                }
+            }
+            
+        }
+    }
+
+    return paths;
+}
+
 
 impl Device
 {
@@ -93,18 +123,9 @@ impl Device
                             _ => unreachable!()
                         };
 
-                        let  mut paths:Vec<String> = vec![dev["path"].as_str().unwrap().to_string()];
+                        let paths = get_dev_paths(&name);
 
-                        if let Some(udev_output) = UdevAdmInfo(&name, Some("symlink"), None).run()
-                        {
-                            if udev_output.exit_code == 0
-                            {
-                                for d in udev_output.stdout.trim().split(" ")
-                                {
-                                    paths.push(format!("/dev/{}",d));
-                                }
-                            }
-                        }
+                        
 
                         return Ok(Device{
                             name,
@@ -162,6 +183,28 @@ impl Device
         }
     }
 
+    pub fn from_lsblk(map:&Map<String,Value>) -> Option<Device>
+    {
+        if let Some(name) = map["name"].as_str()
+        {
+            Some(
+                Device 
+                { 
+                    name: name.to_string(), 
+                    paths: get_dev_paths(name), 
+                    state: DiskState::NEW, 
+                    model: map["model"].as_str().map(|v| v.to_string()), 
+                    serial_number: map["serial"].as_str().map(|v| v.to_string()),
+                    size: match map["size"].as_number() {
+                       Some(n) => n.as_u64().unwrap_or(0),
+                       None => 0
+                    }
+                }
+            )
+        }
+        else {None}
+    }
+
 
     pub fn to_string(&self) -> String
     {
@@ -199,14 +242,45 @@ mod test
 
         let dev = Device::from_subpath("pci-0000:00:0d.0-ata-1", DiskState::ONLINE)?;
 
-        assert_eq!(sda.name,"sda");
-        assert!(sda.paths.len()>1);
-        assert!(sda.model.is_some());
-        assert!(sda.serial_number.is_some());
-        assert!(sda.size>0);
+        assert_eq!(dev.name,"sda");
+        assert!(dev.paths.len()>1);
+        assert!(dev.model.is_some());
+        assert!(dev.serial_number.is_some());
+        assert!(dev.size>0);
 
         assert_eq!(sda,dev);
 
+        println!("{:?}",sda);
+        println!("{:?}",dev);
+
         Ok(())
+    }
+
+    #[test]
+    fn device_lsblk_test() -> Result<(),Box<dyn std::error::Error>>
+    {
+        let lsblk = LSBLK
+            (LsblkProperties::default(), Some(&"/dev/sda".to_string()), None)
+            .run()
+            .unwrap()
+            .is_success()?;
+
+        let m:Value = serde_json::from_str(&lsblk.stdout).unwrap();
+
+        let device = Device::from_lsblk(&m.as_object().unwrap()["blockdevices"].as_array().unwrap()[0].as_object().unwrap());
+
+        let dev = device.unwrap();
+
+        assert_eq!(dev.name,"sda");
+        assert!(dev.paths.len()>1);
+        assert!(dev.model.is_some());
+        assert!(dev.serial_number.is_some());
+        assert!(dev.size>0);
+
+        
+        println!("{:?}",dev);
+
+        Ok(())
+
     }
 }
