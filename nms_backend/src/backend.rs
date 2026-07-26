@@ -24,7 +24,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
 use std::io::Read;
-use std::net::SocketAddrV4;
+use std::net::{SocketAddrV4};
 use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -43,6 +43,7 @@ pub mod jwt;
 pub mod msg;
 pub mod permissions;
 pub mod utils;
+pub mod net;
 
 static BACKEND:OnceLock<Arc<Backend>> = OnceLock::new();
 static NMS_CONFIG_FILE:&str = "nms.conf.json";
@@ -164,6 +165,8 @@ impl ScrubLiveInfo
         }
     }
 }
+
+
 
 pub struct Backend
 {

@@ -7,6 +7,7 @@ mod users;
 mod system;
 mod pool;
 mod disks;
+mod net;
 
 pub use crate::backend::FastAPIComp;
 pub use crate::backend::jwt;
@@ -23,6 +24,7 @@ pub fn v1_api() -> Router<Arc<Backend>>
             .merge(system::get_route())
             .merge(pool::get_route())
             .merge(disks::get_route())
+            .merge(net::get_route())
     )
     
 }

@@ -27,7 +27,7 @@ def widget_network_overview(placeholder:bool=False) -> Tuple[str,Optional[str]]:
     if (placeholder):
         return render_widget("network_list", placeholder=True)
 
-    ifaces = BACKEND.network_interfaces + [BACKEND.vpn_config]
+    ifaces = BACKEND.network_interfaces #+ [BACKEND.vpn_config]
     return render_widget("network_list",ifaces=ifaces)
 
 def widget_sensors(placeholder:bool=False) -> Tuple[str,Optional[str]]:
