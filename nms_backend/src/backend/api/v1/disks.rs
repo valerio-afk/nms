@@ -60,17 +60,21 @@ async fn get_disks_property(
     State(backend): State<Arc<Backend>>
 ) -> FastAPIComp<BackendPropertyResponse<DisksProperties>>
 {
-    let jwt = backend.verify_token(&token, TokenPurposes::Login)?;
-    let user = backend.get_user(&jwt.claims.username.unwrap())?;
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
 
-    check_permission(&user, UserPermissions::ClientDashboardDisks)?;
+    check_permission(&user, UserPermissions::ClientDashboardDisks).await?;
 
     Ok(Json(BackendPropertyResponse {
         property: property.clone(),
         value: serde_json::to_value(match property
             {
-                DisksProperties::Disks => backend.get_disks(),
-                DisksProperties::SystemDisks => get_system_disks()
+                DisksProperties::Disks =>
+                    {
+                        let devs = backend.get_disks().await;
+                        devs
+                    },
+                DisksProperties::SystemDisks => get_system_disks().await
                 
             }
             .iter()

@@ -20,14 +20,14 @@ impl std::fmt::Display for INotifyEvents
     }
 }
 
-pub fn INotifyWait<'a,'b>(
+pub fn INotifyWait(
     path:&str,
     monitor:bool,
     recursive:bool,
     events:Vec<INotifyEvents>,
     format:Option<&str>,
-    config:Option<&'b CmdConfig<'a>>
-) -> CommandLine<'a,'b>
+    config:CmdConfig
+) -> CommandLine
 {
     let mut args:Vec<String> = Vec::new();
 

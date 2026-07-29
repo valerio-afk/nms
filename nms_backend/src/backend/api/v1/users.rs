@@ -12,26 +12,16 @@ const NOTIFICATION_HEADER:&str = "X-User-Notifications-Count";
 
 async fn get_logged_user(AuthBearer(token): AuthBearer, State(backend):State<Arc<Backend>>) -> FastAPIComp<Option<User>>
 {
-    let jwt = backend.verify_token(&token, TokenPurposes::Login)?;
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
 
     match jwt.claims.username
     {
         Some(u) =>
         {
-            let user = backend.get_user(&u)?;
+            let user = backend.get_user(&u).await?;
+            let usr = user.read().await;
 
-            Ok(
-                Json(
-                    Some(
-                        (*user).read().map_err(|e|
-                                {
-                                    LoggerMessages::Error(LogErrors::UserReadLock(&e.to_string()));
-                                    ErrorMessages::E_UNKNOWN.wrap_with_status_code(None)
-                                }
-                            )?.clone()
-                        )
-                    )
-            )
+            Ok(Json(Some(usr.clone())))
         }
         None => Ok(Json(None))
     }
@@ -39,17 +29,14 @@ async fn get_logged_user(AuthBearer(token): AuthBearer, State(backend):State<Arc
 
 async fn get_user_notification_count(AuthBearer(token): AuthBearer, State(backend):State<Arc<Backend>>) -> Result<HeaderMap,HTTPError>
 {
-    let jwt = backend.verify_token(&token, TokenPurposes::Login)?;
-    let user = backend.get_user(&jwt.claims.username.unwrap())?;
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
     let mut headers = HeaderMap::new();
 
-    let notif = match user.read()
-    {
-        Ok(u) => u.notifications,
-        Err(_) => 0
-    };
+    let u = user.read().await;
+    
 
-    headers.insert(NOTIFICATION_HEADER, HeaderValue::from(notif));
+    headers.insert(NOTIFICATION_HEADER, HeaderValue::from(u.notifications));
 
     Ok(headers)
 }

@@ -1,6 +1,6 @@
-use axum::{Json, Router, extract::{Path,State,Query}, routing::{get,patch, post}};
+use axum::{Json, Router, debug_handler, extract::{Path,State,Query}, routing::{get,patch, post}};
 use axum_auth::AuthBearer;
-use crate::backend::{Backend, jwt::JWTClaim, permissions::{UserPermissions, check_permission}};
+use crate::backend::{jwt::JWTClaim, permissions::{UserPermissions, check_permission}, Backend, TemporarySecret};
 use crate::events::{Events,ContextVariables,Trigger, ContextBuilder};
 use super::jwt::{PermissiveTokenParameter,TokenPurposes,create_token};
 use serde_json::{Value};
@@ -48,7 +48,7 @@ struct OPTVerificationForm
     otp:String
 }
 
-fn verify_otp<'a>(otp:&'a str,secret:String,username:&'a Option<String>) -> Result<bool,Box<dyn Error + 'a>>
+fn verify_otp<'a>(otp:&'a str,secret:String,username:&'a Option<String>) -> Result<bool,Box<dyn Error + 'a + Send + Sync>>
 {
     match Secret::Encoded(secret).to_bytes()
     {
@@ -97,7 +97,7 @@ async fn get_auth_property(
 {
     Json(BackendPropertyResponse {
         property: property,
-        value: Value::Bool(backend.is_otp_configured())
+        value: Value::Bool(backend.is_otp_configured().await)
     })
 }
 
@@ -111,7 +111,7 @@ async fn auth_new_secret
     let t = token.token;
     let mut otp_already_configured = false;
 
-    if t.is_none() && backend.is_otp_configured()
+    if t.is_none() && backend.is_otp_configured().await
     {
         otp_already_configured = true;
     }
@@ -120,13 +120,13 @@ async fn auth_new_secret
 
     if let Some(tok) = t
     {
-        let claims = backend.verify_token(&tok, TokenPurposes::FirstLogin)?;
+        let claims = backend.verify_token(&tok, TokenPurposes::FirstLogin).await?;
 
         username = claims.claims.username;
 
         if let Some(ref u) = username
         {
-            if backend.has_otp_secret(u)
+            if backend.has_otp_secret(u).await
             {   
                 otp_already_configured = true;
             }
@@ -179,12 +179,14 @@ async fn auth_new_secret
 
     LoggerMessages::Info(LogInfos::OTPSecretGen(&username)).log();
 
-    backend.add_temporary_secret(username, secret_string);
+    backend.add_temporary_secret(username, secret_string).await;
 
     Ok(
         Json(AuthUriResponse{provisioning_uri: totp.unwrap().get_url()})
     )
 }
+
+#[debug_handler]
 
 async fn auth_otp_verify
 (
@@ -196,30 +198,33 @@ async fn auth_otp_verify
 
     //I received an OTP to verify
     //I check if it's a user performing their first login by searching secrets in the temporary cache
-    if let Ok(tmp_secrets) = backend.get_temporary_secrets()
     {
+        let tmp_secrets:Vec<TemporarySecret> = backend.get_temporary_secrets().await;
+
         for tmp in tmp_secrets
         {
             match verify_otp(&otp.otp, tmp.secret, &tmp.username)
             {
                 Ok(res) =>
-                {
-                    if res
                     {
-                        username = Some(backend.save_temporary_secret(&tmp.uuid)?);
-                        backend.flush_config()?;
-                        break;
-                    } 
-                }
+                        if res
+                        {
+                            username = Some(backend.save_temporary_secret(&tmp.uuid).await?);
+                            backend.flush_config().await?;
+                            break;
+                        }
+                    }
                 Err(e) => LoggerMessages::Error(LogErrors::TmpOTPVerification(&e.to_string())).log(),
             }
         }
     }
 
+
     if username.is_none()
     {
         //If the first bit failed, it could be a current user trying to login.
-        for (uname,secret) in backend.get_otp_secrets()?
+        let secrets = backend.get_otp_secrets().await;
+        for (uname,secret) in secrets
         {
             let uname = Some(uname);
 
@@ -239,9 +244,9 @@ async fn auth_otp_verify
         return Err(ErrorMessages::E_AUTH_WRONG_OTP.wrap_with_status_code(None));
     }
 
-    let user = backend.get_user(&username.as_ref().unwrap())?;
+    let user = backend.get_user(&username.as_ref().unwrap()).await?;
 
-    check_permission(&user, UserPermissions::ClientDashboardAccess)?;
+    check_permission(&user, UserPermissions::ClientDashboardAccess).await?;
 
 
 
@@ -260,17 +265,17 @@ async fn auth_otp_verify
                 expire_date: tok.claims.exp
             });
 
-            backend.event_manager.trigger(
-                Trigger::Event(Events::UserLoggedIn),
-                ContextBuilder::from(ContextVariables::TriggerUser,tok.claims.username.clone().unwrap()).finish()
-            );
+            // backend.event_manager.trigger(
+            //     Trigger::Event(Events::UserLoggedIn),
+            //     ContextBuilder::from(ContextVariables::TriggerUser,tok.claims.username.clone().unwrap()).finish()
+            // );
 
             backend.push_token(JWTClaim{
                 uuid: tok.uuid,
                 claims: tok.claims
-            })?;
+            }).await;
 
-            backend.flush_config()?;
+            backend.flush_config().await?;
 
             return Ok(response);
         }
@@ -286,7 +291,7 @@ async fn auth_token_refresh(
     State(backend):State<Arc<Backend>>
 ) -> FastAPIComp<AuthTokenResponse>
 {
-    let jwt = backend.verify_token(&token, TokenPurposes::Login)?;
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
     let username = jwt.claims.username.clone();
 
     match create_token(
@@ -304,14 +309,14 @@ async fn auth_token_refresh(
                 expire_date: new_tok.claims.exp
             });
 
-            backend.revoke_token(&jwt.uuid)?;
+            backend.revoke_token(&jwt.uuid).await;
 
             backend.push_token(JWTClaim{
                 uuid: new_tok.uuid,
                 claims: new_tok.claims
-            })?;
+            }).await;
 
-            backend.flush_config()?;
+            backend.flush_config().await?;
 
             return Ok(response);
         }
@@ -327,8 +332,8 @@ async fn auth_logout(
     State(backend):State<Arc<Backend>>
 ) -> FastAPIComp<()>
 {
-    let jwt = backend.verify_token(&token, TokenPurposes::Login)?;
-    backend.revoke_token(&jwt.uuid)?;
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    backend.revoke_token(&jwt.uuid).await;
 
     Ok(Json(()))
 }
@@ -338,11 +343,11 @@ async fn auth_verify_first_login_token(
     State(backend): State<Arc<Backend>>
 ) -> FastAPIComp<bool>
 {
-    let jwt = backend.verify_token(&token, TokenPurposes::FirstLogin)?;
+    let jwt = backend.verify_token(&token, TokenPurposes::FirstLogin).await?;
 
     match jwt.claims.username
     {
-        Some(u) => Ok(Json(backend.is_otp_configured_for(&u)?)),
+        Some(u) => Ok(Json(backend.has_otp_secret(&u).await)),
         None=> Err(ErrorMessages::E_AUTH_MALFORMED.wrap_with_status_code(None))
     }
 }

@@ -9,10 +9,10 @@ use std::sync::Arc;
 
 async fn test(AuthBearer(token): AuthBearer, State(backend):State<Arc<Backend>>) -> FastAPIComp<()>
 {
-    let jwt = backend.verify_token(&token, TokenPurposes::Login)?;
-    let user = backend.get_user(&jwt.claims.username.unwrap())?;
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
 
-    check_permission(&user, UserPermissions::ClientDashboardAccess)?;
+    check_permission(&user, UserPermissions::ClientDashboardAccess).await?;
 
     Ok(Json(()))
 }

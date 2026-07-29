@@ -1,6 +1,6 @@
 use api::v1::jwt::{create_token,token_verification,TokenPurposes};
-use axum::http::StatusCode;
 use axum::Json;
+use axum::http::StatusCode;
 use base64::prelude::*;
 use chrono::{TimeDelta};
 use config::Config;
@@ -8,29 +8,33 @@ use crate::backend::api::v1::msg::{StatusMessage, WrappedResponse};
 use crate::backend::config::{CfgToken};
 use crate::backend::dev::{Device, DiskState};
 use crate::backend::jwt::JWTClaim;
-use crate::cmdl::{CmdConfig, Executable};
 use crate::cmdl::coreutils::Cat;
 use crate::cmdl::passwd::{Groups,GetEntPasswd};
 use crate::cmdl::zfs::{ZFSActions, ZFSListArgs, ZFSListType, ZPool, ZPoolActions, ZFS};
+use crate::cmdl::{CmdConfig, Executable};
 use crate::events::{ContextData, EventManager, Events, EventParameters};
-use crate::thread_wrapper::ThreadWrapper;
+use crate::task::TaskWrapper;
 use crate::vfs::{Capacity, VFS};
+use futures::stream::{self, StreamExt};
 use msg::{ErrorMessages,LoggerMessages,LogWarnings,LogErrors, LogInfos};
 use permissions::is_admin;
 use regex::RegexBuilder;
-use serde_json::Value;
 use serde::Serialize;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::error::Error;
-use std::fs;
-use std::io::Read;
 use std::net::{SocketAddrV4};
 use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::{OnceLock,Mutex,Arc, RwLock};
-use utils::{get_quota_for_all, sudo_group,ts_to_str,str_to_i64, get_system_disks};
+use std::sync::Arc;
+use std::fmt::{Display, Debug};
+use std::marker::Send;
+use tokio::sync::{Mutex, RwLock, OnceCell};
+use tokio::fs::{File, rename, read_to_string};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use utils::get_notifications_count;
+use utils::{get_quota_for_all, sudo_group,ts_to_str,str_to_i64, get_system_disks};
 use uuid::Uuid;
 
 pub type HTTPError = (StatusCode, Json<WrappedResponse>);
@@ -45,16 +49,17 @@ pub mod permissions;
 pub mod utils;
 pub mod net;
 
-static BACKEND:OnceLock<Arc<Backend>> = OnceLock::new();
+
+static BACKEND:OnceCell<Arc<Backend>> = OnceCell::const_new();
 static NMS_CONFIG_FILE:&str = "nms.conf.json";
 
 
-pub fn propagate_error<E:Error>(msg:ErrorMessages, err:E) -> HTTPError
+pub fn propagate_error<E:Display+Debug+Send>(msg:ErrorMessages, err:E) -> HTTPError
 {
     msg.wrap_with_status_code(Some(vec![Value::String(err.to_string())]))
 }
 
-pub fn propagate_unknown_error<E:Error>(err:E) -> HTTPError
+pub fn propagate_unknown_error<E:Display+Debug+Send>(err:E) -> HTTPError
 {
     propagate_error(ErrorMessages::E_UNKNOWN, err)
 }
@@ -173,7 +178,7 @@ pub struct Backend
     config:Mutex<Config>,
     users:Mutex<Vec<Arc<RwLock<User>>>>,
     tmp_secrets:Mutex<HashMap<String,TemporarySecret>>,
-    event_manager:Arc<EventManager>,
+    event_manager:EventManager,
     secret_key:String,
     mount: RwLock<Option<VFS>>,
     pool_properties: RwLock<Option<PoolProperties>>
@@ -181,7 +186,7 @@ pub struct Backend
 
 impl Backend
 {
-    fn new() -> Arc<Self>
+    pub async fn new() -> Arc<Self>
     {
         let backend = Arc::new(Backend{
                 config:Mutex::new(Config::default()),
@@ -193,57 +198,85 @@ impl Backend
                 pool_properties:RwLock::new(None)
         });
 
-        if let Err(e) = backend.read_config()
         {
-            LoggerMessages::Error(LogErrors::CfgRead(&e.to_string())).log();
-            LoggerMessages::Warning(LogWarnings::CfgDefault).log();
-            match backend._flush_config()
+            let read_cfg_result = backend.read_config().await;
+
+            if let Err(e) = read_cfg_result
             {
-                Ok(()) => LoggerMessages::Info(LogInfos::NewCfg).log(),
-                Err(e) => {
-                    LoggerMessages::Error(LogErrors::CfgWrite(&e.to_string())).log();
-                    std::process::exit(1)
+                LoggerMessages::Error(LogErrors::CfgRead(&e.to_string())).log();
+                LoggerMessages::Warning(LogWarnings::CfgDefault).log();
+                let flush_cfg_result = backend._flush_config().await;
+                match flush_cfg_result
+                {
+                    Ok(()) => LoggerMessages::Info(LogInfos::NewCfg).log(),
+                    Err(e) => {
+                        LoggerMessages::Error(LogErrors::CfgWrite(&e.to_string())).log();
+                        std::process::exit(1)
+                    }
                 }
             }
+
+            LoggerMessages::Info(LogInfos::BackendStarted).log();
         }
 
-        LoggerMessages::Info(LogInfos::BackendStarted).log();    
 
 
+        let reload_user_ft = backend.reload_users();
 
-        backend.reload_users();
-        let th_backend = Arc::clone(&backend);
+        let task_backend = Arc::clone(&backend);
 
         backend.event_manager.register_multiple_events (
             &[&Events::UserCreated,&Events::UserDeleted, &Events::UserModified],
-            Arc::new(move |_ctx:&Option<ContextData> | th_backend.reload_users()),
+            Arc::new(
+                Box::new(
+                    move |_ctx: &Option<ContextData>|
+                    {
+                        let b = Arc::clone(&task_backend);
+                        Box::pin(
+                        async move
+                          {
+                            b.reload_users().await;
+                          })
+                        }
+                    )
+            )
+            ,
             None
-        );
+        ).await;
 
-        let th_backend = Arc::clone(&backend);
+        let task_backend = Arc::clone(&backend);
 
         backend.event_manager.register_action(
             &Events::Timer,
             Arc::new(
-                move |_ctx:&Option<ContextData> |
-                {
-                    th_backend.update_users();
-                }
+                Box::new(
+                    move |_ctx: &Option<ContextData>|
+                        {
+                            let b = Arc::clone(&task_backend);
+                            Box::pin(
+                                async move
+                                    {
+                                        b.update_users().await;
+                                    })
+                        }
+                )
             ),
             None,
             Some(vec![EventParameters::Timer(3)])
-        );
+        ).await;
 
-        backend.event_manager.start();
+        backend.event_manager.start().await;
+
+        reload_user_ft.await;
 
         return backend;
     }
 
       
 
-    pub fn get_bind_addr(self:&Arc<Self>) -> SocketAddrV4
+    pub async fn get_bind_addr(&self) -> SocketAddrV4
     {
-        let cfg = self.config.lock().unwrap();
+        let cfg = self.config.lock().await;
 
         SocketAddrV4::new(
             cfg.daemon.host,
@@ -251,11 +284,11 @@ impl Backend
         )
     }
 
-    pub fn read_config(self:&Arc<Self>) -> Result<(),Box<dyn Error + '_>>
+    pub async fn read_config(&self) -> Result<(),Box<dyn Error + '_>>
     {
-        let json = fs::read_to_string(NMS_CONFIG_FILE)?;
+        let json = read_to_string(NMS_CONFIG_FILE).await?;
 
-        let mut cfg = self.config.lock()?;
+        let mut cfg = self.config.lock().await;
 
         *cfg = serde_json::from_str(&json)?;
 
@@ -264,223 +297,149 @@ impl Backend
         Ok(())
     }
 
-    fn _flush_config(self:&Arc<Self>) -> Result<(),std::io::Error>
+    async fn _flush_config(&self) -> Result<(),std::io::Error>
     {
         let mut tmp_file = NMS_CONFIG_FILE.to_string();
         tmp_file.push('~');
 
-        let result = fs::File::create(&tmp_file);
+        let result = File::create(&tmp_file).await;
 
-        if let Err(e) = result
+        match result
         {
-            LoggerMessages::Error(LogErrors::CfgRead(&e.to_string())).log();
-            return Err(e.into());
-        }
-        else 
-        {
-            let file = result.unwrap();
-            let cfg = self.config.lock().unwrap();
-            let result = serde_json::to_writer_pretty(file,&(*cfg));
+            Ok(mut file) =>
+                {
+                    let cfg = self.config.lock().await;
+                    let cfg_serialised = serde_json::to_vec_pretty(&*cfg);
 
-            if let Err(e) = result
-            {
-                LoggerMessages::Error(LogErrors::CfgWrite(&e.to_string())).log();
-                return Err(e.into());
-            }
+                    match cfg_serialised
+                    {
+                        Ok(serialised) =>
+                            {
+                                let result = file.write_all(serialised.as_slice()).await;
 
-            if let Err(e) = fs::rename(tmp_file, NMS_CONFIG_FILE)
-            {
-                LoggerMessages::Error(LogErrors::CfgMove(&e.to_string())).log();
-                return Err(e.into());
-            }
+                                if let Err(e) = result
+                                {
+                                    LoggerMessages::Error(LogErrors::CfgWrite(&e.to_string())).log();
+                                    return Err(e.into());
+                                }
 
-            Ok(())
+                                let rename_res = rename(tmp_file, NMS_CONFIG_FILE).await;
+
+                                if let Err(e) = rename_res
+                                {
+                                    LoggerMessages::Error(LogErrors::CfgMove(&e.to_string())).log();
+                                    return Err(e.into());
+                                }
+
+                                Ok(())
+                            }
+                        Err(e) =>
+                            {
+                                LoggerMessages::Error(LogErrors::CfgWrite(&e.to_string())).log();
+                                return Err(e.into());
+                            }
+                    }
+
+                }
+            Err(e) =>
+                {
+                    LoggerMessages::Error(LogErrors::CfgRead(&e.to_string())).log();
+                    Err(e.into())
+                }
         }
     }
 
-    pub fn flush_config(self:&Arc<Self>) -> Result<(),HTTPError>
+    pub async fn flush_config(&self) -> Result<(),HTTPError>
     {
-        self._flush_config().map_err(|e| propagate_unknown_error(e))
+        self._flush_config().await.map_err(|e| propagate_unknown_error(e))
     }
 }
 
 // Auth-related Methods
 impl Backend
 {
-    pub fn verify_token(self:&Arc<Self>, token:&str,requested_purpose:TokenPurposes) -> Result<JWTClaim,HTTPError>
+    //verify if a token is valid
+    pub async fn verify_token(&self, token:&str,requested_purpose:TokenPurposes) -> Result<JWTClaim,HTTPError>
     {
         let claims = token_verification(token, requested_purpose, self.secret_key.as_bytes())?;
 
-        if let Ok(cfg) = self.config.lock()
+        let cfg = self.config.lock().await;
+
+        if !cfg.is_token_issued(&claims.uuid)
         {
-            if !cfg.is_token_issued(&claims.uuid)
-            {
-                return Err(ErrorMessages::E_AUTH_REVOKED.wrap_with_status_code(None));
-            }
+            return Err(ErrorMessages::E_AUTH_REVOKED.wrap_with_status_code(None));
         }
 
         Ok(claims)
     }
 
-    pub fn push_token(self:&Arc<Self>, token:JWTClaim) -> Result<(),HTTPError>
+    //Add a new JWT token to the configuration file
+    pub async fn push_token(self:&Arc<Self>, token:JWTClaim)
     {
-        match self.config.lock()
-        {
-            Ok(mut cfg) =>
-            {
-                cfg.approve_token(token.uuid, token.claims);
-                return Ok(());
-            }
-            Err(e) => 
-            {
-                LoggerMessages::Error(LogErrors::CfgLock(&e.to_string())).log();
-                return Err(ErrorMessages::E_UNKNOWN.wrap_with_status_code(None));
-            }
-        }
+        let mut cfg = self.config.lock().await;
+        cfg.approve_token(token.uuid, token.claims);
     }
 
-    pub fn revoke_token(self:&Arc<Self>, uuid:&String) -> Result<(),HTTPError>
+    //Revoke a JWT token given its uuid
+    pub async fn revoke_token(&self, uuid:&String)
     {
-        match self.config.lock()
-        {
-            Ok(mut cfg) =>
-            {
-                cfg.revoke_token(&uuid);
-                return Ok(());
-            }
-            Err(e) => 
-            {
-                LoggerMessages::Error(LogErrors::CfgLock(&e.to_string())).log();
-                return Err(ErrorMessages::E_UNKNOWN.wrap_with_status_code(None));
-            }
-        }
+        let mut cfg = self.config.lock().await;
+        cfg.revoke_token(&uuid);
     }
 
-    pub fn is_otp_configured_for(self:&Arc<Self>,username:&str) -> Result<bool,HTTPError>
+    //return true if all of the admin users has no configured secrets (ie first boot)
+    pub async fn is_otp_configured(&self) -> bool
     {
-        match self.config.lock()
+        let users = self.users.lock().await;
+        let cfg = self.config.lock().await;
+        let mut configured = false;
+
+        for user in users.iter()
         {
-            Ok(cfg) => {
-                for (uname,cfg_u) in &cfg.users
+            let u = user.read().await;
+            if u.admin
+            {
+                if let Some(u) = cfg.get_user(&u.username)
                 {
-                    if uname == username
+                    if u.otp_secret.is_some()
                     {
-                        return Ok(cfg_u.otp_secret.is_some());
-                    }
-                }
-
-                Err(ErrorMessages::E_USER_NOT_FOUND.wrap_with_status_code(Some(vec![Value::String(username.to_string())])))
-            }
-            Err(e) => 
-            {
-                LoggerMessages::Error(LogErrors::CfgLock(&e.to_string())).log();
-                Err(ErrorMessages::E_UNKNOWN.wrap_with_status_code(None))
-            }
-        }
-    }
-
-    pub fn is_otp_configured(self:&Arc<Self>) -> bool
-    {
-        match self.users.lock()
-        {
-            Err(e) => 
-            {
-                LoggerMessages::Error(LogErrors::AnyOTPCheck(&e.to_string())).log();
-                return true;
-            }
-
-            Ok(users) =>
-            {
-                let mut configured = false;
-
-                match self.config.lock()
-                {
-                    Ok(cfg) =>
-                    {
-                        for user in users.iter()
-                        {
-                            match user.read()
-                            {
-                                Ok(u) =>
-                                {
-                                    if u.admin
-                                    {
-                                        if let Some(u) = cfg.get_user(&u.username)
-                                        {
-                                            if u.otp_secret.is_some()
-                                            {
-                                                configured=true;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                                Err(e) =>
-                                {
-                                    LoggerMessages::Error(LogErrors::AnyOTPCheck(&e.to_string())).log();
-                                    configured = true;
-                                }
-                            }
-                        }
-                    }
-                    Err(e)  =>
-                    {
-                        LoggerMessages::Error(LogErrors::AnyOTPCheck(&e.to_string())).log();
                         configured = true;
+                        break;
                     }
                 }
-
-                return configured;
             }
         }
+        return configured;
     }
 
-    pub fn has_otp_secret(self:&Arc<Self>,username:&String) -> bool
+    pub async fn has_otp_secret(&self,username:&String) -> bool
     {
-        if let Ok(cfg) = self.config.lock()
+        let cfg = self.config.lock().await;
+        if let Some(user) = cfg.get_user(username)
         {
-            if let Some(user) = cfg.get_user(username)
-            {
-                return user.otp_secret.is_some();
-            }
+            return user.otp_secret.is_some();
         }
-
         return false;
     }
 
-    pub fn add_temporary_secret(self:&Arc<Self>,username:Option<String>,secret:String)
+    pub async fn add_temporary_secret(&self,username:Option<String>,secret:String)
     {
-        if let Ok(secrets) = &mut self.tmp_secrets.lock()
-        {
-            let uuid = Uuid::new_v4();
-            secrets.insert(uuid.to_string(),TemporarySecret { uuid: uuid.to_string(), username, secret });
-        }
+        let mut secrets = self.tmp_secrets.lock().await;
+        let uuid = Uuid::new_v4();
+        secrets.insert(uuid.to_string(),TemporarySecret { uuid: uuid.to_string(), username, secret });
     }
 
-    pub fn get_temporary_secrets(self:&Arc<Self>) -> Result<Vec<TemporarySecret>,HTTPError>
+    pub async fn get_temporary_secrets(&self) -> Vec<TemporarySecret>
     {
-        let secrets = self.tmp_secrets.lock().map_err(|e|
-            {
-                LoggerMessages::Error(LogErrors::TmpSecretsLock(&e.to_string())).log();
-                ErrorMessages::E_UNKNOWN.wrap_with_status_code(None)
-            }
-        )?;
-
-        Ok(secrets.values().cloned().collect())
+        let tmp_secrets = self.tmp_secrets.lock().await;
+        tmp_secrets.values().cloned().collect()
     }
 
-    pub fn save_temporary_secret(self:&Arc<Self>,uuid:&String) -> Result<String,HTTPError>
+    pub async fn save_temporary_secret(&self,uuid:&String) -> Result<String,HTTPError>
     {
-        let is_otp_configured = self.is_otp_configured(); //moved here to avoid deadlocks
+        let is_otp_configured = self.is_otp_configured().await; //moved here to avoid deadlocks
 
-        let secrets = &mut self.tmp_secrets.lock().map_err(|e|
-            {
-                LoggerMessages::Error(LogErrors::TmpSecretsLock(&e.to_string())).log();
-                ErrorMessages::E_UNKNOWN.wrap_with_status_code(None)
-            })?;
-
-        
-
+        let mut secrets = self.tmp_secrets.lock().await;
         let secret = match secrets.get(uuid)
         {
             Some(s) => s,
@@ -491,12 +450,8 @@ impl Backend
         };
 
 
-        let cfg = &mut self.config.lock().map_err(|e|{
-            LoggerMessages::Error(LogErrors::CfgLock(&e.to_string())).log();
-            ErrorMessages::E_UNKNOWN.wrap_with_status_code(None)
-        })?;
+        let mut cfg = self.config.lock().await;
 
-        
         // this happens for a new user or a user has reset their credentials
         if let Some(username) = &secret.username
         {
@@ -517,28 +472,19 @@ impl Backend
         {
             if !is_otp_configured
             {
-                for u in self.get_admin_users()?
+                for u in self.get_admin_users().await
                 {
-                    match u.read()
-                    {
-                        Ok(usr) => 
-                        {
-                            if let Some(cfg_u) = cfg.users.get_mut(&usr.username)
-                            {
-                                if cfg_u.otp_secret.is_none()
-                                {
-                                    let tmp_sec = secrets.remove(uuid).unwrap();
-                                    cfg_u.otp_secret = Some(tmp_sec.secret);
+                    let usr = u.read().await;
 
-                                    LoggerMessages::Info(LogInfos::OTPSecretConf(&usr.username)).log();
-                                    return Ok(usr.username.clone())
-                                }
-                            }
-                        }
-                        Err(e) =>
+                    if let Some(cfg_u) = cfg.users.get_mut(&usr.username)
+                    {
+                        if cfg_u.otp_secret.is_none()
                         {
-                            LoggerMessages::Error(LogErrors::UserReadLock(&e.to_string()));
-                            return Err(ErrorMessages::E_UNKNOWN.wrap_with_status_code(None))
+                            let tmp_sec = secrets.remove(uuid).unwrap();
+                            cfg_u.otp_secret = Some(tmp_sec.secret);
+
+                            LoggerMessages::Info(LogInfos::OTPSecretConf(&usr.username)).log();
+                            return Ok(usr.username.clone())
                         }
                     }
                 }
@@ -549,116 +495,101 @@ impl Backend
         }
     }
 
-    
-
-    pub fn get_otp_secrets(self:&Arc<Self>) -> Result<Vec<(String,String)>,HTTPError>
+    //Return a vec of tuple containing (<username>,<secret>)
+    pub async fn get_otp_secrets(&self) -> Vec<(String,String)>
     {
-        match &self.config.lock()
+        let cfg = self.config.lock().await;
+
+        let mut user_secrets: Vec<(String, String)> = Vec::new();
+
+        for (uname, cfg_u) in &cfg.users
         {
-            Ok(cfg) =>
+            if let Some(secret) = &cfg_u.otp_secret
             {
-                let mut r:Vec<(String,String)> = Vec::new();
-
-                for (uname,cfg_u) in &cfg.users
-                {
-                    if let Some(secret) = &cfg_u.otp_secret
-                    {
-                        r.push((uname.clone(), secret.clone()));
-                    }
-                }
-
-                return Ok(r);
-            }
-            Err(e) =>
-            {
-                LoggerMessages::Error(LogErrors::CfgLock(&e.to_string())).log();
-                return Err(ErrorMessages::E_UNKNOWN.wrap_with_status_code(None));
+                user_secrets.push((uname.clone(), secret.clone()));
             }
         }
-    }
 
+        user_secrets
+    }
 }
 
 
 // Pool-related Methods
 impl Backend
 {
-    fn get_quota_info(self:&Arc<Self>,log:bool) -> Option<HashMap<String,Quota>>
+    //Return quota information for all users
+    pub async fn get_quota_info(&self,log:bool) -> Option<HashMap<String,Quota>>
     {
-        if let Ok(cfg) = self.config.lock()
+        let cfg = self.config.lock().await;
+
+        if let Some(pool) = &cfg.pool
         {
-            if let Some(pool) = &cfg.pool
+            match get_quota_for_all(&pool.name, &pool.dataset).await
             {
-                match get_quota_for_all(&pool.name, &pool.dataset)
-                {
-                    Ok(map) => {return Some(map);}
-                    Err(e) => {
-                        if log {LoggerMessages::Warning(LogWarnings::ZfsQuota(&e)).log();}
-                        return None;
-                    }
-                }
-            } 
-            else
-            {
-                if log {LoggerMessages::Warning(LogWarnings::ZfsQuotaNoPool).log();}
-                return None;
-            }
-        }
-
-        None
-    }
-
-    fn get_pool_identifier(self:&Arc<Self>) -> Option<(String,String)>
-    {
-        if let Ok(cfg) = self.config.lock()
-        {
-            if let Some(pool) = &cfg.pool
-            {
-                return Some((pool.name.clone(),pool.dataset.clone()));
-            }
-        }
-
-        None
-    }
-
-    fn is_mounted(self:&Arc<Self>) -> bool
-    {
-        if let Ok(l) = self.mount.read()
-        {
-            return l.is_some();
-        }
-
-        false
-    }
-
-    fn mountpoint(self:&Arc<Self>) -> Option<PathBuf>
-    {
-        if self.is_mounted()
-        {
-            if let Ok(mount) = self.mount.read()
-            {
-                if let Some(vfs) = &*mount
-                {
-                    return Some(vfs.basepath());
+                Ok(map) => {return Some(map);}
+                Err(e) => {
+                    if log {LoggerMessages::Warning(LogWarnings::ZfsQuota(&e)).log();}
                 }
             }
         }
+        else
+        {
+            if log {LoggerMessages::Warning(LogWarnings::ZfsQuotaNoPool).log();}
+        }
 
         None
     }
 
-    fn is_pool_configured(self:&Arc<Self>) -> bool
+    //If a pool is configured, return a tuple with (<pool name>, <dataset name>); None otherwise
+    pub async fn get_pool_identifier(&self) -> Option<(String,String)>
     {
-        self.get_pool_identifier().is_some()
+        let cfg = self.config.lock().await;
+
+        if let Some(pool) = &cfg.pool
+        {
+            return Some((pool.name.clone(),pool.dataset.clone()));
+        }
+
+        None
     }
 
-    fn is_pool_present(self:&Arc<Self>) -> bool
+    //Returns true if the pool is mounted
+    pub async fn is_mounted(&self) -> bool
     {
-        if self.is_pool_configured()
+        self.mount.read().await.as_ref().is_some()
+    }
+
+
+    //Return the mountpoint where the pool is mounted, None otherwise
+    pub async fn mountpoint(&self) -> Option<PathBuf>
+    {
+        if self.is_mounted().await
         {
-            if let Some(output) = ZPool(
-                ZPoolActions::Status(&self.get_pool_identifier().unwrap().0),
-                false,None).run()
+            let mp = self.mount.read().await;
+            if let Some(vfs) = mp.as_ref()
+            {
+                return Some(vfs.basepath());
+            }
+
+        }
+
+        None
+    }
+
+    //Returns true if the backend has a pool configured
+    pub async fn is_pool_configured(&self) -> bool
+    {
+        self.get_pool_identifier().await.as_ref().is_some()
+    }
+
+    pub async fn is_pool_present(&self) -> bool
+    {
+        if let Some((pool_name,_)) = self.get_pool_identifier().await
+        {
+            if let Ok(output_result) = ZPool(
+                ZPoolActions::Status(pool_name),
+                false,CmdConfig::Empty).run().await && let Some(output) = output_result
             {
                 return output.is_success().is_ok();
             }
@@ -667,15 +598,16 @@ impl Backend
         false
     }
 
-    fn get_pool_status_id(self:&Arc<Self>) -> Option<String>
+    //Return any msgid in the pool status (if any)
+    pub async fn get_pool_status_id(&self) -> Option<String>
     {
-        if self.is_pool_configured()
+        if let Some((pool_name,_)) = self.get_pool_identifier().await
         {
-            if let Some(output) = ZPool(
-                ZPoolActions::Status(&self.get_pool_identifier().unwrap().0),
-                false,None
+            if let Ok(output_result) = ZPool(
+                ZPoolActions::Status(pool_name.clone()),
+                false,CmdConfig::Empty
             )
-            .run()
+            .run().await && let Some(output) = output_result
             {
                 if output.exit_code == 0
                 {
@@ -683,7 +615,7 @@ impl Backend
                         .or(serde_json::from_str("{}"))
                         .unwrap();
 
-                    match &status["pools"][self.get_pool_identifier().unwrap().0]["msgid"]
+                    match &status["pools"][pool_name]["msgid"]
                     {
                         Value::String(id) => return Some(id.to_string()),
                         _ => ()
@@ -695,14 +627,14 @@ impl Backend
         None
     }
 
-    fn is_any_pool_present(self:&Arc<Self>) -> bool
+    async fn is_any_pool_present(self:&Arc<Self>) -> bool
     {
 
-        if let Some(output) = ZFS(
+        if let Ok(output_result) = ZFS(
             ZFSActions::List(
-                ZFSListArgs::new(None, Some(ZFSListType::Filesystem), None)
+                ZFSListArgs::new_with_no_args(Some(ZFSListType::Filesystem), None)
             ), 
-            false,None).run()
+            false,CmdConfig::Empty).run().await && let Some(output) = output_result
         {
             if output.exit_code == 0
             {
@@ -720,39 +652,40 @@ impl Backend
         return false;
     }
 
-    fn pool_capacity(self:&Arc<Self>) -> Result<Capacity,HTTPError>
-    {
-        let vfs = self
-            .mount
-            .read()
-            .map_err(|e| ErrorMessages::E_POOL_CAPACITY.wrap_with_status_code(Some(vec![Value::String(e.to_string())])))?;
 
-        match &(*vfs)
+    //Return the capacity of a pool
+    pub async fn pool_capacity(&self) -> Result<Capacity,HTTPError>
+    {
+        let vfs = self.mount.read().await;
+
+        match vfs.as_ref()
         {
             Some(v) => Ok(v.capacity.clone()),
             None => Err(ErrorMessages::E_POOL_MOUNTED.wrap_with_status_code(None))
         }
     }
 
-    fn get_expansion_status(self:&Arc<Self>) -> Result<PoolExtensionStatus,HTTPError>
+    // Returns the progression status of a pool expansion (ie when a new disk is added to a pool)
+    pub async fn get_expansion_status(&self) -> Result<PoolExtensionStatus,HTTPError>
     {
-        if self.is_pool_configured()
+        let pool_id = self.get_pool_identifier().await;
+        if pool_id.is_none()
         {
             return Err(ErrorMessages::E_POOL_NO_CONF.wrap_with_status_code(None));
         } 
 
-        if !self.has_redundancy()
+        if !self.has_redundancy().await
         {
             return Ok(PoolExtensionStatus::new(false,None,None));
         }
 
-        let pool_name = self.get_pool_identifier().unwrap().0;
+        let pool_name = pool_id.unwrap().0;
 
-        if let Some(output) = ZPool(
-            ZPoolActions::Status(&pool_name),
+        if let Ok(output_result) = ZPool(
+            ZPoolActions::Status(pool_name),
             false,
-            None
-        ).run()
+            CmdConfig::Empty
+        ).run().await && let Some(output) = output_result
         {
             if output.exit_code != 0
             {
@@ -841,19 +774,21 @@ impl Backend
         }
     }
 
-    fn get_importable_pools(self:&Arc<Self>) -> Result<Vec<Pool>,HTTPError>
+    pub async fn get_importable_pools(&self) -> Result<Vec<Pool>,HTTPError>
     {
         let zpool_output = ZPool(
-            ZPoolActions::Import(None), 
-        false, 
+            ZPoolActions::Import(None),
+        false,
             CmdConfig::default()
         )
         .run()
+        .await
+        .map_err(
+            |e| propagate_unknown_error(e)
+        )?
         .unwrap()
         .is_success()
-        .map_err( 
-            |e| propagate_unknown_error(e)
-        )?;
+        .map_err(|e| propagate_unknown_error(e))?;
 
         let mut current_pool:Option<Pool> = None;
         let mut pools:Vec<Pool> = Vec::new();
@@ -961,7 +896,7 @@ impl Backend
                             Device::from_subpath(
                                 dev,
                                 DiskState::from_str(state).map_err(|e| propagate_unknown_error(e))?
-                            )
+                            ).await
                             .or_else
                             (
                                 |_| Ok(Device::new_offline(dev))
@@ -984,62 +919,73 @@ impl Backend
     }
 
 
-    fn has_redundancy(self:&Arc<Self>)->bool
+    //Returns true if the pool has redundancy enabled, false if not or if no pool is configured
+    pub async fn has_redundancy(&self)->bool
     {
-        if let Ok(r) = self.pool_properties.read()
+        let pool_props_mg = self.pool_properties.read().await;
+
+        match pool_props_mg.as_ref()
         {
-            !r.is_none() && r.as_ref().unwrap().redundancy
+            Some(p) => p.redundancy,
+            None => false
         }
-        else {false} 
     }
 
-    fn has_encryption(self:&Arc<Self>)->bool
+    //Returns true if the pool has encryption enabled, false if not or if no pool is configured
+    pub async fn has_encryption(&self)->bool
     {
-        if let Ok(r) = self.pool_properties.read()
+        let pool_props_mg = self.pool_properties.read().await;
+
+        match pool_props_mg.as_ref()
         {
-            !r.is_none() && r.as_ref().unwrap().encryption
+            Some(p) => p.encryption,
+            None => false
         }
-        else {false} 
     }
 
-    fn has_compression(self:&Arc<Self>)->bool
+    //Returns true if the pool has compression enabled, false if not or if no pool is configured
+    pub async fn has_compression(&self)->bool
     {
-        if let Ok(r) = self.pool_properties.read()
+        let pool_props_mg = self.pool_properties.read().await;
+
+        match pool_props_mg.as_ref()
         {
-            !r.is_none() && r.as_ref().unwrap().compression
+            Some(p) => p.compression,
+            None => false
         }
-        else {false} 
     }
 
-    fn get_key(self:&Arc<Self>)->Result<Option<String>,HTTPError>
+    //Returns the pool encryption key in base64 encoding
+    pub async fn get_key(&self)->Result<Option<String>,HTTPError>
     {
-        if self.has_encryption()
-        {    
+        if self.has_encryption().await
+        {
+            let cfg = &self.config.lock().await;
+            let cfg_pool = &cfg.pool;
 
-            if let Some(cfg_pool) = &self
-                .config
-                .lock()
-                .map_err(|e| propagate_error(ErrorMessages::E_POOL_KEY,e))?
-                .pool
+            if let Some(pool) = cfg_pool
             {
-                if let Some(key_path) = &cfg_pool.encryption_key
+                if let Some(key_path) = &pool.encryption_key
                 {
                     let mut cat = Cat(
-                        Some(key_path), 
-                        Some(&CmdConfig::new(true,true,None,None))
+                        Some(key_path),
+                        CmdConfig::default()
                     )
                     .spawn()
-                    .map_err(|e| propagate_error(ErrorMessages::E_POOL_KEY,e))?;
+                    .map_err(|e| propagate_error(ErrorMessages::E_POOL_KEY, e))?;
 
-                    let exit_code = cat.wait().map_err(|e| propagate_error(ErrorMessages::E_POOL_KEY,e))?;
 
-                    if !exit_code.success()
+                    cat.wait().await.map_err(|e| propagate_error(ErrorMessages::E_POOL_KEY, e))?;
+
+
+                    let mut key_buffer: Vec<u8> = Vec::new();
+
+                    match cat.stdout.as_mut()
                     {
-                        return Err(ErrorMessages::E_POOL_KEY.wrap_with_status_code(None));
-                    }
+                        None => return Err(ErrorMessages::E_POOL_KEY.wrap_with_status_code(None)),
+                        Some(stdout) => { stdout.read_to_end(&mut key_buffer).await.map_err(|e| propagate_error(ErrorMessages::E_POOL_KEY, e))?; }
 
-                    let mut key_buffer:Vec<u8> = Vec::new();
-                    cat.stdout.unwrap().read_to_end(&mut key_buffer).map_err(|e| propagate_error(ErrorMessages::E_POOL_KEY,e))?;
+                    }
 
                     return Ok(Some(BASE64_STANDARD.encode(key_buffer)));
                 }
@@ -1048,18 +994,19 @@ impl Backend
         return Ok(None);
     }
 
-    fn get_last_scrub_report(self:&Arc<Self>)->Option<LastScrubReport>
-    {        
-        if self.is_pool_configured()
+    //Returns the last report (if any) of a performed scrub operation on the pool
+    pub async fn get_last_scrub_report(&self)->Option<LastScrubReport>
+    {
+        let pool_id = self.get_pool_identifier().await;
+        if let Some((pool_name,_)) = pool_id
         {
-            let pool_name = self.get_pool_identifier().unwrap().0;
             let zpool_output = ZPool(
-                ZPoolActions::Status(&pool_name), 
+                ZPoolActions::Status(pool_name.clone()),
                 false, 
                 CmdConfig::default()
-            ).run();
+            ).run().await;
 
-            if let Some(output) = zpool_output
+            if let Ok(r) = zpool_output && let Some(output) = r && output.exit_code == 0
             {
                 let m:Value = serde_json::from_str(&output.stdout).or::<Value>(Ok(Value::Null)).unwrap();
 
@@ -1082,18 +1029,18 @@ impl Backend
         None
     }
 
-    fn get_current_scrub_info(self:&Arc<Self>)->Option<ScrubLiveInfo>
-    {        
-        if self.is_pool_configured()
+    pub async fn get_current_scrub_info(&self)->Option<ScrubLiveInfo>
+    {
+        let pool_id = self.get_pool_identifier().await;
+        if let Some((pool_name,_)) = pool_id
         {
-            let pool_name = self.get_pool_identifier().unwrap().0;
             let zpool_output = ZPool(
-                ZPoolActions::Status(&pool_name), 
+                ZPoolActions::Status(pool_name.clone()),
                 false, 
                 CmdConfig::default()
-            ).run();
+            ).run().await;
 
-            if let Some(output) = zpool_output
+            if let Ok(r) = zpool_output && let Some(output) = r && output.exit_code == 0
             {
                 let m:Value = serde_json::from_str(&output.stdout).or::<Value>(Ok(Value::Null)).unwrap();
 
@@ -1113,34 +1060,36 @@ impl Backend
                     return Some( ScrubLiveInfo::new(ongoing, time));
                 }
             }
-
-
         }
 
         None
     }
 
-    fn get_pool_disks(self:&Arc<Self>) -> Vec<Device>
+    // Returns the disk devices in the zfs pool
+    pub async fn get_pool_disks(&self) -> Vec<Device>
     {
-        if self.is_pool_configured()
+        let is_configured = self.is_pool_configured().await;
+        if is_configured
         {
-            if let Ok(guard) = self.pool_properties.read() && let Some(pool_pros) = &(*guard)
+            let pool_props = self.pool_properties.read().await;
+            if  let Some(props) = pool_props.as_ref()
             {
-                return pool_pros.attached_disks.clone();
+                return props.attached_disks.clone();
             }
         }
 
-        return Vec::new();
+        Vec::new()
     }
 }
 
 //Device-related Methods
 impl Backend
 {
-    fn get_disks(self:&Arc<Self>) -> Vec<Device>
+    //Get disks attached to the system linking their states with the ZFS pool
+    pub async fn get_disks(&self) -> Vec<Device>
     {
-        let mut pool_disks = self.get_pool_disks();
-        let mut system_disks = get_system_disks();
+        let mut pool_disks = self.get_pool_disks().await;
+        let mut system_disks = get_system_disks().await;
 
         let mut detected_disks:Vec<Device> = Vec::new();
 
@@ -1172,280 +1121,259 @@ impl Backend
 // User-related Methods
 impl Backend
 {
-    fn update_users(self:&Arc<Self>)
+    // Update partial information of each users, such as quota and notification count
+    async fn update_users(self:&Arc<Self>)
     {
-        
-        if let Some(map) = &mut self.get_quota_info(false)
+        let mut quota_info = self.get_quota_info(false).await;
+
+        if let Some(map) = &mut quota_info
         {
-            if let Ok(users) = self.users.lock()
+            let users = self.users.lock().await;
+            for u in users.iter()
             {
-                for u in users.iter()
-                {
-                    if let Ok(mut user) = u.write()
-                    {
-                        user.quota = map.remove(&user.username); 
-                        user.notifications = get_notifications_count(&user.username);
-                    }                 
-                }
+                let mut user = u.write().await;
+                user.quota = map.remove(&user.username);
+                user.notifications = get_notifications_count(&user.username).await;
             }
         }
     }
 
-    fn reload_users(self:&Arc<Self>)
+    // Reload all the User structs
+    pub async fn reload_users(&self)
     {
-        if let Ok(mut users) = self.users.lock()
+        let mut users = self.users.lock().await;
+        let quota_info = self.get_quota_info(true).await;
+
+
+        let mut cfg = self.config.lock().await;
+        users.clear();
+
+        let mut tokens_uuid_to_revoke:Vec<String> = Vec::new();
+        let mut token_to_approve:Option<(String, CfgToken)> = None;
+
+        for (uname, prop) in &cfg.users
         {
-            users.clear();
-            let quota_info = self.get_quota_info(true);
-
-            if let Ok(mut cfg) = self.config.lock()
+            //quota detection
+            let quota:Option<Quota> = match quota_info
             {
-
-                let mut tokens_uuid_to_revoke:Vec<String> = Vec::new();
-                let mut token_to_approve:Option<(String, CfgToken)> = None;
-
-                for (uname, prop) in &cfg.users
-                {
-                    //quota detection
-
-                    let quota:Option<Quota> = match quota_info
+                Some(ref map) => match map.get(uname)
                     {
-                        Some(ref map) => match map.get(uname)
-                            {
-                                Some(opt) => Some(opt.clone()),
-                                None=> None
-                            }
-                        _ => None
-                    };
-
-
-                    // sudo detection
-                    let cmd_cfg = CmdConfig::new(
-                        true,
-                        true,
-                        None,
-                        None
-                    );
-
-                    let mut sudo:bool = false;
-
-                    if let Some(group_output) = Groups(&uname,Some(&cmd_cfg)).run()
-                    {
-                        if group_output.exit_code == 0
-                        {
-                            if let Some(_) = group_output.stdout.find(sudo_group())
-                            {
-                                sudo = true;
-                            }
-                        }
+                        Some(opt) => Some(opt.clone()),
+                        None=> None
                     }
+                _ => None
+            };
 
-                    //first token
-                    let mut home_dir:Option<String> = None;
-                    let mut uid:Option<u32> = None;
-                    let mut gid:Option<u32> = None;
+            let mut sudo:bool = false;
 
-                    //get home - uid - gid
-                    if let Some(output) = GetEntPasswd(Some(uname.as_str()), Some(&cmd_cfg)).run()
-                    {
-                        if output.exit_code == 0
-                        {
-                            let tokens:Vec<&str> = output.stdout.split(":").collect();
+            let uname_ref = Some(uname.as_str());
 
-                            if tokens.len()>5
-                            {
-                                uid = Some(tokens[2].parse::<u32>().unwrap());
-                                gid = Some(tokens[3].parse::<u32>().unwrap());
-                                home_dir = Some(tokens[5].to_string());
-                            }
-                        }
-                    }
-                    
-                    let user=
-                        User{
-                            username: uname.to_string(),
-                            visible_name: prop.fullname.clone(),
-                            permissions: prop.permissions.clone(),
-                            quota:quota,
-                            sudo:sudo,
-                            admin: {
-                                match &prop.permissions
-                                {
-                                    Some(perms) => is_admin(&perms),
-                                    None => false
-                                }
-                            },
-                            first_login_token: {
-                                if prop.otp_secret.is_some() { None }
-                                else
-                                {
-                                    let previous_issued_tokens = cfg.find_tokens_by_purpose(TokenPurposes::FirstLogin, Some(uname));
 
-                                    if previous_issued_tokens.len() == 0
-                                    {
-                                        //need to create a new token to avoid that the user gets locked out
-                                        let t = create_token(
-                                            Some(uname.to_string()),
-                                            TokenPurposes::FirstLogin,
-                                            60*60*24, //24 hours
-                                            self.secret_key.as_bytes()
-                                        );
-
-                                        match t
-                                        {
-                                            Ok(tok) => {
-                                                token_to_approve = Some((tok.uuid.clone(),tok.claims));
-                                                Some(tok.uuid)
-                                            }
-                                            Err(e) => {
-                                                LoggerMessages::Error(LogErrors::FirstLoginToken(uname, &e.to_string())).log();
-                                                None
-                                            }
-                                        }
-                                    }
-                                    else 
-                                    {
-                                        //if more tokens are found as first login token for this user, issue the most recent one and revoke the others.
-                                        let mut vectorised_prev_tokens:Vec<(&String,&CfgToken)> = Vec::new();
-
-                                        for (k,v) in &previous_issued_tokens
-                                        {
-                                            vectorised_prev_tokens.push((&k,&v));
-                                        }
-
-                                        vectorised_prev_tokens.sort_by(
-                                            |(_,a), (_,b)| {
-                                            b.exp.cmp(&a.exp)
-                                        });
-
-                                        let tokes_to_revoke = &vectorised_prev_tokens[1..];
-
-                                        for (uuid,_) in tokes_to_revoke.iter()
-                                        {
-                                            tokens_uuid_to_revoke.push(uuid.to_string());
-                                        }
-
-                                        Some(vectorised_prev_tokens[0].0.clone())
-                                    }
-                                }
-                            },
-                            home_dir: {
-                                match home_dir
-                                {
-                                    Some(p) => Some(Path::new(&p).to_path_buf()),
-                                    None => None
-                                }
-                            },
-                            uid: uid,
-                            gid:gid,
-                            notifications:get_notifications_count(uname)
-                        };
-                    
-                    users.push(Arc::new(RwLock::new(user)));
-                    
-                }
-
-                if let Some((uuid,claims)) = token_to_approve
+            let groups_result = Groups(uname_ref.unwrap(),CmdConfig::default()).run().await;
+            if let Ok(r) = groups_result && let Some(group_output) = r && (group_output.exit_code == 0)
+            {
+                if let Some(_) = group_output.stdout.find(sudo_group())
                 {
-                    cfg.approve_token(uuid,claims);
-                }
-
-                for uuid in tokens_uuid_to_revoke
-                {
-                    cfg.revoke_token(&uuid);
+                    sudo = true;
                 }
             }
+
+            //first token
+            let mut home_dir:Option<String> = None;
+            let mut uid:Option<u32> = None;
+            let mut gid:Option<u32> = None;
+
+            //get home - uid - gid
+            let getentpasswd_result  = GetEntPasswd(uname_ref, CmdConfig::default()).run().await;
+
+            if let Ok(r) = getentpasswd_result && let Some(output) = r && output.exit_code == 0
+            {
+                let tokens:Vec<&str> = output.stdout.split(":").collect();
+
+                if tokens.len()>5
+                {
+                    uid = Some(tokens[2].parse::<u32>().unwrap());
+                    gid = Some(tokens[3].parse::<u32>().unwrap());
+                    home_dir = Some(tokens[5].to_string());
+                }
+            }
+
+            let user=
+                User{
+                    username: uname.to_string(),
+                    visible_name: prop.fullname.clone(),
+                    permissions: prop.permissions.clone(),
+                    quota:quota,
+                    sudo:sudo,
+                    admin: {
+                        match &prop.permissions
+                        {
+                            Some(perms) => is_admin(&perms),
+                            None => false
+                        }
+                    },
+                    first_login_token: {
+                        if prop.otp_secret.is_some() { None }
+                        else
+                        {
+                            let previous_issued_tokens = cfg.find_tokens_by_purpose(TokenPurposes::FirstLogin, Some(uname));
+
+                            if previous_issued_tokens.len() == 0
+                            {
+                                //need to create a new token to avoid that the user gets locked out
+                                let t = create_token(
+                                    Some(uname.to_string()),
+                                    TokenPurposes::FirstLogin,
+                                    60*60*24, //24 hours
+                                    self.secret_key.as_bytes()
+                                );
+
+                                match t
+                                {
+                                    Ok(tok) => {
+                                        token_to_approve = Some((tok.uuid.clone(),tok.claims));
+                                        Some(tok.uuid)
+                                    }
+                                    Err(e) => {
+                                        LoggerMessages::Error(LogErrors::FirstLoginToken(uname, &e.to_string())).log();
+                                        None
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                //if more tokens are found as first login token for this user, issue the most recent one and revoke the others.
+                                let mut vectorised_prev_tokens:Vec<(&String,&CfgToken)> = Vec::new();
+
+                                for (k,v) in &previous_issued_tokens
+                                {
+                                    vectorised_prev_tokens.push((&k,&v));
+                                }
+
+                                vectorised_prev_tokens.sort_by(
+                                    |(_,a), (_,b)| {
+                                    b.exp.cmp(&a.exp)
+                                });
+
+                                let tokes_to_revoke = &vectorised_prev_tokens[1..];
+
+                                for (uuid,_) in tokes_to_revoke.iter()
+                                {
+                                    tokens_uuid_to_revoke.push(uuid.to_string());
+                                }
+
+                                Some(vectorised_prev_tokens[0].0.clone())
+                            }
+                        }
+                    },
+                    home_dir: {
+                        match home_dir
+                        {
+                            Some(p) => Some(Path::new(&p).to_path_buf()),
+                            None => None
+                        }
+                    },
+                    uid: uid,
+                    gid:gid,
+                    notifications:get_notifications_count(uname).await
+                };
+
+            users.push(Arc::new(RwLock::new(user)));
+
         }
+
+        if let Some((uuid,claims)) = token_to_approve
+        {
+            cfg.approve_token(uuid,claims);
+        }
+
+        for uuid in tokens_uuid_to_revoke
+        {
+            cfg.revoke_token(&uuid);
+        }
+
+        drop(cfg);
+
 
         let _ = self._flush_config();
     }
 
-    pub fn get_admin_users(self:&Arc<Self>) -> Result<Vec<Arc<RwLock<User>>>,HTTPError>
+    // Get the list of User structs of admin (ie users with all permissions)
+    pub async fn get_admin_users(&self) -> Vec<Arc<RwLock<User>>>
     {
-        let users = self.users.lock().map_err(|e|{
-            LoggerMessages::Error(LogErrors::AdminUserList(&e.to_string())).log();
-            ErrorMessages::E_UNKNOWN.wrap_with_status_code(None)
-        })?;
+        let users = self.users.lock().await;
 
-        Ok(
-            users
-            .iter()
-            .filter_map(
-                |u|
+        stream::iter(users.iter().cloned())
+        .filter_map(
+            |user| async move
+            {
+                let is_admin =
                 {
-                    if u.read().map(|x|x.admin).unwrap_or(false)
-                    {Some(Arc::clone(u))}
-                    else {None}
-                }
-            )
-            .collect()
+                    let u = user.read().await;
+                    u.admin
+                };
+
+                if is_admin {Some(user)}
+                else {None}
+            }
         )
+        .collect::<Vec<Arc<RwLock<User>>>>()
+        .await
+
     }
 
-    pub fn get_user(self:&Arc<Self>,username:&str) -> Result<Arc<RwLock<User>>,HTTPError>
+    // Returns a User struct given the username
+    pub async fn get_user(&self,username:&str) -> Result<Arc<RwLock<User>>,HTTPError>
     {
-        match &self.users.lock()
+        let users = self.users.lock().await;
+
+        for user in users.iter()
         {
-            Ok(users) =>
-            {
-                for user in users.iter()
-                {
-                    if let Ok(u) = user.read()
-                    {    
-                        if u.username == username
-                        {
-                            return Ok(Arc::clone(&user));
-                        }
-                    }
-                }
-
-                Err(ErrorMessages::E_USER_NOT_FOUND.wrap_with_status_code(Some(vec![Value::String(username.to_string())])))
-            }
-            Err(e) =>
-            {
-                LoggerMessages::Error(LogErrors::AdminUserList(&e.to_string())).log();
-                Err(ErrorMessages::E_UNKNOWN.wrap_with_status_code(None))
-            }
+            let u = user.read().await;
+            if u.username == username { return Ok(Arc::clone(&user)); }
         }
+
+        Err(ErrorMessages::E_USER_NOT_FOUND.wrap_with_status_code(Some(vec![Value::String(username.to_string())])))
     }
 }
 
-pub fn get_backend() -> Arc<Backend>
+pub async fn get_backend() -> Arc<Backend>
 {
-    BACKEND.get_or_init(|| {
-        Backend::new()
-    }).clone()
+    BACKEND.get_or_init( async || {
+        let backend = Backend::new().await;
+        backend
+    }).await.clone()
 }
 
-mod test
-{
-    #[allow(unused)]
-    use super::*;
-
-    #[test]
-    fn importable_pools_test() -> Result<(), HTTPError>
-    {
-        let p = get_backend().get_importable_pools()?;
-
-        println!("{:?}",p);
-
-        Ok(())
-    }
-
-    #[test]
-    fn key_base64_test() -> Result<(), Box<dyn Error>>
-    {
-        let mut cat = Cat(Some("/root/tank.key"), Some(&CmdConfig::new(true,true,None,None))).spawn()?;
-
-        let exit_code = cat.wait()?;
-
-        if exit_code.code().unwrap() != 0 {panic!("Status code: {}",exit_code)}
-        let mut buf:Vec<u8> = Vec::new();
-        let stdout = cat.stdout.unwrap().read_to_end(&mut buf);
-
-        println!("{}",BASE64_STANDARD.encode(buf));
-
-
-        Ok(())
-    }
-}
+// mod test
+// {
+//     #[allow(unused)]
+//     use super::*;
+//
+//     #[test]
+//     fn importable_pools_test() -> Result<(), HTTPError>
+//     {
+//         let p = get_backend().get_importable_pools()?;
+//
+//         println!("{:?}",p);
+//
+//         Ok(())
+//     }
+//
+//     #[test]
+//     fn key_base64_test() -> Result<(), Box<dyn Error>>
+//     {
+//         let mut cat = Cat(Some("/root/tank.key"), Some(&CmdConfig::new(true,true,None,None))).spawn()?;
+//
+//         let exit_code = cat.wait()?;
+//
+//         if exit_code.code().unwrap() != 0 {panic!("Status code: {}",exit_code)}
+//         let mut buf:Vec<u8> = Vec::new();
+//         let stdout = cat.stdout.unwrap().read_to_end(&mut buf);
+//
+//         println!("{}",BASE64_STANDARD.encode(buf));
+//
+//
+//         Ok(())
+//     }
+// }

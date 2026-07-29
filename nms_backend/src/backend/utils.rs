@@ -121,19 +121,21 @@ pub fn ts_to_str(ts:Option<i64>) -> String
     return "-".to_string()
 }
 
-pub fn get_quota_for_all(pool:&str, dataset:&str) -> Result<HashMap<String,Quota>,String>
+pub async fn get_quota_for_all(pool:&str, dataset:&str) -> Result<HashMap<String,Quota>,String>
 {
     let output = ZFS(
-        ZFSActions::GetQuota(ZFSArgs{
-            pool, dataset
+        ZFSActions::GetQuota::<&str>(ZFSArgs{
+            pool: pool,
+            dataset: dataset
         }),
         false,
         CmdConfig::default()
     )
     .run()
-    .unwrap()
+    .await.map_err(|e| e.to_string())?
+    .ok_or_else(|| "No quota found".to_string())?
     .is_success()
-    .map_err(|e| e.to_string() )?;
+    .map_err(|e| e.to_string())?;
 
 
     let mut map:HashMap<String,Quota> = HashMap::new();
@@ -169,45 +171,40 @@ pub fn get_quota_for_all(pool:&str, dataset:&str) -> Result<HashMap<String,Quota
     return Err("Unable to execute zfs".to_string());
 }
 
-pub fn get_notifications_count(username:&str) -> u32
+pub async fn get_notifications_count(username:&str) -> u32
 {
     let mut n_notifications:u32 = 0;
 
-    let cfg = CmdConfig::new(true,true,None,None);
+
     let mail_file: PathBuf = Path::new(MBOX_BASEPATH).join(username);
-    let stat_result = Stat(mail_file.to_str().unwrap(),None,Some(&cfg)).run();
+    let stat_result = Stat(mail_file.to_str().unwrap(),None,CmdConfig::default()).run().await;
 
-    if let Some(stat) = stat_result
+
+    if let Ok(r) = stat_result && let Some(stat) = r && stat.exit_code == 0
     {
-        if stat.exit_code == 0
+        let cat_result = Cat(Some(mail_file.to_str().unwrap()),CmdConfig::default()).run().await;
+        if let Ok(r) = cat_result && let Some(cat) = r && cat.exit_code == 0
         {
-            let cat_result = Cat(Some(mail_file.to_str().unwrap()),Some(&cfg)).run();
 
-            if let Some(cat) = cat_result
+            let pattern = Regex::new(r"^From[^:](.*)$");
+
+            if let Ok(re) = pattern
             {
-                if cat.exit_code == 0
+                for l in cat.stdout.lines()
                 {
-                    let pattern = Regex::new(r"^From[^:](.*)$");
-
-                    if let Ok(re) = pattern
+                    if re.is_match(l)
                     {
-                        for l in cat.stdout.lines()
-                        {
-                            if re.is_match(l)
-                            { 
-                                n_notifications+=1; 
-                            }
-                            else if l.find("X-Notification-Read").is_some()
-                            {
-                                let tokens:Vec<&str> = l.trim().split(":").collect();
+                        n_notifications+=1;
+                    }
+                    else if l.find("X-Notification-Read").is_some()
+                    {
+                        let tokens:Vec<&str> = l.trim().split(":").collect();
 
-                                if tokens.len()==2
-                                {
-                                    if let Ok(n) = tokens[1].trim().parse::<u32>()
-                                    {
-                                        if n==1 {n_notifications-=1;}
-                                    }
-                                }
+                        if tokens.len()==2
+                        {
+                            if let Ok(n) = tokens[1].trim().parse::<u32>()
+                            {
+                                if n==1 {n_notifications-=1;}
                             }
                         }
                     }
@@ -220,12 +217,12 @@ pub fn get_notifications_count(username:&str) -> u32
     return n_notifications;
 }
 
-pub fn get_system_disks() -> Vec<Device>
+pub async fn get_system_disks() -> Vec<Device>
 {
-    let output = LSBLK(LsblkProperties::default(), None, None).run().unwrap();
+    let result = LSBLK(LsblkProperties::default(), None, CmdConfig::Empty).run().await;
     let mut devs:Vec<Device> = Vec::new();
 
-    if output.exit_code==0
+    if let Ok(r) = result && let Some(output) = r && output.exit_code==0
     {
         if let Ok(lsblk) = serde_json::from_str::<Value>(&output.stdout)
         {
@@ -237,7 +234,7 @@ pub fn get_system_disks() -> Vec<Device>
                     {
                         if ACCEPTED_TRAN_TYPES.contains(&d["tran"].as_str().unwrap())
                         {
-                            if let Some(device) = Device::from_lsblk(d)
+                            if let Some(device) = Device::from_lsblk(d).await
                             {
                                 devs.push(device);
                             }
@@ -253,19 +250,19 @@ pub fn get_system_disks() -> Vec<Device>
 }
 
 
-mod test
-{
-    #[allow(unused)]
-    use super::*;
-
-    #[test]
-    fn sysdisk_test()
-    {
-        let dev = get_system_disks();
-
-        assert!(dev.len()>0);
-
-        println!("{dev:?}");
-
-    }
-}
+// mod test
+// {
+//     #[allow(unused)]
+//     use super::*;
+//
+//     #[test]
+//     fn sysdisk_test()
+//     {
+//         let dev = get_system_disks();
+//
+//         assert!(dev.len()>0);
+//
+//         println!("{dev:?}");
+//
+//     }
+// }

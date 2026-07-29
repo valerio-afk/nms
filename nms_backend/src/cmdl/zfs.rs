@@ -1,68 +1,69 @@
 use super::*;
 use std::collections::HashMap;
+use std::fmt::Debug;
 
-pub struct ZPoolAttachArgs<'a>
+pub struct ZPoolAttachArgs
 {
-    pool:&'a str,
-    vdev: &'a str,
-    device: &'a str
+    pool:String,
+    vdev: String,
+    device: String
 }
 
-pub struct ZPoolAddArgs<'a>
+pub struct ZPoolAddArgs
 {
-    pool:&'a str,
-    device: &'a str,
+    pool:String,
+    device: String,
 }
 
-pub struct ZPoolReplaceArgs<'a>
+pub struct ZPoolReplaceArgs
 {
-    pool:&'a str,
-    device: &'a str,
-    new_device:Option<&'a str>
+    pool:String,
+    device: String,
+    new_device:Option<String>
 }
 
-pub struct ZPoolDestroyArgs<'a>
+pub struct ZPoolDestroyArgs
 {
-    pool:&'a str,
+    pool:String,
     force:bool
 }
 
-type ZPoolImportArgs<'a> = ZPoolDestroyArgs<'a>;
+type ZPoolImportArgs = ZPoolDestroyArgs;
 
-pub struct ZPoolCreateArgs<'a>
+pub struct ZPoolCreateArgs
 {
-    devices:&'a[&'a str],
-    pool: &'a str,
+    devices:Vec<String>,
+    pool: String,
     redudancy:bool,
-    encryption:Option<&'a str>,
+    encryption:Option<String>,
     compression:bool,
     posix_acl:bool
 }
 
-pub enum ZPoolActions<'a>
+pub enum ZPoolActions
 {
-    LabelClear(&'a str),
-    Attach(ZPoolAttachArgs<'a>),
-    Replace(ZPoolReplaceArgs<'a>),
-    Add(ZPoolAddArgs<'a>),
-    Destroy(ZPoolDestroyArgs<'a>),
-    Import(Option<ZPoolImportArgs<'a>>),
-    Export(&'a str),
-    Create(ZPoolCreateArgs<'a>),
+    LabelClear(String),
+    Attach(ZPoolAttachArgs),
+    Replace(ZPoolReplaceArgs),
+    Add(ZPoolAddArgs),
+    Destroy(ZPoolDestroyArgs),
+    Import(Option<ZPoolImportArgs>),
+    Export(String),
+    Create(ZPoolCreateArgs),
     Scrub,
-    Clear(&'a str),
-    List(&'a str),
-    Status(&'a str),
-    Get(&'a str),
+    Clear(String),
+    List(String),
+    Status(String),
+    Get(String),
 }
 
-pub enum ZFSQuota<'a>
+pub enum ZFSQuota
 {
     Bytes(u64),
-    Formatted(&'a str)
+    Formatted(String)
 }
 
-impl<'a> std::fmt::Display for ZFSQuota<'a>
+impl std::fmt::Display for ZFSQuota
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result 
     {
@@ -74,13 +75,15 @@ impl<'a> std::fmt::Display for ZFSQuota<'a>
     }
 }
 
-pub struct ZFSArgs<'a>
+pub struct ZFSArgs<S>
+where S:AsRef<str> + ToString + Display
 {
-    pub pool:&'a str,
-    pub dataset: &'a str
+    pub pool:S,
+    pub dataset: S
 }
 
-impl<'a> std::fmt::Display for ZFSArgs<'a>
+impl<S> Display for ZFSArgs<S>
+where S:AsRef<str> + ToString + Display
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result 
     {
@@ -88,10 +91,10 @@ impl<'a> std::fmt::Display for ZFSArgs<'a>
     }
 }
 
-pub struct ZFSQuotaArgs<'a>
+pub struct ZFSQuotaArgs
 {
-    username:&'a str,
-    quota:ZFSQuota<'a>
+    username:String,
+    quota:ZFSQuota
 }
 
 pub enum ZFSListType
@@ -118,71 +121,91 @@ impl std::fmt::Display for ZFSListType
     }
 }
 
-pub struct ZFSListArgs<'a>
+pub struct ZFSListArgs<S>
+where S:AsRef<str> + ToString
 {
-    properties: Option<&'a [&'a str]>,
+    properties: Option<Vec<S>>,
     list_type: Option<ZFSListType>,
-    dataset:Option<&'a str>
+    dataset:Option<String>
 
 }
 
-impl<'a> ZFSListArgs<'a>
+impl<S> ZFSListArgs<S>
+where S:AsRef<str> + ToString
 {
-    pub fn new(properties:Option<&'a [&'a str]>,list_type:Option<ZFSListType>,dataset:Option<&'a str>) -> Self
+    pub fn new(
+        properties: Option<Vec<S>>,
+        list_type: Option<ZFSListType>,
+        dataset: Option<String>
+    ) -> Self
     {
         ZFSListArgs { properties, list_type, dataset }
     }
 }
 
-pub struct ZFSLoadKeyArgs<'a>
+impl ZFSListArgs<String>
 {
-    pool:&'a str,
-    key_path:&'a str,
+    pub fn new_with_no_args(
+        list_type:Option<ZFSListType>,
+        dataset:Option<String>
+    ) -> ZFSListArgs<String> //I have to put something
+    {
+        ZFSListArgs { properties: None, list_type, dataset }
+    }
 }
 
-pub struct ZFSSnapshotArgs<'a>
+pub struct ZFSLoadKeyArgs
 {
-    pool:&'a str,
-    dataset:&'a str,
-    snapshot:&'a str
+    pool:String,
+    key_path:String,
 }
 
-impl<'a> std::fmt::Display for ZFSSnapshotArgs<'a>
+pub struct ZFSSnapshotArgs<S>
+where S:AsRef<str> + ToString + Display
+{
+    pool:S,
+    dataset:S,
+    snapshot:S
+}
+
+impl<S> Display for ZFSSnapshotArgs<S>
+where S:AsRef<str> + ToString + Display
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result 
     {
         write!(f,"{}@{}",
-            ZFSArgs{pool:self.pool,dataset:self.dataset}.to_string(),
+            ZFSArgs{pool:self.pool.to_string(),dataset:self.dataset.to_string()}.to_string(),
             self.snapshot
         )    
     }
 }
 
 
-pub enum ZFSActions<'a>
+pub enum ZFSActions<S>
+where S:AsRef<str> + ToString + Display
 {
-    GetQuota(ZFSArgs<'a>),
-    SetQuota(ZFSArgs<'a>,ZFSQuotaArgs<'a>),
-    Get(&'a str), //pool name
-    List(ZFSListArgs<'a>),
-    LoadKey(ZFSLoadKeyArgs<'a>),
-    UnloadKey(&'a str), //pool name
-    Create(ZFSArgs<'a>,Option<HashMap<&'a str, &'a str>>), //options
-    Destroy(ZFSArgs<'a>,Option<&'a str>), //snapshot nane
-    Snapshot(ZFSSnapshotArgs<'a>),
-    Rollback(ZFSSnapshotArgs<'a>),
-    Mount(ZFSArgs<'a>),
-    Unmount(ZFSArgs<'a>)
+    GetQuota(ZFSArgs<S>),
+    SetQuota(ZFSArgs<S>,ZFSQuotaArgs),
+    Get(String), //pool name
+    List(ZFSListArgs<S>),
+    LoadKey(ZFSLoadKeyArgs),
+    UnloadKey(String), //pool name
+    Create(ZFSArgs<S>,Option<HashMap<String, String>>), //options
+    Destroy(ZFSArgs<S>,Option<S>), //snapshot nane
+    Snapshot(ZFSSnapshotArgs<S>),
+    Rollback(ZFSSnapshotArgs<S>),
+    Mount(ZFSArgs<S>),
+    Unmount(ZFSArgs<S>)
 }
 
-pub fn ZPool<'a,'b>(
-    action:ZPoolActions<'a>,
+pub fn ZPool(
+    action:ZPoolActions,
     revertible:bool,
-    config:Option<&'b CmdConfig<'a>>
-) -> CommandLine<'a,'b>
+    config:CmdConfig
+) -> CommandLine
 {
     let mut args : Vec<String> = Vec::new();
-    let mut rev_cmd:Option<CommandLine<'a,'b>> = None;
+    let mut rev_cmd:Option<CommandLine> = None;
 
     match action
     {
@@ -202,7 +225,7 @@ pub fn ZPool<'a,'b>(
                         pool: pool,
                         force:true
                     })
-                ),false,config));
+                ),false,config.clone()));
             }
         },
         ZPoolActions::Clear(pool) => {
@@ -255,7 +278,7 @@ pub fn ZPool<'a,'b>(
 
                     if revertible 
                     {
-                        rev_cmd = Some(ZPool(ZPoolActions::Export(params.unwrap().pool),false,config));
+                        rev_cmd = Some(ZPool(ZPoolActions::Export(params.unwrap().pool),false,config.clone()));
                     }
                 }
         }
@@ -312,7 +335,7 @@ pub fn ZPool<'a,'b>(
             {
                 rev_cmd = Some(ZPool(ZPoolActions::Destroy(
                     ZPoolDestroyArgs { pool: params.pool, force: true },
-                ),false,config));
+                ),false,config.clone()));
             }
 
         }
@@ -351,25 +374,11 @@ pub fn ZPool<'a,'b>(
 }
 
 
-// pub enum ZFSActions<'a>
-// {
-//     GetQuota(ZFSArgs<'a>),
-//     SetQuota(ZFSQuotaArgs<'a>),
-//     Get(&'a str),
-//     List(ZFSListArgs<'a>),
-//     LoadKey(ZFSLoadKeyArgs<'a>),
-//     UnloadKey(&'a str),
-//     Create(ZFSCreateArgs<'a>),
-//     Destroy(ZFSDestroyArgs<'a>),
-//     Snapshot(ZFSSnapshotArgs<'a>),
-//     Rollback(ZFSSnapshotArgs<'a>),
-//     Mount(ZFSMountArgs<'a>),
-//     Unmount(ZFSMountArgs<'a>)
-// }
-pub fn ZFS<'a,'b>(action:ZFSActions,revertible:bool,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn ZFS<S>(action:ZFSActions<S>,revertible:bool,config:CmdConfig) -> CommandLine
+where S:AsRef<str> + Display
 {
     let mut args:Vec<String> = Vec::new();
-    let mut rev_cmd:Option<CommandLine<'a,'b>> = None;
+    let mut rev_cmd:Option<CommandLine> = None;
 
     match action
     {
@@ -443,7 +452,7 @@ pub fn ZFS<'a,'b>(action:ZFSActions,revertible:bool,config:Option<&'b CmdConfig<
 
                 if revertible
                 {
-                    rev_cmd = Some(ZFS(ZFSActions::UnloadKey(p.pool),false,config));
+                    rev_cmd = Some(ZFS(ZFSActions::UnloadKey::<S>(p.pool),false,config.clone()));
                 } 
             }
         ZFSActions::UnloadKey(pool) =>
@@ -469,7 +478,7 @@ pub fn ZFS<'a,'b>(action:ZFSActions,revertible:bool,config:Option<&'b CmdConfig<
 
                 if revertible
                 {
-                    rev_cmd = Some(ZFS(ZFSActions::Destroy(p, None),false,config));
+                    rev_cmd = Some(ZFS(ZFSActions::Destroy::<S>(p, None),false,config.clone()));
                 }
             }
         ZFSActions::Destroy(p,snapshot) => 
@@ -504,9 +513,9 @@ pub fn ZFS<'a,'b>(action:ZFSActions,revertible:bool,config:Option<&'b CmdConfig<
                 if revertible
                 {
                     rev_cmd = Some(ZFS(
-                        ZFSActions::Destroy(ZFSArgs { pool: p.pool, dataset: p.dataset }, Some(p.snapshot)),
+                        ZFSActions::Destroy::<S>(ZFSArgs { pool: p.pool, dataset: p.dataset }, Some(p.snapshot)),
                         false,
-                        config
+                        config.clone()
                     ))
                 }
             },
@@ -526,7 +535,7 @@ pub fn ZFS<'a,'b>(action:ZFSActions,revertible:bool,config:Option<&'b CmdConfig<
 
                 if revertible
                 {
-                    rev_cmd = Some(ZFS(ZFSActions::Unmount(p),false,config));
+                    rev_cmd = Some(ZFS(ZFSActions::Unmount::<S>(p),false,config.clone()));
                 }
             },
         ZFSActions::Unmount(p)=> 
@@ -538,7 +547,7 @@ pub fn ZFS<'a,'b>(action:ZFSActions,revertible:bool,config:Option<&'b CmdConfig<
 
                 if revertible
                 {
-                    rev_cmd = Some(ZFS(ZFSActions::Mount(p),false,config));
+                    rev_cmd = Some(ZFS(ZFSActions::Mount::<S>(p),false,config.clone()));
                 }
             },
     }

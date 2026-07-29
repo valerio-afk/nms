@@ -40,13 +40,13 @@ impl CmdFlag<PackageManagerActions> for  DnfActions
     }
 }
 
-pub fn PipInstall<'a,'b>
+pub fn PipInstall
 (
     packages:Option<&[&String]>,
     requirements:Option<&String>,
     local_env:bool,
-    config:Option<&'b CmdConfig<'a>>
-) -> CommandLine<'a,'b>
+    config:CmdConfig
+) -> CommandLine
 {
     let mut args:Vec<String> = vec!["install".to_string()];
     let mut pip= "";
@@ -68,9 +68,9 @@ pub fn PipInstall<'a,'b>
     if local_env
     {
         let mut panic = false;
-        if let Some(cfg) = config
+        if config.is_provided()
         {
-            if let Some(_) = &cfg.cwd
+            if let Some(_) = &config.cwd()
             {
                 pip = "./pip";
             }
@@ -99,7 +99,7 @@ pub fn PipInstall<'a,'b>
 
 
 
-pub fn AptGet<'a,'b>(action:PackageManagerActions,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn AptGet(action:PackageManagerActions,config:CmdConfig) -> CommandLine
 {
     let mut args:Vec<String> = vec![AptActions::flag(&action).to_string()];
 
@@ -118,7 +118,7 @@ pub fn AptGet<'a,'b>(action:PackageManagerActions,config:Option<&'b CmdConfig<'a
     )
 }
 
-pub fn DNF<'a,'b>(action:PackageManagerActions,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn DNF(action:PackageManagerActions,config:CmdConfig) -> CommandLine
 {
     let mut args:Vec<String> = vec![DnfActions::flag(&action).to_string()];
 

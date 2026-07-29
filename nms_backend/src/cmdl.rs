@@ -12,46 +12,150 @@ pub mod docker;
 pub mod zfs;
 pub mod notify;
 
-use std::process::{Child, Command, Stdio};
-use std::io::Write;
-use std::fmt;
+use tokio;
+use tokio::process::{Child, Command};
+use std::process::Stdio;
+use std::fmt::{self, Display, Formatter};
+use core::error::Error;
+use std::pin::Pin;
+use tokio::io::AsyncWriteExt;
 
-type Destructor<'a,T> = Box<dyn Fn(&T) + 'a>;
+#[derive(Debug)]
+pub enum CommandError
+{
+    SpawnError(&'static str, std::io::Error),
+    StdinError(&'static str),
+    StdinWriteError(&'static str, std::io::Error),
+    ExecutionError(&'static str,std::io::Error),
+}
+
+impl Display for CommandError
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result
+    {
+        match self
+        {
+            CommandError::SpawnError(cmd, e) => write!(f, "Unable to spawn `{}`: {}", cmd, e),
+            CommandError::StdinError(cmd) => write!(f, "Unable to obtain stdin for `{}`", cmd),
+            CommandError::StdinWriteError(cmd, e) => write!(f, "Unable to write into stdin of `{}`: {}", cmd, e),
+            CommandError::ExecutionError(cmd, e) => write!(f, "Unable to execute `{}`: {}", cmd, e),
+        }
+    }
+}
+impl Error for CommandError {}
+
+type DestructorFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+type Destructor<T> = Box<dyn Fn(&Pin<&mut T>) -> DestructorFuture + Send>;
 
 trait CmdFlag<T>
 {
     fn flag(value:&T) -> &'static str;
 }
 
-const CMD_CONFIG_DEFAULT:CmdConfig<'static> = CmdConfig{
+const CMD_CONFIG_DEFAULT:CmdConfig = CmdConfig::Provided{
     sudo: true,
     strict:true,
     stdin:None,
     cwd:None
 };
 
-pub struct CommandLine<'a,'b>
+
+pub struct CommandLine
 {
-    command:&'a str,
+    command:&'static str,
     args:Option<Vec<String>>,
-    revert_cmd:Option<Box<CommandLine<'a,'b>>>,
-    config: Option<&'b CmdConfig<'a>>,
-    drop: Option<Destructor<'b, Self>>
+    revert_cmd:Option<Box<CommandLine>>,
+    config: CmdConfig,
+    drop: Option<Destructor<Self>>
 }
 
-pub struct CmdConfig<'a>
+#[derive(Clone,Debug)]
+pub enum CmdConfig
 {
-    sudo: bool,
-    strict: bool,
-    stdin:Option<&'a str>,
-    cwd:Option<String>
+    Provided {
+        sudo: bool,
+        strict: bool,
+        stdin: Option<String>,
+        cwd: Option<String>
+    },
+    Empty
 }
 
-impl<'a> CmdConfig<'a>
+impl CmdConfig
 {
-    pub fn default() -> Option<&'a CmdConfig<'a>>
+
+    pub fn is_provided(&self)-> bool
     {
-        Some(&CMD_CONFIG_DEFAULT)
+        if let CmdConfig::Provided{..} = self {true} else {false}
+    }
+
+    pub fn is_empty(&self)-> bool
+    {
+        !self.is_provided()
+    }
+    pub fn is_sudo(&self) -> bool
+    {
+        match &self
+        {
+            CmdConfig::Provided {sudo,..} => *sudo,
+            CmdConfig::Empty => false
+        }
+    }
+
+    pub fn is_strict(&self) -> bool
+    {
+        match &self
+        {
+            CmdConfig::Provided {strict,..} => *strict,
+            CmdConfig::Empty => false
+        }
+    }
+
+    pub fn stdin_data(&self) -> Option<&String>
+    {
+        match &self
+        {
+            CmdConfig::Provided {stdin,..} => {
+                if let Some(data) = stdin
+                {
+                    Some(data)
+                }
+                else { None }
+            },
+            CmdConfig::Empty => None
+        }
+    }
+
+    pub fn take_data(&mut self) -> Option<String>
+    {
+        match self
+        {
+            CmdConfig::Provided {stdin,..} => {stdin.take()},
+            CmdConfig::Empty => None
+        }
+    }
+
+    pub fn cwd(&self) -> Option<&String>
+    {
+        match &self
+        {
+            CmdConfig::Provided {cwd,..} => {
+                if let Some(dir) = cwd
+                {
+                    Some(dir)
+                }
+                else { None }
+            },
+            CmdConfig::Empty => None
+        }
+    }
+}
+
+impl Default for CmdConfig
+{
+    fn default() -> CmdConfig
+    {
+        CMD_CONFIG_DEFAULT.clone()
     }
 }
 
@@ -97,43 +201,42 @@ impl CommandOutput
 }
 
 
-
 pub trait Executable
 {
-    fn run(self:&Self) -> Option<CommandOutput>;
-    fn spawn(self:&Self) -> std::io::Result<Child>;
-    fn execute(self:&Self,revert:bool) -> Option<CommandOutput>;
+    fn run(self) -> impl Future<Output = Result<Option<CommandOutput>,CommandError>> + Send;
+    fn spawn(self) -> Result<Child,CommandError>;
+    fn execute(self,revert:bool) -> impl Future<Output = Result<Option<CommandOutput>,CommandError>> + Send;
 
 }
 
 trait ExecutableInternal
 {
-    fn execute_cmd(self:&Self)  -> Option<CommandOutput>;
-    fn spawn_cmd(self:&Self) -> std::io::Result<Child>;
-    fn parse_cmd(self:&Self) -> Command;
+    fn execute_cmd(self)  -> impl Future<Output = Result<CommandOutput,CommandError>> + Send;
+    fn spawn_cmd(self) -> Result<Child,CommandError>;
+    fn parse_cmd(&self) -> Command;
 }
 
-impl<'a> CmdConfig<'a>
+impl CmdConfig
 {
-    pub fn new(sudo:bool, strict:bool, stdin:Option<&'a str>,cwd:Option<String>) -> CmdConfig<'a>
+    pub fn new(sudo:bool, strict:bool, stdin:Option<String>,cwd:Option<String>) -> CmdConfig
     {
-        CmdConfig {
-            sudo: sudo,
-            strict: strict,
-            stdin: stdin,
-            cwd:cwd
+        CmdConfig::Provided{
+            sudo,
+            strict,
+            stdin,
+            cwd
         }
     }
 
 }
 
-impl<'a,'b> CommandLine<'a,'b>
+impl CommandLine
 {
-    pub fn new(command:&'a str,
+    pub fn new(command:&'static str,
                args:Option<Vec<String>>, 
-               revert_cmd:Option<Box<CommandLine<'a,'b>>>,
-               drop:Option<Destructor<'a, CommandLine<'a,'b>>>,
-               config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+               revert_cmd:Option<Box<CommandLine>>,
+               drop:Option<Destructor<CommandLine>>,
+               config:CmdConfig) -> CommandLine
     {
         CommandLine{
             command,
@@ -145,67 +248,57 @@ impl<'a,'b> CommandLine<'a,'b>
     }
 }
 
-impl Drop for CommandLine<'_,'_>
+impl Drop for CommandLine
 {
-    fn drop(self:&mut Self)
+    fn drop(&mut self)
     {
-        if let Some(callback) = &self.drop
+        if let Some(callback) = self.drop.take()
         {
-            callback(self);
+            tokio::spawn(callback(&Pin::new(self)));
         }
-        
     }
 }
 
-impl Executable for CommandLine<'_,'_>
+impl Executable for CommandLine
 {
-
-
-    fn run(self:&Self)->Option<CommandOutput>
+    async fn run(self)-> Result<Option<CommandOutput>,CommandError>
     {
-        self.execute(false)
+        return self.execute(false).await
     }
 
-    fn execute(self:&Self, revert:bool) -> Option<CommandOutput>
+    async fn execute(mut self, revert:bool) ->  Result<Option<CommandOutput>,CommandError>
     {
+
         if !revert
         {
-            self.execute_cmd()
+            Ok(Some(self.execute_cmd().await?))
         }
         else
         {
-            match &self.revert_cmd
+            match self.revert_cmd.take()
             {
-                Some(cmd) => cmd.execute_cmd(),
-                None => None
+                Some(cmd) => {
+                    Ok(Some(cmd.execute_cmd().await?))
+                },
+                None => Ok(None)
             }
         }
     }
 
-    fn spawn(self:&Self) -> std::io::Result<Child>
+    fn spawn(self) -> Result<Child,CommandError>
     {
         self.spawn_cmd()
     }
 }
 
-impl<'a,'b> ExecutableInternal for CommandLine<'a,'b>
+impl ExecutableInternal for CommandLine
 {
 
-    fn parse_cmd(self:&Self) -> Command
+    fn parse_cmd(&self) -> Command
     {
         let mut cmd;
 
-        let sudo:bool = {
-            if let Some(config) = &self.config { config.sudo } else {false}
-        };
-
-        
-        let cwd:&Option<String> = {
-            if let Some(config) = &self.config { &config.cwd } else { &None }
-        };
-        
-
-        if sudo
+        if self.config.is_sudo()
         {
             cmd = Command::new("sudo");
             cmd.arg(self.command);
@@ -217,17 +310,16 @@ impl<'a,'b> ExecutableInternal for CommandLine<'a,'b>
             cmd.args(args);
         }
 
-        if let Some(path) = cwd
+        if let Some(path) = self.config.cwd()
         {
             cmd.current_dir(path);
         }
 
-        //tracing::debug!("Command to be executed: {cmd:?}");
 
         return cmd;
     }
 
-    fn spawn_cmd(self:&Self) -> std::io::Result<Child>
+    fn spawn_cmd(self) -> Result<Child,CommandError>
     {
   
         let mut cmd = self.parse_cmd();
@@ -236,54 +328,41 @@ impl<'a,'b> ExecutableInternal for CommandLine<'a,'b>
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped())
                     .spawn()
+                    .map_err(|e| CommandError::SpawnError(self.command, e))
 
-         
     }
 
-    fn execute_cmd(self:&Self)  -> Option<CommandOutput>
+    async fn execute_cmd(mut self)  -> Result<CommandOutput, CommandError>
     {
-        let mut cmd = self.parse_cmd();
 
-        let strict:bool = {
-            if let Some(config) = &self.config { config.strict } else {true}
-        };
+        let strict:bool = self.config.is_strict();
 
-        let stdin_data:Option<&'a str> = {
-            if let Some(config) = &self.config { config.stdin } else {None}
-        };        
+        let stdin_data:Option<String> = self.config.take_data();
 
-        let output;
+        let cmd = self.command;
 
-        if stdin_data == None
+        let output= match stdin_data
         {
-            output = cmd.output();  
-        }
-        else
-        {
-            let data:&[u8] = stdin_data.unwrap().as_bytes();
-            let mut child = cmd.stdin(Stdio::piped())
-                        .stdout(Stdio::piped())
-                        .stderr(Stdio::piped())
-                        .spawn()
-                        .expect("Failed to spawn {self.command}");
+            None => self.parse_cmd().output().await,
+            Some(data) =>
+                {
+                    let data_slice: &[u8] = data.as_bytes();
+                    let mut child = self.spawn_cmd()?;
 
+                    let mut stdin = child.stdin.take().ok_or(CommandError::StdinError(cmd))?;
+                    stdin.write_all(data_slice).await.map_err(|e| CommandError::StdinWriteError(cmd, e))?;
+                    drop(stdin);
 
-            let mut stdin = child.stdin.take().expect("Failed to get stdin for {self.command}");
-            stdin.write_all(data).expect("Failed to write the stdin for {self.command}");
-            drop(stdin);
+                    child.wait_with_output().await
+                }
+        }.map_err(|e| CommandError::ExecutionError(cmd,e))?;
 
-            output = child.wait_with_output()
-        }
+        Ok(CommandOutput{
+            exit_code: if strict { output.status.code().unwrap_or(0) } else { 0 },
+            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+            stderr: String::from_utf8_lossy(&output.stderr).to_string()
+        })
 
-        match output
-        {
-            Ok(o) => Some(CommandOutput{
-                exit_code: if strict { o.status.code().unwrap() } else { 0 },
-                stdout: String::from_utf8_lossy(&o.stdout).to_string(),
-                stderr: String::from_utf8_lossy(&o.stderr).to_string()
-            }),
-            Err(e) => if strict {panic!("Error while running {}: {}",self.command,e)} else {None}
-        }
     }
 }
 

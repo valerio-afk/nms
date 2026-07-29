@@ -1,6 +1,6 @@
 use super::*;
 
-pub fn Shutdown<'a,'b>(config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn Shutdown(config:CmdConfig) -> CommandLine
 {
     CommandLine::new(
         "shutdown",
@@ -11,7 +11,7 @@ pub fn Shutdown<'a,'b>(config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
     )
 }
 
-pub fn Reboot<'a,'b>(config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn Reboot(config:CmdConfig) -> CommandLine
 {
     CommandLine::new(
         "reboot",

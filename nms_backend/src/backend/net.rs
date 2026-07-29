@@ -2,8 +2,18 @@
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
 use std::net::{Ipv4Addr, Ipv6Addr};
 use crate::cmdl::net::{NMCLIDevice, NMCLIConnection};
-use crate::cmdl::{Executable};
+use crate::cmdl::coreutils::Cat;
+use crate::cmdl::{Executable, CmdConfig};
+use regex::{Regex, Captures};
+use std::collections::HashMap;
+use anyhow::Error;
 use ipnet::{Ipv4Net, Ipv6Net};
+use configparser::ini::Ini;
+use crate::backend::{propagate_error, HTTPError};
+use crate::backend::msg::{ErrorMessages, StatusMessage};
+
+const WIREGUARD_CONF:&'static str = "/etc/wireguard/wg0.conf";
+const IFACE_TYPE_TO_SKIP: [&'static str;2] = ["loopback","bridge"];
 
 #[derive(Debug)]
 pub enum Host
@@ -54,12 +64,11 @@ impl<'de> Deserialize<'de> for Host
 #[derive(Debug,Serialize,Deserialize)]
 pub struct IPv4
 {
-    dynamic: bool,
-    address: Option<Ipv4Addr>,
-    netmask: Option<Ipv4Addr>,
-    gateway: Option<Ipv4Addr>,
-
-    dns: Vec<Host>
+    pub dynamic: bool,
+    pub address: Option<Ipv4Addr>,
+    pub netmask: Option<Ipv4Addr>,
+    pub gateway: Option<Ipv4Addr>,
+    pub dns: Vec<Host>
 }
 
 impl Default for IPv4
@@ -126,18 +135,17 @@ pub struct NetworkInterface
 
     #[serde(rename="type")]
     pub iface_type: IfaceType,
-    pub has_provide:bool,
+    pub has_profile:bool,
     pub ap:Option<bool>    
 }
 
-const IFACE_TYPE_TO_SKIP: [&'static str;2] = ["loopback","bridge"];
 
-pub fn get_network_ifaces() -> Vec<NetworkInterface>
+pub async fn get_network_ifaces() -> Vec<NetworkInterface>
 {
     let mut ifaces: Vec<NetworkInterface> = Vec::new();
-    let nmcli_dev_output = NMCLIDevice("status".to_string(), None, None).run();
+    let nmcli_dev_output = NMCLIDevice("status", None, CmdConfig::Empty).run().await;
 
-    if let Some(output) = nmcli_dev_output && (output.exit_code==0)
+    if let Ok(r) = nmcli_dev_output && let Some(output) = r && (output.exit_code==0)
     {
         for l in output.stdout.lines().map(|s| s.split(":").collect::<Vec<&str>>())
         {
@@ -172,9 +180,10 @@ pub fn get_network_ifaces() -> Vec<NetworkInterface>
 
             if iface_enabled
             {
-                let nmcli_conn_output = NMCLIConnection("show".to_string(), Some(&[connection.to_string()]), None).run();
+                let args:Option<&[&str]> = Some(&[connection]);
+                let nmcli_conn_output = NMCLIConnection("show", args, CmdConfig::Empty).run().await;
 
-                if let Some(output2) = nmcli_conn_output && (output2.exit_code==0)
+                if let Ok(r) = nmcli_conn_output && let Some(output2) = r && (output2.exit_code==0)
                 {
                     
                     ipv4_info = Some(IPv4::default());
@@ -316,7 +325,7 @@ pub fn get_network_ifaces() -> Vec<NetworkInterface>
                 ipv6: ipv6_info, 
                 network_name: connection.to_string(), 
                 iface_type: iface_type, 
-                has_provide: has_profile,
+                has_profile,
                 ap: hotspot 
             });
 
@@ -325,4 +334,35 @@ pub fn get_network_ifaces() -> Vec<NetworkInterface>
 
     return ifaces;
 
+}
+
+pub async fn read_wireguard_config_file() -> Result<Ini,HTTPError>
+{
+    let output = Cat(
+        Some(WIREGUARD_CONF.to_string()),
+        CmdConfig::default()
+    ).run()
+    .await
+    .map_err(|e| propagate_error(ErrorMessages::E_NET_VPN_CONF,e))?
+    .ok_or_else(|| ErrorMessages::E_NET_VPN_CONF.wrap_with_status_code(None))?;
+
+
+    let re = Regex::new(r"\[(.*?)\]").map_err(|e| propagate_error(ErrorMessages::E_NET_VPN_CONF,e))?;
+
+    let mut counts: HashMap<String,u32> = HashMap::new();
+
+    let cfg = re.replace_all(&output.stdout,|c:&Captures|
+    {
+        let name = c[1].to_string();
+        if let Some(v) = counts.get(&name) { counts.insert(name.clone(), v+1); }
+        else { counts.insert(name.clone(), 1); }
+
+        if name.to_lowercase() == "peer" { format!("[{}@{}]",name,counts.get(&name).unwrap()) }
+        else { format!("[{}]",name) }
+    });
+
+    let mut cfg_parser = Ini::new();
+    cfg_parser.read(cfg.to_string()).map_err(|e| propagate_error(ErrorMessages::E_NET_VPN_CONF,Error::msg(e)))?;
+
+    Ok(cfg_parser)
 }

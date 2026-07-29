@@ -1,12 +1,12 @@
 use super::*;
 
-pub fn UserAdd<'a,'b>(
+pub fn UserAdd(
     username:&String,
     groups:Option<&[&str]>,
     home_dir:Option<&String>,
     allow_login: bool,
-    config:Option<&'b CmdConfig<'a>>
-) -> CommandLine<'a,'b>
+    config:CmdConfig
+) -> CommandLine
 {
     let mut args:Vec<String> = vec![
         "-U".to_string(),
@@ -32,13 +32,13 @@ pub fn UserAdd<'a,'b>(
     CommandLine::new(
         "useradd",
         Some(args),
-        Some(Box::new(UserDel(username,false,config))),
+        Some(Box::new(UserDel(username,false,config.clone()))),
         None,
         config
     )
 }
 
-pub fn UserDel<'a,'b> (username:&String,keep_home:bool,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn UserDel (username:&String,keep_home:bool,config:CmdConfig) -> CommandLine
 {
     let mut args:Vec<String> = Vec::new();
 
@@ -59,10 +59,10 @@ pub fn UserDel<'a,'b> (username:&String,keep_home:bool,config:Option<&'b CmdConf
 }
 
 
-pub fn Groups<'a,'b>(
+pub fn Groups(
     username:&str,
-    config:Option<&'b CmdConfig<'a>>
-) -> CommandLine<'a,'b>
+    config:CmdConfig
+) -> CommandLine
 {
     CommandLine::new(
         "groups",
@@ -73,10 +73,10 @@ pub fn Groups<'a,'b>(
     )
 }
 
-pub fn GetEntPasswd<'a,'b>(
+pub fn GetEntPasswd(
     username:Option<&str>,
-    config:Option<&'b CmdConfig<'a>>
-) -> CommandLine<'a,'b>
+    config:CmdConfig
+) -> CommandLine
 {
     let mut args:Vec<String> = vec![
         "passwd".to_string()

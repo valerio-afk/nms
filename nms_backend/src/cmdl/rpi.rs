@@ -18,7 +18,7 @@ impl std::fmt::Display for VideoCoreCommands
     }
 }
 
-pub fn VCGENCMD<'a,'b>(cmd:VideoCoreCommands,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn VCGENCMD(cmd:VideoCoreCommands,config:CmdConfig) -> CommandLine
 {
     CommandLine::new(
         "vcgencmd",

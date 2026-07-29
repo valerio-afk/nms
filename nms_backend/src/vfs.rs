@@ -1,6 +1,6 @@
 use std::str::FromStr;
 use std::{path::PathBuf};
-use crate::cmdl::{Executable,zfs::{ZFS, ZFSActions, ZFSListArgs, ZFSListType, ZPool, ZPoolActions}};
+use crate::cmdl::{zfs::{ZFS, ZFSActions, ZFSListArgs, ZFSListType, ZPool, ZPoolActions}, CmdConfig, Executable};
 use serde::Serialize;
 use serde_json::Value;
 pub enum FileType 
@@ -27,11 +27,11 @@ pub struct Capacity
 
 impl Capacity
 {
-    pub fn from_zfs(pool_name:&str) -> Result<Self,Option<String>>
+    pub async fn from_zfs(pool_name:&str) -> Result<Self,Option<String>>
     {
-        let cmd = ZPool(ZPoolActions::List(pool_name), false, None);
+        let cmd = ZPool(ZPoolActions::List(pool_name.to_string()), false, CmdConfig::Empty);
         
-        if let Some(output) = cmd.run()
+        if let Some(output) = cmd.run().await.map_err(|e| Some(e.to_string()))?
         {
             if output.exit_code != 0 { return Err(Some(output.stderr)); }
             let zpool_list:Value = serde_json::from_str(&output.stdout).map_err(|x| Some(x.to_string()))?;
@@ -64,7 +64,7 @@ pub struct VFS
 
 impl VFS
 {
-    pub fn from_zfs(pool:&str,dataset:&str) -> Result<Self,Option<String>>
+    pub async fn from_zfs(pool:&str,dataset:&str) -> Result<Self,Option<String>>
     {
         //let basepath = PathBuf::from_str(basepath).unwrap();
         //let capacity = Capacity::from_zfs(&basepath);
@@ -74,15 +74,15 @@ impl VFS
         let cmd = ZFS(
             ZFSActions::List(
                 ZFSListArgs::new(
-                    Some(&vec!["mountpoint"]),
+                    Some(vec!["mountpoint"]),
                     Some(ZFSListType::Filesystem),
-                    Some(&key)
+                    Some(key.clone())
                 )
             ), 
             false, 
-            None);
+            CmdConfig::Empty);
 
-        if let Some(output) = cmd.run()
+        if let Some(output) = cmd.run().await.map_err(|e| Some(e.to_string()))?
         {
             if output.exit_code != 0 { return Err(Some(output.stderr)); }
 
@@ -99,7 +99,7 @@ impl VFS
                         filetype: FileType::Directory(Vec::new()),
                         size: 0
                     },
-                    capacity: Capacity::from_zfs(pool)?
+                    capacity: Capacity::from_zfs(pool).await?
                 });
             }
         }

@@ -59,7 +59,7 @@ impl std::fmt::Display for TarCompression
     }
 }
 
-pub fn Tar<'a,'b>(
+pub fn Tar(
             tar_filename:&String,
             path:&String,
             action:CompressionAction,
@@ -67,8 +67,8 @@ pub fn Tar<'a,'b>(
             files:Option<&Vec<&String>>,
             exclude:Option<&Vec<&String>>,
             strip_component:Option<u32>,
-            config:Option<&'b CmdConfig<'a>>
-        ) -> CommandLine<'a,'b>
+            config:CmdConfig
+        ) -> CommandLine
 {
     let flags = format!("-{}{}f",TarArchive::flag(&action),compression);
     let mut args:Vec<String> = vec![
@@ -114,7 +114,7 @@ pub fn Tar<'a,'b>(
     
 }
 
-pub fn Unpack<'a,'b>(archive:&String,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn Unpack(archive:&String,config:CmdConfig) -> CommandLine
 {
     CommandLine::new(
         "unp",
@@ -125,12 +125,12 @@ pub fn Unpack<'a,'b>(archive:&String,config:Option<&'b CmdConfig<'a>>) -> Comman
     )
 }
 
-pub fn Zip<'a,'b>(
+pub fn Zip(
                     archive:&String,
                     files:&Vec<&String>,
                     recursive:bool,
-                    config:Option<&'b CmdConfig<'a>>
-                ) -> CommandLine<'a,'b>
+                    config:CmdConfig
+                ) -> CommandLine
 {
     let mut args:Vec<String> = Vec::new();
 
@@ -149,23 +149,19 @@ pub fn Zip<'a,'b>(
     CommandLine::new(
         "zip",
         Some(args),
-        Some(
-            Box::new(
-                coreutils::RM(archive,false,false,config)
-            )
-        ),
+        Some(Box::new(coreutils::RM(archive,false,false, config.clone()))),
         None,
         config
     )
 }
 
-pub fn SevenZip<'a,'b>(
+pub fn SevenZip(
     archive:&String,
     action:CompressionAction,
     files:Option<&Vec<&String>>,
     compression_level:Option<u32>,
-    config:Option<&'b CmdConfig<'a>>
-) -> CommandLine<'a,'b>
+    config:CmdConfig
+) -> CommandLine
 {
     let mut args:Vec<String> = vec![SevenZipArchive::flag(&action).to_string()];
 
@@ -204,7 +200,7 @@ pub fn SevenZip<'a,'b>(
     )
 }
 
-pub fn ALS<'a,'b>(archive:&String,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn ALS(archive:&String,config:CmdConfig) -> CommandLine
 {
     CommandLine::new(
         "als",

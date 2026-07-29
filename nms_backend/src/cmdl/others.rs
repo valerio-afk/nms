@@ -1,6 +1,6 @@
 use super::*;
 
-pub fn Mimetype<'a,'b>(filename:&String,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn Mimetype(filename:&String,config:CmdConfig) -> CommandLine
 {
     CommandLine::new(
         "mimetype",
@@ -10,12 +10,12 @@ pub fn Mimetype<'a,'b>(filename:&String,config:Option<&'b CmdConfig<'a>>) -> Com
         config)
 }
 
-pub fn RSync<'a,'b>(
+pub fn RSync(
     src:&str,
     dst:&str,
     flags:Option<&[&str]>,
-    config:Option<&'b CmdConfig<'a>>
-) -> CommandLine<'a,'b>
+    config:CmdConfig
+) -> CommandLine
 {
     let mut args:Vec<String> = Vec::new();
 

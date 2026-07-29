@@ -31,7 +31,7 @@ impl std::fmt::Display for DockerRestart
 
 
 
-pub fn DockerRun<'a,'b>(
+pub fn DockerRun(
     image_name:&str,
     container_name: &str,
     mount:Option<HashMap<&str,&str>>,
@@ -41,8 +41,8 @@ pub fn DockerRun<'a,'b>(
     detach:bool,
     remove:bool,
     restart:Option<DockerRestart>,
-    config: Option<&'b CmdConfig<'a>>
-) -> CommandLine<'a,'b>
+    config: CmdConfig
+) -> CommandLine
 {
     let mut args:Vec<String> = vec!["run".to_string()];
 
@@ -125,14 +125,14 @@ pub fn DockerRun<'a,'b>(
         "docker",
         Some(args),
         Some(Box::new(
-            DockerStop(container_name,config)
+            DockerStop(container_name,config.clone())
         )),
         None,
         config
     )
 }
 
-pub fn DockerStop<'a,'b>(identifier:&str,config: Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn DockerStop(identifier:&str,config: CmdConfig) -> CommandLine
 {
     CommandLine::new(
         "docker",
@@ -143,7 +143,7 @@ pub fn DockerStop<'a,'b>(identifier:&str,config: Option<&'b CmdConfig<'a>>) -> C
     )
 }
 
-pub fn DockerRemove<'a,'b>(identifier:&str,config: Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn DockerRemove(identifier:&str,config: CmdConfig) -> CommandLine
 {
     CommandLine::new(
         "docker",
@@ -154,12 +154,12 @@ pub fn DockerRemove<'a,'b>(identifier:&str,config: Option<&'b CmdConfig<'a>>) ->
     )
 }
 
-pub fn DockerInspect<'a,'b>
+pub fn DockerInspect
 (
     identifier:&str,
     parameters:&[&str],
-    config: Option<&'b CmdConfig<'a>>
-) -> CommandLine<'a,'b>
+    config: CmdConfig
+) -> CommandLine
 {
     let mut args:Vec<String> = vec!["inspect".to_string()];
 

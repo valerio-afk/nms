@@ -1,6 +1,6 @@
 use super::*;
 use std::fmt::{Display,Formatter,Result};
-
+use tracing::error;
 
 #[derive(PartialEq)]
 #[derive(Debug)]
@@ -162,7 +162,7 @@ impl POSIXPermissions
                 
             }
 
-            if !parsed { panic!("Unrecognised character `{c}` in `{permission}`. Make sure the order of the permissions in 'rwx'"); }
+            if !parsed { error!("Unrecognised character `{c}` in `{permission}`. Make sure the order of the permissions in 'rwx'"); }
         }
 
 
@@ -291,7 +291,7 @@ impl Display for FileSystemPermissions
     }
 }
 
-pub fn LS<'a,'b>(path:&String,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn LS(path:&String,config:CmdConfig) -> CommandLine
 {
     return CommandLine::new(
         "ls",
@@ -302,7 +302,7 @@ pub fn LS<'a,'b>(path:&String,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'
     );
 }
 
-pub fn Cat<'a,'b,S:AsRef<str>+ToString>(path:Option<S>, config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn Cat<S:AsRef<str>+ToString>(path:Option<S>, config:CmdConfig) -> CommandLine
 {
     if let Some(p) = path
     {
@@ -316,25 +316,24 @@ pub fn Cat<'a,'b,S:AsRef<str>+ToString>(path:Option<S>, config:Option<&'b CmdCon
     }
     else
     {
-        if let Some(c) = &config
+        if let CmdConfig::Provided {stdin,..} = &config && stdin.is_some()
         {
-            if c.stdin != None
-            {
-                return CommandLine::new(
-                    "cat",
-                    None,
-                    None,
-                    None,
-                    config
-                );
-            }
+
+            return CommandLine::new(
+                "cat",
+                None,
+                None,
+                None,
+                config
+            );
+
         }
 
         panic!("Invalid use of `cat`. Either provide a filename OR piped data.");
     }
 }
 
-pub fn MV<'a,'b>(src:&String, dst:&String,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn MV(src:&String, dst:&String,config:CmdConfig) -> CommandLine
 {
     let cmd:&'static str = "mv";
 
@@ -346,14 +345,14 @@ pub fn MV<'a,'b>(src:&String, dst:&String,config:Option<&'b CmdConfig<'a>>) -> C
             Some(vec![dst.clone(),src.clone()]),
             None,
             None,
-            config
+            config.clone()
         ))),
         None,
         config
     )
 }
 
-pub fn CP<'a,'b>(src:&String, dst:&String,recursive:bool,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn CP(src:&String, dst:&String,recursive:bool,config:CmdConfig) -> CommandLine
 {
     let mut args:Vec<String> = Vec::new();
 
@@ -366,28 +365,41 @@ pub fn CP<'a,'b>(src:&String, dst:&String,recursive:bool,config:Option<&'b CmdCo
         "cp", 
         Some(args),
         Some(Box::new(
-            RM(dst,recursive,false,config)
+            RM(dst,recursive,false,config.clone())
         )),
         None, 
         config
     )
 }
 
-pub fn RM<'a,'b>(filename:&String,
+pub fn RM(filename:&String,
                 recursive:bool,
                 revertible:bool,
-                config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+                config:CmdConfig) -> CommandLine
 {
     if revertible
     {
         let mut new_name:String = filename.clone();
         new_name.push_str(".bkp");
-        
-        let mut mv_cmd = MV(filename,&new_name,config);
 
-        mv_cmd.drop = Some(Box::new(move |_:&CommandLine| 
+        let mut mv_cmd = MV(filename,&new_name,config.clone());
+
+
+
+        mv_cmd.drop = Some(Box::new(move |_:&Pin<&mut CommandLine>|
         {
-            RM(&new_name,recursive,false,config).run();
+            let file_to_remove = new_name.clone();
+            let cfg = config.clone();
+
+            Box::pin( async move {
+
+                let r = RM(&file_to_remove, recursive, false, cfg).run().await;
+                match r
+                {
+                    Err(e) => error!("Error while executing `rm` cleanup function: {}",e),
+                    Ok(_) => ()
+                }
+            })
         }));
 
         return mv_cmd;
@@ -407,7 +419,7 @@ pub fn RM<'a,'b>(filename:&String,
     )
 }
 
-pub fn DD<'a,'b>(input_file:&String, output_file:&String,bytes:Option<u32>, count:Option<u32>, config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn DD(input_file:&String, output_file:&String,bytes:Option<u32>, count:Option<u32>, config:CmdConfig) -> CommandLine
 {
     let mut args:Vec<String> = vec![
         format!("if={input_file}"),
@@ -433,16 +445,16 @@ pub fn DD<'a,'b>(input_file:&String, output_file:&String,bytes:Option<u32>, coun
     )
 }
 
-pub fn CreateKey<'a,'b>(filename:&String,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn CreateKey(filename:&String,config:CmdConfig) -> CommandLine
 {
     DD(&"/dev/urandom".to_string(),filename,Some(32),Some(1),config)
 }
 
-pub fn Chmod<'a,'b>(permissions:&FileSystemPermissions,
+pub fn Chmod(permissions:&FileSystemPermissions,
                     old_permissions:Option<&FileSystemPermissions>,
                     filename:&String,
                     recursive:bool,
-                    config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+                    config:CmdConfig) -> CommandLine
 {
     let mut args:Vec<String> = Vec::new();
 
@@ -456,7 +468,7 @@ pub fn Chmod<'a,'b>(permissions:&FileSystemPermissions,
         Some(args),
         match old_permissions
         {
-            Some (p) => Some(Box::new(Chmod(p,None,filename,recursive,config))),
+            Some (p) => Some(Box::new(Chmod(p,None,filename,recursive,config.clone()))),
             None => None
         },
         None,
@@ -485,15 +497,15 @@ fn chown_owner_formatter(u:&OSUser,g:&OSUser) -> String
     return fmt;
 }
 
-pub fn Chown<'a,'b>(
+pub fn Chown(
                     user:&OSUser,
                     group:&OSUser,
                     old_user:&OSUser,
                     old_group:&OSUser,
                     filename:&String,
                     recursive:bool,
-                    config:Option<&'b CmdConfig<'a>>
-                ) -> CommandLine<'a,'b>
+                    config:CmdConfig
+                ) -> CommandLine
 {
     let new_owner = chown_owner_formatter(user, group);
     let old_owner = chown_owner_formatter(old_user, old_group);
@@ -517,7 +529,7 @@ pub fn Chown<'a,'b>(
                 &OSUser::Empty, &OSUser::Empty,
                 filename,
                 recursive,
-                config
+                config.clone()
             )))
         }
         else { None },
@@ -526,7 +538,7 @@ pub fn Chown<'a,'b>(
     )
 }
 
-pub fn Mkdir<'a,'b>(path:&String,permissions:Option<FileSystemPermissions>,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn Mkdir(path:&String,permissions:Option<FileSystemPermissions>,config:CmdConfig) -> CommandLine
 {
     let mut args:Vec<String> = Vec::new();
 
@@ -544,7 +556,7 @@ pub fn Mkdir<'a,'b>(path:&String,permissions:Option<FileSystemPermissions>,confi
         Some(args),
         {
             Some(Box::new(
-                RM(path,true,false,config)
+                RM(path,true,false,config.clone())
             ))
         },
         None,
@@ -553,7 +565,7 @@ pub fn Mkdir<'a,'b>(path:&String,permissions:Option<FileSystemPermissions>,confi
 }
 
 
-pub fn Touch<'a,'b>(filename:&String,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn Touch(filename:&String,config:CmdConfig) -> CommandLine
 {
     CommandLine::new(
         "touch",
@@ -562,13 +574,13 @@ pub fn Touch<'a,'b>(filename:&String,config:Option<&'b CmdConfig<'a>>) -> Comman
             filename,
             false,
             false,
-            config
+            config.clone()
         ))),
         None, 
         config)
 }
 
-pub fn Stat<'a,'b,'c>(filename:&str,format:Option<Vec<StatFormat<'c>>>,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn Stat<'a,'b,'c>(filename:&str,format:Option<Vec<StatFormat<'c>>>,config:CmdConfig) -> CommandLine
 {
     let mut args:Vec<String> = Vec::new();
 
@@ -589,7 +601,7 @@ pub fn Stat<'a,'b,'c>(filename:&str,format:Option<Vec<StatFormat<'c>>>,config:Op
     )
 }
 
-pub fn Readlink<'a,'b>(path:&String,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn Readlink(path:&String,config:CmdConfig) -> CommandLine
 {
     CommandLine::new(
         "readlink",
@@ -600,7 +612,7 @@ pub fn Readlink<'a,'b>(path:&String,config:Option<&'b CmdConfig<'a>>) -> Command
     )
 }
 
-pub fn MD5Sum<'a,'b>(path:&String,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn MD5Sum(path:&String,config:CmdConfig) -> CommandLine
 {
     CommandLine::new(
         "md5sum",
@@ -611,7 +623,7 @@ pub fn MD5Sum<'a,'b>(path:&String,config:Option<&'b CmdConfig<'a>>) -> CommandLi
     )
 }
 
-pub fn Truncate<'a,'b>(filename:&String,size:usize,config:Option<&'b CmdConfig<'a>>)  -> CommandLine<'a,'b>
+pub fn Truncate(filename:&String,size:usize,config:CmdConfig)  -> CommandLine
 {
     CommandLine::new(
         "truncate",

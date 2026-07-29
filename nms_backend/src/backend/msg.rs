@@ -1,9 +1,9 @@
 use axum::{Json,http::{StatusCode}};
-use std::fmt::Display;
+use std::fmt::{Display, Formatter};
 use serde::{Serialize};
 use serde_json::Value;
 use tracing::{info,warn,error};
-use strum::EnumProperty;
+use strum::{EnumProperty,IntoStaticStr};
 use super::HTTPError;
 
 pub trait StatusMessage:Clone
@@ -13,7 +13,7 @@ pub trait StatusMessage:Clone
 }
 
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, IntoStaticStr)]
 #[serde(tag = "type")]
 pub enum MessageTypes
 {
@@ -35,10 +35,26 @@ pub struct MessageResponse
     params:Option<Vec<Value>>
 }
 
+impl Display for MessageTypes
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
+    {
+        write!(f, "{:?}", self)
+    }
+}
+
 #[derive(Debug, Serialize)]
 pub struct WrappedResponse
 {
     detail:MessageResponse
+}
+
+impl Display for WrappedResponse
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
+    {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl WrappedResponse
@@ -196,7 +212,7 @@ pub enum ErrorMessages
 
 impl StatusMessage for ErrorMessages
 {
-    fn wrap(self:&Self,params:Option<Vec<Value>>) -> WrappedResponse
+    fn wrap(&self,params:Option<Vec<Value>>) -> WrappedResponse
     {
         WrappedResponse { 
             detail: MessageResponse 
@@ -206,7 +222,7 @@ impl StatusMessage for ErrorMessages
             }
         }    
     }
-    fn wrap_with_status_code(self:&Self,params:Option<Vec<Value>>) -> HTTPError
+    fn wrap_with_status_code(&self,params:Option<Vec<Value>>) -> HTTPError
     {
         let status_code_str:&'static str = {
             match self.get_str("status_code")

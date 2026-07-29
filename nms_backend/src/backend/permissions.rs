@@ -1,4 +1,5 @@
-use std::sync::{RwLock,Arc};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use strum::{EnumString,Display,EnumIter,IntoEnumIterator};
 use serde_json::Value;
 use super::msg::{StatusMessage,ErrorMessages};
@@ -157,21 +158,19 @@ impl UserPermissions
     }
 }
 
-pub fn check_permission(user:&Arc<RwLock<User>>, perm: UserPermissions) -> Result<(),HTTPError>
+pub async fn check_permission(user:&Arc<RwLock<User>>, perm: UserPermissions) -> Result<(),HTTPError>
 {
-    if let Ok(u) = user.read()
+    let u = user.read().await;
+
+    if let Some(u_perm) = &u.permissions
     {
-        if let Some(u_perm) = &u.permissions
+        if perm.is_any_allowed(&u_perm)
         {
-            if perm.is_any_allowed(&u_perm)
-            {
-                return Ok(())
-            }
+            return Ok(());
         }
     }
     
-    
-    return Err(ErrorMessages::E_NO_PERM.wrap_with_status_code(Some(vec![Value::String(perm.to_string())])))
+    Err(ErrorMessages::E_NO_PERM.wrap_with_status_code(Some(vec![Value::String(perm.to_string())])))
     
 }
 

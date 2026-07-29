@@ -2,11 +2,11 @@ use super::*;
 
 const NMCLI_DEFAULT_PARAMS:&[&str] = &["-c", "no","-t"]; //no colours, terse
 
-pub fn NMCLIDevice<'a,'b>(
-    subcommand:String,
-    parameters:Option<&[String]>,
-    config:Option<&'b CmdConfig<'a>>
-) -> CommandLine<'a,'b>
+pub fn NMCLIDevice(
+    subcommand:&str,
+    parameters:Option<&[&str]>,
+    config:CmdConfig
+) -> CommandLine
 {
     let mut args:Vec<String> = Vec::new(); //vec!["device".to_string(), subcommand];
 
@@ -16,13 +16,13 @@ pub fn NMCLIDevice<'a,'b>(
     }
 
     args.push("device".to_string());
-    args.push(subcommand);
+    args.push(subcommand.to_string());
 
     if let Some(params) = parameters
     {
         for p in params
         {
-            args.push(p.clone());
+            args.push(p.to_string());
         }
     }
 
@@ -35,11 +35,11 @@ pub fn NMCLIDevice<'a,'b>(
     )
 }
 
-pub fn NMCLIConnection<'a,'b>(
-    subcommand:String,
-    parameters:Option<&[String]>,
-    config:Option<&'b CmdConfig<'a>>
-) -> CommandLine<'a,'b>
+pub fn NMCLIConnection(
+    subcommand:&str,
+    parameters:Option<&[&str]>,
+    config:CmdConfig
+) -> CommandLine
 {
     let mut args:Vec<String> = Vec::new();
 
@@ -49,13 +49,13 @@ pub fn NMCLIConnection<'a,'b>(
     }
 
     args.push("connection".to_string());
-    args.push(subcommand);
+    args.push(subcommand.to_string());
 
     if let Some(params) = parameters
     {
         for p in params
         {
-            args.push(p.clone());
+            args.push(p.to_string());
         }
     }
 

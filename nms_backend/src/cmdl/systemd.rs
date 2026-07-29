@@ -32,14 +32,14 @@ impl std::fmt::Display for SystemctlAction
 }
 
 
-pub fn Journalctl<'a,'b>
+pub fn Journalctl
 (
     service:&String,
     grep:Option<&String>,
     since:Option<&String>,
     until:Option<&String>,
-    config:Option<&'b CmdConfig<'a>>
-) -> CommandLine<'a,'b>
+    config:CmdConfig
+) -> CommandLine
 {
     let mut args:Vec<String> = vec![
         "-u".to_string(),
@@ -75,27 +75,27 @@ pub fn Journalctl<'a,'b>
     )
 }
 
-pub fn Systemctl<'a,'b>
+pub fn Systemctl
 (
     service:&String,
     action:&SystemctlAction,
     revertible:bool,
-    config:Option<&'b CmdConfig<'a>>
-) -> CommandLine<'a,'b>
+    config:CmdConfig
+) -> CommandLine
 {
-    let mut revert_cmd:Option<CommandLine<'a,'b>> = None;
+    let mut revert_cmd:Option<CommandLine> = None;
 
     if revertible
     {
         revert_cmd = match action
             {
-                SystemctlAction::Enable => Some(Systemctl(service,&SystemctlAction::Disable,false,config)),
-                SystemctlAction::Disable => Some(Systemctl(service,&SystemctlAction::Enable,false,config)),
-                SystemctlAction::Start => Some(Systemctl(service,&SystemctlAction::Stop,false,config)),
-                SystemctlAction::Stop => Some(Systemctl(service,&SystemctlAction::Start,false,config)),
+                SystemctlAction::Enable => Some(Systemctl(service,&SystemctlAction::Disable,false,config.clone())),
+                SystemctlAction::Disable => Some(Systemctl(service,&SystemctlAction::Enable,false,config.clone())),
+                SystemctlAction::Start => Some(Systemctl(service,&SystemctlAction::Stop,false,config.clone())),
+                SystemctlAction::Stop => Some(Systemctl(service,&SystemctlAction::Start,false,config.clone())),
                 SystemctlAction::Restart => None,
-                SystemctlAction::Mask => Some(Systemctl(service,&SystemctlAction::Unmask,false,config)),
-                SystemctlAction::Unmask => Some(Systemctl(service,&SystemctlAction::Mask,false,config)),
+                SystemctlAction::Mask => Some(Systemctl(service,&SystemctlAction::Unmask,false,config.clone())),
+                SystemctlAction::Unmask => Some(Systemctl(service,&SystemctlAction::Mask,false,config.clone())),
                 SystemctlAction::IsActive => None
             }
     }

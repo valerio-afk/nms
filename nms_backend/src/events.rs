@@ -1,28 +1,31 @@
-use uuid::Uuid;
-use std::collections::HashMap;
-use std::io::{BufRead, BufReader};
-use std::os::fd::AsFd;
-use std::sync::{Arc,mpsc,Mutex};
-use std::sync::atomic::{AtomicBool,Ordering};
-use std::thread;
-use std::time::Duration;
-use std::path::Path;
-use tracing::{debug,info,warn,error};
 use chrono::Local;
-use nix::poll::{poll, PollFd, PollFlags};
-use serde::{Serialize,Deserialize};
- 
 use crate::backend::msg::{LogInfos, LogWarnings, LoggerMessages};
-use crate::thread_wrapper::{ThreadWrapper, WrappedThread};
-use crate::cmdl::{CmdConfig, Executable};
 use crate::cmdl::coreutils::{Stat,StatFormat};
 use crate::cmdl::notify::{INotifyEvents,INotifyWait};
+use crate::cmdl::{CmdConfig, Executable};
+use crate::task::{TaskWrapper, WrappedTask, WrappedTaskInternal,Runner};
+use nix::poll::{poll, PollFd, PollFlags};
+use serde::{Serialize,Deserialize};
+use std::collections::HashMap;
+use std::ops::Deref;
+use std::os::fd::AsFd;
+use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool,Ordering};
+use std::time::Duration;
+use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::sync::{mpsc,Mutex};
+use tokio::time::sleep;
+use tokio::task::JoinHandle;
+use tokio::time::timeout;
+use tracing::{debug,info,warn,error};
+use uuid::Uuid;
 
 
 pub mod actions;
 
 pub type ContextData = HashMap<ContextVariables,String>;
-pub type EventCallback = Arc<dyn Fn(&Option<ContextData>)+Send+Sync>;
+pub type EventCallback = Runner<Option<ContextData>>;
 pub type EventData = (Trigger,Option<ContextData>);
 
 #[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -203,17 +206,38 @@ impl std::fmt::Display for ContextVariables
 pub struct EventAction
 {
     uuid:String,
-    callback:EventCallback
+    callback:Arc<EventCallback>
 }
 
 
-pub struct EventManager
+pub struct EventManageInternal
 {
     registered_actions:Arc<Mutex<HashMap<Events,Vec<EventAction>>>>,
     tx:Mutex<Option<mpsc::Sender<EventData>>>,
     running_state:Arc<AtomicBool>,
-    main_thread:Mutex<Option<thread::JoinHandle<()>>>,
-    threads:Mutex<HashMap<String,Arc<WrappedThread>>>
+    main_task:Mutex<Option<JoinHandle<()>>>,
+    tasks:Mutex<HashMap<String,WrappedTask>>
+}
+
+impl EventManageInternal
+{
+    pub fn new() -> Self
+    {
+        EventManageInternal
+        {
+            registered_actions: Arc::new(Mutex::new(HashMap::new())),
+            tx: Mutex::new(None),
+            running_state: Arc::new(AtomicBool::new(false)),
+            main_task: Mutex::new(None),
+            tasks: Mutex::new(HashMap::new())
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct EventManager
+{
+    internal: Arc<EventManageInternal>
 }
 
 pub enum Trigger
@@ -222,343 +246,341 @@ pub enum Trigger
     Action(String)
 }
 
+impl Deref for EventManager
+{
+    type Target = EventManageInternal;
+    fn deref(&self) -> &Self::Target
+    {
+        &self.internal
+    }
+}
+
 impl EventManager
 {
-    fn start_inotify_thread(self: &Arc<Self>,path:&str)
+    async fn start_inotify_thread(&self,path:&str)
     {
-        let config: CmdConfig = CmdConfig::new(
-            true,
-            true,
-            None,
-            None
-        );
 
-        let manager = Arc::clone(&self);
+        let mngt = self.clone();
         let thread_name = "INotifyThread".to_string();
         let thread_path = path.to_string();
 
 
-        let th = WrappedThread::new(
+        let inotify_task = WrappedTask::new(
             Box::new(
-                move |this:&Arc<WrappedThread>|
+                move |this:&WrappedTask|
                 {
-                    let cmd = INotifyWait(
-                        &thread_path, 
-                        true, 
-                        true, 
-                        vec![INotifyEvents::Create,INotifyEvents::Delete,INotifyEvents::Modify], 
-                        Some(&"%e%0%w%0%f".to_string()), 
-                        Some(&config)
-                    );
-
-                    let result = cmd.spawn();
-                    
-                    if let Err(e) = result
-                    {
-                        error!("Unable to start inotifywait: {e}");
-                    }
-                    else 
-                    {  
-                        let mut child = result.unwrap();  
-                        let stdout = child.stdout.take().unwrap();
-
-                        let mut reader = BufReader::new(stdout);    
-
-                        info!("Started");
-
-                        while this.is_running()
-                        {
+                    let path = thread_path.clone();
+                    let task = this.clone();
+                    let manager = mngt.clone();
+                    Box::pin(
+                        async move
                             {
-                                let fd = reader.get_ref().as_fd();
-                                let mut fds = [PollFd::new(fd,PollFlags::POLLIN)];
-                                let ready = poll(&mut fds,3000u16);
+                                let cmd = INotifyWait(
+                                    &path,
+                                    true,
+                                    true,
+                                    vec![INotifyEvents::Create, INotifyEvents::Delete, INotifyEvents::Modify],
+                                    Some(&"%e%0%w%0%f".to_string()),
+                                    CmdConfig::default()
+                                );
 
-                                
-
-                                match ready
+                                let result = cmd.spawn();
+                                match result
                                 {
-                                    Ok(num) => 
+                                    Err(e) => error!("Unable to start inotifywait: {e}"),
+                                    Ok(mut child) =>
                                     {
-                                        if num == 0 { continue; }
-                                    }
-                                    Err(_) => {continue;}
-                                }
-
-                            }
-                            
-
-                            if let Ok(Some(status)) = child.try_wait()
-                            {
-                                error!("inotifywait ended unexpectedly: {status}");
-                                break;
-                            }
-
-
-                            let mut line = String::new();
-                            let n = reader.read_line(&mut line);
-
-                            match n
-                            {
-                                Ok(bytes) => 
-                                {
-                                    if bytes == 0 
-                                    {
-                                        thread::sleep(std::time::Duration::from_secs(2));
-                                        error!("Bytes received: {bytes}"); continue; 
-                                    }
-                                }
-                                Err(err) =>
-                                {
-                                    error!("Error while reading the stdout from inotifywait: {err}");
-                                    break;
-                                }
-                            }
-
-
-                            let tokens:Vec<&str> = line.split("\0").collect();
-
-                            if tokens.len() == 3
-                            {
-                                let event = tokens[0];
-                                let path = tokens[1];
-                                let name = tokens[2];
-
-                                let is_dir =  if let Some(_) = event.find("ISDIR") { "1" } else { "0" };
-                            
-                                let event_to_trigger:Option<INotifyEvents> = {
-                                    if let Some(_) = event.find("CREATE") { Some(INotifyEvents::Create) }
-                                    else if let Some(_) = event.find("MODIFY") { Some(INotifyEvents::Modify) }
-                                    else if let Some(_) = event.find("DELETE") { Some(INotifyEvents::Delete) }
-                                    else {None}
-                                };
-
-                                if let Some(e) = event_to_trigger
-                                {
-                                    let mut ctx: HashMap<ContextVariables,String> = HashMap::new();
-
-                                    ctx.insert(ContextVariables::IsDir, is_dir.to_string());
-                                    ctx.insert(ContextVariables::Path, path.to_string());
-                                    ctx.insert(ContextVariables::Filename, name.to_string());
-
-                                    //TODO: implement line thread.py:222 with call to get_home_owner                            
-                                    //ctx.insert(ContextVariables::HomeOwner, "");
-
-                                    let perform_stat = 
-                                    {
-                                        match e
+                                        match child.stdout.take()
                                         {
-                                            INotifyEvents::Delete => false,
-                                            _ => true
-                                        }
-                                    };
+                                            None => error!("Unable to get inotify stdout"),
+                                            Some(stdout) => {
+                                                info!("Started");
+                                                let mut reader = BufReader::new(stdout);
 
-                                    if perform_stat
-                                    {
-                                        let pth = Path::new(path).join(name);
-                                        let stat = Stat(&pth.to_string_lossy().to_string(),Some(
-                                                vec![
-                                                    StatFormat::PermissionsOctal,
-                                                    StatFormat::Filler(" "),
-                                                    StatFormat::User,
-                                                    StatFormat::Filler(" "),
-                                                    StatFormat::GroupName,
-                                                ]
-                                            ),
-                                            None
-                                        );
-
-                                        let result = stat.run();
-
-                                        let mut user = String::new();
-                                        let mut group = String::new();
-                                        let mut permissions = String::new();
-
-                                        if let Some(output) = result
-                                        {
-                                            if output.exit_code == 0
-                                            {
-                                                let tokens:Vec<&str> = output.stdout.split(" ").collect();
-
-                                                if tokens.len()==3
+                                                while task.is_running()
                                                 {
-                                                    user = tokens[0].to_string();
-                                                    group = tokens[1].to_string();
-                                                    permissions = tokens[2].to_string();
+                                                    let fd = reader.get_ref().as_fd();
+                                                    let mut fds = [PollFd::new(fd,PollFlags::POLLIN)];
+                                                    let ready = poll(&mut fds,3000u16);
+
+                                                    match ready
+                                                    {
+                                                        Ok(num) =>
+                                                        {
+                                                            if num == 0 { continue; }
+                                                        }
+                                                        Err(_) => {continue;}
+                                                    }
+
+                                                    if let Ok(Some(status)) = child.try_wait()
+                                                    {
+                                                        error!("inotifywait ended unexpectedly: {status}");
+                                                        break;
+                                                    }
+
+                                                    let mut line = String::new();
+                                                    let n = reader.read_line(&mut line).await;
+
+                                                    match n
+                                                    {
+                                                        Ok(bytes) =>
+                                                        {
+                                                            if bytes == 0
+                                                            {
+                                                                sleep(std::time::Duration::from_secs(2)).await;
+                                                                error!("Bytes received: {bytes}");
+                                                                continue;
+                                                            }
+                                                        }
+                                                        Err(err) =>
+                                                        {
+                                                            error!("Error while reading the stdout from inotifywait: {err}");
+                                                            break;
+                                                        }
+                                                    }
+
+                                                    let tokens:Vec<&str> = line.split("\0").collect();
+
+                                                    if tokens.len() == 3
+                                                    {
+                                                        let event = tokens[0];
+                                                        let path = tokens[1];
+                                                        let name = tokens[2];
+
+                                                        let is_dir =  if let Some(_) = event.find("ISDIR") { "1" } else { "0" };
+
+                                                        let event_to_trigger:Option<INotifyEvents> = {
+                                                            if let Some(_) = event.find("CREATE") { Some(INotifyEvents::Create) }
+                                                            else if let Some(_) = event.find("MODIFY") { Some(INotifyEvents::Modify) }
+                                                            else if let Some(_) = event.find("DELETE") { Some(INotifyEvents::Delete) }
+                                                            else {None}
+                                                        };
+
+                                                        if let Some(e) = event_to_trigger
+                                                        {
+                                                            let mut ctx: HashMap<ContextVariables,String> = HashMap::new();
+
+                                                            ctx.insert(ContextVariables::IsDir, is_dir.to_string());
+                                                            ctx.insert(ContextVariables::Path, path.to_string());
+                                                            ctx.insert(ContextVariables::Filename, name.to_string());
+
+                                                            //TODO: implement line thread.py:222 with call to get_home_owner
+                                                            //ctx.insert(ContextVariables::HomeOwner, "");
+
+                                                            let perform_stat =
+                                                            {
+                                                                match e
+                                                                {
+                                                                    INotifyEvents::Delete => false,
+                                                                    _ => true
+                                                                }
+                                                            };
+
+                                                            if perform_stat
+                                                            {
+                                                                let pth = Path::new(path).join(name);
+                                                                let stat = Stat(&pth.to_string_lossy().to_string(),Some(
+                                                                        vec![
+                                                                            StatFormat::PermissionsOctal,
+                                                                            StatFormat::Filler(" "),
+                                                                            StatFormat::User,
+                                                                            StatFormat::Filler(" "),
+                                                                            StatFormat::GroupName,
+                                                                        ]
+                                                                    ),
+                                                                    CmdConfig::Empty
+                                                                );
+
+                                                                let result = stat.run().await;
+
+                                                                let mut user = String::new();
+                                                                let mut group = String::new();
+                                                                let mut permissions = String::new();
+
+                                                                if let Ok(r) = result && let Some(output) = r && output.exit_code == 0
+                                                                {
+                                                                    let tokens:Vec<&str> = output.stdout.split(" ").collect();
+
+                                                                    if tokens.len()==3
+                                                                    {
+                                                                        user = tokens[0].to_string();
+                                                                        group = tokens[1].to_string();
+                                                                        permissions = tokens[2].to_string();
+                                                                    }
+                                                                }
+
+                                                                ctx.insert(ContextVariables::User,user);
+                                                                ctx.insert(ContextVariables::Group,group);
+                                                                ctx.insert(ContextVariables::Permissions,permissions);
+                                                            }
+
+                                                            let event_trigger:Events = {
+                                                                match e
+                                                                {
+                                                                    INotifyEvents::Create => Events::FileCreated,
+                                                                    INotifyEvents::Modify => Events::FileModified,
+                                                                    INotifyEvents::Delete => Events::FileDeleted,
+                                                                }
+                                                            };
+
+                                                            //TODO: introduce delayed actions when uploading a file
+
+                                                            manager.trigger(
+                                                                Trigger::Event(event_trigger),
+                                                                Some(ctx)
+                                                            ).await;
+                                                        }
+                                                    }
                                                 }
+                                                warn!("Ended");
                                             }
                                         }
-
-                                        ctx.insert(ContextVariables::User,user);
-                                        ctx.insert(ContextVariables::Group,group);
-                                        ctx.insert(ContextVariables::Permissions,permissions);
-                                    }    
-
-                                    let event_trigger:Events = {
-                                        match e
-                                        {
-                                            INotifyEvents::Create => Events::FileCreated,
-                                            INotifyEvents::Modify => Events::FileModified,
-                                            INotifyEvents::Delete => Events::FileDeleted,
-                                        }
-                                    };                   
-
-                                    //TODO: introduce delayed actions when uploading a file
-                                    manager.trigger(
-                                        Trigger::Event(event_trigger),
-                                        Some(ctx)
-                                    );
+                                    }
                                 }
-                                
                             }
-
-
-                        }
-                    }
-                    warn!("Ended");
-                }
+                )}
             ),
             Some(thread_name.clone())
-        );
+        ).await;
 
-        th.start();
+        inotify_task.start().await;
 
-        let mut map = self.threads.lock().unwrap();
-        map.insert(thread_name, th);
+        let mut map = self.tasks.lock().await;
+        map.insert(thread_name, inotify_task);
     }
 }
 
-
-impl ThreadWrapper for EventManager
+#[async_trait::async_trait]
+impl TaskWrapper for EventManager
 {
-    fn start(self: &Arc<Self>)
+    async fn start(&self)
     {
-        let (tx,rx) = mpsc::channel::<EventData>();
+        let (tx,mut rx) = mpsc::channel::<EventData>(10);
+        let mut self_tx = self.tx.lock().await;
 
-        *self.tx.lock().unwrap() = Some(tx);
+
+        *self_tx = Some(tx);
+
 
         self.running_state.store(true, Ordering::Relaxed);
 
-        self.start_inotify_thread("/nms/nms_backend");
+        // self.start_inotify_thread("/nms/nms_backend");
                 
-        let this = Arc::clone(&self);
+        let this = self.clone();
 
-        let t = thread::Builder::new()
-            .name("Event Manager".to_string())
-            .spawn(
-                move || 
+        let t = tokio::spawn(
+            async move
                 {
                     LoggerMessages::Info(LogInfos::EMStarted).log();
 
-                    while this.running_state.load(Ordering::Relaxed)
+                    loop
                     {
-                        let event_data = rx.recv_timeout(Duration::from_secs(1));
+                        let event_data = timeout(Duration::from_secs(3), rx.recv()).await;
 
-                        if let Ok((trigger,ctx)) = event_data
+                        match event_data
                         {
-                            let mut uuids:Vec<&str> = Vec::new();
-
-                            let map = this.registered_actions.lock().unwrap();
-
-                            if let Trigger::Event(ev) = trigger
-                            {
-                                if let Some(lst) = map.get(&ev)
+                            Err(_) => continue,
+                            Ok(None) => break,
+                            Ok(Some((trigger,ctx))) =>
                                 {
-                                    for action in lst
+                                    let mut uuids:Vec<&str> = Vec::new();
+
+                                    let map = this.registered_actions.lock().await;
+
+                                    if let Trigger::Event(ev) = trigger
                                     {
-                                        uuids.push(&action.uuid);
-                                        (action.callback)(&ctx);
-                                    }
-                                }
-
-                                // if uuids.len()==0
-                                // {
-                                //     debug!("No action found for {ev}.");
-                                // }
-                                if uuids.len()>0
-                                {
-                                    debug!("{ev} dispatched to: {}.",uuids.join(", "));
-                                }
-                            }
-                            else if let Trigger::Action(uuid) = &trigger
-                            {
-
-                                for (_,lst) in map.iter()
-                                {
-                                    for action in lst
-                                    {
-                                        
-                                        if action.uuid == *uuid
+                                        if let Some(lst) = map.get(&ev)
                                         {
-                                            (action.callback)(&ctx);
-                                            break;
+                                            for action in lst
+                                            {
+                                                uuids.push(&action.uuid);
+                                                (action.callback)(&ctx).await;
+                                            }
+                                        }
+
+                                        if uuids.len()>0
+                                        {
+                                            debug!("{ev} dispatched to: {}.",uuids.join(", "));
+                                        }
+                                    }
+                                    else if let Trigger::Action(uuid) = &trigger
+                                    {
+
+                                        for (_,lst) in map.iter()
+                                        {
+                                            for action in lst
+                                            {
+
+                                                if action.uuid == *uuid
+                                                {
+                                                    (action.callback)(&ctx).await;
+                                                    break;
+                                                }
+                                            }
                                         }
                                     }
                                 }
-                            }
-
                         }
                     }
                     LoggerMessages::Warning(LogWarnings::EMStopped).log();
                 }
-            ).expect("Unable to start event manager.");
+            );
 
-        *self.main_thread.lock().unwrap() = Some(t);
-
+        let mut self_task = self.main_task.lock().await;
+        *self_task = Some(t);
     }
 
-    fn stop(self:&Arc<Self>)
+    async fn stop(&self)
     {
         self.running_state.store(false,Ordering::Relaxed);
-        
-        self.tx.lock().unwrap().take();
 
-        for (_,t) in self.threads.lock().unwrap().iter()
+        let tasks = self.tasks.lock().await;
+
+        for (_,t) in tasks.iter()
         {
-            t.stop();
+            t.stop().await;
         }
         
     }
 
-    fn join(self:&Arc<Self>)
+    async fn join(&self)
     {
-        if let Some(th) = self.main_thread.lock().unwrap().take()
+        let mut main_task = self.main_task.lock().await;
+        if let Some(th) = main_task.as_mut()
         {
-            let _ = th.join();
+            let _ = th.await;
         }
 
-        for (_,t) in self.threads.lock().unwrap().iter()
+        let tasks = self.tasks.lock().await;
+
+        for (_,t) in tasks.iter()
         {
-            t.join();
+            t.join().await;
         }
     }
 
-    fn is_running(self:&Arc<Self>) -> bool 
+    fn is_running(&self) -> bool
     {
         self.running_state.load(Ordering::Relaxed)
     }
 
 }
 
+
 impl EventManager
 {
-    pub fn new() -> Arc<EventManager>
+    pub fn new() -> EventManager
     {
-        Arc::new(EventManager
-        { 
-            registered_actions: Arc::new(Mutex::new(HashMap::new())),
-            tx: Mutex::new(None),
-            running_state: Arc::new(AtomicBool::new(false)),
-            main_thread: Mutex::new(None),
-            threads: Mutex::new(HashMap::new())
-        })
+        EventManager
+        {
+            internal: Arc::new(EventManageInternal::new())
+        }
     }
 
-    
-
-    pub fn trigger(self:&Arc<Self>, trigger:Trigger,ctx:Option<HashMap<ContextVariables,String>>)
+    pub async fn trigger(&self, trigger:Trigger,ctx:Option<HashMap<ContextVariables,String>>)
     {
-
-        if let Some(tx) = self.tx.lock().unwrap().as_ref()
+        let tx = self.tx.lock().await;
+        if let Some(tx) = tx.as_ref()
         {
             let mut map:HashMap<ContextVariables,String>;
             if let Some(m) = ctx
@@ -575,15 +597,15 @@ impl EventManager
         }
     }
 
-    pub fn register_action(
-        self:&Arc<Self>,
+    pub async fn register_action(
+        &self,
         event:&Events,
-        action:EventCallback,
+        action:Arc<EventCallback>,
         uuid:Option<String>,
         event_params:Option<Vec<EventParameters>>
     )
     {
-        let mut map = self.registered_actions.lock().unwrap();
+        let mut map = self.registered_actions.lock().await;
         //let mut map = lock.unwrap();
         let mut v = map.get_mut(event);
 
@@ -628,45 +650,55 @@ impl EventManager
 
             if secs == 0
             {
-                panic!("You must specify an amount of seconds >0 as an event parameter for Timer");
+                error!("You must specify an amount of seconds >0 as an event parameter for Timer");
             }
 
-            let mngt = Arc::clone(&self);
-            let thread_uuid = action_uuid.clone();
+            let mngt = self.clone();
+            let timing_task_uuid = action_uuid.clone();
 
-            let timing_thread = WrappedThread::new(
-                Box::new(move |this:&Arc<WrappedThread>| {
-                    while this.is_running() 
-                    {
-                        thread::sleep(Duration::from_secs(secs));
-                        mngt.trigger(
-                            Trigger::Action(thread_uuid.clone()),
-                            None
-                        );
+            let timing_task = WrappedTask::new(
+                Box::new(
+                    move |this:&WrappedTask| {
+                        let uuid = timing_task_uuid.clone();
+                        let ev = mngt.clone();
+                        let task = this.clone();
+                        Box::pin(
+                            async move  {
+                                while task.is_running()
+                                {
+                                    sleep(Duration::from_secs(secs)).await;
+                                    ev.trigger(
+                                        Trigger::Action(uuid.clone()),
+                                        None
+                                    ).await;
+                                }
+                            }
+                        )
                     }
-                }),
+                ),
                 Some(action_uuid.clone())
-            );           
+            ).await;
 
-            timing_thread.start();
-            self.threads.lock().unwrap().insert(action_uuid.clone(), timing_thread);
+            timing_task.start().await;
+            let mut tasks = self.tasks.lock().await;
+            tasks.insert(action_uuid.clone(), timing_task);
 
         }
                     
         debug!("Add a new event callback action {} for the event {}",action_uuid, event.to_string());
     }
 
-    pub fn register_multiple_events
+    pub async fn register_multiple_events
     (
-        self:&Arc<Self>,
+        &self,
         events:&[&Events],
-        action:EventCallback,
+        action:Arc<EventCallback>,
         event_params:Option<Vec<EventParameters>>
     )
     {
         for e in events
         {
-            self.register_action(e, Arc::clone(&action), None, event_params.clone());
+            self.register_action(e, Arc::clone(&action), None, event_params.clone()).await;
         }
     }
 }

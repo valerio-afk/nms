@@ -174,11 +174,11 @@ impl std::fmt::Display for SmartctlActions
     }
 }
 
-pub fn LSBLK<'a,'b>(
+pub fn LSBLK(
     properties:Option<&[LsblkProperties]>,
     dev_path:Option<&String>,
-    config:Option<&'b CmdConfig<'a>>
-) -> CommandLine<'a,'b>
+    config:CmdConfig
+) -> CommandLine
 {
     let mut args = vec![
         "-J".to_string(),
@@ -207,7 +207,7 @@ pub fn LSBLK<'a,'b>(
     )
 }
 
-pub fn LSCPU<'a,'b>(config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn LSCPU(config:CmdConfig) -> CommandLine
 {
     CommandLine::new(
         "lscpu",
@@ -218,14 +218,14 @@ pub fn LSCPU<'a,'b>(config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
     )
 }
 
-pub fn Find<'a,'b>(
+pub fn Find(
     path:String,
     name:Option<String>,
     tests:Option<&HashMap<String,String>>,
     exec:Option<Vec<String>>,
     single_exec:bool,
-    config:Option<&'b CmdConfig<'a>>
-) -> CommandLine<'a,'b>
+    config:CmdConfig
+) -> CommandLine
 {
     let mut args:Vec<String> = vec![path.clone()];
 
@@ -272,7 +272,7 @@ pub fn Find<'a,'b>(
     )
 }
 
-pub fn Smartctl<'a,'b>(dev:&String,action:SmartctlActions,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn Smartctl(dev:&String,action:SmartctlActions,config:CmdConfig) -> CommandLine
 {
     let mut args:Vec<String> = vec![action.to_string()];
 
@@ -292,7 +292,7 @@ pub fn Smartctl<'a,'b>(dev:&String,action:SmartctlActions,config:Option<&'b CmdC
     )
 }
 
-pub fn LMSensors<'a,'b>(config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn LMSensors(config:CmdConfig) -> CommandLine
 {
     CommandLine::new(
         "sensors",
@@ -303,7 +303,7 @@ pub fn LMSensors<'a,'b>(config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
     )
 }
 
-pub fn WipeFS<'a,'b> (device:&str,all:bool,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn WipeFS (device:&str,all:bool,config:CmdConfig) -> CommandLine
 {
     let mut args:Vec<String> = Vec::new();
 
@@ -320,7 +320,7 @@ pub fn WipeFS<'a,'b> (device:&str,all:bool,config:Option<&'b CmdConfig<'a>>) -> 
     )
 }
 
-pub fn UdevAdmInfo<'a,'b> (name:&str,query:Option<&str>,config:Option<&'b CmdConfig<'a>>) -> CommandLine<'a,'b>
+pub fn UdevAdmInfo (name:&str,query:Option<&str>,config:CmdConfig) -> CommandLine
 {
     let mut args:Vec<String> = vec!["info".to_string(),"--json=short".to_string()];
 
