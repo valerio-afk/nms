@@ -75,15 +75,17 @@ pub fn Journalctl
     )
 }
 
-pub fn Systemctl
+pub fn Systemctl<S: AsRef<str> + ToString>
 (
-    service:&String,
+    service:S,
     action:&SystemctlAction,
     revertible:bool,
     config:CmdConfig
 ) -> CommandLine
 {
     let mut revert_cmd:Option<CommandLine> = None;
+
+    let service_name = service.to_string();
 
     if revertible
     {
@@ -105,7 +107,7 @@ pub fn Systemctl
         Some(
             vec![
                 action.to_string(),
-                service.clone()
+                service_name,
             ]
         ),
         if let Some(cmd) = revert_cmd { Some(Box::new(cmd)) } else {None}

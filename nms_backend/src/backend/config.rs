@@ -30,6 +30,14 @@ pub struct CfgSystemdService
     units: Vec<String>
 }
 
+impl CfgSystemdService
+{
+    pub fn get_units(&self) -> Vec<String>
+    {
+        self.units.iter().cloned().collect()
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub enum AccessService
 {

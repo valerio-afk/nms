@@ -339,3 +339,14 @@ pub fn UdevAdmInfo (name:&str,query:Option<&str>,config:CmdConfig) -> CommandLin
         config
     )
 }
+
+pub fn ExportFs(config:CmdConfig) -> CommandLine
+{
+    CommandLine::new(
+        "exportfs",
+        Some(vec!["-ra".to_string()]),
+        None,
+        None,
+        config
+    )
+}

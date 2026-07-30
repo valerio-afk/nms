@@ -333,16 +333,16 @@ pub fn Cat<S:AsRef<str>+ToString>(path:Option<S>, config:CmdConfig) -> CommandLi
     }
 }
 
-pub fn MV(src:&String, dst:&String,config:CmdConfig) -> CommandLine
+pub fn MV<S:AsRef<str>+ToString>(src:S, dst:S,config:CmdConfig) -> CommandLine
 {
     let cmd:&'static str = "mv";
 
     CommandLine::new(
         cmd,
-        Some(vec![src.clone(),dst.clone()]),
+        Some(vec![src.to_string(),dst.to_string()]),
         Some(Box::new(CommandLine::new(
             cmd,
-            Some(vec![dst.clone(),src.clone()]),
+            Some(vec![dst.to_string(),src.to_string()]),
             None,
             None,
             config.clone()

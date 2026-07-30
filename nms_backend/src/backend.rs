@@ -36,6 +36,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use utils::get_notifications_count;
 use utils::{get_quota_for_all, sudo_group,ts_to_str,str_to_i64, get_system_disks};
 use uuid::Uuid;
+use crate::backend::remote_access::init_remote_services;
 
 pub type HTTPError = (StatusCode, Json<WrappedResponse>);
 pub type FastAPIComp<T> = Result<Json<T>, HTTPError>; //this type is to make it more compatible with the current frontend
@@ -48,7 +49,7 @@ pub mod msg;
 pub mod permissions;
 pub mod utils;
 pub mod net;
-
+mod remote_access;
 
 static BACKEND:OnceCell<Arc<Backend>> = OnceCell::const_new();
 static NMS_CONFIG_FILE:&str = "nms.conf.json";
@@ -268,6 +269,12 @@ impl Backend
         backend.event_manager.start().await;
 
         reload_user_ft.await;
+
+        {
+            let cfg = backend.config.lock().await;
+            init_remote_services(&cfg.access_services).await;
+        }
+
 
         return backend;
     }

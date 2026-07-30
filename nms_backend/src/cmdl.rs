@@ -75,7 +75,7 @@ pub enum CmdConfig
     Provided {
         sudo: bool,
         strict: bool,
-        stdin: Option<String>,
+        stdin: Option<Vec<u8>>,
         cwd: Option<String>
     },
     Empty
@@ -102,6 +102,22 @@ impl CmdConfig
         }
     }
 
+    pub fn set_sudo(&mut self, new_sudo: bool)
+    {
+        match self
+        {
+            CmdConfig::Provided {sudo,..} => *sudo=new_sudo,
+            CmdConfig::Empty => {
+                *self = CmdConfig::Provided {
+                    sudo: new_sudo,
+                    strict: true,
+                    stdin: None,
+                    cwd: None,
+                };
+            }
+        }
+    }
+
     pub fn is_strict(&self) -> bool
     {
         match &self
@@ -111,7 +127,7 @@ impl CmdConfig
         }
     }
 
-    pub fn stdin_data(&self) -> Option<&String>
+    pub fn stdin_data(&self) -> Option<&[u8]>
     {
         match &self
         {
@@ -126,7 +142,7 @@ impl CmdConfig
         }
     }
 
-    pub fn take_data(&mut self) -> Option<String>
+    pub fn take_data(&mut self) -> Option<Vec<u8>>
     {
         match self
         {
@@ -218,12 +234,16 @@ trait ExecutableInternal
 
 impl CmdConfig
 {
-    pub fn new(sudo:bool, strict:bool, stdin:Option<String>,cwd:Option<String>) -> CmdConfig
+    pub fn new(sudo:bool, strict:bool, stdin:Option<&[u8]>,cwd:Option<String>) -> CmdConfig
     {
         CmdConfig::Provided{
             sudo,
             strict,
-            stdin,
+            stdin: match stdin
+            {
+                Some(stdin) => Some(stdin.to_vec()),
+                None => None
+            },
             cwd
         }
     }
@@ -245,6 +265,16 @@ impl CommandLine
             config,
             drop
         }
+    }
+
+    pub fn as_sudo(&mut self)
+    {
+        self.config.set_sudo(true);
+    }
+
+    pub fn take_revert_cmd(&mut self) -> Option<Box<CommandLine>>
+    {
+        self.revert_cmd.take()
     }
 }
 
@@ -337,7 +367,7 @@ impl ExecutableInternal for CommandLine
 
         let strict:bool = self.config.is_strict();
 
-        let stdin_data:Option<String> = self.config.take_data();
+        let stdin_data:Option<Vec<u8>> = self.config.take_data();
 
         let cmd = self.command;
 
@@ -346,7 +376,7 @@ impl ExecutableInternal for CommandLine
             None => self.parse_cmd().output().await,
             Some(data) =>
                 {
-                    let data_slice: &[u8] = data.as_bytes();
+                    let data_slice: &[u8] = &data;
                     let mut child = self.spawn_cmd()?;
 
                     let mut stdin = child.stdin.take().ok_or(CommandError::StdinError(cmd))?;
@@ -366,6 +396,69 @@ impl ExecutableInternal for CommandLine
     }
 }
 
+pub struct Transaction
+{
+    commands: Vec<CommandLine>,
+    privileged: bool
+}
+
+impl Transaction
+{
+    pub fn new(commands:Vec<CommandLine>) -> Transaction
+    {
+        Transaction{commands, privileged: false}
+    }
+
+    pub fn new_sudo(commands:Vec<CommandLine>) -> Transaction
+    {
+        Transaction{commands, privileged: true}
+    }
+
+    pub async fn execute(mut self) -> Result<Vec<CommandOutput>,CommandError>
+    {
+        let mut outputs:Vec<CommandOutput> = Vec::new();
+        let mut revert_commands:Vec<Option<Box<CommandLine>>> = Vec::new();
+        let mut last_error: Option<CommandError> = None;
+
+        for mut cmd in self.commands.drain(0..)
+        {
+            revert_commands.push(cmd.take_revert_cmd());
+
+            let output = cmd.run().await;
+
+            match output
+            {
+                Ok(o) => {
+                    match o
+                    {
+                        Some(r) => outputs.push(r),
+                        None => ()
+                    }
+                }
+                Err(e) =>
+                    {
+                        last_error = Some(e);
+                        break;
+
+                    },
+            }
+        }
+
+        if let Some(e) = last_error
+        {
+            for revert_cmd in revert_commands.drain(0..).into_iter().rev()
+            {
+                match revert_cmd
+                {
+                    Some(cmd) => { let _ = cmd.run().await?; }
+                    None => ()
+                }
+            }
+
+            return Err(e);
+        }
 
 
-
+        Ok(outputs)
+    }
+}
