@@ -1,14 +1,12 @@
-use tracing::{Level,debug,debug_span, Span};
+use tracing::{Level,debug, Span};
 use tracing_subscriber::FmtSubscriber;
 use backend::get_backend;
 use backend::utils::detect_distro_family;
 use backend::api::get_api;
-use tower_http::classify::ServerErrorsFailureClass;
 use tower_http::trace::TraceLayer;
 use tower_http::trace::{DefaultMakeSpan,DefaultOnResponse,DefaultOnFailure};
 use std::sync::{Arc};
-use std::time::Duration;
-use axum::{Router, extract::{Request, MatchedPath}};
+use axum::{Router};
 
 use crate::backend::msg::{LoggerMessages,LogErrors};
 

@@ -265,10 +265,10 @@ async fn auth_otp_verify
                 expire_date: tok.claims.exp
             });
 
-            // backend.event_manager.trigger(
-            //     Trigger::Event(Events::UserLoggedIn),
-            //     ContextBuilder::from(ContextVariables::TriggerUser,tok.claims.username.clone().unwrap()).finish()
-            // );
+            backend.event_manager.trigger(
+                Trigger::Event(Events::UserLoggedIn),
+                ContextBuilder::from(ContextVariables::TriggerUser,tok.claims.username.clone().unwrap()).finish()
+            ).await;
 
             backend.push_token(JWTClaim{
                 uuid: tok.uuid,

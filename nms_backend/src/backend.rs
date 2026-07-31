@@ -272,7 +272,8 @@ impl Backend
 
         {
             let cfg = backend.config.lock().await;
-            init_remote_services(&cfg.access_services).await;
+            
+            init_remote_services(&cfg.access_services,backend.mountpoint().await).await;
         }
 
 

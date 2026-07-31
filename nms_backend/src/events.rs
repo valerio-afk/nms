@@ -3,7 +3,7 @@ use crate::backend::msg::{LogInfos, LogWarnings, LoggerMessages};
 use crate::cmdl::coreutils::{Stat,StatFormat};
 use crate::cmdl::notify::{INotifyEvents,INotifyWait};
 use crate::cmdl::{CmdConfig, Executable};
-use crate::task::{TaskWrapper, WrappedTask, WrappedTaskInternal,Runner};
+use crate::task::{TaskWrapper, WrappedTask, Runner};
 use nix::poll::{poll, PollFd, PollFlags};
 use serde::{Serialize,Deserialize};
 use std::collections::HashMap;

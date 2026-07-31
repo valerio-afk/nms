@@ -13,6 +13,9 @@ pub mod systemd;
 pub mod utils;
 pub mod zfs;
 pub mod sed;
+pub mod selinux;
+pub mod firewall;
+pub mod smb;
 
 use tokio;
 use tokio::process::{Child, Command};
@@ -114,6 +117,22 @@ impl CmdConfig
                     sudo: new_sudo,
                     strict: true,
                     stdin: None,
+                    cwd: None,
+                };
+            }
+        }
+    }
+
+    pub fn set_stdin_data(&mut self, data:Vec<u8>)
+    {
+        match self
+        {
+            CmdConfig::Provided {stdin,..} => *stdin=Some(data),
+            CmdConfig::Empty => {
+                *self = CmdConfig::Provided {
+                    sudo: false,
+                    strict: true,
+                    stdin: Some(data),
                     cwd: None,
                 };
             }

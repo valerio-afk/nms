@@ -1,6 +1,5 @@
 use super::*;
 use std::collections::HashMap;
-use std::fmt::Debug;
 
 pub struct ZPoolAttachArgs
 {

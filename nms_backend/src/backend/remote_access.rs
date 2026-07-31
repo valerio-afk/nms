@@ -1,19 +1,23 @@
 pub mod ssh;
-mod ftp;
+pub mod ftp;
+pub mod nfs;
+pub mod smb;
 
 use async_trait::async_trait;
 use crate::backend::permissions::UserPermissions;
 use crate::cmdl::systemd::{Systemctl, SystemctlAction};
-use crate::cmdl::{CmdConfig, CommandLine, Transaction, Executable};
+use crate::cmdl::{CmdConfig, CommandLine, Transaction};
 use serde::{Serialize, Deserialize};
 use serde_json::{Value};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Display;
-use std::ops::{Deref, DerefMut};
 use std::path::{PathBuf, Path};
 use tokio::sync::OnceCell;
 use crate::backend::config::{AccessService, CfgSystemdService};
+use crate::backend::remote_access::ftp::FTPService;
+use crate::backend::remote_access::nfs::NFSService;
+use crate::backend::remote_access::smb::SMBService;
 use self::ssh::SSHService;
 
 type AbstractRemoteService = Box::<dyn RemoteService + Send + Sync + 'static>;
@@ -30,7 +34,9 @@ pub enum ServiceError
     TmpFileWrite(PathBuf, String),
     TmpFileMove(PathBuf,PathBuf,String),
     SetPassword(String, String),
-    InitialisationError(String)
+    InitialisationError(String),
+    Selinux(String),
+    Firewall(String)
 }
 
 impl Display for ServiceError
@@ -47,7 +53,9 @@ impl Display for ServiceError
             ServiceError::TmpFileWrite(fname, err) => write!(f, "Unable to write in temporary file {}: {}", fname.display(), err),
             ServiceError::TmpFileMove(src, dst, err) => write!(f, "Unable to move temporary file {} in {}: {}", src.display(), dst.display(), err),
             ServiceError::SetPassword(uname, err) => write!(f, "Unable to set password for {}: {}", uname, err),
-            ServiceError::InitialisationError(err) => write!(f, "Initialisation Error: {}", err)
+            ServiceError::InitialisationError(err) => write!(f, "Initialisation Error: {}", err),
+            ServiceError::Selinux(err) => write!(f, "Error while setting up SeLinux: {}", err),
+            ServiceError::Firewall(err) => write!(f, "Error while setting up the firewall: {}", err)
         }
     }
 }
@@ -59,7 +67,9 @@ impl Error for ServiceError {}
 pub enum ServiceProperty
 {
     Port,
-    PortRange
+    PortRange,
+    Mountpoint,
+    IpAddr,
 }
 #[async_trait]
 pub trait ServicePermissionHooks
@@ -91,7 +101,7 @@ pub trait ServiceProperties
 pub trait RemoteService
 {
     async fn start(&mut self) -> Result<(),anyhow::Error>;
-    async fn stop(&self) -> Result<(),anyhow::Error>;
+    async fn stop(&mut self) -> Result<(),anyhow::Error>;
     async fn is_active(&self) -> Result<bool,anyhow::Error>;
     fn service_name(&self) -> &'static str;
 }
@@ -208,7 +218,7 @@ impl RemoteService for SystemdService
         Ok(())
     }
 
-    async fn stop(&self) -> Result<(),anyhow::Error>
+    async fn stop(&mut self) -> Result<(),anyhow::Error>
     {
         let mut systemd_cmds:Vec<CommandLine> = Vec::new();
 
@@ -285,7 +295,10 @@ impl DockerService
 
 
 
-async fn _remote_services(cfg:Option<&HashMap<String,AccessService>>) -> Result<&'static Vec<AbstractRemoteService>,ServiceError>
+async fn _remote_services(
+    cfg:Option<&HashMap<String,AccessService>>,
+    mountpoint: Option<PathBuf>
+) -> Result<&'static Vec<AbstractRemoteService>,ServiceError>
 {
     SYSTEM_SERVICES.get_or_try_init(
         || async
@@ -306,17 +319,68 @@ async fn _remote_services(cfg:Option<&HashMap<String,AccessService>>) -> Result<
 
                 tracing::info!("SSH service initialised");
 
+                //ftp configuration
+                if let Some(ftp) = c.get("ftp") && let AccessService::Systemd(ftpd) = ftp
+                {
+                    services.push(Box::new(FTPService::new(ftpd.get_units())));
+                }
+                else
+                {
+                    Err(ServiceError::InitialisationError("You have to provide a valid configuration for VSFTPD".to_string()))?
+                }
+
+                tracing::info!("FTP service initialised");
+
+                //nfs configuration
+                if let Some(nfs) = c.get("nfs") && let AccessService::Systemd(nfsd) = nfs
+                {
+                    services.push(Box::new(NFSService::new(nfsd.get_units(), mountpoint.clone()).await?));
+                }
+                else
+                {
+                    Err(ServiceError::InitialisationError("You have to provide a valid configuration for NFS".to_string()))?
+                }
+
+                tracing::info!("NFS service initialised");
+
+                //smb configuration
+                if let Some(smb) = c.get("smb") && let AccessService::Systemd(smbd) = smb
+                {
+                    services.push(Box::new(SMBService::new(smbd.get_units(), mountpoint)));
+                }
+                else
+                {
+                    Err(ServiceError::InitialisationError("You have to provide a valid configuration for SMB".to_string()))?
+                }
+
+                tracing::info!("SMB service initialised");
+
                 Ok(services)
             }
     ).await
 }
-pub async fn init_remote_services(cfg:&HashMap<String,AccessService>)
+pub async fn init_remote_services(
+    cfg:&HashMap<String,AccessService>,
+    mountpoint: Option<PathBuf>
+)
 {
-    let _ = _remote_services(Some(cfg)).await;
+    let _ = _remote_services(Some(cfg),mountpoint).await;
 }
 
 
 pub async fn get_remote_services() -> Result<&'static Vec<AbstractRemoteService>,ServiceError>
 {
-    _remote_services(None).await
+    _remote_services(None,None).await
+}
+
+pub async fn get_remote_service(name: &str) -> Result<Option<&'static AbstractRemoteService>,ServiceError>
+{
+    for service in get_remote_services().await?
+    {
+        if service.service_name() == name
+        {
+            return Ok(Some(service));
+        }
+    }
+    Ok(None)
 }

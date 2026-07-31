@@ -4,7 +4,7 @@ use crate::backend::remote_access::{ServiceAuth, ServiceError, ServicePermission
 use crate::cmdl::coreutils::{Cat, MV, Touch, Chmod, FileSystemPermissions, Stat, Tee};
 use crate::cmdl::grep::{Grep,GrepFlags};
 use crate::cmdl::sed::{Sed, SedFlags};
-use crate::cmdl::{CmdConfig, Executable, Transaction};
+use crate::cmdl::{CmdConfig, CommandLine, Executable, Transaction};
 use serde_json::{Number, Value};
 use std::collections::HashMap;
 use std::env::temp_dir;
@@ -16,6 +16,8 @@ use anyhow::Error;
 use crate::backend::utils::{detect_distro_family, DistroFamily};
 use super::RemoteService;
 use std::sync::LazyLock;
+use crate::cmdl::firewall::{Firewall, FirewallAction, FirewallPort};
+use crate::cmdl::selinux::{Protocol, SeLinuxSetBool};
 
 static VSFTPD_CONF:LazyLock<HashMap<&'static str,&'static str>> = LazyLock::new(||{
     HashMap::from([
@@ -107,7 +109,7 @@ impl ServiceProperties for FTPService
 {
     fn properties(&self) -> Vec<ServiceProperty>
     {
-        vec![ServiceProperty::Port]
+        vec![ServiceProperty::PortRange]
     }
 
     async fn get_property(&mut self, prop: ServiceProperty) -> Result<&Value, ServiceError>
@@ -201,6 +203,19 @@ impl FTPService
         Ok(())
     }
 
+    pub async fn get_passive_ports(&mut self) -> Result<(u32, u32),ServiceError>
+    {
+        let pasv_ports = self
+            .get_property(ServiceProperty::PortRange).await?
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| p.as_u64().unwrap() as u32)
+            .collect::<Vec<u32>>();
+
+        Ok((pasv_ports[0],pasv_ports[1]))
+    }
+
     async fn patch_configuration(&mut self) -> Result<(),ServiceError>
     {
         let mut cfg_default_params = (*VSFTPD_CONF).clone();
@@ -210,16 +225,13 @@ impl FTPService
 
         cfg_default_params.insert("userlist_file", &userlist_fname);
 
-        let pasv_ports = self
-            .get_property(ServiceProperty::PortRange).await?
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|p| p.as_u64().unwrap().to_string())
-            .collect::<Vec<String>>();
+        let pasv_ports = self.get_passive_ports().await?;
 
-        cfg_default_params.insert("pasv_min_port", &pasv_ports[0]);
-        cfg_default_params.insert("pasv_max_port", &pasv_ports[1]);
+        let port_min = pasv_ports.0.to_string();
+        let port_max = pasv_ports.1.to_string();
+
+        cfg_default_params.insert("pasv_min_port", &port_min);
+        cfg_default_params.insert("pasv_max_port", &port_max);
 
         let cmd = Cat(self.get_configuration_file().to_str(),CmdConfig::default())
             .run()
@@ -291,8 +303,42 @@ impl FTPService
 
         }
 
+        Ok(())
+    }
 
+    async fn setup_firewall(&self, add:bool,port_min:u32, port_max:u32) -> Result<(),ServiceError>
+    {
+        let mut cmd:Vec<CommandLine> = Vec::new();
 
+        let firewall_state = Firewall(FirewallAction::State,false,false,CmdConfig::default()).run().await;
+
+        if let Ok(Some(s)) = firewall_state && (s.exit_code==0) && (s.stdout.trim()=="running")
+        {
+            cmd.push(Firewall(
+                (if add {FirewallAction::AddService} else {FirewallAction::RemoveService})("ftp".to_string()),
+                true,
+                true,
+                CmdConfig::default()
+            ));
+
+            cmd.push(Firewall(
+                (if add {FirewallAction::AddPort} else {FirewallAction::RemovePort})(FirewallPort::PortRange(port_min,port_max),Protocol::TCP),
+                true,
+                true,
+                CmdConfig::default()
+            ));
+
+            cmd.push(SeLinuxSetBool("ftpd_full_access",add,true,true,CmdConfig::default()));
+            cmd.push(SeLinuxSetBool("ftpd_use_passive_mode",add,true,true,CmdConfig::default()));
+            cmd.push(Firewall(FirewallAction::Reload,false,false,CmdConfig::default()));
+
+            let transaction = Transaction::new(cmd);
+            match transaction.execute().await
+            {
+                Ok(_) => return Ok(()),
+                Err(e) => return Err(ServiceError::Firewall(e.to_string()))
+            }
+        }
         Ok(())
     }
 
@@ -305,12 +351,26 @@ impl RemoteService for FTPService
     async fn start(&mut self) -> Result<(), Error>
     {
         self.patch_configuration().await?;
+        
+        if detect_distro_family().eq(&DistroFamily::Rh)
+        {
+            let pasv_ports = self.get_passive_ports().await?;
+            self.setup_firewall(true, pasv_ports.0, pasv_ports.1).await?;
+        }
         self.ftp_service.start().await
     }
 
-    async fn stop(&self) -> Result<(), Error>
+    async fn stop(&mut self) -> Result<(), Error>
     {
-        self.ftp_service.stop().await
+        self.ftp_service.stop().await?;
+        
+        if detect_distro_family().eq(&DistroFamily::Rh)
+        {
+            let pasv_ports = self.get_passive_ports().await?;
+            self.setup_firewall(true, pasv_ports.0, pasv_ports.1).await.map_err(|e| Error::new(e))?;
+        }
+        
+        Ok(())
     }
 
     async fn is_active(&self) -> Result<bool, Error>

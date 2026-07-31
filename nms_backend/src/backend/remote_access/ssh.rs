@@ -3,7 +3,9 @@ use crate::backend::permissions::UserPermissions;
 use crate::backend::remote_access::{ServiceAuth, ServiceError, ServicePermissionHooks, ServiceProperties, ServiceProperty, SystemdService};
 use crate::cmdl::coreutils::{Cat, MV};
 use crate::cmdl::passwd::{ChPasswd, UserMod, UserModAction};
-use crate::cmdl::{CmdConfig, Executable};
+use crate::cmdl::selinux::{SelinuxManagePort,SelinuxManagePortAction,Protocol};
+use crate::cmdl::firewall::{FirewallPort,FirewallAction,Firewall};
+use crate::cmdl::{CmdConfig, CommandLine, Executable, Transaction};
 use serde_json::{Number, Value};
 use std::collections::HashMap;
 use std::env::temp_dir;
@@ -12,6 +14,7 @@ use std::io::{Write};
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use anyhow::Error;
+use crate::backend::utils::{detect_distro_family, DistroFamily};
 use super::RemoteService;
 
 pub struct SSHService
@@ -121,14 +124,6 @@ impl SSHService
     {
         let properties : HashMap<ServiceProperty,Value> = HashMap::new();
 
-        // properties.insert(ServiceProperty::Port, Value::Number(Number::from_u128(
-        //     match port
-        //     {
-        //         Some(p) => p as u128,
-        //         None => 22
-        //     }
-        // ).unwrap()
-        // ));
 
         SSHService
         {
@@ -142,6 +137,78 @@ impl SSHService
                 )
             )
         }
+    }
+
+    async fn setup_selinux(&self,old_port:u32, new_port:u32) -> Result<(), ServiceError>
+    {
+        let mut cmd:Vec<CommandLine> = Vec::new();
+
+        if old_port != 22
+        {
+            cmd.push(SelinuxManagePort(
+                SelinuxManagePortAction::Remove,
+                Some("ssh_port_t"),
+                Some(old_port),
+                None,
+                Some(Protocol::TCP),
+                true,
+                CmdConfig::default()
+            ));
+        }
+
+        cmd.push(SelinuxManagePort(
+            SelinuxManagePortAction::Add,
+            Some("ssh_port_t"),
+            Some(new_port),
+            None,
+            Some(Protocol::TCP),
+            true,
+            CmdConfig::default()
+        ));
+
+        let transaction = Transaction::new(cmd);
+        match transaction.execute().await
+        {
+            Ok(_) => Ok(()),
+            Err(e) => Err(ServiceError::Selinux(e.to_string()))
+        }
+
+    }
+
+    async fn setup_firewall(&self,old_port:u32, new_port:u32) -> Result<(), ServiceError>
+    {
+        let mut cmd:Vec<CommandLine> = Vec::new();
+        
+        let firewall_state = Firewall(FirewallAction::State,false,false,CmdConfig::default()).run().await;
+
+        if let Ok(Some(s)) = firewall_state && (s.exit_code==0) && (s.stdout.trim()=="running")
+        {
+            cmd.push(Firewall(
+                FirewallAction::AddPort(FirewallPort::Port(new_port),Protocol::TCP),
+                true,
+                true,
+                CmdConfig::default()
+            ));
+
+            cmd.push(Firewall(
+                FirewallAction::RemovePort(FirewallPort::Port(old_port),Protocol::TCP),
+                true,
+                true,
+                CmdConfig::default()
+            ));
+            
+            cmd.push(Firewall(FirewallAction::Reload,false,false,CmdConfig::default()));
+
+            let transaction = Transaction::new(cmd);
+            match transaction.execute().await
+            {
+                Ok(_) => return Ok(()),
+                Err(e) => return Err(ServiceError::Selinux(e.to_string()))
+            }
+        }
+        
+        Ok(()) //if the firewall is not there OR is inactive -- who cares?
+
     }
 
     async fn read_port_from_cfg(&mut self) -> Result<&Value, ServiceError>
@@ -184,6 +251,7 @@ impl SSHService
         {
             self.get_properties_mut().insert(ServiceProperty::Port,Value::Number(Number::from_u128(22 as u128).unwrap()));
         }
+
 
         Ok(self.get_properties().get(&ServiceProperty::Port).unwrap())
 
@@ -237,6 +305,14 @@ impl SSHService
                 .await
                 .map_err(|e| ServiceError::TmpFileMove(tmp_fullpath,self.cfg.clone(),e.to_string()))?;
 
+            if detect_distro_family().eq(&DistroFamily::Rh)
+            {
+                let old_port:u32 = self.get_property(ServiceProperty::Port).await.unwrap().as_u64().unwrap() as u32;
+                
+                self.setup_selinux(old_port,port).await?;
+                self.setup_firewall(old_port,port).await?;
+            }
+
             self.get_properties_mut().insert(ServiceProperty::Port,Value::Number(Number::from_u128(port as u128).unwrap()));
 
         }
@@ -263,7 +339,7 @@ impl RemoteService for SSHService
         self.ssh_service.start().await
     }
 
-    async fn stop(&self) -> Result<(), Error>
+    async fn stop(&mut self) -> Result<(), Error>
     {
         self.ssh_service.stop().await
     }
