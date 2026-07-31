@@ -333,7 +333,7 @@ pub fn Cat<S:AsRef<str>+ToString>(path:Option<S>, config:CmdConfig) -> CommandLi
     }
 }
 
-pub fn MV<S:AsRef<str>+ToString>(src:S, dst:S,config:CmdConfig) -> CommandLine
+pub fn MV<S1:AsRef<str>+ToString, S2:AsRef<str>+ToString>(src:S1, dst:S2,config:CmdConfig) -> CommandLine
 {
     let cmd:&'static str = "mv";
 
@@ -372,23 +372,23 @@ pub fn CP(src:&String, dst:&String,recursive:bool,config:CmdConfig) -> CommandLi
     )
 }
 
-pub fn RM(filename:&String,
+pub fn RM<S:AsRef<str>+ToString>(filename:S,
                 recursive:bool,
                 revertible:bool,
                 config:CmdConfig) -> CommandLine
 {
     if revertible
     {
-        let mut new_name:String = filename.clone();
+        let mut new_name:String = filename.to_string();
         new_name.push_str(".bkp");
 
-        let mut mv_cmd = MV(filename,&new_name,config.clone());
+        let mut mv_cmd = MV(filename,new_name.clone(),config.clone());
 
 
 
         mv_cmd.drop = Some(Box::new(move |_:&Pin<&mut CommandLine>|
         {
-            let file_to_remove = new_name.clone();
+            let file_to_remove = new_name;
             let cfg = config.clone();
 
             Box::pin( async move {
@@ -408,7 +408,7 @@ pub fn RM(filename:&String,
     let mut args:Vec<String> = Vec::new();
 
     if recursive {args.push("-rf".to_string());}
-    args.push(filename.clone());
+    args.push(filename.to_string());
 
     CommandLine::new(
         "rm",
@@ -450,9 +450,9 @@ pub fn CreateKey(filename:&String,config:CmdConfig) -> CommandLine
     DD(&"/dev/urandom".to_string(),filename,Some(32),Some(1),config)
 }
 
-pub fn Chmod(permissions:&FileSystemPermissions,
+pub fn Chmod<S:AsRef<str> + ToString>(permissions:&FileSystemPermissions,
                     old_permissions:Option<&FileSystemPermissions>,
-                    filename:&String,
+                    filename:S,
                     recursive:bool,
                     config:CmdConfig) -> CommandLine
 {
@@ -461,7 +461,7 @@ pub fn Chmod(permissions:&FileSystemPermissions,
     if recursive { args.push("-R".to_string()); }
 
     args.push(permissions.to_string());
-    args.push(filename.clone());
+    args.push(filename.to_string());
 
     CommandLine::new(
         "chmod",
@@ -565,11 +565,11 @@ pub fn Mkdir(path:&String,permissions:Option<FileSystemPermissions>,config:CmdCo
 }
 
 
-pub fn Touch(filename:&String,config:CmdConfig) -> CommandLine
+pub fn Touch<S:AsRef<str> + ToString>(filename:S,config:CmdConfig) -> CommandLine
 {
     CommandLine::new(
         "touch",
-        Some(vec![filename.clone()]),
+        Some(vec![filename.to_string()]),
         Some(Box::new(RM(
             filename,
             false,
@@ -580,7 +580,7 @@ pub fn Touch(filename:&String,config:CmdConfig) -> CommandLine
         config)
 }
 
-pub fn Stat<'a,'b,'c>(filename:&str,format:Option<Vec<StatFormat<'c>>>,config:CmdConfig) -> CommandLine
+pub fn Stat<'c,S:AsRef<str>+ToString>(filename:S,format:Option<Vec<StatFormat<'c>>>,config:CmdConfig) -> CommandLine
 {
     let mut args:Vec<String> = Vec::new();
 
@@ -628,6 +628,28 @@ pub fn Truncate(filename:&String,size:usize,config:CmdConfig)  -> CommandLine
     CommandLine::new(
         "truncate",
         Some(vec!["-s".to_string(),format!("{size}"),filename.clone()]),
+        None,
+        None,
+        config
+    )
+}
+
+pub fn Tee<S:AsRef<str>+ToString>(filename:S,append:bool, config:CmdConfig)  -> CommandLine
+{
+    let mut args:Vec<String> = Vec::new();
+    
+    if config.stdin_data().is_none()
+    {
+        panic!("Tee must have stdin data to be provided.");
+    }
+    
+    if append { args.push("-a".to_string()); }
+    
+    args.push(filename.to_string());
+    
+    CommandLine::new(
+        "tee",
+        Some(args),
         None,
         None,
         config

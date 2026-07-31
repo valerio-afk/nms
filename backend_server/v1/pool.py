@@ -18,7 +18,7 @@ from nms_shared import ErrorMessages, SuccessMessages
 from nms_shared.constants import KEYPATH
 from nms_shared.disks import Disk
 from nms_shared.enums import DiskStatus, UserPermissions
-from typing import  Optional, List, Callable, Dict
+from typing import  Optional, List, Callable, Dict, Union
 import base64
 import datetime
 import json
@@ -483,13 +483,15 @@ class PoolProperties(Enum):
 
 
 @pool.get("/get/disks",
-          response_model=List[Disk],
+          response_model=Dict[str,Union[str|List[Disk]]],
           responses={500: {"description": "Any internal error to retrieve pool information"}},
           summary="Get the list of disks in the array"
           )
-def pool_disks(token:dict=Depends(verify_token)) -> List[Disk]:
+def pool_disks(token:dict=Depends(verify_token)) -> Dict[str,Union[str|List[Disk]]]:
     check_permission(token.get("username"), UserPermissions.CLIENT_DASHBOARD_DISKS)
-    return get_pool_disks()
+    return { "property": "pool_disks",
+            "value": get_pool_disks()
+           }
 
 @pool.get("/get/attachable-disks",
           response_model=List[Disk],

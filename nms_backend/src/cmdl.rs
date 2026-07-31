@@ -1,16 +1,18 @@
-pub mod coreutils;
-pub mod others;
-pub mod compression;
 pub mod acpi;
-pub mod systemd;
-pub mod utils;
-pub mod rpi;
+pub mod compression;
+pub mod coreutils;
+pub mod docker;
+pub mod grep;
 pub mod net;
+pub mod notify;
+pub mod others;
 pub mod package_mngt;
 pub mod passwd;
-pub mod docker;
+pub mod rpi;
+pub mod systemd;
+pub mod utils;
 pub mod zfs;
-pub mod notify;
+pub mod sed;
 
 use tokio;
 use tokio::process::{Child, Command};
@@ -45,7 +47,7 @@ impl Display for CommandError
 impl Error for CommandError {}
 
 type DestructorFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
-type Destructor<T> = Box<dyn Fn(&Pin<&mut T>) -> DestructorFuture + Send>;
+type Destructor<T> = Box<dyn FnOnce(&Pin<&mut T>) -> DestructorFuture + Send>;
 
 trait CmdFlag<T>
 {
@@ -164,6 +166,19 @@ impl CmdConfig
             },
             CmdConfig::Empty => None
         }
+    }
+
+    pub fn default_with_stdin(data:Vec<u8>)-> Self
+    {
+        let mut d = Self::default();
+
+        match &mut d
+        {
+            CmdConfig::Provided {stdin,..} => {*stdin = Some(data)},
+            CmdConfig::Empty => ()
+        }
+
+        d
     }
 }
 

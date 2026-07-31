@@ -366,7 +366,7 @@ class FTPService(SystemService):
         "userlist_deny": "NO",
         "chroot_list_enable":"NO",
         "pasv_min_port": str(PASV_PORTS.port_min),
-        "pasv_max_port": str(PASV_PORTS.port_min),
+        "pasv_max_port": str(PASV_PORTS.port_max),
         "pasv_enable": "YES",
     }
     def __init__(this,service_name, **kwargs):

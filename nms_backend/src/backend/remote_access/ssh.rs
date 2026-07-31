@@ -49,6 +49,9 @@ impl ServicePermissionHooks for SSHService
         let _ = UserMod(UserModAction::ChangeShell(username,"/usr/sbin/nologin"),false,CmdConfig::default()).run().await;
     }
 
+    async fn user_deleted(&self, _: &str) {} //Nothing to do here
+
+
 }
 #[async_trait]
 impl ServiceProperties for SSHService
@@ -73,7 +76,6 @@ impl ServiceProperties for SSHService
                         Ok(self.read_port_from_cfg().await?)
                     }
                 }
-            #[allow(unreachable_patterns)]
             _ => Err(ServiceError::PropertyNotFound(prop))
         }
     }
@@ -99,7 +101,6 @@ impl ServiceProperties for SSHService
                         Err(ServiceError::PropertyValue(prop,"number"))
                     }
                 }
-            #[allow(unreachable_patterns)]
             _ => Err(ServiceError::PropertyNotFound(prop))
         }
     }
@@ -257,7 +258,7 @@ impl ServiceAuth for SSHService
 #[async_trait]
 impl RemoteService for SSHService
 {
-    async fn start(&self) -> Result<(), Error>
+    async fn start(&mut self) -> Result<(), Error>
     {
         self.ssh_service.start().await
     }

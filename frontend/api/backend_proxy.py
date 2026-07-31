@@ -21,7 +21,7 @@ import sys
 
 cache = TTLCache(maxsize=100, ttl=60)
 
-def parse_disks_from_request(d:Optional[List[dict]]) -> List[Disk]:
+def parse_disks_from_request(d:Optional[Dict[str,Union[str|List[Disk]]]]) -> List[Disk]:
     if (d is not None):
         return [
             Disk(

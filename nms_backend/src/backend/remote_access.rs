@@ -1,4 +1,5 @@
 pub mod ssh;
+mod ftp;
 
 use async_trait::async_trait;
 use crate::backend::permissions::UserPermissions;
@@ -23,6 +24,7 @@ pub enum ServiceError
 {
     PropertyNotFound(ServiceProperty),
     PropertyValue(ServiceProperty,&'static str),
+    ReadOnlyProperty(ServiceProperty),
     Configuration(String),
     TmpFileCreate(PathBuf, String),
     TmpFileWrite(PathBuf, String),
@@ -38,6 +40,7 @@ impl Display for ServiceError
         match self
         {
             ServiceError::PropertyNotFound(property) => write!(f, "Service property not found: {}", property),
+            ServiceError::ReadOnlyProperty(prop) => write!(f, "Service property {} is read-only", prop),
             ServiceError::Configuration(message) => write!(f, "Unable to access configuration file: {}", message),
             ServiceError::PropertyValue(prop, expected) => write!(f, "Expected `{}` for property: {}", expected, prop),
             ServiceError::TmpFileCreate(fname, err) => write!(f, "Unable to create temporary file {}: {}", fname.display(), err),
@@ -55,13 +58,15 @@ impl Error for ServiceError {}
 #[serde(rename_all="lowercase")]
 pub enum ServiceProperty
 {
-    Port
+    Port,
+    PortRange
 }
 #[async_trait]
 pub trait ServicePermissionHooks
 {
     async fn permission_granted(&self, username:&str);
     async fn permission_revoked(&self, username:&str);
+    async fn user_deleted(&self, username:&str);
 }
 
 #[async_trait]
@@ -85,7 +90,7 @@ pub trait ServiceProperties
 #[async_trait]
 pub trait RemoteService
 {
-    async fn start(&self) -> Result<(),anyhow::Error>;
+    async fn start(&mut self) -> Result<(),anyhow::Error>;
     async fn stop(&self) -> Result<(),anyhow::Error>;
     async fn is_active(&self) -> Result<bool,anyhow::Error>;
     fn service_name(&self) -> &'static str;
@@ -182,7 +187,7 @@ impl SystemdService
 #[async_trait]
 impl RemoteService for SystemdService
 {
-    async fn start(&self) -> Result<(),anyhow::Error>
+    async fn start(&mut self) -> Result<(),anyhow::Error>
     {
         let mut systemd_cmds:Vec<CommandLine> = Vec::new();
 

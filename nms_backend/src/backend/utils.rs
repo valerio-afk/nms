@@ -248,21 +248,3 @@ pub async fn get_system_disks() -> Vec<Device>
 
     return devs;
 }
-
-
-// mod test
-// {
-//     #[allow(unused)]
-//     use super::*;
-//
-//     #[test]
-//     fn sysdisk_test()
-//     {
-//         let dev = get_system_disks();
-//
-//         assert!(dev.len()>0);
-//
-//         println!("{dev:?}");
-//
-//     }
-// }

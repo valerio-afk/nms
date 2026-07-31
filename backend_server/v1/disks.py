@@ -11,7 +11,7 @@ from nms_shared import ErrorMessages
 from nms_shared.disks import Disk
 from nms_shared.msg import SuccessMessages
 from nms_shared.enums import UserPermissions, DiskStatus
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Union
 import json
 
 
@@ -153,26 +153,30 @@ def smartctl(device:str) -> SMART:
     )
 
 @disks.get("/get/sys-disks",
-          response_model=List[Disk],
+          response_model=Dict[str,Union[str|List[Disk]]],
           responses={
               500: {"description": "Any internal error to retrieve system disks"},
             },
           summary="Provides all the disks installed in the system",
           )
-def sys_disks(token:dict=Depends(verify_token)) -> List[Disk]:
+def sys_disks(token:dict=Depends(verify_token)) -> Dict[str,Union[str|List[Disk]]]:
     check_permission(token.get("username"), UserPermissions.CLIENT_DASHBOARD_DISKS)
-    return get_system_disks()
+    return {"property": "disks",
+            "value": get_system_disks()
+            }
 
 @disks.get("/get/disks",
-          response_model=List[Disk],
+          response_model=Dict[str,Union[str|List[Disk]]],
           responses={
               500: {"description": "Any internal error to retrieve system disks"},
             },
           summary="Provides all the disks in the array, attachable, and detached",
           )
-def get_all_disks(token:dict=Depends(verify_token)) -> List[Disk]:
+def get_all_disks(token:dict=Depends(verify_token)) -> Dict[str,Union[str|List[Disk]]]:
     check_permission(token.get("username"), UserPermissions.CLIENT_DASHBOARD_DISKS)
-    return get_disks()
+    return { "property": "disks",
+            "value": get_disks()
+           }
 
 @disks.post("/format",
             responses={
