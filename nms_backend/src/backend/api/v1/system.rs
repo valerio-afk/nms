@@ -6,12 +6,14 @@ use crate::backend::{Backend, FastAPIComp, BACKEND_VERSION};
 use crate::backend::jwt::TokenPurposes;
 use crate::backend::permissions::{UserPermissions, check_permission};
 use std::sync::Arc;
-use sysinfo::{System,   MINIMUM_CPU_UPDATE_INTERVAL};
+use std::time::UNIX_EPOCH;
+use sysinfo::{System, MINIMUM_CPU_UPDATE_INTERVAL};
 use serde_json::Value;
 use indexmap::IndexMap;
-use psutil::host::{uptime};
+use psutil::host::{boot_time};
 use serde::{Deserialize, Serialize};
 use crate::backend::api::BackendPropertyResponse;
+
 
 #[derive(Clone,Debug,Deserialize, Serialize)]
 enum SystemProperties
@@ -24,9 +26,9 @@ async fn get_system_information(backend: Arc<Backend>) -> IndexMap<&'static str,
 {
     let mut sys_info: IndexMap<&'static str, Value> = IndexMap::new();
 
-    if let Ok(uptime) = uptime()
+    if let Ok(bt) = boot_time() && let Ok(secs) = bt.duration_since(UNIX_EPOCH)
     {
-        sys_info.insert("uptime", Value::from(uptime.as_secs()));
+        sys_info.insert("uptime", Value::from(secs.as_secs()));
     }
     sys_info.insert("nms_ver", Value::from(BACKEND_VERSION));
 
