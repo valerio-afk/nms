@@ -2,26 +2,35 @@ pub mod ssh;
 pub mod ftp;
 pub mod nfs;
 pub mod smb;
+pub mod web;
+pub mod mediaserver;
 
 use async_trait::async_trait;
 use crate::backend::permissions::UserPermissions;
 use crate::cmdl::systemd::{Systemctl, SystemctlAction};
-use crate::cmdl::{CmdConfig, CommandLine, Transaction};
+use crate::cmdl::{CmdConfig, CommandLine, Executable, Transaction};
 use serde::{Serialize, Deserialize};
 use serde_json::{Value};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Display;
 use std::path::{PathBuf, Path};
-use tokio::sync::OnceCell;
-use crate::backend::config::{AccessService, CfgSystemdService};
+use tokio::sync::{OnceCell,RwLock};
+use crate::backend::config::{AccessService};
+use crate::backend::remote_access::ssh::SSHService;
 use crate::backend::remote_access::ftp::FTPService;
+use crate::backend::remote_access::mediaserver::MEDIAService;
 use crate::backend::remote_access::nfs::NFSService;
 use crate::backend::remote_access::smb::SMBService;
-use self::ssh::SSHService;
+use crate::backend::remote_access::web::WEBService;
+use crate::backend::User;
+use crate::cmdl::docker::{DockerInspect, DockerRemove, DockerRestart, DockerRun, DockerStop};
 
-type AbstractRemoteService = Box::<dyn RemoteService + Send + Sync + 'static>;
-static SYSTEM_SERVICES:OnceCell<Vec<AbstractRemoteService>> = OnceCell::const_new();
+pub trait AgnosticRemoteService:RemoteService + ServiceProperties {}
+
+type AbstractRemoteService = Box::<dyn AgnosticRemoteService + Send + Sync + 'static>;
+
+static SYSTEM_SERVICES:OnceCell<RwLock<Vec<AbstractRemoteService>>> = OnceCell::const_new();
 
 #[derive(Debug)]
 pub enum ServiceError
@@ -36,7 +45,8 @@ pub enum ServiceError
     SetPassword(String, String),
     InitialisationError(String),
     Selinux(String),
-    Firewall(String)
+    Firewall(String),
+    Systemd(String),
 }
 
 impl Display for ServiceError
@@ -55,14 +65,15 @@ impl Display for ServiceError
             ServiceError::SetPassword(uname, err) => write!(f, "Unable to set password for {}: {}", uname, err),
             ServiceError::InitialisationError(err) => write!(f, "Initialisation Error: {}", err),
             ServiceError::Selinux(err) => write!(f, "Error while setting up SeLinux: {}", err),
-            ServiceError::Firewall(err) => write!(f, "Error while setting up the firewall: {}", err)
+            ServiceError::Firewall(err) => write!(f, "Error while setting up the firewall: {}", err),
+            ServiceError::Systemd(err) => write!(f, "Error while using systemd: {}", err),
         }
     }
 }
 
 impl Error for ServiceError {}
 
-#[derive(Debug,Serialize, Deserialize, strum::Display, Hash, Eq, PartialEq)]
+#[derive(Debug,Serialize, Deserialize, strum::Display, Hash, Eq, PartialEq, Clone)]
 #[serde(rename_all="lowercase")]
 pub enum ServiceProperty
 {
@@ -70,6 +81,7 @@ pub enum ServiceProperty
     PortRange,
     Mountpoint,
     IpAddr,
+    Path
 }
 #[async_trait]
 pub trait ServicePermissionHooks
@@ -258,47 +270,110 @@ impl RemoteService for SystemdService
     }
 }
 
+
 pub struct DockerService
 {
     service: Service,
-    image_name: &'static str,
-    container_name: &'static str,
+    image_name: String,
+    container_name: String,
+    volumes: HashMap<String, String>,
+    port_forwarding: Vec<(u32,u32)>
 }
 
 impl DockerService
 {
     pub fn new(name: &'static str,
-               image_name: &'static str,
-               container_name: &'static str,
+               image_name: String,
+               container_name: String,
                trigger_perms: Vec<UserPermissions>,
-               properties: HashMap<ServiceProperty,Value>
+               properties: HashMap<ServiceProperty,Value>,
+               volumes: HashMap<String, String>,
+               port_forwarding: Vec<(u32,u32)>
 
     ) -> Self
     {
         DockerService{
             service: Service::new(name,trigger_perms, properties),
             image_name,
-            container_name
+            container_name,
+            volumes,
+            port_forwarding
         }
     }
 
-    pub fn image_name(&self) -> &'static str
+    pub fn image_name(&self) -> &str
     {
         &self.image_name
     }
 
-    pub fn container_name(&self) -> &'static str
+    pub fn container_name(&self) -> &str
     {
         &self.container_name
     }
 }
 
+#[async_trait]
+impl RemoteService for DockerService
+{
+    async fn start(&mut self) -> Result<(),anyhow::Error>
+    {
+        DockerRun(
+            self.image_name(),
+            self.container_name(),
+            Some(self.volumes.iter().map(|(k,v)| (k.as_str(), v.as_str())).collect::<HashMap<_,_>>()),
+            None,
+            Some(self.port_forwarding.iter().map(|(p1,p2)| (*p1,*p2,None)).collect::<Vec<_>>().as_slice()),
+            None,
+            true,
+            true,
+            Some(DockerRestart::UnlessStopped),
+            CmdConfig::default()
+        ).run().await?;
 
+        Ok(())
+    }
+
+
+    async fn stop(&mut self) -> Result<(),anyhow::Error>
+    {
+        Transaction::new_sudo(vec![
+            DockerStop(self.container_name(),CmdConfig::Empty),
+            DockerRemove(self.container_name(),CmdConfig::Empty),
+        ]).execute().await?;
+
+        Ok(())
+    }
+
+    async fn is_active(&self) -> Result<bool,anyhow::Error>
+    {
+        let docker = DockerInspect(
+            self.container_name(),
+            &["-f","{{.State.Running}}"],
+            CmdConfig::default())
+            .run()
+            .await?
+            .ok_or_else(|| anyhow::Error::msg(format!("Unable to get state of docker container {}",self.container_name())))?
+            .is_success()?;
+
+        Ok(docker.stdout.trim() == "true")
+    }
+
+    fn service_name(&self) -> &'static str
+    {
+        self.service.name()
+    }
+}
+
+impl<T> AgnosticRemoteService for T
+where
+    T: RemoteService + ServiceProperties,
+{}
 
 async fn _remote_services(
     cfg:Option<&HashMap<String,AccessService>>,
-    mountpoint: Option<PathBuf>
-) -> Result<&'static Vec<AbstractRemoteService>,ServiceError>
+    mountpoint: Option<PathBuf>,
+    users: Option<&[User]>
+) -> Result<&'static RwLock<Vec<AbstractRemoteService>>,ServiceError>
 {
     SYSTEM_SERVICES.get_or_try_init(
         || async
@@ -355,32 +430,77 @@ async fn _remote_services(
 
                 tracing::info!("SMB service initialised");
 
-                Ok(services)
+                //web configuration
+                if let Some(web) = c.get("web") && let AccessService::Systemd(nginx) = web
+                {
+                    services.push(Box::new(WEBService::new(nginx.get_units())));
+                }
+                else
+                {
+                    Err(ServiceError::InitialisationError("You have to provide a valid configuration for WEB".to_string()))?
+                }
+
+                //media server
+                if let Some(ms) = c.get("mediaserver") && let AccessService::Docker(msd) = ms
+                {
+                    let media_username = &msd.user;
+                    let mut media_root:Option<PathBuf> = None;
+
+                    if let Some(media_uname) = media_username && let Some(usrs) = users
+                    {
+                        for u in usrs
+                        {
+                            if u.username.eq(media_uname)
+                            {
+                                media_root = u.home_dir.clone()
+                            }
+                        }
+                    }
+
+                    services.push(Box::new(MEDIAService::new(
+                        msd.image_name.clone(),
+                        msd.container_name.clone(),
+                        msd.port,
+                        media_root
+                    )));
+                }
+                else
+                {
+                    Err(ServiceError::InitialisationError("You have to provide a valid configuration for MEDIASERVER".to_string()))?
+                }
+
+                tracing::info!("MEDIASERVER service initialised");
+
+                Ok(RwLock::new(services))
             }
     ).await
 }
 pub async fn init_remote_services(
     cfg:&HashMap<String,AccessService>,
-    mountpoint: Option<PathBuf>
-)
+    mountpoint: Option<PathBuf>,
+    users:Option<&[User]>
+) -> Result<&'static RwLock<Vec<AbstractRemoteService>>,ServiceError>
+
 {
-    let _ = _remote_services(Some(cfg),mountpoint).await;
+    _remote_services(Some(cfg),mountpoint, users).await
 }
 
 
-pub async fn get_remote_services() -> Result<&'static Vec<AbstractRemoteService>,ServiceError>
+pub async fn get_remote_services() -> Result<&'static RwLock<Vec<AbstractRemoteService>>,ServiceError>
 {
-    _remote_services(None,None).await
+    _remote_services(None,None, None).await
 }
-
-pub async fn get_remote_service(name: &str) -> Result<Option<&'static AbstractRemoteService>,ServiceError>
-{
-    for service in get_remote_services().await?
-    {
-        if service.service_name() == name
-        {
-            return Ok(Some(service));
-        }
-    }
-    Ok(None)
-}
+//
+// pub async fn get_remote_service(name: &str) -> Result<Option<&'static AbstractRemoteService>,ServiceError>
+// {
+//     let services = get_remote_services().await?.read().await;
+//
+//     for service in services.read().await.iter()
+//     {
+//         if service.service_name() == name
+//         {
+//             return Ok(Some(service));
+//         }
+//     }
+//     Ok(None)
+// }

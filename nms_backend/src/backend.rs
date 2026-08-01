@@ -4,6 +4,7 @@ use axum::http::StatusCode;
 use base64::prelude::*;
 use chrono::{TimeDelta};
 use config::Config;
+use sysinfo::Networks;
 use crate::backend::api::v1::msg::{StatusMessage, WrappedResponse};
 use crate::backend::config::{CfgToken};
 use crate::backend::dev::{Device, DiskState};
@@ -33,10 +34,13 @@ use std::marker::Send;
 use tokio::sync::{Mutex, RwLock, OnceCell};
 use tokio::fs::{File, rename, read_to_string};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tracing::error;
 use utils::get_notifications_count;
 use utils::{get_quota_for_all, sudo_group,ts_to_str,str_to_i64, get_system_disks};
 use uuid::Uuid;
 use crate::backend::remote_access::init_remote_services;
+
+pub static BACKEND_VERSION:&'static str = env!("CARGO_PKG_VERSION");
 
 pub type HTTPError = (StatusCode, Json<WrappedResponse>);
 pub type FastAPIComp<T> = Result<Json<T>, HTTPError>; //this type is to make it more compatible with the current frontend
@@ -102,6 +106,28 @@ pub struct PoolExtensionStatus
     pub is_running:bool,
     pub eta:Option<i64>,
     pub progress:Option<f32>
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct NetIOCounter
+{
+    total_bytes_recv: u64,
+    total_bytes_sent: u64,
+    bytes_recv: u64,
+    bytes_sent: u64,
+}
+
+impl Default for NetIOCounter
+{
+    fn default() -> Self
+    {
+        NetIOCounter{
+            total_bytes_recv: 0,
+            total_bytes_sent: 0,
+            bytes_recv: 0,
+            bytes_sent: 0
+        }
+    }
 }
 
 
@@ -182,7 +208,8 @@ pub struct Backend
     event_manager:EventManager,
     secret_key:String,
     mount: RwLock<Option<VFS>>,
-    pool_properties: RwLock<Option<PoolProperties>>
+    pool_properties: RwLock<Option<PoolProperties>>,
+    net_counter: RwLock<NetIOCounter>,
 }
 
 impl Backend
@@ -196,7 +223,8 @@ impl Backend
                 event_manager: EventManager::new(),
                 secret_key: "prova".to_string(),
                 mount: RwLock::new(None),
-                pool_properties:RwLock::new(None)
+                pool_properties:RwLock::new(None),
+                net_counter: RwLock::new(NetIOCounter::default()),
         });
 
         {
@@ -253,11 +281,37 @@ impl Backend
                 Box::new(
                     move |_ctx: &Option<ContextData>|
                         {
+                            let mut net = Networks::new_with_refreshed_list();
                             let b = Arc::clone(&task_backend);
                             Box::pin(
                                 async move
                                     {
                                         b.update_users().await;
+                                        net.refresh(true);
+
+                                        let mut net_bytes_sent = 0;
+                                        let mut net_bytes_recv = 0;
+
+
+                                        for (_, network) in &net
+                                        {
+                                            net_bytes_sent += network.total_transmitted();
+                                            net_bytes_recv += network.total_received();
+                                        }
+
+                                        {
+                                            let mut net_counters = b.net_counter.write().await;
+
+                                            if (net_counters.total_bytes_recv > 0) && (net_counters.total_bytes_sent > 0)
+                                            {
+                                                net_counters.bytes_recv = net_bytes_sent - net_counters.total_bytes_recv;
+                                                net_counters.bytes_sent = net_bytes_recv - net_counters.total_bytes_sent;
+                                            }
+
+                                            net_counters.total_bytes_recv = net_bytes_sent;
+                                            net_counters.total_bytes_sent = net_bytes_recv;
+                                        }
+
                                     })
                         }
                 )
@@ -273,23 +327,18 @@ impl Backend
         {
             let cfg = backend.config.lock().await;
             
-            init_remote_services(&cfg.access_services,backend.mountpoint().await).await;
+            if let Err(e) = init_remote_services(
+                &cfg.access_services,
+                backend.mountpoint().await,
+                Some(backend.get_users().await.as_slice())
+            ).await
+            {
+                error!("{:?}", e);
+            }
         }
 
 
         return backend;
-    }
-
-      
-
-    pub async fn get_bind_addr(&self) -> SocketAddrV4
-    {
-        let cfg = self.config.lock().await;
-
-        SocketAddrV4::new(
-            cfg.daemon.host,
-            cfg.daemon.port
-        )
     }
 
     pub async fn read_config(&self) -> Result<(),Box<dyn Error + '_>>
@@ -361,6 +410,28 @@ impl Backend
     {
         self._flush_config().await.map_err(|e| propagate_unknown_error(e))
     }
+}
+
+// Network-related Methods
+
+impl Backend
+{
+    pub async fn get_bind_addr(&self) -> SocketAddrV4
+    {
+        let cfg = self.config.lock().await;
+
+        SocketAddrV4::new(
+            cfg.daemon.host,
+            cfg.daemon.port
+        )
+    }
+
+    pub async fn get_net_counter(&self) -> NetIOCounter
+    {
+        let counter = self.net_counter.read().await;
+        counter.clone()
+    }
+
 }
 
 // Auth-related Methods
@@ -1304,6 +1375,18 @@ impl Backend
 
 
         let _ = self._flush_config();
+    }
+
+    pub async fn get_users(&self) -> Vec<User>
+    {
+        let users = self.users.lock().await;
+
+        stream::iter(users.iter())
+            .then(|u| async  {
+                 u.read().await.clone()
+            })
+            .collect::<Vec<User>>()
+            .await
     }
 
     // Get the list of User structs of admin (ie users with all permissions)

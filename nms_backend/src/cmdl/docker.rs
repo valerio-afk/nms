@@ -72,7 +72,7 @@ pub fn DockerRun(
 
             if let Some(x) = prot
             {
-                p.push_str(x);
+                p.push_str(&format!("/{}",x));
             }
 
             args.push("-p".to_string());

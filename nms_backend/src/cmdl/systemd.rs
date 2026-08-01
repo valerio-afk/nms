@@ -103,7 +103,7 @@ pub fn Systemctl<S: AsRef<str> + ToString>
     }
 
     CommandLine::new(
-        "journalctl",
+        "systemctl",
         Some(
             vec![
                 action.to_string(),

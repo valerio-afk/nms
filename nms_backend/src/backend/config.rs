@@ -19,10 +19,10 @@ pub struct CfgPool
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CfgDockerService
 {
-    image_name:String,
-    container_name: String,
-    port: u16,
-    user:Option<String>
+    pub image_name:String,
+    pub container_name: String,
+    pub port: u32,
+    pub user:Option<String>
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CfgSystemdService

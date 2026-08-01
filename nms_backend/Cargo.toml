@@ -1,6 +1,6 @@
 [package]
 name = "nms_backend"
-version = "0.1.0"
+version = "0.2.0-alpha"
 edition = "2024"
 
 [lints.rust]
@@ -31,3 +31,6 @@ configparser = "3.2"
 futures = "0.3.33"
 anyhow = "1.0"
 async-trait = "0.1"
+indexmap = { version = "2", features = ["serde"] }
+psutil = "3.3.0"
+sysinfo = "0.39.6"

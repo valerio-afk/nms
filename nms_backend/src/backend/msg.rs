@@ -1,6 +1,7 @@
 use axum::{Json,http::{StatusCode}};
 use std::fmt::{Display, Formatter};
-use serde::{Serialize};
+use serde::{Serialize, Serializer};
+use serde::ser::{SerializeStruct};
 use serde_json::Value;
 use tracing::{info,warn,error};
 use strum::{EnumProperty,IntoStaticStr};
@@ -13,18 +14,49 @@ pub trait StatusMessage:Clone
 }
 
 
-#[derive(Debug, Serialize, IntoStaticStr)]
-#[serde(tag = "type")]
+#[derive(Debug,  IntoStaticStr)]
 pub enum MessageTypes
 {
-    #[serde(rename="error")]
+    // #[serde(rename="error")]
     Error(ErrorMessages),
 
-    #[serde(rename="warning")]
+    // #[serde(rename="warning")]
     Warning,
 
-    #[serde(rename="success")]
+    // #[serde(rename="success")]
     Success
+}
+
+impl Serialize for MessageTypes
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // 3 is the number of fields in the struct.
+        let mut state = serializer.serialize_struct("MessageType", 2)?;
+
+        match self
+        {
+            MessageTypes::Error(err) => {
+                state.serialize_field("type","error")?;
+                let code: &'static str = err.into();
+                state.serialize_field("code",code)?;
+            }
+            MessageTypes::Warning => {
+                state.serialize_field("type","warning")?;
+                // let code: &'static str = err.into();
+                // state.serialize_field("code",code)?;
+            }
+            MessageTypes::Success => {
+                state.serialize_field("type","success")?;
+                // let code: &'static str = err.into();
+                // state.serialize_field("code",code)?;
+            }
+        }
+
+        state.end()
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -65,7 +97,7 @@ impl WrappedResponse
     }
 }
 
-#[derive(Debug, Serialize, Clone, EnumProperty)]
+#[derive(Debug, Serialize, Clone, EnumProperty, IntoStaticStr)]
 pub enum ErrorMessages
 {
     E_UNKNOWN,
@@ -136,7 +168,11 @@ pub enum ErrorMessages
     
     #[strum(props(status_code="400"))]
     E_AUTH_MALFORMED,
+
+    #[strum(props(status_code="401"))]
     E_AUTH_NOT_CONF,
+
+    #[strum(props(status_code="403"))]
     E_AUTH_WRONG_OTP,
 
     E_DISK_ATTACH,

@@ -14,8 +14,8 @@ use crate::backend::remote_access::{RemoteService, ServiceAuth, ServiceError, Se
 use crate::backend::utils::{detect_distro_family, DistroFamily};
 use crate::cmdl::{CmdConfig, CommandLine, Executable, Transaction};
 use crate::cmdl::coreutils::{Cat, MV};
-use crate::cmdl::firewall::{Firewall, FirewallAction, FirewallPort};
-use crate::cmdl::selinux::{Protocol, RestoreContext, SeLinuxSetBool};
+use crate::cmdl::firewall::{Firewall, FirewallAction};
+use crate::cmdl::selinux::{RestoreContext, SeLinuxSetBool};
 
 static NFS_DEFAULT_PARAMS:LazyLock<Vec<&'static str>> = LazyLock::new(||{ Vec::from(["rw","sync","fsid=0"]) });
 static NMS_CFG_TAG:&'static str = "#nms";
@@ -182,7 +182,7 @@ impl NFSService
                         props.insert(ServiceProperty::Mountpoint,Value::String(mountpoint.to_string()));
                     }
 
-                    if let Ok(ip) = addr.parse::<Ipv4Net>()
+                    if addr.parse::<Ipv4Net>().is_ok()
                     {
                         props.insert(ServiceProperty::IpAddr,Value::String(addr.to_string()));
                     }

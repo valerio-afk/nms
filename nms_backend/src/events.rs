@@ -132,7 +132,7 @@ impl Events
     }
 }
 
-#[derive(Eq, Hash, PartialEq)]
+#[derive(Eq, Hash, PartialEq, Debug)]
 pub enum ContextVariables
 {
     TriggerUser,
@@ -240,6 +240,7 @@ pub struct EventManager
     internal: Arc<EventManageInternal>
 }
 
+#[derive(Debug)]
 pub enum Trigger
 {
     Event(Events),
@@ -593,7 +594,11 @@ impl EventManager
             }
 
             map.entry(ContextVariables::ISOTimestamp).or_insert(Local::now().to_rfc3339());
-            let _ = tx.send((trigger,Some(map)));
+
+            if let Err(e) = tx.send((trigger,Some(map))).await
+            {
+                error!("Error sending event: {}", e);
+            }
         }
     }
 
@@ -667,6 +672,7 @@ impl EventManager
                                 while task.is_running()
                                 {
                                     sleep(Duration::from_secs(secs)).await;
+
                                     ev.trigger(
                                         Trigger::Action(uuid.clone()),
                                         None

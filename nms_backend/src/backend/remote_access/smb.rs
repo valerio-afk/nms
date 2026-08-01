@@ -17,8 +17,6 @@ use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::str::FromStr;
 use anyhow::Error;
-use crate::backend::msg::ErrorMessages;
-use crate::backend::propagate_error;
 use crate::backend::utils::{detect_distro_family, DistroFamily};
 use crate::cmdl::smb::{SMBPasswd, SMBPasswdAction};
 use super::RemoteService;
@@ -213,7 +211,7 @@ impl SMBService
             for (ctx,pth) in selinux_contexes.iter()
             {
                 cmd.push(SelinuxManageContext(
-                    (if add { SelinuxManageContextAction::Add } else {SelinuxManageContextAction::Remove}),
+                    if add { SelinuxManageContextAction::Add } else {SelinuxManageContextAction::Remove},
                     Some(ctx),
                     Some(pth),
                     true,
@@ -299,7 +297,7 @@ impl SMBService
 
                     for port in ports.split(",")
                     {
-                        if let Ok(protocol) = Protocol::from_str(port) && let Ok(p) = FirewallPort::from_str(port)
+                        if let Ok(protocol) = Protocol::from_str(proto) && let Ok(p) = FirewallPort::from_str(port)
                         {
                             list_ports.push((protocol,p));
                         }

@@ -1,4 +1,4 @@
-use tracing::{Level,debug, Span};
+use tracing::{Level,debug};
 use tracing_subscriber::FmtSubscriber;
 use backend::get_backend;
 use backend::utils::detect_distro_family;
@@ -44,7 +44,6 @@ fn logger_init()
 async fn main() 
 {
     logger_init();
-
     let backend = get_backend().await;
 
     let app = Router::new()

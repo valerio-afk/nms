@@ -244,6 +244,7 @@ async fn auth_otp_verify
         return Err(ErrorMessages::E_AUTH_WRONG_OTP.wrap_with_status_code(None));
     }
 
+
     let user = backend.get_user(&username.as_ref().unwrap()).await?;
 
     check_permission(&user, UserPermissions::ClientDashboardAccess).await?;

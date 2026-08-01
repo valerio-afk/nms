@@ -27,7 +27,7 @@ pub struct WrappedTaskInternal
     running_state: Arc<AtomicBool>,
     name:Option<String>,
     run: Runner<WrappedTask>,
-    handle: Mutex<Option<JoinHandle<TaskFuture>>>
+    handle: Mutex<Option<JoinHandle<()>>>
 }
 
 
@@ -82,7 +82,7 @@ impl TaskWrapper for WrappedTask
         let this = self.clone();
 
         let handle = tokio::spawn(
-            async move { (this.run)(&this) }
+            async move { (this.run)(&this).await }
         );
 
         let task_name = match &self.name
