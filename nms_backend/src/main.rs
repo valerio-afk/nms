@@ -15,7 +15,7 @@ pub mod events;
 pub mod task;
 pub mod backend;
 pub mod vfs;
-
+pub mod sensors;
 
 // tracing_subscriber::registry()
 //         .with(

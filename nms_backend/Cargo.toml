@@ -34,3 +34,4 @@ async-trait = "0.1"
 indexmap = { version = "2", features = ["serde"] }
 psutil = "3.3.0"
 sysinfo = "0.39.6"
+inventory = "0.3.24"

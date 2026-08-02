@@ -132,7 +132,7 @@ impl Events
     }
 }
 
-#[derive(Eq, Hash, PartialEq, Debug)]
+#[derive(Eq, Hash, PartialEq, Debug, Clone)]
 pub enum ContextVariables
 {
     TriggerUser,

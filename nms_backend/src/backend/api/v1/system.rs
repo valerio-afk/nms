@@ -1,8 +1,8 @@
 use axum_auth::AuthBearer;
 use axum::Json;
-use axum::routing::{Router, get};
+use axum::routing::{Router, get, post};
 use axum::extract::{Path, State};
-use crate::backend::{Backend, FastAPIComp, BACKEND_VERSION};
+use crate::backend::{Backend, FastAPIComp, BACKEND_VERSION, HTTPError, propagate_unknown_error};
 use crate::backend::jwt::TokenPurposes;
 use crate::backend::permissions::{UserPermissions, check_permission};
 use std::sync::Arc;
@@ -12,8 +12,11 @@ use serde_json::Value;
 use indexmap::IndexMap;
 use psutil::host::{boot_time};
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 use crate::backend::api::BackendPropertyResponse;
-
+use crate::cmdl::acpi::{Reboot, Shutdown};
+use crate::cmdl::{CmdConfig, CommandLine, Executable};
+use crate::events::{ContextData, ContextVariables, EventData, Events, Trigger};
 
 #[derive(Clone,Debug,Deserialize, Serialize)]
 enum SystemProperties
@@ -93,10 +96,55 @@ async fn get_sys_property(
 }
 
 
+async fn acpi_exec(token:String, backend: Arc<Backend>, cmd:CommandLine,event:Events) -> Result<(), HTTPError>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::ClientDashboardAdvanced).await?;
+    let uname = user.read().await.username.clone();
+
+    let mut ctx = ContextData::new();
+
+    match event
+    {
+        Events::SystemPoweroff => warn!("System shutdown requested by {}. Bye!",uname),
+        Events::SystemReboot => warn!("System reboot requested by {}. Bye!",uname),
+        _ => ()
+    }
+
+    ctx.insert(ContextVariables::TriggerUser, uname);
+
+    backend.event_manager.trigger(Trigger::Event(event),Some(ctx.clone())).await;
+    backend.event_manager.trigger(Trigger::Event(Events::SystemShutdown),Some(ctx)).await;
+    
+    cmd.run().await.map_err(|e| propagate_unknown_error(e))?;
+    Ok(())
+}
+
+async fn shutdown(
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>
+) -> Result<(),HTTPError>
+{
+    acpi_exec(token,backend,Shutdown(CmdConfig::default()),Events::SystemPoweroff).await
+}
+
+async fn reboot(
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>
+) -> Result<(),HTTPError>
+{
+    acpi_exec(token,backend,Reboot(CmdConfig::default()),Events::SystemReboot).await
+}
+
+
 pub fn get_route() -> Router<Arc<Backend>>
 {
     Router::new().nest("/system",
         Router::new()
+        .route("/shutdown", post(shutdown))
+        .route("/restart", post(reboot))
         .route("/test", get(test))
         .route("/get/{prop}", get(get_sys_property))
     )
