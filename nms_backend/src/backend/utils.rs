@@ -1,22 +1,21 @@
-use chrono::{DateTime};
-use core::result::Result;
-use crate::backend::dev::Device;
-use crate::cmdl::{CmdConfig, Executable};
-use crate::cmdl::coreutils::{Stat,Cat};
-use crate::cmdl::utils::{LSBLK,LsblkProperties};
+use super::Quota;
+use crate::cmdl::coreutils::{Cat, Stat};
+use crate::cmdl::utils::{LSBLK, LsblkProperties};
 use crate::cmdl::zfs::{ZFS, ZFSActions, ZFSArgs};
+use crate::cmdl::{CmdConfig, Executable};
+use crate::dev::Device;
+use chrono::DateTime;
+use core::result::Result;
 use regex::Regex;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
-use super::Quota;
 
 static DISTRO_FAMILY:OnceLock<DistroFamily> = OnceLock::new();
 static SUDO_GROUP:OnceLock<&'static str> = OnceLock::new();
 const MBOX_BASEPATH:&str = "/var/mail";
-const ACCEPTED_TRAN_TYPES:[&'static str;3] = ["sata","spi","usb"];
 
 #[derive(PartialEq)]
 pub enum DistroFamily
@@ -217,34 +216,3 @@ pub async fn get_notifications_count(username:&str) -> u32
     return n_notifications;
 }
 
-pub async fn get_system_disks() -> Vec<Device>
-{
-    let result = LSBLK(LsblkProperties::default(), None, CmdConfig::Empty).run().await;
-    let mut devs:Vec<Device> = Vec::new();
-
-    if let Ok(r) = result && let Some(output) = r && output.exit_code==0
-    {
-        if let Ok(lsblk) = serde_json::from_str::<Value>(&output.stdout)
-        {
-            if let Value::Array(detected_disks) = &lsblk["blockdevices"]
-            {
-                for dev in detected_disks
-                {
-                    if let Value::Object(d) = dev
-                    {
-                        if ACCEPTED_TRAN_TYPES.contains(&d["tran"].as_str().unwrap())
-                        {
-                            if let Some(device) = Device::from_lsblk(d).await
-                            {
-                                devs.push(device);
-                            }
-                        }
-                    }
-                }
-            }
-
-        }
-    }
-
-    return devs;
-}

@@ -17,6 +17,7 @@ use crate::backend::api::BackendPropertyResponse;
 use crate::cmdl::acpi::{Reboot, Shutdown};
 use crate::cmdl::{CmdConfig, CommandLine, Executable};
 use crate::events::{ContextData, ContextVariables, EventData, Events, Trigger};
+use crate::sensors::{get_sensors, Sensor};
 
 #[derive(Clone,Debug,Deserialize, Serialize)]
 enum SystemProperties
@@ -139,6 +140,16 @@ async fn reboot(
 }
 
 
+async fn system_sensors(AuthBearer(token): AuthBearer, State(backend): State<Arc<Backend>>) -> FastAPIComp<Vec<Sensor>>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::ClientDashboardAdvanced).await?;
+
+    Ok(Json(get_sensors().await))
+}
+
 pub fn get_route() -> Router<Arc<Backend>>
 {
     Router::new().nest("/system",
@@ -146,6 +157,7 @@ pub fn get_route() -> Router<Arc<Backend>>
         .route("/shutdown", post(shutdown))
         .route("/restart", post(reboot))
         .route("/test", get(test))
+        .route("/sensors", get(system_sensors))
         .route("/get/{prop}", get(get_sys_property))
     )
 }

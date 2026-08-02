@@ -7,6 +7,7 @@ use crate::cmdl::{CmdConfig, Executable};
 use crate::cmdl::utils::Find;
 use crate::cmdl::utils::{LSBLK, LsblkProperties,UdevAdmInfo};
 
+static ACCEPTED_TRAN_TYPES:[&'static str;3] = ["sata","spi","usb"];
 #[derive(Debug, Serialize_repr,FromRepr, PartialEq,EnumString, Clone)]
 #[repr(i32)]
 #[strum(ascii_case_insensitive)]
@@ -221,6 +222,38 @@ impl PartialEq for Device
     }
 }
 
+
+pub async fn get_system_disks() -> Vec<Device>
+{
+    let result = LSBLK(LsblkProperties::default(), None, CmdConfig::Empty).run().await;
+    let mut devs:Vec<Device> = Vec::new();
+
+    if let Ok(r) = result && let Some(output) = r && output.exit_code==0
+    {
+        if let Ok(lsblk) = serde_json::from_str::<Value>(&output.stdout)
+        {
+            if let Value::Array(detected_disks) = &lsblk["blockdevices"]
+            {
+                for dev in detected_disks
+                {
+                    if let Value::Object(d) = dev
+                    {
+                        if ACCEPTED_TRAN_TYPES.contains(&d["tran"].as_str().unwrap())
+                        {
+                            if let Some(device) = Device::from_lsblk(d).await
+                            {
+                                devs.push(device);
+                            }
+                        }
+                    }
+                }
+            }
+
+        }
+    }
+
+    return devs;
+}
 
 // mod test
 // {

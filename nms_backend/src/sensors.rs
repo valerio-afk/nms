@@ -2,6 +2,10 @@ use async_trait::async_trait;
 use serde::Serialize;
 use inventory;
 
+mod lmsensors;
+mod smartctl;
+mod rpi_sensors;
+
 inventory::collect!(DriverRegistration);
 
 #[derive(Serialize)]
@@ -41,5 +45,17 @@ pub trait SensorDriver: Send + Sync
 
 pub struct DriverRegistration
 {
-    pub driver: &'static dyn SensorDriver,
+    pub driver: fn() -> Box<dyn SensorDriver>,
+}
+
+pub async fn get_sensors() -> Vec<Sensor>
+{
+    let mut sensors = Vec::new();
+    for reg in inventory::iter::<DriverRegistration>
+    {
+        let driver = (reg.driver)();
+        sensors.extend(driver.get_sensors().await);
+    }
+
+    sensors
 }

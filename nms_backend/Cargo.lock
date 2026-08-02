@@ -1034,6 +1034,7 @@ dependencies = [
  "strum",
  "sysinfo",
  "tokio",
+ "tokio-stream",
  "totp-rs",
  "tower-http",
  "tower_governor",

@@ -272,7 +272,7 @@ pub fn Find(
     )
 }
 
-pub fn Smartctl(dev:&String,action:SmartctlActions,config:CmdConfig) -> CommandLine
+pub fn Smartctl<S:AsRef<str> + ToString>(dev:S,action:SmartctlActions,config:CmdConfig) -> CommandLine
 {
     let mut args:Vec<String> = vec![action.to_string()];
 
@@ -281,7 +281,7 @@ pub fn Smartctl(dev:&String,action:SmartctlActions,config:CmdConfig) -> CommandL
         args.push(t.to_string());
     }
 
-    args.push(dev.clone());
+    args.push(dev.to_string());
 
     CommandLine::new(
         "smartctl",
@@ -345,6 +345,17 @@ pub fn ExportFs(config:CmdConfig) -> CommandLine
     CommandLine::new(
         "exportfs",
         Some(vec!["-ra".to_string()]),
+        None,
+        None,
+        config
+    )
+}
+
+pub fn Sensors(config:CmdConfig) -> CommandLine
+{
+    CommandLine::new(
+        "sensors",
+        Some(vec!["-j".to_string()]),
         None,
         None,
         config

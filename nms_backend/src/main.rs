@@ -1,14 +1,14 @@
-use tracing::{Level,debug};
-use tracing_subscriber::FmtSubscriber;
+use axum::Router;
+use backend::api::get_api;
 use backend::get_backend;
 use backend::utils::detect_distro_family;
-use backend::api::get_api;
+use std::sync::Arc;
 use tower_http::trace::TraceLayer;
-use tower_http::trace::{DefaultMakeSpan,DefaultOnResponse,DefaultOnFailure};
-use std::sync::{Arc};
-use axum::{Router};
+use tower_http::trace::{DefaultMakeSpan, DefaultOnFailure, DefaultOnResponse};
+use tracing::{Level, debug};
+use tracing_subscriber::FmtSubscriber;
 
-use crate::backend::msg::{LoggerMessages,LogErrors};
+use crate::backend::msg::{LogErrors, LoggerMessages};
 
 pub mod cmdl;
 pub mod events;
@@ -16,6 +16,8 @@ pub mod task;
 pub mod backend;
 pub mod vfs;
 pub mod sensors;
+pub mod dev;
+pub mod rpi;
 
 // tracing_subscriber::registry()
 //         .with(

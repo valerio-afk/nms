@@ -304,6 +304,8 @@ class BackEndProxy:
     def system_information(this) -> Dict[str,Any]:
         r = this._get_property_request("system","system_information")
 
+        import sys; print(r,file=sys.stderr)
+
         if (r is not None):
             uptime = r.get("uptime")
             uptime = format_datetime(uptime, "EEEE, d MMMM yyyy HH:mm").title() if uptime is not None else ""
@@ -314,6 +316,7 @@ class BackEndProxy:
                 _('OS'): r.get('os',""),
                 "_cpu_load": f"{r.get("cpu_load","")}",
                 "_memory_load": f"{r.get("memory_load", "")}",
+                "_swap_load": f"{r.get("swap_load", "")}",
                 '_net_counters': r.get("net_counters",{})
             }
 

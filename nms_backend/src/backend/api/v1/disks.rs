@@ -1,16 +1,15 @@
-use crate::backend::dev::{Device, DiskState};
-use crate::backend::{Backend, FastAPIComp, propagate_unknown_error};
 use crate::backend::api::BackendPropertyResponse;
-use crate::backend::permissions::{UserPermissions, check_permission};
 use crate::backend::jwt::TokenPurposes;
-use crate::backend::utils::{get_system_disks};
-use std::sync::Arc;
-use axum::{Json, Router};
+use crate::backend::permissions::{UserPermissions, check_permission};
+use crate::dev::{get_system_disks};
+use crate::backend::{Backend, FastAPIComp, propagate_unknown_error};
+use crate::dev::{Device, DiskState};
+use axum::extract::{Path, State};
 use axum::routing::get;
-use axum::extract::{State,Path};
+use axum::{Json, Router};
 use axum_auth::AuthBearer;
-// use serde_json::Value;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 #[derive(Clone,Debug,Deserialize, Serialize)]
 enum DisksProperties
