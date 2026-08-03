@@ -78,7 +78,7 @@ pub struct ZFSArgs<S>
 where S:AsRef<str> + ToString + Display
 {
     pub pool:S,
-    pub dataset: S
+    pub dataset: Option<S>
 }
 
 impl<S> Display for ZFSArgs<S>
@@ -86,7 +86,15 @@ where S:AsRef<str> + ToString + Display
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result 
     {
-        write!(f,"{}/{}",self.pool,self.dataset)
+        let mut s = self.pool.to_string();
+
+        if let Some(dataset) = &self.dataset
+        {
+            s.push('/');
+            s.push_str(dataset.as_ref());
+        }
+
+        write!(f,"{}",s)
     }
 }
 
@@ -153,10 +161,10 @@ impl ZFSListArgs<String>
     }
 }
 
-pub struct ZFSLoadKeyArgs
+pub struct ZFSLoadKeyArgs<S>
 {
-    pool:String,
-    key_path:String,
+    pub pool:S,
+    pub key_path:S,
 }
 
 pub struct ZFSSnapshotArgs<S>
@@ -173,7 +181,7 @@ where S:AsRef<str> + ToString + Display
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result 
     {
         write!(f,"{}@{}",
-            ZFSArgs{pool:self.pool.to_string(),dataset:self.dataset.to_string()}.to_string(),
+            ZFSArgs{pool:self.pool.to_string(),dataset:Some(self.dataset.to_string())}.to_string(),
             self.snapshot
         )    
     }
@@ -185,10 +193,10 @@ where S:AsRef<str> + ToString + Display
 {
     GetQuota(ZFSArgs<S>),
     SetQuota(ZFSArgs<S>,ZFSQuotaArgs),
-    Get(String), //pool name
+    Get(Option<String>), //pool name
     List(ZFSListArgs<S>),
-    LoadKey(ZFSLoadKeyArgs),
-    UnloadKey(String), //pool name
+    LoadKey(ZFSLoadKeyArgs<S>),
+    UnloadKey(S), //pool name
     Create(ZFSArgs<S>,Option<HashMap<String, String>>), //options
     Destroy(ZFSArgs<S>,Option<S>), //snapshot nane
     Snapshot(ZFSSnapshotArgs<S>),
@@ -205,6 +213,7 @@ pub fn ZPool(
 {
     let mut args : Vec<String> = Vec::new();
     let mut rev_cmd:Option<CommandLine> = None;
+    let json_params = &["-p".to_string(),"-j".to_string()];
 
     match action
     {
@@ -339,27 +348,21 @@ pub fn ZPool(
 
         }
 
-        _ =>{
-                args.extend_from_slice(&["-p".to_string(),"-J".to_string()]); //json output
-                match action
-                {
-                    ZPoolActions::List(pool) => {
-                        args.push("list".to_string());
-                        args.push(pool.to_string());
-                    },
-                    ZPoolActions::Status(pool) => {
-                        args.push("status".to_string());
-                        args.push(pool.to_string());
-                    },
-                    ZPoolActions::Get(pool) => {
-                        args.push("get".to_string());
-                        args.push(pool.to_string());
-                    },
-                    _ => ()
-                }
-            }
-        
-
+        ZPoolActions::List(pool) => {
+            args.push("list".to_string());
+            args.extend_from_slice(json_params);
+            args.push(pool.to_string());
+        },
+        ZPoolActions::Status(pool) => {
+            args.push("status".to_string());
+            args.extend_from_slice(json_params);
+            args.push(pool.to_string());
+        },
+        ZPoolActions::Get(pool) => {
+            args.push("get".to_string());
+            args.extend_from_slice(json_params);
+            args.push(pool.to_string());
+        },
     }
 
     CommandLine::new(
@@ -407,8 +410,12 @@ where S:AsRef<str> + Display
                     "-p".to_string(),
                     "-j".to_string(),
                     "all".to_string(),
-                    pool.to_string()
-                ];        
+                ];
+                
+                if let Some(pool) = pool
+                {
+                    args.push(pool.to_string());
+                }
             }
         ZFSActions::List(p) =>
             {
@@ -484,11 +491,11 @@ where S:AsRef<str> + Display
             {
                 let fs:String;
 
-                if let Some(tag) = snapshot
+                if let Some(tag) = snapshot && let Some(dataset) = p.dataset
                 {
                     fs = ZFSSnapshotArgs{
                         pool:p.pool,
-                        dataset:p.dataset,
+                        dataset,
                         snapshot:tag
                     }.to_string()
                 }
@@ -512,7 +519,7 @@ where S:AsRef<str> + Display
                 if revertible
                 {
                     rev_cmd = Some(ZFS(
-                        ZFSActions::Destroy::<S>(ZFSArgs { pool: p.pool, dataset: p.dataset }, Some(p.snapshot)),
+                        ZFSActions::Destroy::<S>(ZFSArgs { pool: p.pool, dataset: Some(p.dataset) }, Some(p.snapshot)),
                         false,
                         config.clone()
                     ))

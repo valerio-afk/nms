@@ -1,3 +1,5 @@
+use std::collections::hash_set::Intersection;
+use std::collections::HashSet;
 use crate::backend::{Backend, FastAPIComp, propagate_unknown_error};
 use crate::backend::api::BackendPropertyResponse;
 use crate::backend::permissions::{UserPermissions, check_permission};
@@ -10,6 +12,7 @@ use axum::extract::{State,Path};
 use axum_auth::AuthBearer;
 use serde_json::Value;
 use serde::{Deserialize, Serialize};
+use crate::dev::{get_system_disks, DiskState, Device};
 
 #[derive(Debug,Serialize)]
 struct PoolFlags
@@ -80,8 +83,43 @@ enum PoolProperties
     ScrubInfo,
 
     #[serde(rename = "disks")]
-    PoolDisks
+    PoolDisks,
+
+    #[serde(rename = "attachable-disks")]
+    AttachableDisks,
+    
+    #[serde(rename = "snapshot")]
+    Snapshots
 }
+
+async fn get_attachable_disks(backend:Arc<Backend>) -> Vec<Device>
+{
+    let config_disks = backend.get_pool_disks().await;
+    let sys_disks = get_system_disks().await;
+    let sys_disks = sys_disks.iter().filter(|d| d.state == DiskState::NEW);
+    let mut physical_paths:Vec<String> = Vec::new();
+    let mut attachable_disks:Vec<Device> = Vec::new();
+
+    for dev in config_disks
+    {
+        physical_paths.extend(dev.paths.iter().map(|p| p.to_string()));
+    }
+
+    let phys_paths_set:HashSet<String> = HashSet::from_iter(physical_paths.into_iter());
+
+    for dev in sys_disks
+    {
+        let dev_paths_set: HashSet<String> = dev.paths.iter().map(|p| p.clone()).collect();
+        let intersection:Intersection<String,_> = phys_paths_set.intersection(&dev_paths_set);
+        if intersection.count() == 0
+        {
+            attachable_disks.push(dev.clone());
+        }
+    }
+
+    attachable_disks
+}
+
 
 async fn get_pool_property(
     Path(property):Path<PoolProperties>,
@@ -158,6 +196,12 @@ async fn get_pool_property(
             ).map_err(|e| propagate_unknown_error(e))?,
             PoolProperties::PoolDisks => serde_json::to_value(
                 backend.get_pool_disks().await.iter().map(|d| CompatibleDisk::from_device(d)).collect::<Vec<CompatibleDisk>>()
+            ).map_err(|e| propagate_unknown_error(e))?,
+            PoolProperties::AttachableDisks => serde_json::to_value(
+                get_attachable_disks(backend).await.iter().map(|d| CompatibleDisk::from_device(d)).collect::<Vec<CompatibleDisk>>()
+            ).map_err(|e| propagate_unknown_error(e))?,
+            PoolProperties::Snapshots => serde_json::to_value(
+                backend.get_pool_snapshots().await?
             ).map_err(|e| propagate_unknown_error(e))?,
         }
     }))

@@ -16,7 +16,7 @@ use tracing::warn;
 use crate::backend::api::BackendPropertyResponse;
 use crate::cmdl::acpi::{Reboot, Shutdown};
 use crate::cmdl::{CmdConfig, CommandLine, Executable};
-use crate::events::{ContextData, ContextVariables, EventData, Events, Trigger};
+use crate::events::{ContextData, ContextVariables, Events, Trigger};
 use crate::sensors::{get_sensors, Sensor};
 
 #[derive(Clone,Debug,Deserialize, Serialize)]
@@ -36,7 +36,7 @@ async fn get_system_information(backend: Arc<Backend>) -> IndexMap<&'static str,
     }
     sys_info.insert("nms_ver", Value::from(BACKEND_VERSION));
 
-    let mut sys = System::new_all();
+    let sys = System::new_all();
 
     tokio::time::sleep(MINIMUM_CPU_UPDATE_INTERVAL).await;
 

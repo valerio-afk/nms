@@ -404,9 +404,9 @@ class BackEndProxy:
 
     @property
     def snapshots(this) -> List[Tuple[str,int]]:
-        snapshots = this._request("pool/snapshot", RequestMethod.GET)
+        snapshots = this._request("pool/get/snapshot", RequestMethod.GET)
 
-        return [ (s.get("name"),s.get("ref_size") )for s in snapshots ]
+        return [ (s.get("name"),s.get("ref_size") )for s in snapshots["value"] ]
 
     #DISK PROPERTIES
     @property

@@ -18,7 +18,7 @@ use tokio::sync::{mpsc,Mutex};
 use tokio::time::sleep;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
-use tracing::{debug,info,warn,error};
+use tracing::{debug,info,error};
 use uuid::Uuid;
 
 
@@ -27,6 +27,8 @@ pub mod actions;
 pub type ContextData = HashMap<ContextVariables,String>;
 pub type EventCallback = Runner<Option<ContextData>>;
 pub type EventData = (Trigger,Option<ContextData>);
+
+static INOTIFY_TASK:&'static str = "inotify_task";
 
 #[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum Events
@@ -42,7 +44,7 @@ pub enum Events
     SystemNMSUpgrade,
     Timer,
     PoolMount,
-    PoolUnmont,
+    PoolUnmount,
     UserLoggedIn,
     UserCreated,
     UserModified,
@@ -81,7 +83,7 @@ impl std::fmt::Display for Events
             Events::SystemNMSUpgrade => write!(f,"SystemNMSUpgrade"),
             Events::Timer => write!(f,"Timer"),
             Events::PoolMount => write!(f,"PoolMount"),
-            Events::PoolUnmont => write!(f,"PoolUnmont"),
+            Events::PoolUnmount => write!(f, "PoolUnmont"),
             Events::UserLoggedIn => write!(f,"UserLoggedIn"),
             Events::UserCreated => write!(f,"UserCreated"),
             Events::UserModified => write!(f,"UserModified"),
@@ -258,11 +260,11 @@ impl Deref for EventManager
 
 impl EventManager
 {
-    async fn start_inotify_thread(&self,path:&str)
+    pub async fn start_inotify_task(&self,path:&str)
     {
 
         let mngt = self.clone();
-        let thread_name = "INotifyThread".to_string();
+        let thread_name = INOTIFY_TASK.to_string();
         let thread_path = path.to_string();
 
 
@@ -295,7 +297,7 @@ impl EventManager
                                         {
                                             None => error!("Unable to get inotify stdout"),
                                             Some(stdout) => {
-                                                info!("Started");
+                                                info!("inotify task started");
                                                 let mut reader = BufReader::new(stdout);
 
                                                 while task.is_running()
@@ -433,7 +435,7 @@ impl EventManager
                                                         }
                                                     }
                                                 }
-                                                warn!("Ended");
+                                                info!("inotify task terminated");
                                             }
                                         }
                                     }
@@ -448,6 +450,16 @@ impl EventManager
 
         let mut map = self.tasks.lock().await;
         map.insert(thread_name, inotify_task);
+    }
+
+    pub async fn stop_inotify_task(&self)
+    {
+        let mut map = self.tasks.lock().await;
+
+        if let Some(task) = map.remove(&INOTIFY_TASK.to_string())
+        {
+            task.stop().await;
+        }
     }
 }
 

@@ -63,6 +63,9 @@ def widget_disk_mngt_tools() -> str:
 
     verify = BACKEND.scrub_info
 
+    if verify is None:
+        verify = {"last": None}
+
     if (verify['last'] is None):
         verify['last'] = _("Never")
     else:

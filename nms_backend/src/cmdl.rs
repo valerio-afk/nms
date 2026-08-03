@@ -16,6 +16,7 @@ pub mod sed;
 pub mod selinux;
 pub mod firewall;
 pub mod smb;
+pub mod acl;
 
 use tokio;
 use tokio::process::{Child, Command};
@@ -458,6 +459,11 @@ impl Transaction
         {
             revert_commands.push(cmd.take_revert_cmd());
 
+            if self.privileged
+            {
+                cmd.as_sudo();
+            }
+
             let output = cmd.run().await;
 
             match output
@@ -484,7 +490,15 @@ impl Transaction
             {
                 match revert_cmd
                 {
-                    Some(cmd) => { let _ = cmd.run().await?; }
+                    Some(mut cmd) =>
+                        {
+                            if self.privileged
+                            {
+                                cmd.as_sudo();
+                            }
+
+                            let _ = cmd.run().await?;
+                        }
                     None => ()
                 }
             }

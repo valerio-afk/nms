@@ -1,13 +1,10 @@
 use super::Quota;
 use crate::cmdl::coreutils::{Cat, Stat};
-use crate::cmdl::utils::{LSBLK, LsblkProperties};
 use crate::cmdl::zfs::{ZFS, ZFSActions, ZFSArgs};
 use crate::cmdl::{CmdConfig, Executable};
-use crate::dev::Device;
 use chrono::DateTime;
 use core::result::Result;
 use regex::Regex;
-use serde_json::Value;
 use std::collections::HashMap;
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
@@ -125,7 +122,7 @@ pub async fn get_quota_for_all(pool:&str, dataset:&str) -> Result<HashMap<String
     let output = ZFS(
         ZFSActions::GetQuota::<&str>(ZFSArgs{
             pool: pool,
-            dataset: dataset
+            dataset: Some(dataset)
         }),
         false,
         CmdConfig::default()

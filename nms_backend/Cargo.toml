@@ -36,3 +36,4 @@ psutil = "3.3.0"
 sysinfo = "0.39.6"
 inventory = "0.3.24"
 tokio-stream = { version = "0.1.19", features = ["fs"] }
+async-recursion = "1.1.1"

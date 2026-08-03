@@ -1,13 +1,13 @@
 use crate::backend::api::v1::msg::{StatusMessage, WrappedResponse};
-use crate::backend::config::CfgToken;
+use crate::backend::config::{CfgPool, CfgToken};
 use crate::backend::jwt::JWTClaim;
-use crate::backend::remote_access::init_remote_services;
+use crate::backend::remote_access::{get_remote_services, init_remote_services};
 use crate::cmdl::coreutils::Cat;
 use crate::cmdl::passwd::{GetEntPasswd, Groups};
-use crate::cmdl::zfs::{ZFS, ZFSActions, ZFSListArgs, ZFSListType, ZPool, ZPoolActions};
-use crate::cmdl::{CmdConfig, Executable};
+use crate::cmdl::zfs::{ZFSActions, ZFSListArgs, ZFSListType, ZFSLoadKeyArgs, ZPool, ZPoolActions, ZFS, ZFSArgs};
+use crate::cmdl::{CmdConfig, CommandLine, Executable, Transaction};
 use crate::dev::{Device, DiskState};
-use crate::events::{ContextData, EventManager, EventParameters, Events};
+use crate::events::{ContextData, EventManager, EventParameters, Events, Trigger};
 use crate::task::TaskWrapper;
 use crate::vfs::{Capacity, VFS};
 use api::v1::jwt::{TokenPurposes, create_token, token_verification};
@@ -21,7 +21,7 @@ use msg::{ErrorMessages, LogErrors, LogInfos, LogWarnings, LoggerMessages};
 use permissions::is_admin;
 use regex::RegexBuilder;
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{Number, Value};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Debug, Display};
@@ -35,7 +35,7 @@ use sysinfo::Networks;
 use tokio::fs::{File, read_to_string, rename};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{Mutex, OnceCell, RwLock};
-use tracing::error;
+use tracing::{error, info};
 use utils::get_notifications_count;
 use utils::{get_quota_for_all, str_to_i64, sudo_group, ts_to_str};
 use crate::dev::get_system_disks;
@@ -198,6 +198,24 @@ impl ScrubLiveInfo
     }
 }
 
+#[derive(Debug, Serialize)]
+pub struct Snapshot
+{
+    name:String,
+    ref_size:u64
+}
+
+impl Snapshot
+{
+    pub fn new(name:String, ref_size:u64) -> Snapshot
+    {
+        Snapshot{
+            name,
+            ref_size
+        }
+    }
+}
+
 
 
 pub struct Backend
@@ -216,7 +234,7 @@ impl Backend
 {
     pub async fn new() -> Arc<Self>
     {
-        let backend = Arc::new(Backend{
+        let backend = Backend{
                 config:Mutex::new(Config::default()),
                 users:Mutex::new(vec![]),
                 tmp_secrets: Mutex::new(HashMap::new()),
@@ -225,120 +243,9 @@ impl Backend
                 mount: RwLock::new(None),
                 pool_properties:RwLock::new(None),
                 net_counter: RwLock::new(NetIOCounter::default()),
-        });
+        };
 
-        {
-            let read_cfg_result = backend.read_config().await;
-
-            if let Err(e) = read_cfg_result
-            {
-                LoggerMessages::Error(LogErrors::CfgRead(&e.to_string())).log();
-                LoggerMessages::Warning(LogWarnings::CfgDefault).log();
-                let flush_cfg_result = backend._flush_config().await;
-                match flush_cfg_result
-                {
-                    Ok(()) => LoggerMessages::Info(LogInfos::NewCfg).log(),
-                    Err(e) => {
-                        LoggerMessages::Error(LogErrors::CfgWrite(&e.to_string())).log();
-                        std::process::exit(1)
-                    }
-                }
-            }
-
-            LoggerMessages::Info(LogInfos::BackendStarted).log();
-        }
-
-
-
-        let reload_user_ft = backend.reload_users();
-
-        let task_backend = Arc::clone(&backend);
-
-        backend.event_manager.register_multiple_events (
-            &[&Events::UserCreated,&Events::UserDeleted, &Events::UserModified],
-            Arc::new(
-                Box::new(
-                    move |_ctx: &Option<ContextData>|
-                    {
-                        let b = Arc::clone(&task_backend);
-                        Box::pin(
-                        async move
-                          {
-                            b.reload_users().await;
-                          })
-                        }
-                    )
-            )
-            ,
-            None
-        ).await;
-
-        let task_backend = Arc::clone(&backend);
-
-        backend.event_manager.register_action(
-            &Events::Timer,
-            Arc::new(
-                Box::new(
-                    move |_ctx: &Option<ContextData>|
-                        {
-                            let mut net = Networks::new_with_refreshed_list();
-                            let b = Arc::clone(&task_backend);
-                            Box::pin(
-                                async move
-                                    {
-                                        b.update_users().await;
-                                        net.refresh(true);
-
-                                        let mut net_bytes_sent = 0;
-                                        let mut net_bytes_recv = 0;
-
-
-                                        for (_, network) in &net
-                                        {
-                                            net_bytes_sent += network.total_transmitted();
-                                            net_bytes_recv += network.total_received();
-                                        }
-
-                                        {
-                                            let mut net_counters = b.net_counter.write().await;
-
-                                            if (net_counters.total_bytes_recv > 0) && (net_counters.total_bytes_sent > 0)
-                                            {
-                                                net_counters.bytes_recv = net_bytes_sent - net_counters.total_bytes_recv;
-                                                net_counters.bytes_sent = net_bytes_recv - net_counters.total_bytes_sent;
-                                            }
-
-                                            net_counters.total_bytes_recv = net_bytes_sent;
-                                            net_counters.total_bytes_sent = net_bytes_recv;
-                                        }
-
-                                    })
-                        }
-                )
-            ),
-            None,
-            Some(vec![EventParameters::Timer(3)])
-        ).await;
-
-        backend.event_manager.start().await;
-
-        reload_user_ft.await;
-
-        {
-            let cfg = backend.config.lock().await;
-            
-            if let Err(e) = init_remote_services(
-                &cfg.access_services,
-                backend.mountpoint().await,
-                Some(backend.get_users().await.as_slice())
-            ).await
-            {
-                error!("{:?}", e);
-            }
-        }
-
-
-        return backend;
+        backend.init().await
     }
 
     pub async fn read_config(&self) -> Result<(),Box<dyn Error + '_>>
@@ -409,6 +316,319 @@ impl Backend
     pub async fn flush_config(&self) -> Result<(),HTTPError>
     {
         self._flush_config().await.map_err(|e| propagate_unknown_error(e))
+    }
+}
+
+//initialiser Methods
+
+impl Backend
+{
+    async fn init_configuration(&mut self)
+    {
+        let read_cfg_result = self.read_config().await;
+
+        if let Err(e) = read_cfg_result
+        {
+            LoggerMessages::Error(LogErrors::CfgRead(&e.to_string())).log();
+            LoggerMessages::Warning(LogWarnings::CfgDefault).log();
+            let flush_cfg_result = self._flush_config().await;
+            match flush_cfg_result
+            {
+                Ok(()) => LoggerMessages::Info(LogInfos::NewCfg).log(),
+                Err(e) => {
+                    LoggerMessages::Error(LogErrors::CfgWrite(&e.to_string())).log();
+                    std::process::exit(1)
+                }
+            }
+        }
+
+        LoggerMessages::Info(LogInfos::BackendStarted).log();
+    }
+
+    async fn init_users(self: &Arc<Self>)
+    {
+        let reload_user_ft = self.reload_users();
+
+        let task_backend = Arc::clone(self);
+
+        self.event_manager.register_multiple_events (
+            &[&Events::UserCreated,&Events::UserDeleted, &Events::UserModified],
+            Arc::new(
+                Box::new(
+                    move |_ctx: &Option<ContextData>|
+                        {
+                            let b = Arc::clone(&task_backend);
+                            Box::pin(
+                                async move
+                                    {
+                                        b.reload_users().await;
+                                    })
+                        }
+                )
+            )
+            ,
+            None
+        ).await;
+
+        reload_user_ft.await;
+    }
+
+    async fn init_net_counters(self: &Arc<Self>)
+    {
+        let task_backend = Arc::clone(self);
+
+        self.event_manager.register_action(
+            &Events::Timer,
+            Arc::new(
+                Box::new(
+                    move |_ctx: &Option<ContextData>|
+                        {
+                            let mut net = Networks::new_with_refreshed_list();
+                            let b = Arc::clone(&task_backend);
+                            Box::pin(
+                                async move
+                                    {
+                                        b.update_users().await;
+                                        net.refresh(true);
+
+                                        let mut net_bytes_sent = 0;
+                                        let mut net_bytes_recv = 0;
+
+
+                                        for (_, network) in &net
+                                        {
+                                            net_bytes_sent += network.total_transmitted();
+                                            net_bytes_recv += network.total_received();
+                                        }
+
+                                        {
+                                            let mut net_counters = b.net_counter.write().await;
+
+                                            if (net_counters.total_bytes_recv > 0) && (net_counters.total_bytes_sent > 0)
+                                            {
+                                                net_counters.bytes_recv = net_bytes_sent - net_counters.total_bytes_recv;
+                                                net_counters.bytes_sent = net_bytes_recv - net_counters.total_bytes_sent;
+                                            }
+
+                                            net_counters.total_bytes_recv = net_bytes_sent;
+                                            net_counters.total_bytes_sent = net_bytes_recv;
+                                        }
+
+                                    })
+                        }
+                )
+            ),
+            None,
+            Some(vec![EventParameters::Timer(3)])
+        ).await;
+    }
+
+    async fn init_remote_service(&self)
+    {
+        let cfg = self.config.lock().await;
+
+        if let Err(e) = init_remote_services(
+            &cfg.access_services,
+            self.mountpoint().await,
+            Some(self.get_users().await.as_slice())
+        ).await
+        {
+            error!("{:?}", e);
+        }
+    }
+
+    async fn init_inotify_events(self: &Arc<Self>)
+    {
+        let task_backend = Arc::clone(self);
+
+        self.event_manager.register_action(
+            &Events::PoolMount,
+            Arc::new(
+                Box::new(
+                    move |_ctx: &Option<ContextData>|
+                        {
+                            let b = Arc::clone(&task_backend);
+                            Box::pin(
+                                async move {
+                                    if let  Some(mountpoint) = b.mountpoint().await
+                                    {
+                                        b.event_manager.start_inotify_task(mountpoint.to_str().unwrap()).await;
+                                    }
+                                }
+                            )
+                        }
+                )
+            ),
+            None,
+            None
+        ).await;
+
+        let task_backend = Arc::clone(self);
+
+        self.event_manager.register_action(
+            &Events::PoolUnmount,
+            Arc::new(
+                Box::new(
+                    move |_ctx: &Option<ContextData>|
+                        {
+                            let b = Arc::clone(&task_backend);
+                            Box::pin(
+                                async move {
+                                    b.event_manager.stop_inotify_task().await;
+                                }
+                            )
+                        }
+                )
+            ),
+            None,
+            None
+        ).await;
+    }
+
+    pub async fn configure_pool(&self) -> Result<(), HTTPError>
+    {
+        let mut flush = false;
+
+        let mut cfg = self.config.lock().await;
+        if cfg.pool.is_none()
+        {
+            let output = ZFS::<String>(ZFSActions::Get(None),false,CmdConfig::Empty)
+                .run()
+                .await
+                .map_err(|e| propagate_error(ErrorMessages::E_POOL_MOUNT, e))?
+                .ok_or_else(|| ErrorMessages::E_POOL_MOUNT.wrap_with_status_code(None))?
+                .is_success()
+                .map_err(|e| propagate_error(ErrorMessages::E_POOL_MOUNT, e))?;
+
+            let json:Value = serde_json::from_str(&output.stdout).map_err(|e| propagate_error(ErrorMessages::E_POOL_MOUNT, e))?;
+
+            let mut pool_name:Option<String> = None;
+            let mut dataset_name:Option<String> = None;
+            let mut key_location:Option<String> = None;
+
+            if let Some(data) = json.as_object() &&
+               let Some(datasets_object) = data.get("datasets") &&
+               let Some(datasets) = datasets_object.as_object()
+            {
+                //two passes bc order cannot be ensured
+
+                //first pass to find pool_name
+                for (name,dataset) in datasets.iter()
+                {
+                    if let Some(ds) = dataset.as_object() &&
+                       let Some(ds_type) = dataset["type"].as_str() &&
+                       ds_type == "FILESYSTEM" &&
+                       let Some(ds_name) = ds["name"].as_str() &&
+                       name == ds_name
+                    {
+
+                        pool_name = Some(name.clone());
+                        let props = &ds["properties"];
+
+                        if let Some(keyloc) = props["keylocation"].as_object() &&
+                           let Some(valueloc) = keyloc["value"].as_str()
+                        {
+                            key_location = Some(valueloc.replace("file://",""));
+                        }
+
+                        break;
+                    }
+                }
+
+                if let Some(tank) = &pool_name
+                {
+                    //second pass to find datasetname
+                    for (_, dataset) in datasets.iter()
+                    {
+                        if let Some(ds) = dataset.as_object() &&
+                           let Some(ds_name) = ds["name"].as_str() &&
+                           let Some(dataset_pool) = ds["pool"].as_str() &&
+                           dataset_pool == tank
+                            {
+                                let tokens = ds_name.split('/').collect::<Vec<&str>>();
+                                if tokens.len() == 2 && tokens[0] == tank
+                                {
+                                    dataset_name = Some(tokens[1].to_string());
+                                    break;
+                                }
+                            }
+                    }
+                }
+            }
+
+            if let Some(pool) = pool_name && let Some(dataset) = dataset_name
+            {
+                info!("Unconfigured dataset detected: {}/{}. Configuring.", pool, dataset);
+                if let Some(key) = &key_location
+                {
+                    info!("Found pool encryption key in {}",key);
+                }
+
+                let pool = CfgPool {
+                    name: pool,
+                    dataset,
+                    encryption_key: key_location
+                };
+
+                cfg.pool = Some(pool);
+                flush = true;
+                info!("Pool configured successfully.");
+
+            }
+        }
+
+        drop(cfg);
+        if flush { self.flush_config().await?; }
+
+        Ok(())
+    }
+
+    pub async fn init_vfs(&self) -> Result<(), HTTPError>
+    {
+        if let Some((pool,dataset)) = self.get_pool_identifier().await
+        {
+            let mut vfs = VFS::from_zfs(&pool, &dataset)
+                .await
+                .map_err(|e| propagate_error(ErrorMessages::E_POOL_MOUNTED,e.unwrap_or("unknown error".to_string())))?;
+
+            vfs.rebuild_tree().await;
+
+            let mut b_vfs = self.mount.write().await;
+            *b_vfs = Some(vfs);
+
+            return Ok(());
+        }
+
+        Err(ErrorMessages::E_POOL_MOUNTED.wrap_with_status_code(Some(vec![Value::String("Pool not mounted yet".to_string())])))
+    }
+
+    async fn init(mut self) -> Arc<Self>
+    {
+        self.init_configuration().await;
+        let be = Arc::new(self);
+        if let Err(e) = be.configure_pool().await
+        {
+            error!("Recoverable error during automatic pool detection: {}",e.1.to_string());
+        }
+        if let Err(e) = be.mount().await
+        {
+            error!("Unable to mount pool: {}",e.1.to_string());
+        }
+
+        if let Err(e) = be.init_vfs().await
+        {
+            error!("Unable to initialise VFS: {}",e.1.to_string());
+        }
+
+        be.init_inotify_events().await;
+        be.init_users().await;
+        be.init_net_counters().await;
+        be.event_manager.start().await;
+        be.init_remote_service().await;
+
+
+
+        be
     }
 }
 
@@ -837,9 +1057,9 @@ impl Backend
                 );
             }
 
-            return Ok(
+            Ok(
                     PoolExtensionStatus { is_running: true, eta: None, progress: None }
-            );
+            )
 
         }
         else 
@@ -1159,6 +1379,178 @@ impl Backend
 
         Vec::new()
     }
+
+    pub async fn get_pool_snapshots(&self) -> Result<Vec<Snapshot>,HTTPError>
+    {
+        let output = ZFS::<String>(ZFSActions::List(ZFSListArgs::new(None,Some(ZFSListType::Snapshot),None)),false,CmdConfig::Empty)
+            .run()
+            .await
+            .map_err(|e| propagate_error(ErrorMessages::E_POOL_SNAPSHOTS, e))?
+            .ok_or_else(|| ErrorMessages::E_POOL_SNAPSHOTS.wrap_with_status_code(None))?
+            .is_success()
+            .map_err(|e| propagate_error(ErrorMessages::E_POOL_SNAPSHOTS, e))?;
+
+        let json:Value = serde_json::from_str(&output.stdout).or::<Value>(Ok(Value::Null)).unwrap();
+        let mut snapshots:Vec<Snapshot> = Vec::new();
+
+        if let Some(d) = json.as_object() &&
+            let Some(datasets) = d.get("datasets") &&
+            let Some(list_datasets) = datasets.as_array()
+        {
+            let mut list_datasets = list_datasets.clone();
+            list_datasets.sort_by_key(|k| k.get("createtxg").unwrap_or(&Value::Number(Number::from(0))).as_number().unwrap().as_i128().unwrap() );
+
+            for dataset in list_datasets
+            {
+                if let Some(dataset) = dataset.as_object()
+                {
+                    if let Some(tp) = dataset.get("type") &&
+                        let Some(dataset_type) = tp.as_str() &&
+                        dataset_type == "SNAPSHOT"
+                    {
+                        let name = &dataset["snapshot_name"];
+                        let ref_size = &dataset["properties"]["referenced"]["value"];
+
+                        if let Some(name) = name.as_str() && let Some(size) = ref_size.as_u64()
+                        {
+                            snapshots.push(Snapshot::new(name.to_string(), size));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(snapshots)
+    }
+
+    pub async fn mount(&self) -> Result<(),HTTPError>
+    {
+        let cfg = self.config.lock().await;
+        if let Some(pool) = &cfg.pool && !self.is_mounted().await
+        {
+            let mut cmds:Vec<CommandLine> = Vec::new();
+
+            if let Some(key_path) = &pool.encryption_key
+            {
+
+                cmds.push(
+                    ZFS(
+                        ZFSActions::LoadKey(
+                            ZFSLoadKeyArgs{
+                                pool: pool.name.clone(),
+                                key_path: key_path.clone(),
+                            }
+                        ),
+                        true,
+                        CmdConfig::Provided {
+                            sudo: true,
+                            strict: false, // sometimes the key can be already loaded and this will result in an error
+                            stdin: None,
+                            cwd: None
+                        }
+                    )
+                )
+            }
+
+            cmds.push(ZFS(ZFSActions::Mount(
+                ZFSArgs {
+                    pool: pool.name.clone(),
+                    dataset: None
+                }
+            ), true, CmdConfig::default()));
+
+            cmds.push(ZFS(ZFSActions::Mount(
+                ZFSArgs {
+                    pool: pool.name.clone(),
+                    dataset: Some(pool.dataset.clone())
+                }
+            ), true, CmdConfig::default()));
+
+            let transaction = Transaction::new(cmds);
+
+            transaction
+                .execute()
+                .await
+                .map_err(|e| propagate_error(ErrorMessages::E_POOL_MOUNT, e))?;
+
+        }
+
+        self.event_manager.trigger(Trigger::Event(Events::PoolMount),None).await;
+
+        Ok(())
+    }
+
+    pub async fn unmount(&self) -> Result<(),HTTPError>
+    {
+        let mut services = get_remote_services()
+            .await
+            .map_err(|e| propagate_error(ErrorMessages::E_POOL_UNMOUNT, e))?
+            .write()
+            .await;
+
+        for service in services.iter_mut()
+        {
+            if service.service_name() != "ssh" //SSH is special - if we disable it we'll lose the possibility to restore the system if needeed (already happened!)
+            {
+                service.stop()
+                    .await
+                    .map_err(|e| propagate_error(ErrorMessages::E_POOL_UNMOUNT, e))?;
+            }
+        }
+
+        let cfg = self.config.lock().await;
+        if let Some(pool) = &cfg.pool && self.is_mounted().await
+        {
+            let mut cmds:Vec<CommandLine> = Vec::new();
+
+            cmds.push(ZFS(ZFSActions::Unmount(
+                ZFSArgs {
+                    pool: pool.name.clone(),
+                    dataset: Some(pool.dataset.clone())
+                }
+            ), true, CmdConfig::default()));
+
+            cmds.push(ZFS(ZFSActions::Unmount(
+                ZFSArgs {
+                    pool: pool.name.clone(),
+                    dataset: None
+                }
+            ), true, CmdConfig::default()));
+
+
+            if self.has_encryption().await
+            {
+                cmds.push(
+                    ZFS(
+                        ZFSActions::UnloadKey(
+                            pool.name.clone()
+                        ),
+                        true,
+                        CmdConfig::Provided {
+                            sudo: true,
+                            strict: false, // sometimes the key can be already loaded and this will result in an error
+                            stdin: None,
+                            cwd: None
+                        }
+                    )
+                )
+            }
+
+
+            let transaction = Transaction::new(cmds);
+
+            transaction
+                .execute()
+                .await
+                .map_err(|e| propagate_error(ErrorMessages::E_POOL_UNMOUNT, e))?;
+
+        }
+
+        self.event_manager.trigger(Trigger::Event(Events::PoolUnmount), None).await;
+
+        Ok(())
+    }
+
 }
 
 //Device-related Methods
@@ -1427,6 +1819,7 @@ impl Backend
         Err(ErrorMessages::E_USER_NOT_FOUND.wrap_with_status_code(Some(vec![Value::String(username.to_string())])))
     }
 }
+
 
 pub async fn get_backend() -> Arc<Backend>
 {
