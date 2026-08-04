@@ -7,11 +7,13 @@ use crate::backend::jwt::TokenPurposes;
 use super::disks::CompatibleDisk;
 use std::sync::Arc;
 use axum::{Json, Router};
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::extract::{State,Path};
 use axum_auth::AuthBearer;
 use serde_json::Value;
 use serde::{Deserialize, Serialize};
+use tracing::warn;
+use crate::backend::msg::{LogInfos, LogWarnings, LoggerMessages, SuccessMessages};
 use crate::dev::{get_system_disks, DiskState, Device};
 
 #[derive(Debug,Serialize)]
@@ -201,10 +203,42 @@ async fn get_pool_property(
                 get_attachable_disks(backend).await.iter().map(|d| CompatibleDisk::from_device(d)).collect::<Vec<CompatibleDisk>>()
             ).map_err(|e| propagate_unknown_error(e))?,
             PoolProperties::Snapshots => serde_json::to_value(
-                backend.get_pool_snapshots().await?
+                backend.get_pool_snapshots().await
             ).map_err(|e| propagate_unknown_error(e))?,
         }
     }))
+}
+
+async fn pool_unmount(AuthBearer(token): AuthBearer, State(backend): State<Arc<Backend>>) -> FastAPIComp<SuccessMessages>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::PoolToolsMount).await?;
+
+    let u = user.read().await;
+
+    backend.unmount(Some(&*u)).await?;
+
+    LoggerMessages::Warning(LogWarnings::PoolUnmountedBy(&u.username)).log();
+
+    Ok(Json(SuccessMessages::S_POOL_UNMOUNTED))
+}
+
+async fn pool_mount(AuthBearer(token): AuthBearer, State(backend): State<Arc<Backend>>) -> FastAPIComp<SuccessMessages>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::PoolToolsMount).await?;
+
+    let u = user.read().await;
+
+    backend.mount(Some(&*u)).await?;
+
+    LoggerMessages::Info(LogInfos::PoolMountedBy(&u.username)).log();
+
+    Ok(Json(SuccessMessages::S_POOL_MOUNTED))
 }
 
 pub fn get_route() -> Router<Arc<Backend>>
@@ -212,7 +246,9 @@ pub fn get_route() -> Router<Arc<Backend>>
    
     Router::new().nest("/pool",
         Router::new()
-        .route("/get/{property}", get(get_pool_property))
+            .route("/get/{property}", get(get_pool_property))
+            .route("/mount", post(pool_mount))
+            .route("/unmount", post(pool_unmount))
     )
 }
 

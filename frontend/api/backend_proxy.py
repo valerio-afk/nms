@@ -150,9 +150,9 @@ class BackEndProxy:
                     if (err.response.status_code == 401):
                         args = err.response.json()
                         abort(401,description=args)
-                    elif (err.response.status_code == 500):
-                        flash(f"{str(err.response.raw.data)}", "error")
-                        return None
+                    # elif (err.response.status_code == 500):
+                    #     flash(f"{str(err.response.raw.data)}", "error")
+                    #     return None
                     elif (err.response.status_code == 429):
                         show_flash(code=ErrorMessages.E_TOO_MANY_REQ.value)
                         return None

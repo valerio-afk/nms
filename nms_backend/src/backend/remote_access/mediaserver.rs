@@ -213,7 +213,7 @@ impl RemoteService for MEDIAService
         {
             self.setup_firewall(true).await?;
         }
-        self.start().await
+        self.media_service.start().await
     }
 
     async fn stop(&mut self) -> Result<(), Error>
@@ -222,7 +222,7 @@ impl RemoteService for MEDIAService
         {
             self.setup_firewall(false).await?;
         }
-        self.stop().await
+        self.media_service.stop().await
     }
     async fn is_active(&self) -> Result<bool, Error>
     {

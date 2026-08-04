@@ -182,6 +182,7 @@ impl NFSService
                         props.insert(ServiceProperty::Mountpoint,Value::String(mountpoint.to_string()));
                     }
 
+
                     if addr.parse::<Ipv4Net>().is_ok()
                     {
                         props.insert(ServiceProperty::IpAddr,Value::String(addr.to_string()));
@@ -204,15 +205,18 @@ impl NFSService
             .is_success()
             .map_err(|e| ServiceError::Configuration(e.to_string()))?;
 
+
         let mountpoint = self.get_properties().get(&ServiceProperty::Mountpoint)
             .ok_or_else(||ServiceError::PropertyNotFound(ServiceProperty::Mountpoint))?
             .as_str()
             .ok_or_else(||ServiceError::PropertyValue(ServiceProperty::Mountpoint,"path"))?;
 
+
         let addr = self.get_properties().get(&ServiceProperty::IpAddr)
             .ok_or_else(||ServiceError::PropertyNotFound(ServiceProperty::IpAddr))?
             .as_str()
             .ok_or_else(||ServiceError::PropertyValue(ServiceProperty::IpAddr,"ipv4 address/subnet"))?;
+
 
         let mut cfg = cmd.stdout.lines().map(|s|s.to_string()).collect::<Vec<String>>();
         let mut append = true;
@@ -224,7 +228,7 @@ impl NFSService
         //without a cloning. The append branch is almost surely executed once (bc when nms adds it, it will simply replace it)
         //I madee this closure to avoid cloning bc the line replacement is more probable than append and would have cause
         //many stupid clones
-        let cfg_line = || format!("{}\t{}({})",mountpoint,addr,NFS_DEFAULT_PARAMS.join(","));
+        let cfg_line = || format!("{}\t{}({}) #{}",mountpoint,addr,NFS_DEFAULT_PARAMS.join(","),NMS_CFG_TAG);
 
         for (idx,line) in cfg.iter().enumerate()
         {
@@ -250,18 +254,19 @@ impl NFSService
         let mut tmp_fullpath = temp_dir();
         tmp_fullpath.push(tmp_filename);
 
+
         let mut handle = File::create(&tmp_fullpath)
             .map_err(|e| ServiceError::TmpFileCreate(tmp_fullpath.clone(),e.to_string()))?;
 
+
         handle.write_all(cfg.join("\n").as_bytes())
             .map_err(|e| ServiceError::TmpFileWrite(tmp_fullpath.clone(),e.to_string()))?;
+
 
         MV(tmp_fullpath.to_str().unwrap(),self.cfg.to_str().unwrap(),CmdConfig::default())
             .run()
             .await
             .map_err(|e| ServiceError::TmpFileMove(tmp_fullpath,self.cfg.clone(),e.to_string()))?;
-
-
 
         Ok(())
     }

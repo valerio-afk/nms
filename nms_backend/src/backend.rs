@@ -7,7 +7,7 @@ use crate::cmdl::passwd::{GetEntPasswd, Groups};
 use crate::cmdl::zfs::{ZFSActions, ZFSListArgs, ZFSListType, ZFSLoadKeyArgs, ZPool, ZPoolActions, ZFS, ZFSArgs};
 use crate::cmdl::{CmdConfig, CommandLine, Executable, Transaction};
 use crate::dev::{Device, DiskState};
-use crate::events::{ContextData, EventManager, EventParameters, Events, Trigger};
+use crate::events::{ContextBuilder, ContextData, ContextVariables, EventManager, EventParameters, Events, Trigger};
 use crate::task::TaskWrapper;
 use crate::vfs::{Capacity, VFS};
 use api::v1::jwt::{TokenPurposes, create_token, token_verification};
@@ -40,6 +40,7 @@ use utils::get_notifications_count;
 use utils::{get_quota_for_all, str_to_i64, sudo_group, ts_to_str};
 use crate::dev::get_system_disks;
 use uuid::Uuid;
+use crate::cmdl::error_filters::stderr_contains;
 
 pub static BACKEND_VERSION:&'static str = env!("CARGO_PKG_VERSION");
 
@@ -198,7 +199,7 @@ impl ScrubLiveInfo
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct Snapshot
 {
     name:String,
@@ -228,6 +229,7 @@ pub struct Backend
     mount: RwLock<Option<VFS>>,
     pool_properties: RwLock<Option<PoolProperties>>,
     net_counter: RwLock<NetIOCounter>,
+    snapshots:RwLock<Vec<Snapshot>>,
 }
 
 impl Backend
@@ -243,6 +245,7 @@ impl Backend
                 mount: RwLock::new(None),
                 pool_properties:RwLock::new(None),
                 net_counter: RwLock::new(NetIOCounter::default()),
+                snapshots: RwLock::new(Vec::new())
         };
 
         backend.init().await
@@ -406,12 +409,12 @@ impl Backend
 
                                             if (net_counters.total_bytes_recv > 0) && (net_counters.total_bytes_sent > 0)
                                             {
-                                                net_counters.bytes_recv = net_bytes_sent - net_counters.total_bytes_recv;
-                                                net_counters.bytes_sent = net_bytes_recv - net_counters.total_bytes_sent;
+                                                net_counters.bytes_recv = net_bytes_recv - net_counters.total_bytes_recv;
+                                                net_counters.bytes_sent = net_bytes_sent - net_counters.total_bytes_sent;
                                             }
 
-                                            net_counters.total_bytes_recv = net_bytes_sent;
-                                            net_counters.total_bytes_sent = net_bytes_recv;
+                                            net_counters.total_bytes_recv = net_bytes_recv;
+                                            net_counters.total_bytes_sent = net_bytes_sent;
                                         }
 
                                     })
@@ -437,7 +440,7 @@ impl Backend
         }
     }
 
-    async fn init_inotify_events(self: &Arc<Self>)
+    async fn init_pool_event_tasks(self: &Arc<Self>)
     {
         let task_backend = Arc::clone(self);
 
@@ -450,6 +453,11 @@ impl Backend
                             let b = Arc::clone(&task_backend);
                             Box::pin(
                                 async move {
+                                    if let Err(e) = b.init_vfs().await
+                                    {
+                                        LoggerMessages::Error(LogErrors::VFSInit(&e.1.to_string())).log();
+                                    }
+
                                     if let  Some(mountpoint) = b.mountpoint().await
                                     {
                                         b.event_manager.start_inotify_task(mountpoint.to_str().unwrap()).await;
@@ -474,6 +482,10 @@ impl Backend
                             let b = Arc::clone(&task_backend);
                             Box::pin(
                                 async move {
+                                    {
+                                        let mut mp = b.mount.write().await;
+                                        *mp = None;
+                                    }
                                     b.event_manager.stop_inotify_task().await;
                                 }
                             )
@@ -577,6 +589,99 @@ impl Backend
             }
         }
 
+        if let Some(pool) = &cfg.pool
+        {
+            let output = ZFS::<String>(ZFSActions::Get(Some(pool.name.clone())),false,CmdConfig::Empty)
+                .run()
+                .await
+                .map_err(|e| propagate_error(ErrorMessages::E_POOL_MOUNT, e))?
+                .ok_or_else(|| ErrorMessages::E_POOL_MOUNT.wrap_with_status_code(None))?
+                .is_success()
+                .map_err(|e| propagate_error(ErrorMessages::E_POOL_MOUNT, e))?;
+
+            let json:Value = serde_json::from_str(&output.stdout).map_err(|e| propagate_error(ErrorMessages::E_POOL_MOUNT, e))?;
+            let dataset_props = &json["datasets"][pool.name.as_str()]["properties"];
+
+            let compression:bool = if let Some(compr) = dataset_props["compression"]["value"].as_str()
+            {
+                compr.to_lowercase() != "off"
+            }
+            else { false };
+
+            let encryption:bool = if let Some(compr) = dataset_props["encryption"]["value"].as_str()
+            {
+                compr.to_lowercase() != "off"
+            }
+            else { false };
+            let mut redundancy = false;
+
+            let output = ZPool(ZPoolActions::Status(pool.name.clone()),false,CmdConfig::Empty)
+                .run()
+                .await
+                .map_err(|e| propagate_error(ErrorMessages::E_POOL_MOUNT, e))?
+                .ok_or_else(|| ErrorMessages::E_POOL_MOUNT.wrap_with_status_code(None))?
+                .is_success()
+                .map_err(|e| propagate_error(ErrorMessages::E_POOL_MOUNT, e))?;
+
+            let json:Value = serde_json::from_str(&output.stdout).map_err(|e| propagate_error(ErrorMessages::E_POOL_MOUNT, e))?;
+
+            let pool_root = &json["pools"][&pool.name]["vdevs"][&pool.name];
+            let mut vdevs = &pool_root["vdevs"];
+
+            let mut pool_disks:Vec<Device> = Vec::new();
+
+            if let Some(devs) = vdevs.as_object()
+            {
+                if devs.len() == 1
+                {
+                    for (_, v) in devs
+                    {
+                        if let Some(vdev_type) = v["vdev_type"].as_str() && vdev_type == "raidz"
+                        {
+                            redundancy = true;
+                            vdevs = &v["vdevs"];
+                            break;
+                        }
+                    }
+                }
+
+                if let Some(devices) = vdevs.as_object()
+                {
+                    for (_,d) in devices
+                    {
+                        if let Some(dtype) = d["vdev_type"].as_str() &&
+                            dtype == "disk" &&
+                            let Some(subpath) = d["phys_path"].as_str() &&
+                            let Some(state) = d["state"].as_str()
+
+                        {
+                            if let Ok(dev) = Device::from_subpath(
+                                subpath,
+                                if let Ok(s) = DiskState::from_str(state) {s} else {DiskState::NEW}
+                            ).await
+                            {
+                                pool_disks.push(dev);
+                            }
+                        }
+                    }
+                }
+            }
+
+            info!("Detected pool: {}/{}",pool.name,pool.dataset);
+            info!("Redundancy: {}",redundancy);
+            info!("Encryption: {}",encryption);
+            info!("Compression: {}",compression);
+            info!("Devices: {}", pool_disks.iter().map(|d|d.paths[0].to_string()).collect::<Vec<_>>().join(","));
+
+            let mut props = self.pool_properties.write().await;
+            *props = Some(PoolProperties{
+                redundancy,
+                encryption,
+                compression,
+                attached_disks: pool_disks,
+            });
+        }
+
         drop(cfg);
         if flush { self.flush_config().await?; }
 
@@ -602,25 +707,77 @@ impl Backend
         Err(ErrorMessages::E_POOL_MOUNTED.wrap_with_status_code(Some(vec![Value::String("Pool not mounted yet".to_string())])))
     }
 
+    pub async fn init_pool_snapshots(&self) -> Result<(),HTTPError>
+    {
+        let output = ZFS::<String>(ZFSActions::List(ZFSListArgs::new(None,Some(ZFSListType::Snapshot),None)),false,CmdConfig::Empty)
+            .run()
+            .await
+            .map_err(|e| propagate_error(ErrorMessages::E_POOL_SNAPSHOTS, e))?
+            .ok_or_else(|| ErrorMessages::E_POOL_SNAPSHOTS.wrap_with_status_code(None))?
+            .is_success()
+            .map_err(|e| propagate_error(ErrorMessages::E_POOL_SNAPSHOTS, e))?;
+
+        let json:Value = serde_json::from_str(&output.stdout).or::<Value>(Ok(Value::Null)).unwrap();
+        let mut snapshots:Vec<Snapshot> = Vec::new();
+
+        if let Some(d) = json.as_object() &&
+            let Some(datasets) = d.get("datasets") &&
+            let Some(list_datasets) = datasets.as_array()
+        {
+            let mut list_datasets = list_datasets.clone();
+            list_datasets.sort_by_key(|k| k.get("createtxg").unwrap_or(&Value::Number(Number::from(0))).as_number().unwrap().as_i128().unwrap() );
+
+            for dataset in list_datasets
+            {
+                if let Some(dataset) = dataset.as_object()
+                {
+                    if let Some(tp) = dataset.get("type") &&
+                        let Some(dataset_type) = tp.as_str() &&
+                        dataset_type == "SNAPSHOT"
+                    {
+                        let name = &dataset["snapshot_name"];
+                        let ref_size = &dataset["properties"]["referenced"]["value"];
+
+                        if let Some(name) = name.as_str() && let Some(size) = ref_size.as_u64()
+                        {
+                            snapshots.push(Snapshot::new(name.to_string(), size));
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut snapshot_cache = self.snapshots.write().await;
+        *snapshot_cache = snapshots;
+
+        Ok(())
+    }
+
     async fn init(mut self) -> Arc<Self>
     {
         self.init_configuration().await;
         let be = Arc::new(self);
         if let Err(e) = be.configure_pool().await
         {
-            error!("Recoverable error during automatic pool detection: {}",e.1.to_string());
+            LoggerMessages::Error(LogErrors::PoolConfig(&e.1.to_string()));
         }
-        if let Err(e) = be.mount().await
+        if let Err(e) = be.mount(None).await
         {
-            error!("Unable to mount pool: {}",e.1.to_string());
+            LoggerMessages::Error(LogErrors::Automount(&e.1.to_string()));
         }
 
         if let Err(e) = be.init_vfs().await
         {
-            error!("Unable to initialise VFS: {}",e.1.to_string());
+            LoggerMessages::Error(LogErrors::VFSInit(&e.1.to_string()));
         }
 
-        be.init_inotify_events().await;
+        if let Err(e) = be.init_pool_snapshots().await
+        {
+            LoggerMessages::Error(LogErrors::SnapshotInit(&e.1.to_string()));
+        }
+
+
+        be.init_pool_event_tasks().await;
         be.init_users().await;
         be.init_net_counters().await;
         be.event_manager.start().await;
@@ -1311,11 +1468,11 @@ impl Backend
 
                 if let Value::Object(scan_stats) = &m["pools"][pool_name]["scan_stats"]
                 {
-                    if scan_stats["function"].as_str().unwrap() == "SCRUB"
+                    if let Some(function) = scan_stats["function"].as_str() && function == "SCRUB"
                     {
                         return Some(LastScrubReport::new(
-                            str_to_i64(scan_stats["started"].as_str()),
-                            str_to_i64(scan_stats["started"].as_str()),
+                            str_to_i64(scan_stats["start_time"].as_str()),
+                            str_to_i64(scan_stats["end_time"].as_str()),
                             scan_stats["errors"].as_str(),
                         ));
                     }
@@ -1326,6 +1483,12 @@ impl Backend
         }
 
         None
+    }
+
+    pub async fn get_pool_snapshots(&self) -> Vec<Snapshot>
+    {
+        let snapshots = self.snapshots.read().await;
+        snapshots.clone()
     }
 
     pub async fn get_current_scrub_info(&self)->Option<ScrubLiveInfo>
@@ -1380,50 +1543,9 @@ impl Backend
         Vec::new()
     }
 
-    pub async fn get_pool_snapshots(&self) -> Result<Vec<Snapshot>,HTTPError>
-    {
-        let output = ZFS::<String>(ZFSActions::List(ZFSListArgs::new(None,Some(ZFSListType::Snapshot),None)),false,CmdConfig::Empty)
-            .run()
-            .await
-            .map_err(|e| propagate_error(ErrorMessages::E_POOL_SNAPSHOTS, e))?
-            .ok_or_else(|| ErrorMessages::E_POOL_SNAPSHOTS.wrap_with_status_code(None))?
-            .is_success()
-            .map_err(|e| propagate_error(ErrorMessages::E_POOL_SNAPSHOTS, e))?;
 
-        let json:Value = serde_json::from_str(&output.stdout).or::<Value>(Ok(Value::Null)).unwrap();
-        let mut snapshots:Vec<Snapshot> = Vec::new();
 
-        if let Some(d) = json.as_object() &&
-            let Some(datasets) = d.get("datasets") &&
-            let Some(list_datasets) = datasets.as_array()
-        {
-            let mut list_datasets = list_datasets.clone();
-            list_datasets.sort_by_key(|k| k.get("createtxg").unwrap_or(&Value::Number(Number::from(0))).as_number().unwrap().as_i128().unwrap() );
-
-            for dataset in list_datasets
-            {
-                if let Some(dataset) = dataset.as_object()
-                {
-                    if let Some(tp) = dataset.get("type") &&
-                        let Some(dataset_type) = tp.as_str() &&
-                        dataset_type == "SNAPSHOT"
-                    {
-                        let name = &dataset["snapshot_name"];
-                        let ref_size = &dataset["properties"]["referenced"]["value"];
-
-                        if let Some(name) = name.as_str() && let Some(size) = ref_size.as_u64()
-                        {
-                            snapshots.push(Snapshot::new(name.to_string(), size));
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(snapshots)
-    }
-
-    pub async fn mount(&self) -> Result<(),HTTPError>
+    pub async fn mount(&self,user:Option<&User>) -> Result<(),HTTPError>
     {
         let cfg = self.config.lock().await;
         if let Some(pool) = &cfg.pool && !self.is_mounted().await
@@ -1466,21 +1588,27 @@ impl Backend
                 }
             ), true, CmdConfig::default()));
 
-            let transaction = Transaction::new(cmds);
-
-            transaction
+            Transaction::new(cmds)
+                .accept_error_if(stderr_contains("filesystem already mounted"))
                 .execute()
                 .await
                 .map_err(|e| propagate_error(ErrorMessages::E_POOL_MOUNT, e))?;
 
         }
 
-        self.event_manager.trigger(Trigger::Event(Events::PoolMount),None).await;
+        let mut ctx = ContextBuilder::new();
+
+        if let Some(u) = user
+        {
+            ctx = ctx.push(ContextVariables::TriggerUser,u.username.clone());
+        }
+
+        self.event_manager.trigger(Trigger::Event(Events::PoolMount),ctx.finish()).await;
 
         Ok(())
     }
 
-    pub async fn unmount(&self) -> Result<(),HTTPError>
+    pub async fn unmount(&self, user:Option<&User>) -> Result<(),HTTPError>
     {
         let mut services = get_remote_services()
             .await
@@ -1495,6 +1623,8 @@ impl Backend
                 service.stop()
                     .await
                     .map_err(|e| propagate_error(ErrorMessages::E_POOL_UNMOUNT, e))?;
+
+                LoggerMessages::Warning(LogWarnings::RemoteServiceStopped(service.service_name().as_ref(),None)).log();
             }
         }
 
@@ -1537,16 +1667,21 @@ impl Backend
             }
 
 
-            let transaction = Transaction::new(cmds);
-
-            transaction
+            Transaction::new(cmds)
                 .execute()
                 .await
                 .map_err(|e| propagate_error(ErrorMessages::E_POOL_UNMOUNT, e))?;
 
         }
 
-        self.event_manager.trigger(Trigger::Event(Events::PoolUnmount), None).await;
+        let mut ctx = ContextBuilder::new();
+
+        if let Some(u) = user
+        {
+            ctx = ctx.push(ContextVariables::TriggerUser,u.username.clone());
+        }
+
+        self.event_manager.trigger(Trigger::Event(Events::PoolUnmount),ctx.finish()).await;
 
         Ok(())
     }
@@ -1559,6 +1694,7 @@ impl Backend
     //Get disks attached to the system linking their states with the ZFS pool
     pub async fn get_disks(&self) -> Vec<Device>
     {
+
         let mut pool_disks = self.get_pool_disks().await;
         let mut system_disks = get_system_disks().await;
 

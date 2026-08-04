@@ -18,7 +18,8 @@ import time
 
 def widget_disk_mngt_list() -> str:
     disks = BACKEND.disks
-    return render_template("disk_mngt.list.html",disks=disks)
+    x = render_template("disk_mngt.list.html",disks=disks)
+    return x
 
 @bp.route("/async/widgets/disk_list")
 def async_widget_disk_mngt_list() -> str:

@@ -14,15 +14,16 @@ static ACCEPTED_TRAN_TYPES:[&'static str;3] = ["sata","spi","usb"];
 pub enum DiskState
 {
     NEW = 0,
-    ONLINE = -1,
+    ONLINE = 1,
 
     #[strum(serialize="UNAVAIL")]
-    OFFLINE = -2,
+    OFFLINE = -1,
 
     #[strum(serialize="DEGRADED",serialize="FAULTED")]
-    CORRUPTED = -3,
-    UNKNOWN = -100
+    CORRUPTED = -2,
+    UNKNOWN = -3
 }
+
 
 #[derive(Debug, Serialize, Clone)]
 pub struct Device
@@ -34,6 +35,7 @@ pub struct Device
     pub serial_number:Option<String>,
     pub size:u64
 }
+
 
 #[derive(Debug)]
 pub enum DeviceError

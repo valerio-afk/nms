@@ -25,6 +25,7 @@ use crate::backend::remote_access::smb::SMBService;
 use crate::backend::remote_access::web::WEBService;
 use crate::backend::User;
 use crate::cmdl::docker::{DockerInspect, DockerRemove, DockerRestart, DockerRun, DockerStop};
+use crate::cmdl::error_filters::stderr_contains;
 
 pub trait AgnosticRemoteService:RemoteService + ServiceProperties {}
 
@@ -339,7 +340,10 @@ impl RemoteService for DockerService
         Transaction::new_sudo(vec![
             DockerStop(self.container_name(),CmdConfig::Empty),
             DockerRemove(self.container_name(),CmdConfig::Empty),
-        ]).execute().await?;
+        ])
+            .accept_error_if(stderr_contains("No such container"))
+            .execute()
+            .await?;
 
         Ok(())
     }

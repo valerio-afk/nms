@@ -1,11 +1,11 @@
-use axum::{Json,http::{StatusCode}};
-use std::fmt::{Display, Formatter};
-use serde::{Serialize, Serializer};
-use serde::ser::{SerializeStruct};
-use serde_json::Value;
-use tracing::{info,warn,error};
-use strum::{EnumProperty,IntoStaticStr};
 use super::HTTPError;
+use axum::{Json, http::StatusCode};
+use serde::ser::SerializeStruct;
+use serde::{Serialize, Serializer};
+use serde_json::Value;
+use std::fmt::{Display, Formatter};
+use strum::{EnumProperty, IntoStaticStr};
+use tracing::{error, info, warn};
 
 pub trait StatusMessage:Clone
 {
@@ -24,7 +24,7 @@ pub enum MessageTypes
     Warning,
 
     // #[serde(rename="success")]
-    Success
+    Success(SuccessMessages)
 }
 
 impl Serialize for MessageTypes
@@ -48,10 +48,10 @@ impl Serialize for MessageTypes
                 // let code: &'static str = err.into();
                 // state.serialize_field("code",code)?;
             }
-            MessageTypes::Success => {
+            MessageTypes::Success(msg) => {
                 state.serialize_field("type","success")?;
-                // let code: &'static str = err.into();
-                // state.serialize_field("code",code)?;
+                let code: &'static str = msg.into();
+                state.serialize_field("code",code)?;
             }
         }
 
@@ -284,6 +284,84 @@ impl StatusMessage for ErrorMessages
     }
 }
 
+#[derive(Debug, Serialize, Clone, EnumProperty, IntoStaticStr)]
+pub enum SuccessMessages
+{
+    S_POOL_CREATED,
+    S_POOL_EXPANDED,
+    S_POOL_FORMATTED,
+    S_POOL_DESTROYED,
+    S_POOL_MOUNTED,
+    S_POOL_UNMOUNTED,
+    S_POOL_SCRUB,
+    S_POOL_SNAPSHOT_CREATE,
+    S_POOL_SNAPSHOT_DELETE,
+    S_POOL_SNAPSHOT_ROLLBACK,
+
+    S_APT_UPDATE,
+    S_APT_UPGRADE,
+    
+    S_OTP_DANGEROUS,
+    
+    S_RECOVERY,
+    
+    S_ACCESS_ENABLED,
+    S_ACCESS_UPDATED,
+    S_ACCESS_DISABLED,
+    
+    S_DISK_FORMATTED,
+    S_DISK_SELF_TEST,
+    
+    S_POOL_REPLACE_DISK,
+    
+    S_NET_VPN_KEYSGEN,
+    S_NET_VPN_CONFIG,
+    S_NET_CONFIG,
+    S_NET_VPN_PEER_DELETED,
+    S_NET_VPN_PEER_ADDED,
+    S_NET_DDNS_ENABLED,
+    S_NET_DDNS_DISABLED,
+    S_NET_AP,
+    
+    S_USER_PASSWORD,
+    S_USER_FULLNAME,
+    S_USER_QUOTA,
+    S_USER_NAME,
+    S_USER_SUDO,
+    S_NEW_USER,
+    S_USER_PERM,
+    S_DEL_USER,
+    S_USER_LOGIN_RESET,
+    S_USER_UID,
+    
+    S_EVENT_ADDED,
+    S_EVENT_ENABLED,
+    S_EVENT_DISABLED,
+    S_EVENT_DELETED,
+    S_EVENT_UPDATED
+}
+
+impl StatusMessage for SuccessMessages
+{
+    fn wrap(&self,params:Option<Vec<Value>>) -> WrappedResponse
+    {
+        WrappedResponse {
+            detail: MessageResponse
+            {
+                code: MessageTypes::Success(self.clone()),
+                params:params
+            }
+        }
+    }
+    fn wrap_with_status_code(&self,params:Option<Vec<Value>>) -> HTTPError
+    {
+        (
+            StatusCode::OK,
+            self.wrap(params).to_json()
+        )
+    }
+}
+
 
 
 
@@ -308,7 +386,11 @@ pub enum LogErrors<'a>
     OTPInit(&'a Option<String>,&'a String,),
     OTPWrong,
     UserReadLock(&'a String),
-    UnexpectedJWT(&'a String)
+    UnexpectedJWT(&'a String),
+    VFSInit(&'a String),
+    PoolConfig(&'a String),
+    Automount(&'a String),
+    SnapshotInit(&'a String),
 }
 
 impl<'a> Display for LogErrors<'a>
@@ -351,6 +433,10 @@ impl<'a> Display for LogErrors<'a>
             }
             LogErrors::OTPWrong => write!(f,"Login attempt failed"),
             LogErrors::UnexpectedJWT(e) => write!(f,"Unexpected JWT: {}",e),
+            LogErrors::VFSInit(e) => write!(f,"VFS init failed: {}",e),
+            LogErrors::PoolConfig(e) => write!(f,"Pool configuration failed: {}",e),
+            LogErrors::Automount(e) => write!(f,"Automount failed: {}",e),
+            LogErrors::SnapshotInit(e) => write!(f,"Pool snapshot init failed: {}",e),
 
         }
     }
@@ -365,6 +451,10 @@ pub enum LogWarnings<'a>
 
     TmpSecretNotFound(&'a str),
     EMStopped,
+    
+    PoolUnmountedBy(&'a str),
+
+    RemoteServiceStopped(&'a str, Option<&'a str>),
 }
 
 impl<'a> Display for LogWarnings<'a>
@@ -379,6 +469,14 @@ impl<'a> Display for LogWarnings<'a>
             LogWarnings::ZfsQuotaNoPool => write!(f,"Unable to obtain quota information as pool is not configured"),
             LogWarnings::TmpSecretNotFound(uuid) => write!(f,"Temporary secret {} not found",uuid),
             LogWarnings::EMStopped => write!(f,"Event Manager stopped"),
+            LogWarnings::PoolUnmountedBy(uname) => write!(f,"Pool unmounted by {}",uname),
+            LogWarnings::RemoteServiceStopped(srv, usr) => {
+                match usr
+                {
+                    Some(u) => write!(f,"Remote service {} stopped by {}",srv,u),
+                    None => write!(f,"Remote service {} stopped",srv)
+                }
+            }
         }
     }
 }
@@ -391,6 +489,7 @@ pub enum LogInfos<'a>
     OTPSecretConf(&'a String),
     OTPSecretGen(&'a Option<String>),
     EMStarted,
+    PoolMountedBy(&'a str),
     
 }
 
@@ -410,6 +509,7 @@ impl<'a> Display for LogInfos<'a>
                 None =>  write!(f,"New OTP secret successfully generated"),
             },
             LogInfos::EMStarted => write!(f,"Event Manager started"),
+            LogInfos::PoolMountedBy(uname) => write!(f,"Pool mounted by {}",uname)
         }
     }
 }

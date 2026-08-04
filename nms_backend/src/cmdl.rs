@@ -17,14 +17,18 @@ pub mod selinux;
 pub mod firewall;
 pub mod smb;
 pub mod acl;
+pub mod error_filters;
 
-use tokio;
-use tokio::process::{Child, Command};
-use std::process::Stdio;
-use std::fmt::{self, Display, Formatter};
 use core::error::Error;
+use std::sync::Arc;
+use std::fmt::{self, Display, Formatter};
 use std::pin::Pin;
+use std::process::Stdio;
+use tokio;
 use tokio::io::AsyncWriteExt;
+use tokio::process::{Child, Command};
+
+pub type TransactionErrorFilter = Arc<dyn Fn(&CommandOutput) -> bool + Send + Sync> ;
 
 #[derive(Debug)]
 pub enum CommandError
@@ -33,6 +37,7 @@ pub enum CommandError
     StdinError(&'static str),
     StdinWriteError(&'static str, std::io::Error),
     ExecutionError(&'static str,std::io::Error),
+    TransactionError(String),
 }
 
 impl Display for CommandError
@@ -45,6 +50,7 @@ impl Display for CommandError
             CommandError::StdinError(cmd) => write!(f, "Unable to obtain stdin for `{}`", cmd),
             CommandError::StdinWriteError(cmd, e) => write!(f, "Unable to write into stdin of `{}`: {}", cmd, e),
             CommandError::ExecutionError(cmd, e) => write!(f, "Unable to execute `{}`: {}", cmd, e),
+            CommandError::TransactionError(err) => write!(f, "Transaction terminated due to an error: {}", err),
         }
     }
 }
@@ -434,6 +440,7 @@ impl ExecutableInternal for CommandLine
 pub struct Transaction
 {
     commands: Vec<CommandLine>,
+    filters: Vec<TransactionErrorFilter>,
     privileged: bool
 }
 
@@ -441,12 +448,33 @@ impl Transaction
 {
     pub fn new(commands:Vec<CommandLine>) -> Transaction
     {
-        Transaction{commands, privileged: false}
+        Transaction
+        {
+            commands,
+            filters: Vec::new(),
+            privileged: false
+        }
     }
 
     pub fn new_sudo(commands:Vec<CommandLine>) -> Transaction
     {
-        Transaction{commands, privileged: true}
+        Transaction
+        {
+            commands,
+            filters: Vec::new(),
+            privileged: true
+        }
+    }
+
+    pub fn accept_error_if(mut self, f:TransactionErrorFilter) -> Self
+    {
+        self.filters.push(f);
+        self
+    }
+
+    fn skip_error(&self, output:&CommandOutput) -> bool
+    {
+        self.filters.iter().any(|filter| filter(output))
     }
 
     pub async fn execute(mut self) -> Result<Vec<CommandOutput>,CommandError>
@@ -454,8 +482,10 @@ impl Transaction
         let mut outputs:Vec<CommandOutput> = Vec::new();
         let mut revert_commands:Vec<Option<Box<CommandLine>>> = Vec::new();
         let mut last_error: Option<CommandError> = None;
+        
+        let mut cmds = self.commands.drain(..).collect::<Vec<_>>();
 
-        for mut cmd in self.commands.drain(0..)
+        for mut cmd in cmds
         {
             revert_commands.push(cmd.take_revert_cmd());
 
@@ -471,7 +501,18 @@ impl Transaction
                 Ok(o) => {
                     match o
                     {
-                        Some(r) => outputs.push(r),
+                        Some(r) => {
+                            if r.exit_code == 0 || self.skip_error(&r)
+                            {
+                                outputs.push(r)
+                            }
+                            else
+                            {
+                                last_error = Some(CommandError::TransactionError(r.stderr));
+                                break;
+                            }
+
+                        },
                         None => ()
                     }
                 }
