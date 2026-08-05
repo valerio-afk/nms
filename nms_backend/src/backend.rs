@@ -4,7 +4,7 @@ use crate::backend::jwt::JWTClaim;
 use crate::backend::remote_access::{get_remote_services, init_remote_services};
 use crate::cmdl::coreutils::Cat;
 use crate::cmdl::passwd::{GetEntPasswd, Groups};
-use crate::cmdl::zfs::{ZFSActions, ZFSListArgs, ZFSListType, ZFSLoadKeyArgs, ZPool, ZPoolActions, ZFS, ZFSArgs};
+use crate::cmdl::zfs::{ZFSActions, ZFSListArgs, ZFSListType, ZFSLoadKeyArgs, ZPool, ZPoolActions, ZFS, ZFSArgs, ZPoolImportArgs};
 use crate::cmdl::{CmdConfig, CommandLine, Executable, Transaction};
 use crate::dev::{Device, DiskState};
 use crate::events::{ContextBuilder, ContextData, ContextVariables, EventManager, EventParameters, Events, Trigger};
@@ -31,6 +31,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+use anyhow::anyhow;
 use sysinfo::Networks;
 use tokio::fs::{File, read_to_string, rename};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -43,9 +44,10 @@ use uuid::Uuid;
 use crate::cmdl::error_filters::stderr_contains;
 
 pub static BACKEND_VERSION:&'static str = env!("CARGO_PKG_VERSION");
+static POOL_KEY_PATH: &'static str = "/root/tank.key";
 
-pub type HTTPError = (StatusCode, Json<WrappedResponse>);
-pub type FastAPIComp<T> = Result<Json<T>, HTTPError>; //this type is to make it more compatible with the current frontend
+pub type HTTPMessage = (StatusCode, Json<WrappedResponse>);
+pub type FastAPIComp<T> = Result<Json<T>, HTTPMessage>; //this type is to make it more compatible with the current frontend
 
 pub mod api;
 pub mod config;
@@ -60,12 +62,15 @@ static BACKEND:OnceCell<Arc<Backend>> = OnceCell::const_new();
 static NMS_CONFIG_FILE:&str = "nms.conf.json";
 
 
-pub fn propagate_error<E:Display+Debug+Send>(msg:ErrorMessages, err:E) -> HTTPError
+pub fn propagate_error<E:Display+Debug+Send>(msg:ErrorMessages, err:E) -> HTTPMessage
 {
-    msg.wrap_with_status_code(Some(vec![Value::String(err.to_string())]))
+    let err = msg.wrap_with_status_code(Some(vec![Value::String(err.to_string())]));
+    LoggerMessages::Error(LogErrors::HTTPError(&err)).log();
+
+    err
 }
 
-pub fn propagate_unknown_error<E:Display+Debug+Send>(err:E) -> HTTPError
+pub fn propagate_unknown_error<E:Display+Debug+Send>(err:E) -> HTTPMessage
 {
     propagate_error(ErrorMessages::E_UNKNOWN, err)
 }
@@ -159,7 +164,7 @@ pub struct Pool
 }
 
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct LastScrubReport
 {
     pub started:String,
@@ -180,7 +185,7 @@ impl LastScrubReport
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ScrubLiveInfo
 {
     pub ongoing:bool,
@@ -218,6 +223,23 @@ impl Snapshot
 }
 
 
+pub struct ScrubDetails
+{
+    last_scrub_report:Option<LastScrubReport>,
+    scrub_live_info: Option<ScrubLiveInfo>
+}
+
+impl Default for ScrubDetails
+{
+    fn default() -> Self
+    {
+        ScrubDetails{
+            last_scrub_report: None,
+            scrub_live_info: None
+        }
+    }
+}
+
 
 pub struct Backend
 {
@@ -230,6 +252,7 @@ pub struct Backend
     pool_properties: RwLock<Option<PoolProperties>>,
     net_counter: RwLock<NetIOCounter>,
     snapshots:RwLock<Vec<Snapshot>>,
+    scrub_details:RwLock<ScrubDetails>,
 }
 
 impl Backend
@@ -245,7 +268,8 @@ impl Backend
                 mount: RwLock::new(None),
                 pool_properties:RwLock::new(None),
                 net_counter: RwLock::new(NetIOCounter::default()),
-                snapshots: RwLock::new(Vec::new())
+                snapshots: RwLock::new(Vec::new()),
+                scrub_details: RwLock::new(ScrubDetails::default())
         };
 
         backend.init().await
@@ -316,7 +340,7 @@ impl Backend
         }
     }
 
-    pub async fn flush_config(&self) -> Result<(),HTTPError>
+    pub async fn flush_config(&self) -> Result<(), HTTPMessage>
     {
         self._flush_config().await.map_err(|e| propagate_unknown_error(e))
     }
@@ -426,6 +450,31 @@ impl Backend
         ).await;
     }
 
+    async fn init_scrub_details_watcher(self: &Arc<Self>)
+    {
+        let task_backend = Arc::clone(self);
+
+        self.event_manager.register_action(
+            &Events::Timer,
+            Arc::new(
+                Box::new(
+                    move |_ctx: &Option<ContextData>|
+                        {
+                            let mut net = Networks::new_with_refreshed_list();
+                            let b = Arc::clone(&task_backend);
+                            Box::pin(
+                                async move
+                                    {
+                                        b.update_scrub_details().await;
+                                    })
+                        }
+                )
+            ),
+            None,
+            Some(vec![EventParameters::Timer(10)])
+        ).await;
+    }
+
     async fn init_remote_service(&self)
     {
         let cfg = self.config.lock().await;
@@ -456,6 +505,11 @@ impl Backend
                                     if let Err(e) = b.init_vfs().await
                                     {
                                         LoggerMessages::Error(LogErrors::VFSInit(&e.1.to_string())).log();
+                                    }
+
+                                    if let Err(e) = b.init_pool_snapshots().await
+                                    {
+                                        LoggerMessages::Error(LogErrors::SnapshotInit(&e.1.to_string()));
                                     }
 
                                     if let  Some(mountpoint) = b.mountpoint().await
@@ -497,7 +551,7 @@ impl Backend
         ).await;
     }
 
-    pub async fn configure_pool(&self) -> Result<(), HTTPError>
+    pub async fn configure_pool(&self) -> Result<(), HTTPMessage>
     {
         let mut flush = false;
 
@@ -688,7 +742,7 @@ impl Backend
         Ok(())
     }
 
-    pub async fn init_vfs(&self) -> Result<(), HTTPError>
+    pub async fn init_vfs(&self) -> Result<(), HTTPMessage>
     {
         if let Some((pool,dataset)) = self.get_pool_identifier().await
         {
@@ -707,7 +761,7 @@ impl Backend
         Err(ErrorMessages::E_POOL_MOUNTED.wrap_with_status_code(Some(vec![Value::String("Pool not mounted yet".to_string())])))
     }
 
-    pub async fn init_pool_snapshots(&self) -> Result<(),HTTPError>
+    pub async fn init_pool_snapshots(&self) -> Result<(), HTTPMessage>
     {
         let output = ZFS::<String>(ZFSActions::List(ZFSListArgs::new(None,Some(ZFSListType::Snapshot),None)),false,CmdConfig::Empty)
             .run()
@@ -780,12 +834,27 @@ impl Backend
         be.init_pool_event_tasks().await;
         be.init_users().await;
         be.init_net_counters().await;
+        be.init_scrub_details_watcher().await;
         be.event_manager.start().await;
         be.init_remote_service().await;
 
 
 
         be
+    }
+
+    async fn deinit_pool(&self)
+    {
+        let mut cfg = self.config.lock().await;
+        cfg.pool = None;
+
+        let mut pool_props = self.pool_properties.write().await;
+        *pool_props = None;
+
+        let mut snapshots = self.snapshots.write().await;
+        snapshots.clear();
+
+
     }
 }
 
@@ -815,7 +884,7 @@ impl Backend
 impl Backend
 {
     //verify if a token is valid
-    pub async fn verify_token(&self, token:&str,requested_purpose:TokenPurposes) -> Result<JWTClaim,HTTPError>
+    pub async fn verify_token(&self, token:&str,requested_purpose:TokenPurposes) -> Result<JWTClaim, HTTPMessage>
     {
         let claims = token_verification(token, requested_purpose, self.secret_key.as_bytes())?;
 
@@ -891,7 +960,7 @@ impl Backend
         tmp_secrets.values().cloned().collect()
     }
 
-    pub async fn save_temporary_secret(&self,uuid:&String) -> Result<String,HTTPError>
+    pub async fn save_temporary_secret(&self,uuid:&String) -> Result<String, HTTPMessage>
     {
         let is_otp_configured = self.is_otp_configured().await; //moved here to avoid deadlocks
 
@@ -1110,7 +1179,7 @@ impl Backend
 
 
     //Return the capacity of a pool
-    pub async fn pool_capacity(&self) -> Result<Capacity,HTTPError>
+    pub async fn pool_capacity(&self) -> Result<Capacity, HTTPMessage>
     {
         let vfs = self.mount.read().await;
 
@@ -1122,7 +1191,7 @@ impl Backend
     }
 
     // Returns the progression status of a pool expansion (ie when a new disk is added to a pool)
-    pub async fn get_expansion_status(&self) -> Result<PoolExtensionStatus,HTTPError>
+    pub async fn get_expansion_status(&self) -> Result<PoolExtensionStatus, HTTPMessage>
     {
         let pool_id = self.get_pool_identifier().await;
         if pool_id.is_none()
@@ -1230,7 +1299,7 @@ impl Backend
         }
     }
 
-    pub async fn get_importable_pools(&self) -> Result<Vec<Pool>,HTTPError>
+    pub async fn get_importable_pools(&self) -> Result<Vec<Pool>, HTTPMessage>
     {
         let zpool_output = ZPool(
             ZPoolActions::Import(None),
@@ -1412,7 +1481,7 @@ impl Backend
     }
 
     //Returns the pool encryption key in base64 encoding
-    pub async fn get_key(&self)->Result<Option<String>,HTTPError>
+    pub async fn get_key(&self)->Result<Option<String>, HTTPMessage>
     {
         if self.has_encryption().await
         {
@@ -1447,11 +1516,11 @@ impl Backend
                 }
             }
         }
-        return Ok(None);
+        Ok(None)
     }
 
-    //Returns the last report (if any) of a performed scrub operation on the pool
-    pub async fn get_last_scrub_report(&self)->Option<LastScrubReport>
+
+    async fn update_scrub_details(&self)
     {
         let pool_id = self.get_pool_identifier().await;
         if let Some((pool_name,_)) = pool_id
@@ -1466,45 +1535,18 @@ impl Backend
             {
                 let m:Value = serde_json::from_str(&output.stdout).or::<Value>(Ok(Value::Null)).unwrap();
 
-                if let Value::Object(scan_stats) = &m["pools"][pool_name]["scan_stats"]
+                if let Value::Object(scan_stats) = &m["pools"][pool_name.clone()]["scan_stats"]
                 {
                     if let Some(function) = scan_stats["function"].as_str() && function == "SCRUB"
                     {
-                        return Some(LastScrubReport::new(
+                        let mut scrub_details = self.scrub_details.write().await;
+                        (*scrub_details).last_scrub_report = Some(LastScrubReport::new(
                             str_to_i64(scan_stats["start_time"].as_str()),
                             str_to_i64(scan_stats["end_time"].as_str()),
                             scan_stats["errors"].as_str(),
                         ));
                     }
                 }
-            }
-
-
-        }
-
-        None
-    }
-
-    pub async fn get_pool_snapshots(&self) -> Vec<Snapshot>
-    {
-        let snapshots = self.snapshots.read().await;
-        snapshots.clone()
-    }
-
-    pub async fn get_current_scrub_info(&self)->Option<ScrubLiveInfo>
-    {
-        let pool_id = self.get_pool_identifier().await;
-        if let Some((pool_name,_)) = pool_id
-        {
-            let zpool_output = ZPool(
-                ZPoolActions::Status(pool_name.clone()),
-                false, 
-                CmdConfig::default()
-            ).run().await;
-
-            if let Ok(r) = zpool_output && let Some(output) = r && output.exit_code == 0
-            {
-                let m:Value = serde_json::from_str(&output.stdout).or::<Value>(Ok(Value::Null)).unwrap();
 
                 if let Value::Object(scan_stats) = &m["pools"][pool_name]["scan_stats"]
                 {
@@ -1515,16 +1557,31 @@ impl Backend
                             if int > 0 { Some(int) }
                             else {None}
                         }
-                        else {str_to_i64(scan_stats["start_time"].as_str())}                       
+                        else {str_to_i64(scan_stats["start_time"].as_str())}
                     };
 
-
-                    return Some( ScrubLiveInfo::new(ongoing, time));
+                    let mut scrub_details = self.scrub_details.write().await;
+                    (*scrub_details).scrub_live_info = Some( ScrubLiveInfo::new(ongoing, time));
                 }
             }
         }
+    }
 
-        None
+    pub async fn get_last_scrub_report(&self) -> Option<LastScrubReport>
+    {
+        self.scrub_details.read().await.last_scrub_report.clone()
+    }
+    pub async fn get_current_scrub_info(&self) -> Option<ScrubLiveInfo>
+    {
+        self.scrub_details.read().await.scrub_live_info.clone()
+    }
+
+
+
+    pub async fn get_pool_snapshots(&self) -> Vec<Snapshot>
+    {
+        let snapshots = self.snapshots.read().await;
+        snapshots.clone()
     }
 
     // Returns the disk devices in the zfs pool
@@ -1545,55 +1602,55 @@ impl Backend
 
 
 
-    pub async fn mount(&self,user:Option<&User>) -> Result<(),HTTPError>
+    pub async fn mount(&self,user:Option<&User>) -> Result<(), HTTPMessage>
     {
-        let cfg = self.config.lock().await;
-        if let Some(pool) = &cfg.pool && !self.is_mounted().await
         {
-            let mut cmds:Vec<CommandLine> = Vec::new();
-
-            if let Some(key_path) = &pool.encryption_key
+            let cfg = self.config.lock().await;
+            if let Some(pool) = &cfg.pool && !self.is_mounted().await
             {
+                let mut cmds: Vec<CommandLine> = Vec::new();
 
-                cmds.push(
-                    ZFS(
-                        ZFSActions::LoadKey(
-                            ZFSLoadKeyArgs{
-                                pool: pool.name.clone(),
-                                key_path: key_path.clone(),
-                            }
-                        ),
-                        true,
-                        CmdConfig::Provided {
-                            sudo: true,
-                            strict: false, // sometimes the key can be already loaded and this will result in an error
-                            stdin: None,
-                            cwd: None
-                        }
+                if let Some(key_path) = &pool.encryption_key
+                {
+                    cmds.push(
+                        ZFS(
+                            ZFSActions::LoadKey(
+                                ZFSLoadKeyArgs {
+                                    pool: pool.name.clone(),
+                                    key_path: key_path.clone(),
+                                }
+                            ),
+                            true,
+                            CmdConfig::Provided {
+                                sudo: true,
+                                strict: false, // sometimes the key can be already loaded and this will result in an error
+                                stdin: None,
+                                cwd: None,
+                            },
+                        )
                     )
-                )
+                }
+
+                cmds.push(ZFS(ZFSActions::Mount(
+                    ZFSArgs {
+                        pool: pool.name.clone(),
+                        dataset: None,
+                    }
+                ), true, CmdConfig::default()));
+
+                cmds.push(ZFS(ZFSActions::Mount(
+                    ZFSArgs {
+                        pool: pool.name.clone(),
+                        dataset: Some(pool.dataset.clone()),
+                    }
+                ), true, CmdConfig::default()));
+
+                Transaction::new(cmds)
+                    .accept_error_if(stderr_contains("filesystem already mounted"))
+                    .execute()
+                    .await
+                    .map_err(|e| propagate_error(ErrorMessages::E_POOL_MOUNT, e))?;
             }
-
-            cmds.push(ZFS(ZFSActions::Mount(
-                ZFSArgs {
-                    pool: pool.name.clone(),
-                    dataset: None
-                }
-            ), true, CmdConfig::default()));
-
-            cmds.push(ZFS(ZFSActions::Mount(
-                ZFSArgs {
-                    pool: pool.name.clone(),
-                    dataset: Some(pool.dataset.clone())
-                }
-            ), true, CmdConfig::default()));
-
-            Transaction::new(cmds)
-                .accept_error_if(stderr_contains("filesystem already mounted"))
-                .execute()
-                .await
-                .map_err(|e| propagate_error(ErrorMessages::E_POOL_MOUNT, e))?;
-
         }
 
         let mut ctx = ContextBuilder::new();
@@ -1608,7 +1665,7 @@ impl Backend
         Ok(())
     }
 
-    pub async fn unmount(&self, user:Option<&User>) -> Result<(),HTTPError>
+    pub async fn unmount(&self, user:Option<&User>) -> Result<(), HTTPMessage>
     {
         let mut services = get_remote_services()
             .await
@@ -1682,6 +1739,71 @@ impl Backend
         }
 
         self.event_manager.trigger(Trigger::Event(Events::PoolUnmount),ctx.finish()).await;
+
+        Ok(())
+    }
+
+    pub async fn export_pool(&self, user: Option<&User>) -> Result<(), HTTPMessage>
+    {
+
+        if let Some((pool_name,_)) = self.get_pool_identifier().await
+        {
+            self.unmount(user).await?;
+
+            let output = ZPool(ZPoolActions::Export(pool_name),false,CmdConfig::default())
+                .run()
+                .await
+                .map_err(|e| propagate_error(ErrorMessages::E_POOL_DETACH,e))?
+                .ok_or_else(|| propagate_unknown_error(anyhow!("unable to export pool")))?
+                .is_success()
+                .map_err(|e| propagate_error(ErrorMessages::E_POOL_DETACH,e))?;
+
+            self.deinit_pool().await;
+            self.flush_config().await?;
+
+        }
+        else {return Err(ErrorMessages::E_POOL_NO_CONF.wrap_with_status_code(None));}
+
+        Ok(())
+    }
+
+    pub async fn import_pool(&self, pool_name:&str, load_key:bool, user: Option<&User>) -> Result<(), HTTPMessage>
+    {
+        if self.is_pool_configured().await
+        {
+            return Err(ErrorMessages::E_POOL_CONFIG.wrap_with_status_code(None));
+        }
+
+        let mut cmds: Vec<CommandLine> = vec![ZPool(ZPoolActions::Import(
+            Some(ZPoolImportArgs {
+                pool: pool_name.to_string(),
+                force: true
+            })),true,CmdConfig::default()
+        )];
+
+        if load_key
+        {
+            cmds.push(
+                ZFS(
+                    ZFSActions::LoadKey(
+                        ZFSLoadKeyArgs{
+                            pool: pool_name.to_string(),
+                            key_path: POOL_KEY_PATH.to_string()
+                        }),
+                    true, CmdConfig::default()
+                    )
+                );
+        }
+
+        Transaction::new(cmds)
+            .execute()
+            .await
+            .map_err(|e| propagate_error(ErrorMessages::E_POOL_ATTACH,e))?;
+
+        self.configure_pool().await?;
+        self.mount(user).await?;
+        self.flush_config().await?;
+
 
         Ok(())
     }
@@ -1942,7 +2064,7 @@ impl Backend
     }
 
     // Returns a User struct given the username
-    pub async fn get_user(&self,username:&str) -> Result<Arc<RwLock<User>>,HTTPError>
+    pub async fn get_user(&self,username:&str) -> Result<Arc<RwLock<User>>, HTTPMessage>
     {
         let users = self.users.lock().await;
 

@@ -255,10 +255,15 @@ impl RemoteService for SystemdService
     async fn is_active(&self) -> Result<bool,anyhow::Error>
     {
         let systemd_cmds:Vec<CommandLine> = self.units.iter().map(
-            |u| Systemctl(u,&SystemctlAction::IsActive,false,CmdConfig::Empty)
+            |u| Systemctl(u,&SystemctlAction::IsActive,false,CmdConfig::Provided {
+                sudo: true,
+                strict: false, //systemctl can return 3 if the unit is not running,
+                stdin:None,
+                cwd: None
+            })
         ).collect();
 
-        let transaction = Transaction::new_sudo(systemd_cmds);
+        let transaction = Transaction::new(systemd_cmds);
 
         let outputs = transaction.execute().await?;
 
@@ -356,10 +361,16 @@ impl RemoteService for DockerService
             CmdConfig::default())
             .run()
             .await?
-            .ok_or_else(|| anyhow::Error::msg(format!("Unable to get state of docker container {}",self.container_name())))?
-            .is_success()?;
+            .ok_or_else(|| anyhow::Error::msg(format!("Unable to get state of docker container {}",self.container_name())))?;
 
-        Ok(docker.stdout.trim() == "true")
+        if docker.exit_code != 0 && docker.stderr.contains("No such object")
+        {
+            Ok(false)
+        }
+        else
+        {
+            Ok(docker.stdout.trim() == "true")
+        }
     }
 
     fn service_name(&self) -> &'static str

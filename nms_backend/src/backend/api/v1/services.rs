@@ -40,6 +40,7 @@ async fn list_access_services(AuthBearer(token): AuthBearer, State(backend):Stat
     {
         let mut properties:HashMap<ServiceProperty,Value> = HashMap::new();
 
+
         for prop in s.properties()
         {
             properties.insert(prop.clone(),

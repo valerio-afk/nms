@@ -23,11 +23,11 @@ pub struct ZPoolReplaceArgs
 
 pub struct ZPoolDestroyArgs
 {
-    pool:String,
-    force:bool
+    pub pool:String,
+    pub force:bool
 }
 
-type ZPoolImportArgs = ZPoolDestroyArgs;
+pub type ZPoolImportArgs = ZPoolDestroyArgs;
 
 pub struct ZPoolCreateArgs
 {

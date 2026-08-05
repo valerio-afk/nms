@@ -2,7 +2,7 @@ use axum_auth::AuthBearer;
 use axum::Json;
 use axum::routing::{Router, get, post};
 use axum::extract::{Path, State};
-use crate::backend::{Backend, FastAPIComp, BACKEND_VERSION, HTTPError, propagate_unknown_error};
+use crate::backend::{Backend, FastAPIComp, BACKEND_VERSION, HTTPMessage, propagate_unknown_error};
 use crate::backend::jwt::TokenPurposes;
 use crate::backend::permissions::{UserPermissions, check_permission};
 use std::sync::Arc;
@@ -97,7 +97,7 @@ async fn get_sys_property(
 }
 
 
-async fn acpi_exec(token:String, backend: Arc<Backend>, cmd:CommandLine,event:Events) -> Result<(), HTTPError>
+async fn acpi_exec(token:String, backend: Arc<Backend>, cmd:CommandLine,event:Events) -> Result<(), HTTPMessage>
 {
     let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
     let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
@@ -126,7 +126,7 @@ async fn acpi_exec(token:String, backend: Arc<Backend>, cmd:CommandLine,event:Ev
 async fn shutdown(
     AuthBearer(token): AuthBearer,
     State(backend): State<Arc<Backend>>
-) -> Result<(),HTTPError>
+) -> Result<(), HTTPMessage>
 {
     acpi_exec(token,backend,Shutdown(CmdConfig::default()),Events::SystemPoweroff).await
 }
@@ -134,7 +134,7 @@ async fn shutdown(
 async fn reboot(
     AuthBearer(token): AuthBearer,
     State(backend): State<Arc<Backend>>
-) -> Result<(),HTTPError>
+) -> Result<(), HTTPMessage>
 {
     acpi_exec(token,backend,Reboot(CmdConfig::default()),Events::SystemReboot).await
 }

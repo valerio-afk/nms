@@ -1,4 +1,4 @@
-use super::HTTPError;
+use super::HTTPMessage;
 use axum::{Json, http::StatusCode};
 use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
@@ -10,7 +10,7 @@ use tracing::{error, info, warn};
 pub trait StatusMessage:Clone
 {
     fn wrap(self:&Self,params:Option<Vec<Value>>) -> WrappedResponse;
-    fn wrap_with_status_code(self:&Self,params:Option<Vec<Value>>) -> HTTPError;
+    fn wrap_with_status_code(self:&Self,params:Option<Vec<Value>>) -> HTTPMessage;
 }
 
 
@@ -258,7 +258,7 @@ impl StatusMessage for ErrorMessages
             }
         }    
     }
-    fn wrap_with_status_code(&self,params:Option<Vec<Value>>) -> HTTPError
+    fn wrap_with_status_code(&self,params:Option<Vec<Value>>) -> HTTPMessage
     {
         let status_code_str:&'static str = {
             match self.get_str("status_code")
@@ -283,6 +283,7 @@ impl StatusMessage for ErrorMessages
         )
     }
 }
+
 
 #[derive(Debug, Serialize, Clone, EnumProperty, IntoStaticStr)]
 pub enum SuccessMessages
@@ -353,7 +354,7 @@ impl StatusMessage for SuccessMessages
             }
         }
     }
-    fn wrap_with_status_code(&self,params:Option<Vec<Value>>) -> HTTPError
+    fn wrap_with_status_code(&self,params:Option<Vec<Value>>) -> HTTPMessage
     {
         (
             StatusCode::OK,
@@ -391,11 +392,12 @@ pub enum LogErrors<'a>
     PoolConfig(&'a String),
     Automount(&'a String),
     SnapshotInit(&'a String),
+    HTTPError(&'a HTTPMessage),
 }
 
 impl<'a> Display for LogErrors<'a>
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result 
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
     {
 
         match self
@@ -437,6 +439,7 @@ impl<'a> Display for LogErrors<'a>
             LogErrors::PoolConfig(e) => write!(f,"Pool configuration failed: {}",e),
             LogErrors::Automount(e) => write!(f,"Automount failed: {}",e),
             LogErrors::SnapshotInit(e) => write!(f,"Pool snapshot init failed: {}",e),
+            LogErrors::HTTPError(err) => write!(f,"HTTP error: {:?}",err.1.detail),
 
         }
     }
@@ -455,6 +458,8 @@ pub enum LogWarnings<'a>
     PoolUnmountedBy(&'a str),
 
     RemoteServiceStopped(&'a str, Option<&'a str>),
+
+    PoolExport(Option<&'a str>),
 }
 
 impl<'a> Display for LogWarnings<'a>
@@ -473,8 +478,15 @@ impl<'a> Display for LogWarnings<'a>
             LogWarnings::RemoteServiceStopped(srv, usr) => {
                 match usr
                 {
-                    Some(u) => write!(f,"Remote service {} stopped by {}",srv,u),
-                    None => write!(f,"Remote service {} stopped",srv)
+                    Some(u) => write!(f, "Remote service {} stopped by {}", srv, u),
+                    None => write!(f, "Remote service {} stopped", srv)
+                }
+            }
+            LogWarnings::PoolExport(usr) => {
+                match usr
+                {
+                    Some(u) => write!(f, "Pool exported by by {}", u),
+                    None => write!(f, "Pool exported")
                 }
             }
         }
@@ -490,6 +502,7 @@ pub enum LogInfos<'a>
     OTPSecretGen(&'a Option<String>),
     EMStarted,
     PoolMountedBy(&'a str),
+    PoolImport(&'a str, Option<&'a str>),
     
 }
 
@@ -509,7 +522,14 @@ impl<'a> Display for LogInfos<'a>
                 None =>  write!(f,"New OTP secret successfully generated"),
             },
             LogInfos::EMStarted => write!(f,"Event Manager started"),
-            LogInfos::PoolMountedBy(uname) => write!(f,"Pool mounted by {}",uname)
+            LogInfos::PoolMountedBy(uname) => write!(f,"Pool mounted by {}",uname),
+            LogInfos::PoolImport(pool, uname) => {
+                match uname
+                {
+                    Some(u) => write!(f, "Pool {} imported by {}", pool, u),
+                    None => write!(f, "Pool {} imported", pool),
+                }
+            }
         }
     }
 }

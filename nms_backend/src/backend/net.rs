@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use anyhow::Error;
 use ipnet::{Ipv4Net, Ipv6Net};
 use configparser::ini::Ini;
-use crate::backend::{propagate_error, HTTPError};
+use crate::backend::{propagate_error, HTTPMessage};
 use crate::backend::msg::{ErrorMessages, StatusMessage};
 
 const WIREGUARD_CONF:&'static str = "/etc/wireguard/wg0.conf";
@@ -336,7 +336,7 @@ pub async fn get_network_ifaces() -> Vec<NetworkInterface>
 
 }
 
-pub async fn read_wireguard_config_file() -> Result<Ini,HTTPError>
+pub async fn read_wireguard_config_file() -> Result<Ini, HTTPMessage>
 {
     let output = Cat(
         Some(WIREGUARD_CONF.to_string()),

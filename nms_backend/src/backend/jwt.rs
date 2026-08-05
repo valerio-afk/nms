@@ -6,7 +6,7 @@ use crate::backend::api::v1::msg::StatusMessage;
 use crate::backend::config::CfgToken;
 use crate::backend::msg::{LoggerMessages,LogErrors};
 use super::msg::{ErrorMessages};
-use super::HTTPError;
+use super::HTTPMessage;
 
 
 
@@ -89,7 +89,7 @@ pub fn token_verification(
     token:&str,
     requested_purpose:TokenPurposes,
     secret:&[u8]
-) -> Result<JWTClaim,HTTPError>
+) -> Result<JWTClaim, HTTPMessage>
 {
 
     let tok = decode::<JWTClaim>(

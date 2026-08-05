@@ -37,7 +37,7 @@ pub enum CommandError
     StdinError(&'static str),
     StdinWriteError(&'static str, std::io::Error),
     ExecutionError(&'static str,std::io::Error),
-    TransactionError(String),
+    TransactionError(String, &'static str, Option<Vec<String>>),
 }
 
 impl Display for CommandError
@@ -50,7 +50,7 @@ impl Display for CommandError
             CommandError::StdinError(cmd) => write!(f, "Unable to obtain stdin for `{}`", cmd),
             CommandError::StdinWriteError(cmd, e) => write!(f, "Unable to write into stdin of `{}`: {}", cmd, e),
             CommandError::ExecutionError(cmd, e) => write!(f, "Unable to execute `{}`: {}", cmd, e),
-            CommandError::TransactionError(err) => write!(f, "Transaction terminated due to an error: {}", err),
+            CommandError::TransactionError(err,cmd,args) => write!(f, "Transaction terminated due to an error: {}\n {} ({:?})", err,cmd,args),
         }
     }
 }
@@ -494,6 +494,9 @@ impl Transaction
                 cmd.as_sudo();
             }
 
+            let last_cmd = cmd.command;
+            let last_args = cmd.args.clone();
+
             let output = cmd.run().await;
 
             match output
@@ -508,7 +511,9 @@ impl Transaction
                             }
                             else
                             {
-                                last_error = Some(CommandError::TransactionError(r.stderr));
+                                last_error = Some(CommandError::TransactionError(
+                                    r.stderr,last_cmd,last_args
+                                ));
                                 break;
                             }
 

@@ -3,7 +3,7 @@ use axum_auth::AuthBearer;
 use axum::Json;
 use axum::routing::{Router, get, head};
 use axum::extract::State;
-use crate::backend::{Backend, FastAPIComp, HTTPError, User};
+use crate::backend::{Backend, FastAPIComp, HTTPMessage, User};
 use crate::backend::jwt::TokenPurposes;
 use std::sync::Arc;
 
@@ -26,7 +26,7 @@ async fn get_logged_user(AuthBearer(token): AuthBearer, State(backend):State<Arc
     }
 }
 
-async fn get_user_notification_count(AuthBearer(token): AuthBearer, State(backend):State<Arc<Backend>>) -> Result<HeaderMap,HTTPError>
+async fn get_user_notification_count(AuthBearer(token): AuthBearer, State(backend):State<Arc<Backend>>) -> Result<HeaderMap, HTTPMessage>
 {
     let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
     let user = backend.get_user(&jwt.claims.username.unwrap()).await?;

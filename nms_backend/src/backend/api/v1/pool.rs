@@ -1,6 +1,6 @@
 use std::collections::hash_set::Intersection;
 use std::collections::HashSet;
-use crate::backend::{Backend, FastAPIComp, propagate_unknown_error};
+use crate::backend::{propagate_unknown_error, Backend, FastAPIComp, HTTPMessage};
 use crate::backend::api::BackendPropertyResponse;
 use crate::backend::permissions::{UserPermissions, check_permission};
 use crate::backend::jwt::TokenPurposes;
@@ -13,7 +13,7 @@ use axum_auth::AuthBearer;
 use serde_json::Value;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
-use crate::backend::msg::{LogInfos, LogWarnings, LoggerMessages, SuccessMessages};
+use crate::backend::msg::{LogInfos, LogWarnings, LoggerMessages, StatusMessage, SuccessMessages};
 use crate::dev::{get_system_disks, DiskState, Device};
 
 #[derive(Debug,Serialize)]
@@ -92,6 +92,13 @@ enum PoolProperties
     
     #[serde(rename = "snapshot")]
     Snapshots
+}
+
+#[derive(Debug,Deserialize)]
+struct ImportPool
+{
+    pool_name:String,
+    load_key: bool
 }
 
 async fn get_attachable_disks(backend:Arc<Backend>) -> Vec<Device>
@@ -209,7 +216,7 @@ async fn get_pool_property(
     }))
 }
 
-async fn pool_unmount(AuthBearer(token): AuthBearer, State(backend): State<Arc<Backend>>) -> FastAPIComp<SuccessMessages>
+async fn pool_unmount(AuthBearer(token): AuthBearer, State(backend): State<Arc<Backend>>) -> Result<HTTPMessage,HTTPMessage>
 {
     let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
     let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
@@ -222,10 +229,10 @@ async fn pool_unmount(AuthBearer(token): AuthBearer, State(backend): State<Arc<B
 
     LoggerMessages::Warning(LogWarnings::PoolUnmountedBy(&u.username)).log();
 
-    Ok(Json(SuccessMessages::S_POOL_UNMOUNTED))
+    Ok(SuccessMessages::S_POOL_UNMOUNTED.wrap_with_status_code(None))
 }
 
-async fn pool_mount(AuthBearer(token): AuthBearer, State(backend): State<Arc<Backend>>) -> FastAPIComp<SuccessMessages>
+async fn pool_mount(AuthBearer(token): AuthBearer, State(backend): State<Arc<Backend>>) -> Result<HTTPMessage,HTTPMessage>
 {
     let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
     let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
@@ -238,8 +245,50 @@ async fn pool_mount(AuthBearer(token): AuthBearer, State(backend): State<Arc<Bac
 
     LoggerMessages::Info(LogInfos::PoolMountedBy(&u.username)).log();
 
-    Ok(Json(SuccessMessages::S_POOL_MOUNTED))
+    Ok(SuccessMessages::S_POOL_MOUNTED.wrap_with_status_code(None))
 }
+
+async fn pool_detatch(AuthBearer(token): AuthBearer, State(backend): State<Arc<Backend>>) -> FastAPIComp<()>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::PoolConfImport).await?;
+
+    let u = user.read().await;
+
+    backend.export_pool(Some(&*u)).await?;
+
+    LoggerMessages::Warning(LogWarnings::PoolExport(Some(u.username.as_str()))).log();
+
+    Ok(Json(()))
+}
+
+async fn pool_attach(
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>,
+    Json(data): Json<ImportPool>,
+) -> FastAPIComp<()>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::PoolConfImport).await?;
+
+    let u = user.read().await;
+
+    backend.import_pool(
+        data.pool_name.as_str(),
+        data.load_key,
+        Some(&*u)
+    ).await?;
+
+    LoggerMessages::Info(LogInfos::PoolImport(&data.pool_name, Some(u.username.as_str()))).log();
+
+    Ok(Json(()))
+}
+
+
 
 pub fn get_route() -> Router<Arc<Backend>>
 {
@@ -249,6 +298,8 @@ pub fn get_route() -> Router<Arc<Backend>>
             .route("/get/{property}", get(get_pool_property))
             .route("/mount", post(pool_mount))
             .route("/unmount", post(pool_unmount))
+            .route("/detach", post(pool_detatch))
+            .route("/attach", post(pool_attach))
     )
 }
 

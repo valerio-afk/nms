@@ -3,7 +3,7 @@ use tokio::sync::RwLock;
 use strum::{EnumString,Display,EnumIter,IntoEnumIterator};
 use serde_json::Value;
 use super::msg::{StatusMessage,ErrorMessages};
-use crate::backend::{HTTPError, User};
+use crate::backend::{HTTPMessage, User};
 
 #[derive(Display,EnumString,EnumIter, PartialEq)]
 pub enum UserPermissions
@@ -158,7 +158,7 @@ impl UserPermissions
     }
 }
 
-pub async fn check_permission(user:&Arc<RwLock<User>>, perm: UserPermissions) -> Result<(),HTTPError>
+pub async fn check_permission(user:&Arc<RwLock<User>>, perm: UserPermissions) -> Result<(), HTTPMessage>
 {
     let u = user.read().await;
 
