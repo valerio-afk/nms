@@ -1,6 +1,6 @@
 use std::collections::hash_set::Intersection;
 use std::collections::HashSet;
-use crate::backend::{propagate_unknown_error, Backend, FastAPIComp, HTTPMessage};
+use crate::backend::{propagate_unknown_error, Backend, FastAPIComp, HTTPMessage, BackgroundTaskInformation};
 use crate::backend::api::BackendPropertyResponse;
 use crate::backend::permissions::{UserPermissions, check_permission};
 use crate::backend::jwt::TokenPurposes;
@@ -12,8 +12,7 @@ use axum::extract::{State,Path};
 use axum_auth::AuthBearer;
 use serde_json::Value;
 use serde::{Deserialize, Serialize};
-use tracing::warn;
-use crate::backend::msg::{LogInfos, LogWarnings, LoggerMessages, StatusMessage, SuccessMessages};
+use crate::backend::msg::{ErrorMessages, LogInfos, LogWarnings, LoggerMessages, StatusMessage, SuccessMessages};
 use crate::dev::{get_system_disks, DiskState, Device};
 
 #[derive(Debug,Serialize)]
@@ -288,6 +287,19 @@ async fn pool_attach(
     Ok(Json(()))
 }
 
+async fn start_scrub(AuthBearer(token): AuthBearer, State(backend): State<Arc<Backend>>) -> FastAPIComp<BackgroundTaskInformation>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::PoolToolsVerify).await?;
+
+    let id =backend.start_scrub().await?;
+    let task = backend.get_task_by_id(&id.to_string()).await;
+
+    if let Some(task) = task { Ok(Json(task)) }
+    else { Err(ErrorMessages::E_POOL_SCRUB.wrap_with_status_code(None)) }
+}
 
 
 pub fn get_route() -> Router<Arc<Backend>>
@@ -300,6 +312,7 @@ pub fn get_route() -> Router<Arc<Backend>>
             .route("/unmount", post(pool_unmount))
             .route("/detach", post(pool_detatch))
             .route("/attach", post(pool_attach))
+            .route("/scrub", post(start_scrub))
     )
 }
 

@@ -191,6 +191,9 @@ class BackEndProxy:
 
         output = response.json()
 
+        import sys;
+        print(output, file=sys.stderr);
+
         if ((isinstance(output,dict)) and ((flash_data:=output.get("detail")) is not None)):
             make_flash(flash_data)
             return None

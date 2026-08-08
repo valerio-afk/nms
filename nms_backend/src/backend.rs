@@ -8,7 +8,7 @@ use crate::cmdl::zfs::{ZFSActions, ZFSListArgs, ZFSListType, ZFSLoadKeyArgs, ZPo
 use crate::cmdl::{CmdConfig, CommandLine, Executable, Transaction};
 use crate::dev::{Device, DiskState};
 use crate::events::{ContextBuilder, ContextData, ContextVariables, EventManager, EventParameters, Events, Trigger};
-use crate::task::TaskWrapper;
+use crate::task::{BackgroundTaskManager, Task, BackgroundTask};
 use crate::vfs::{Capacity, VFS};
 use api::v1::jwt::{TokenPurposes, create_token, token_verification};
 use axum::Json;
@@ -20,7 +20,7 @@ use futures::stream::{self, StreamExt};
 use msg::{ErrorMessages, LogErrors, LogInfos, LogWarnings, LoggerMessages};
 use permissions::is_admin;
 use regex::RegexBuilder;
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use serde_json::{Number, Value};
 use std::collections::HashMap;
 use std::error::Error;
@@ -31,16 +31,20 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use anyhow::anyhow;
+use serde::ser::SerializeStruct;
 use sysinfo::Networks;
 use tokio::fs::{File, read_to_string, rename};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{Mutex, OnceCell, RwLock};
+use tokio::time::sleep;
 use tracing::{error, info};
 use utils::get_notifications_count;
 use utils::{get_quota_for_all, str_to_i64, sudo_group, ts_to_str};
 use crate::dev::get_system_disks;
 use uuid::Uuid;
+use crate::backend::msg::{MessageTypes, SuccessMessages};
 use crate::cmdl::error_filters::stderr_contains;
 
 pub static BACKEND_VERSION:&'static str = env!("CARGO_PKG_VERSION");
@@ -133,6 +137,55 @@ impl Default for NetIOCounter
             bytes_recv: 0,
             bytes_sent: 0
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct BackgroundTaskInformation
+{
+    task_id:String,
+    running:bool,
+    progress:Option<f32>,
+    eta:Option<u32>,
+    detail: Result<Option<SuccessMessages>, ErrorMessages>,
+}
+
+impl Serialize for BackgroundTaskInformation
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // 3 is the number of fields in the struct.
+        let mut state = serializer.serialize_struct("BackgroundTaskInformation", 5)?;
+
+        state.serialize_field("task_id", &self.task_id)?;
+        state.serialize_field("running", &self.running)?;
+        state.serialize_field("progress", &self.progress)?;
+        state.serialize_field("eta", &self.eta)?;
+
+        match &self.detail
+        {
+            Ok(o) =>
+                {
+                    if let Some(result) = o
+                    {
+                        let success = serde_json::to_value(result.wrap(None)).unwrap();
+                        state.serialize_field("detail", &success["detail"])?;
+                    }
+                    else
+                    {
+                        state.serialize_field("detail", &Option::<String>::None)?;
+                    }
+                }
+            Err(e) =>
+                {
+                    let err = serde_json::to_value(e.wrap(None)).unwrap();
+                    state.serialize_field("detail", &err["detail"])?;
+                }
+        }
+
+        state.end()
     }
 }
 
@@ -247,6 +300,7 @@ pub struct Backend
     users:Mutex<Vec<Arc<RwLock<User>>>>,
     tmp_secrets:Mutex<HashMap<String,TemporarySecret>>,
     event_manager:EventManager,
+    background_task_manager: Arc<BackgroundTaskManager<SuccessMessages>>,
     secret_key:String,
     mount: RwLock<Option<VFS>>,
     pool_properties: RwLock<Option<PoolProperties>>,
@@ -264,6 +318,7 @@ impl Backend
                 users:Mutex::new(vec![]),
                 tmp_secrets: Mutex::new(HashMap::new()),
                 event_manager: EventManager::new(),
+                background_task_manager: BackgroundTaskManager::new(),
                 secret_key: "prova".to_string(),
                 mount: RwLock::new(None),
                 pool_properties:RwLock::new(None),
@@ -344,6 +399,38 @@ impl Backend
     {
         self._flush_config().await.map_err(|e| propagate_unknown_error(e))
     }
+
+    pub async fn get_task_by_id(&self, id:&str) -> Option<BackgroundTaskInformation>
+    {
+        if let Some(task) = self.background_task_manager.get_task_by_id(id).await
+        {
+            let running = task.is_running().await;
+
+            return Some(BackgroundTaskInformation{
+                task_id: id.to_string(),
+                running,
+                progress: task.get_progress(),
+                eta: task.get_eta(),
+                detail: {
+                    if running { Ok(None) }
+                    else {
+                        let j = task.join().await;
+                        match j
+                        {
+                            Ok(r) => Ok(r),
+                            Err(e) =>  {
+                                LoggerMessages::Error(LogErrors::TaskError(task.get_name(),&e.to_string())).log();
+                                Err(ErrorMessages::E_UNKNOWN)
+                            }
+                        }
+                    }
+                }
+
+            });
+        }
+
+        None
+    }
 }
 
 //initialiser Methods
@@ -389,7 +476,8 @@ impl Backend
                                 async move
                                     {
                                         b.reload_users().await;
-                                    })
+                                    }
+                            )
                         }
                 )
             )
@@ -460,7 +548,6 @@ impl Backend
                 Box::new(
                     move |_ctx: &Option<ContextData>|
                         {
-                            let mut net = Networks::new_with_refreshed_list();
                             let b = Arc::clone(&task_backend);
                             Box::pin(
                                 async move
@@ -811,31 +898,29 @@ impl Backend
     {
         self.init_configuration().await;
         let be = Arc::new(self);
-        if let Err(e) = be.configure_pool().await
+        be.event_manager.start().await;
+        be.init_pool_event_tasks().await;
+                if let Err(e) = be.configure_pool().await
         {
             LoggerMessages::Error(LogErrors::PoolConfig(&e.1.to_string()));
         }
-        if let Err(e) = be.mount(None).await
+                if let Err(e) = be.mount(None).await
         {
             LoggerMessages::Error(LogErrors::Automount(&e.1.to_string()));
         }
-
-        if let Err(e) = be.init_vfs().await
+                if let Err(e) = be.init_vfs().await
         {
             LoggerMessages::Error(LogErrors::VFSInit(&e.1.to_string()));
         }
-
-        if let Err(e) = be.init_pool_snapshots().await
+                if let Err(e) = be.init_pool_snapshots().await
         {
             LoggerMessages::Error(LogErrors::SnapshotInit(&e.1.to_string()));
         }
 
-
-        be.init_pool_event_tasks().await;
         be.init_users().await;
         be.init_net_counters().await;
         be.init_scrub_details_watcher().await;
-        be.event_manager.start().await;
+
         be.init_remote_service().await;
 
 
@@ -1552,7 +1637,8 @@ impl Backend
                 {
                     let ongoing: bool = scan_stats["function"].as_str().unwrap() == "SCANNING";
                     let time:Option<i64> = {
-                        if let Some(int) = str_to_i64(scan_stats["end_time"].as_str())
+                        if ongoing { None }
+                        else if let Some(int) = str_to_i64(scan_stats["end_time"].as_str())
                         {
                             if int > 0 { Some(int) }
                             else {None}
@@ -1574,6 +1660,82 @@ impl Backend
     pub async fn get_current_scrub_info(&self) -> Option<ScrubLiveInfo>
     {
         self.scrub_details.read().await.scrub_live_info.clone()
+    }
+
+    pub async fn start_scrub(self:&Arc<Self>) -> Result<Uuid, HTTPMessage>
+    {
+        if let Some((pool_name, _)) = self.get_pool_identifier().await
+        {
+            ZPool(ZPoolActions::Scrub(pool_name.clone()),false,CmdConfig::default())
+                .run()
+                .await
+                .map_err(|e| propagate_error(ErrorMessages::E_POOL_SCRUB, e))?
+                .ok_or(ErrorMessages::E_POOL_SCRUB.wrap_with_status_code(None))?
+                .is_success()
+                .map_err(|e| propagate_error(ErrorMessages::E_POOL_SCRUB, e))?;
+
+            let backend = Arc::clone(&self);
+            let scrub_task = Arc::new(
+                BackgroundTask::new(
+                    Box::new(move |_| {
+                        let pool_name = pool_name.clone();
+                        let b = Arc::clone(&backend);
+
+                        Box::pin(async move {
+                            loop {
+                                sleep(Duration::from_secs(2)).await;
+
+                                let output = ZPool(ZPoolActions::Status(pool_name.clone()),false,CmdConfig::Empty)
+                                   .run()
+                                   .await;
+
+                                match output
+                                {
+                                    Ok(result) => {
+                                        if let Some(o) = result && o.exit_code == 0
+                                        {
+                                            if let Ok(v) = serde_json::from_str::<Value>(&o.stdout) && let Some(d) = v.as_object()
+                                            {
+                                                let scan_stats = &d["pools"][pool_name.clone()]["scan_stats"];
+
+                                                if let Some(scan_stats) = scan_stats.as_object()
+                                                {
+                                                    if let Some(function) = scan_stats["function"].as_str() && function == "SCRUB"
+                                                    {
+                                                        if let Some(state) = scan_stats["state"].as_str() && state == "FINISHED"
+                                                        {
+                                                            break;
+                                                        }
+                                                    }
+
+                                                }
+                                            }
+
+                                        }
+                                        else
+                                        {
+                                            return  Err(anyhow![ErrorMessages::E_POOL_SCRUB.wrap(None)]);
+                                        }
+                                    }
+                                    Err(err) => return Err(anyhow![
+                                        ErrorMessages::E_POOL_SCRUB.wrap(Some(vec![Value::from(err.to_string())])),
+                                    ])
+                                }
+                            }
+
+                            b.update_scrub_details().await;
+
+                            Ok(SuccessMessages::S_POOL_SCRUB)
+                        })
+                    }),
+                 Some("Scrub Task".to_string())
+                )
+            );
+
+            return Ok(self.background_task_manager.add_task(scrub_task).await);
+        }
+
+        Err(ErrorMessages::E_POOL_NO_CONF.wrap_with_status_code(None))
     }
 
 
@@ -1606,61 +1768,69 @@ impl Backend
     {
         {
             let cfg = self.config.lock().await;
-            if let Some(pool) = &cfg.pool && !self.is_mounted().await
+            if let Some(pool) = &cfg.pool
             {
-                let mut cmds: Vec<CommandLine> = Vec::new();
-
-                if let Some(key_path) = &pool.encryption_key
+                if !self.is_mounted().await
                 {
-                    cmds.push(
-                        ZFS(
-                            ZFSActions::LoadKey(
-                                ZFSLoadKeyArgs {
-                                    pool: pool.name.clone(),
-                                    key_path: key_path.clone(),
-                                }
-                            ),
-                            true,
-                            CmdConfig::Provided {
-                                sudo: true,
-                                strict: false, // sometimes the key can be already loaded and this will result in an error
-                                stdin: None,
-                                cwd: None,
-                            },
+                    let mut cmds: Vec<CommandLine> = Vec::new();
+
+                    if let Some(key_path) = &pool.encryption_key
+                    {
+                        cmds.push(
+                            ZFS(
+                                ZFSActions::LoadKey(
+                                    ZFSLoadKeyArgs {
+                                        pool: pool.name.clone(),
+                                        key_path: key_path.clone(),
+                                    }
+                                ),
+                                true,
+                                CmdConfig::Provided {
+                                    sudo: true,
+                                    strict: false, // sometimes the key can be already loaded and this will result in an error
+                                    stdin: None,
+                                    cwd: None,
+                                },
+                            )
                         )
-                    )
+                    }
+
+                    cmds.push(ZFS(ZFSActions::Mount(
+                        ZFSArgs {
+                            pool: pool.name.clone(),
+                            dataset: None,
+                        }
+                    ), true, CmdConfig::default()));
+
+                    cmds.push(ZFS(ZFSActions::Mount(
+                        ZFSArgs {
+                            pool: pool.name.clone(),
+                            dataset: Some(pool.dataset.clone()),
+                        }
+                    ), true, CmdConfig::default()));
+
+                    Transaction::new(cmds)
+                        .accept_error_if(stderr_contains("filesystem already mounted"))
+                        .execute()
+                        .await
+                        .map_err(|e| propagate_error(ErrorMessages::E_POOL_MOUNT, e))?;
                 }
 
-                cmds.push(ZFS(ZFSActions::Mount(
-                    ZFSArgs {
-                        pool: pool.name.clone(),
-                        dataset: None,
-                    }
-                ), true, CmdConfig::default()));
+                let mut ctx = ContextBuilder::new();
 
-                cmds.push(ZFS(ZFSActions::Mount(
-                    ZFSArgs {
-                        pool: pool.name.clone(),
-                        dataset: Some(pool.dataset.clone()),
-                    }
-                ), true, CmdConfig::default()));
+                if let Some(u) = user
+                {
+                    ctx = ctx.push(ContextVariables::TriggerUser,u.username.clone());
+                }
 
-                Transaction::new(cmds)
-                    .accept_error_if(stderr_contains("filesystem already mounted"))
-                    .execute()
-                    .await
-                    .map_err(|e| propagate_error(ErrorMessages::E_POOL_MOUNT, e))?;
+                self.event_manager.trigger(Trigger::Event(Events::PoolMount),ctx.finish()).await;
+            }
+            else
+            {
+                return Err(ErrorMessages::E_POOL_NO_CONF.wrap_with_status_code(None));
             }
         }
 
-        let mut ctx = ContextBuilder::new();
-
-        if let Some(u) = user
-        {
-            ctx = ctx.push(ContextVariables::TriggerUser,u.username.clone());
-        }
-
-        self.event_manager.trigger(Trigger::Event(Events::PoolMount),ctx.finish()).await;
 
         Ok(())
     }
@@ -1677,11 +1847,14 @@ impl Backend
         {
             if service.service_name() != "ssh" //SSH is special - if we disable it we'll lose the possibility to restore the system if needeed (already happened!)
             {
-                service.stop()
-                    .await
-                    .map_err(|e| propagate_error(ErrorMessages::E_POOL_UNMOUNT, e))?;
+                if service.is_active().await.unwrap_or(true)
+                {
+                    service.stop()
+                        .await
+                        .map_err(|e| propagate_error(ErrorMessages::E_POOL_UNMOUNT, e))?;
 
-                LoggerMessages::Warning(LogWarnings::RemoteServiceStopped(service.service_name().as_ref(),None)).log();
+                    LoggerMessages::Warning(LogWarnings::RemoteServiceStopped(service.service_name().as_ref(), None)).log();
+                }
             }
         }
 
@@ -1750,7 +1923,7 @@ impl Backend
         {
             self.unmount(user).await?;
 
-            let output = ZPool(ZPoolActions::Export(pool_name),false,CmdConfig::default())
+            ZPool(ZPoolActions::Export(pool_name),false,CmdConfig::default())
                 .run()
                 .await
                 .map_err(|e| propagate_error(ErrorMessages::E_POOL_DETACH,e))?
@@ -1932,8 +2105,8 @@ impl Backend
                     username: uname.to_string(),
                     visible_name: prop.fullname.clone(),
                     permissions: prop.permissions.clone(),
-                    quota:quota,
-                    sudo:sudo,
+                    quota,
+                    sudo,
                     admin: {
                         match &prop.permissions
                         {

@@ -49,7 +49,7 @@ pub enum ZPoolActions
     Import(Option<ZPoolImportArgs>),
     Export(String),
     Create(ZPoolCreateArgs),
-    Scrub,
+    Scrub(String),
     Clear(String),
     List(String),
     Status(String),
@@ -217,7 +217,10 @@ pub fn ZPool(
 
     match action
     {
-        ZPoolActions::Scrub => args.push("scrub".to_string()),
+        ZPoolActions::Scrub(pool_name) => {
+            args.push("scrub".to_string());
+            args.push(pool_name);
+        },
         ZPoolActions::LabelClear(dev) => {
             args.push("labelclear".to_string());
             args.push(dev.to_string());

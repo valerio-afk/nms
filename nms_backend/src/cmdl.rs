@@ -81,6 +81,9 @@ pub struct CommandLine
     drop: Option<Destructor<Self>>
 }
 
+unsafe impl Send for CommandLine {}
+unsafe impl Sync for CommandLine {}
+
 #[derive(Clone,Debug)]
 pub enum CmdConfig
 {
@@ -256,6 +259,8 @@ impl CommandOutput
         self.check_status(0)
     }
 }
+
+
 
 
 pub trait Executable
@@ -483,7 +488,7 @@ impl Transaction
         let mut revert_commands:Vec<Option<Box<CommandLine>>> = Vec::new();
         let mut last_error: Option<CommandError> = None;
         
-        let mut cmds = self.commands.drain(..).collect::<Vec<_>>();
+        let cmds = self.commands.drain(..).collect::<Vec<_>>();
 
         for mut cmd in cmds
         {

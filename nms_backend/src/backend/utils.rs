@@ -100,7 +100,11 @@ pub fn str_to_i64 (s:Option<&str>) -> Option<i64>
     {
         match t.parse::<i64>()
         {
-            Ok(int) => return Some(int),
+            Ok(int) =>
+                {
+                    let offset = chrono::Local::now().offset().local_minus_utc() as i64;
+                    return Some(int + offset);
+                },
             _ => ()
         }
     }

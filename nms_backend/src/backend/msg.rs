@@ -4,6 +4,7 @@ use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
 use serde_json::Value;
 use std::fmt::{Display, Formatter};
+use std::process::ExitStatus;
 use strum::{EnumProperty, IntoStaticStr};
 use tracing::{error, info, warn};
 
@@ -284,7 +285,6 @@ impl StatusMessage for ErrorMessages
     }
 }
 
-
 #[derive(Debug, Serialize, Clone, EnumProperty, IntoStaticStr)]
 pub enum SuccessMessages
 {
@@ -393,6 +393,10 @@ pub enum LogErrors<'a>
     Automount(&'a String),
     SnapshotInit(&'a String),
     HTTPError(&'a HTTPMessage),
+    INotifyStart(&'a String),
+    INotifyIOError(&'a std::io::Error),
+    INotifyStopped(&'a ExitStatus),
+    TaskError(Option<&'a String>, &'a String),
 }
 
 impl<'a> Display for LogErrors<'a>
@@ -440,6 +444,17 @@ impl<'a> Display for LogErrors<'a>
             LogErrors::Automount(e) => write!(f,"Automount failed: {}",e),
             LogErrors::SnapshotInit(e) => write!(f,"Pool snapshot init failed: {}",e),
             LogErrors::HTTPError(err) => write!(f,"HTTP error: {:?}",err.1.detail),
+            LogErrors::INotifyStart(e) => write!(f, "Unable to start inotify: {}", e),
+            LogErrors::INotifyStopped(e) => write!(f,"Inotify stopped unexpectedly: {}",e),
+            LogErrors::INotifyIOError(e) => write!(f,"Inotify IO error: {}",e),
+            LogErrors::TaskError(name, err) => match (name){
+                Some(n) =>  write!(f,"Task {} returned an error {}",n,err),
+                None =>  write!(f,"A task returned an error: {}", err)
+
+            }
+                
+                
+                
 
         }
     }
@@ -460,6 +475,8 @@ pub enum LogWarnings<'a>
     RemoteServiceStopped(&'a str, Option<&'a str>),
 
     PoolExport(Option<&'a str>),
+
+    INotifyStopped(),
 }
 
 impl<'a> Display for LogWarnings<'a>
@@ -489,6 +506,7 @@ impl<'a> Display for LogWarnings<'a>
                     None => write!(f, "Pool exported")
                 }
             }
+            LogWarnings::INotifyStopped() => write!(f,"Inotify task terminated"),
         }
     }
 }
@@ -503,6 +521,9 @@ pub enum LogInfos<'a>
     EMStarted,
     PoolMountedBy(&'a str),
     PoolImport(&'a str, Option<&'a str>),
+    INotify,
+    ScrubStarted,
+    ScrubFinished,
     
 }
 
@@ -530,6 +551,10 @@ impl<'a> Display for LogInfos<'a>
                     None => write!(f, "Pool {} imported", pool),
                 }
             }
+            LogInfos::INotify => write!(f,"Inotify started"),
+            LogInfos::ScrubStarted => write!(f,"Pool scrub started"),
+            LogInfos::ScrubFinished => write!(f,"Pool scrub finished"),
+            
         }
     }
 }
@@ -547,9 +572,46 @@ impl<'a> LoggerMessages<'a>
     {
         match self
         {
-            LoggerMessages::Error(e) => error!("{}",e.to_string()),
-            LoggerMessages::Warning(w) => warn!("{}",w.to_string()),
-            LoggerMessages::Info(info) => info!("{}",info.to_string()),
+            LoggerMessages::Error(e) => print_error(format!("{}",e.to_string())),
+            LoggerMessages::Warning(w) => print_warning(format!("{}",w.to_string())),
+            LoggerMessages::Info(info) => print_info(format!("{}",info.to_string())),
         }
     }
+}
+
+
+#[cfg(not(tokio_unstable))]
+fn print_error(err:String)
+{
+    error!("{}",err);
+}
+
+#[cfg(not(tokio_unstable))]
+fn print_warning(warn:String)
+{
+    warn!("{}",warn);
+}
+
+#[cfg(not(tokio_unstable))]
+fn print_info(info:String)
+{
+    info!("{}",info);
+}
+
+#[cfg(tokio_unstable)]
+fn print_error(err:String)
+{
+    eprintln!("[ERROR] {}",err);
+}
+
+#[cfg(tokio_unstable)]
+fn print_warning(warn:String)
+{
+    eprintln!("[WARN] {}",warn);
+}
+
+#[cfg(tokio_unstable)]
+fn print_info(info:String)
+{
+    eprintln!("[INFO] {}",info);
 }

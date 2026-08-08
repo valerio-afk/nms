@@ -2,7 +2,7 @@ use axum_auth::AuthBearer;
 use axum::Json;
 use axum::routing::{Router, get, post};
 use axum::extract::{Path, State};
-use crate::backend::{Backend, FastAPIComp, BACKEND_VERSION, HTTPMessage, propagate_unknown_error};
+use crate::backend::{Backend, FastAPIComp, BACKEND_VERSION, HTTPMessage, propagate_unknown_error, BackgroundTaskInformation};
 use crate::backend::jwt::TokenPurposes;
 use crate::backend::permissions::{UserPermissions, check_permission};
 use std::sync::Arc;
@@ -53,8 +53,6 @@ async fn get_system_information(backend: Arc<Backend>) -> IndexMap<&'static str,
 
     sys_info.insert("memory_load", Value::from(((sys.used_memory() as f32)/(sys.total_memory() as f32) * 100.0).round() as u32));
     sys_info.insert("swap_load", Value::from(((sys.used_swap() as f32)/(sys.total_swap() as f32) * 100.0).round() as u32));
-
-
 
 
     sys_info.insert("net_counters", serde_json::to_value(&backend.get_net_counter().await).unwrap());
@@ -150,6 +148,21 @@ async fn system_sensors(AuthBearer(token): AuthBearer, State(backend): State<Arc
     Ok(Json(get_sensors().await))
 }
 
+async fn get_task_info(
+    Path(task_id): Path<String>,
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>
+) -> FastAPIComp<Option<BackgroundTaskInformation>>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::ClientDashboardAdvanced).await?;
+
+    Ok(Json(backend.get_task_by_id(&task_id).await))
+
+}
+
 pub fn get_route() -> Router<Arc<Backend>>
 {
     Router::new().nest("/system",
@@ -159,5 +172,6 @@ pub fn get_route() -> Router<Arc<Backend>>
         .route("/test", get(test))
         .route("/sensors", get(system_sensors))
         .route("/get/{prop}", get(get_sys_property))
+        .route("/task/{task_id}", get(get_task_info))
     )
 }
