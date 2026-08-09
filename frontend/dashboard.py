@@ -52,18 +52,23 @@ def widget_disk_usage(user:Optional[dict]) -> Tuple[str,Optional[str]]:
     if (user is None):
         return render_widget("disk_usage", placeholder=True)
 
+    global_usage = None
+    capacity = None
+
     try:
         pool_capacity = BACKEND.pool_capacity
-        used = pool_capacity['used']
-        total = pool_capacity['total']
-        capacity = int(used / total * 1000) / 10 if total > 0 else 0
+        global_usage = dict();
+        global_usage["used"] = pool_capacity['used']
+        global_usage["total"] = pool_capacity['total']
+        capacity = int(global_usage["used"] / global_usage["total"] * 1000) / 10 if global_usage["total"] > 0 else 0
     except Exception as e:
-        flash(f"Error while retrieving disk array usage information: {str(e)}","error")
-        used = 0
-        total = 0
-        capacity = 0
+        ...
+        # flash(f"Error while retrieving disk array usage information: {str(e)}","error")
+        # used = 0
+        # total = 0
+        # capacity = 0
 
-    return render_widget("disk_usage",global_usage={"used":used, "total":total},user_usage=user.get("quota"), capacity=capacity,mounted=BACKEND.is_mounted)
+    return render_widget("disk_usage",global_usage=global_usage,user_usage=user.get("quota"), capacity=capacity,mounted=BACKEND.is_mounted)
 
 @bp.route("/async/notification-number")
 def async_notification_number() -> str:

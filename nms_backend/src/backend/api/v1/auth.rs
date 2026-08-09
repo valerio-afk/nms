@@ -166,7 +166,7 @@ async fn auth_new_secret
             match username
             {
                 Some(ref u) => u.clone(),
-                None=> "".to_string()
+                None=> "admin".to_string()
             }
         }
     );

@@ -78,7 +78,7 @@ pub fn Journalctl
 pub fn Systemctl<S: AsRef<str> + ToString>
 (
     service:S,
-    action:&SystemctlAction,
+    action:SystemctlAction,
     revertible:bool,
     config:CmdConfig
 ) -> CommandLine
@@ -91,13 +91,13 @@ pub fn Systemctl<S: AsRef<str> + ToString>
     {
         revert_cmd = match action
             {
-                SystemctlAction::Enable => Some(Systemctl(service,&SystemctlAction::Disable,false,config.clone())),
-                SystemctlAction::Disable => Some(Systemctl(service,&SystemctlAction::Enable,false,config.clone())),
-                SystemctlAction::Start => Some(Systemctl(service,&SystemctlAction::Stop,false,config.clone())),
-                SystemctlAction::Stop => Some(Systemctl(service,&SystemctlAction::Start,false,config.clone())),
+                SystemctlAction::Enable => Some(Systemctl(service,SystemctlAction::Disable,false,config.clone())),
+                SystemctlAction::Disable => Some(Systemctl(service,SystemctlAction::Enable,false,config.clone())),
+                SystemctlAction::Start => Some(Systemctl(service,SystemctlAction::Stop,false,config.clone())),
+                SystemctlAction::Stop => Some(Systemctl(service,SystemctlAction::Start,false,config.clone())),
                 SystemctlAction::Restart => None,
-                SystemctlAction::Mask => Some(Systemctl(service,&SystemctlAction::Unmask,false,config.clone())),
-                SystemctlAction::Unmask => Some(Systemctl(service,&SystemctlAction::Mask,false,config.clone())),
+                SystemctlAction::Mask => Some(Systemctl(service,SystemctlAction::Unmask,false,config.clone())),
+                SystemctlAction::Unmask => Some(Systemctl(service,SystemctlAction::Mask,false,config.clone())),
                 SystemctlAction::IsActive => None
             }
     }

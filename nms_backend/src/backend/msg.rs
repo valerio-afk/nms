@@ -397,6 +397,8 @@ pub enum LogErrors<'a>
     INotifyIOError(&'a std::io::Error),
     INotifyStopped(&'a ExitStatus),
     TaskError(Option<&'a String>, &'a String),
+    NginxRestarted(&'a String),
+    MailFlushError(&'a String),
 }
 
 impl<'a> Display for LogErrors<'a>
@@ -447,15 +449,14 @@ impl<'a> Display for LogErrors<'a>
             LogErrors::INotifyStart(e) => write!(f, "Unable to start inotify: {}", e),
             LogErrors::INotifyStopped(e) => write!(f,"Inotify stopped unexpectedly: {}",e),
             LogErrors::INotifyIOError(e) => write!(f,"Inotify IO error: {}",e),
-            LogErrors::TaskError(name, err) => match (name){
+            LogErrors::NginxRestarted(e) => write!(f,"Ngix restart error: {}",e),
+            LogErrors::TaskError(name, err) => match name
+            {
                 Some(n) =>  write!(f,"Task {} returned an error {}",n,err),
                 None =>  write!(f,"A task returned an error: {}", err)
 
             }
-                
-                
-                
-
+            LogErrors::MailFlushError(e) => write!(f,"Unable to flush mails: {}",e),
         }
     }
 }
@@ -466,17 +467,14 @@ pub enum LogWarnings<'a>
     CfgDefault,
     ZfsQuota(&'a str),
     ZfsQuotaNoPool,
-
     TmpSecretNotFound(&'a str),
     EMStopped,
-    
     PoolUnmountedBy(&'a str),
-
     RemoteServiceStopped(&'a str, Option<&'a str>),
-
     PoolExport(Option<&'a str>),
-
-    INotifyStopped(),
+    INotifyStopped,
+    NginxRestart,
+    MailParsingError(&'a str)
 }
 
 impl<'a> Display for LogWarnings<'a>
@@ -506,7 +504,9 @@ impl<'a> Display for LogWarnings<'a>
                     None => write!(f, "Pool exported")
                 }
             }
-            LogWarnings::INotifyStopped() => write!(f,"Inotify task terminated"),
+            LogWarnings::INotifyStopped => write!(f,"Inotify task terminated"),
+            LogWarnings::NginxRestart => write!(f,"Server web nginx is being restarted"),
+            LogWarnings::MailParsingError(msg) => write!(f,"Error parsing mail: {}",msg),
         }
     }
 }
@@ -521,15 +521,20 @@ pub enum LogInfos<'a>
     EMStarted,
     PoolMountedBy(&'a str),
     PoolImport(&'a str, Option<&'a str>),
+    PoolUnconfigured(&'a str, &'a str),
+    PoolConfigured,
+    PoolKeyDetected(&'a str),
     INotify,
     ScrubStarted,
     ScrubFinished,
+    NginxRestarted,
+    UserReloaded,
     
 }
 
 impl<'a> Display for LogInfos<'a>
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result 
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
     {
 
         match self
@@ -554,6 +559,11 @@ impl<'a> Display for LogInfos<'a>
             LogInfos::INotify => write!(f,"Inotify started"),
             LogInfos::ScrubStarted => write!(f,"Pool scrub started"),
             LogInfos::ScrubFinished => write!(f,"Pool scrub finished"),
+            LogInfos::NginxRestarted => write!(f,"Server web nginx restarted successfully"),
+            LogInfos::PoolUnconfigured(pool, dataset) => write!(f, "Unconfigured dataset detected: {}/{}. Configuring", pool, dataset),
+            LogInfos::PoolConfigured => write!(f,"Pool configured successfully."),
+            LogInfos::PoolKeyDetected(key) => write!(f,"Found pool encryption key in {}",key),
+            LogInfos::UserReloaded => write!(f,"User list reloaded successfully."),
             
         }
     }

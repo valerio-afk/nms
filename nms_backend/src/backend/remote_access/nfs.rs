@@ -3,6 +3,7 @@ use std::env::temp_dir;
 use std::fs::File;
 use ipnet::Ipv4Net;
 use std::io::{Write};
+use std::net::Ipv4Addr;
 use regex::Regex;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
@@ -113,14 +114,19 @@ impl RemoteService for NFSService
         Ok(())
     }
 
+    async fn restart(&mut self) -> Result<(), Error>
+    {
+        self.nfs_service.restart().await
+    }
+
     async fn is_active(&self) -> Result<bool, Error>
     {
         self.nfs_service.is_active().await
     }
 
-    fn service_name(&self) -> &'static str
+    async fn service_name(&self) -> &'static str
     {
-        self.nfs_service.service_name()
+        self.nfs_service.service_name().await
     }
 }
 
@@ -168,7 +174,7 @@ impl NFSService
         {
             if line.contains(NMS_CFG_TAG)
             {
-                let re = Regex::new(r"[ \t]*(.*?)[ \t]+(([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,3})[ \t]*\((.*?)\)").unwrap();
+                let re = Regex::new(r"[ \t]*(.*?)[ \t]+(([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,3})?)[ \t]*\((.*?)\)").unwrap();
                 if let Some(captures) = re.captures(line)
                 {
                     let mountpoint = &captures[1];
@@ -183,9 +189,12 @@ impl NFSService
                     }
 
 
-                    if addr.parse::<Ipv4Net>().is_ok()
+                    if addr.parse::<Ipv4Net>().is_ok() || addr.parse::<Ipv4Addr>().is_ok()
                     {
                         props.insert(ServiceProperty::IpAddr,Value::String(addr.to_string()));
+                    }
+                    else {
+                        println!("dio porco");
                     }
                 }
                 break;

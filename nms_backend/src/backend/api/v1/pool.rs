@@ -1,6 +1,9 @@
 use std::collections::hash_set::Intersection;
 use std::collections::HashSet;
-use crate::backend::{propagate_unknown_error, Backend, FastAPIComp, HTTPMessage, BackgroundTaskInformation};
+use std::env::temp_dir;
+use std::fs::File;
+use std::io::Write;
+use crate::backend::{propagate_unknown_error, Backend, FastAPIComp, HTTPMessage, BackgroundTaskInformation, propagate_error, POOL_KEY_PATH};
 use crate::backend::api::BackendPropertyResponse;
 use crate::backend::permissions::{UserPermissions, check_permission};
 use crate::backend::jwt::TokenPurposes;
@@ -8,11 +11,13 @@ use super::disks::CompatibleDisk;
 use std::sync::Arc;
 use axum::{Json, Router};
 use axum::routing::{get, post};
-use axum::extract::{State,Path};
+use axum::extract::{State,Path, Multipart};
 use axum_auth::AuthBearer;
 use serde_json::Value;
 use serde::{Deserialize, Serialize};
 use crate::backend::msg::{ErrorMessages, LogInfos, LogWarnings, LoggerMessages, StatusMessage, SuccessMessages};
+use crate::cmdl::{CmdConfig, Executable};
+use crate::cmdl::coreutils::MV;
 use crate::dev::{get_system_disks, DiskState, Device};
 
 #[derive(Debug,Serialize)]
@@ -301,6 +306,50 @@ async fn start_scrub(AuthBearer(token): AuthBearer, State(backend): State<Arc<Ba
     else { Err(ErrorMessages::E_POOL_SCRUB.wrap_with_status_code(None)) }
 }
 
+async fn upload_key(
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>,
+    mut multipart: Multipart
+) -> FastAPIComp<()>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::PoolConfImport).await?;
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| ErrorMessages::E_POOL_KEY_IMPORT.wrap_with_status_code(Some(vec![
+            serde_json::to_value(e.to_string()).unwrap()
+        ])))?
+    {
+        if field.name() == Some("key_file")
+        {
+            let fname = field.file_name().unwrap_or("pool_key.key").to_string();
+
+            if let Ok(data) = field.bytes().await
+            {
+                let mut tmp_fullpath = temp_dir();
+                tmp_fullpath.push(fname);
+
+                let mut handle = File::create(&tmp_fullpath)
+                    .map_err(|e| propagate_error(ErrorMessages::E_POOL_KEY_IMPORT,e))?;
+
+                handle.write_all(data.as_ref())
+                    .map_err(|e| propagate_error(ErrorMessages::E_POOL_KEY_IMPORT,e))?;
+
+                MV(tmp_fullpath.to_str().unwrap(), POOL_KEY_PATH, CmdConfig::default())
+                    .run()
+                    .await
+                    .map_err(|e| propagate_error(ErrorMessages::E_POOL_KEY_IMPORT,e))?;
+            }
+        }
+    }
+
+    Ok(Json(()))
+}
+
 
 pub fn get_route() -> Router<Arc<Backend>>
 {
@@ -313,6 +362,7 @@ pub fn get_route() -> Router<Arc<Backend>>
             .route("/detach", post(pool_detatch))
             .route("/attach", post(pool_attach))
             .route("/scrub", post(start_scrub))
+            .route("/import/key",post(upload_key))
     )
 }
 

@@ -344,13 +344,18 @@ impl RemoteService for SSHService
         self.ssh_service.stop().await
     }
 
+    async fn restart(&mut self) -> Result<(), Error>
+    {
+        self.ssh_service.restart().await
+    }
+
     async fn is_active(&self) -> Result<bool, Error>
     {
         self.ssh_service.is_active().await
     }
 
-    fn service_name(&self) -> &'static str
+    async fn service_name(&self) -> &'static str
     {
-        self.ssh_service.service_name()
+        self.ssh_service.service_name().await
     }
 }

@@ -1,19 +1,21 @@
 use async_trait::async_trait;
 use crate::backend::utils::{detect_distro_family, DistroFamily};
 use crate::cmdl::coreutils::{Cat, MV};
-use crate::cmdl::{CmdConfig, CommandLine, Executable, Transaction};
+use crate::cmdl::{CmdConfig,  Executable};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::env::temp_dir;
 use std::fs::File;
 use std::io::Write;
-use std::ops::{Deref, DerefMut};
+use std::ops::{Deref};
 use std::path::PathBuf;
+use std::sync::{Arc};
 use std::time::Duration;
 use tokio;
+use tokio::sync::RwLock;
 use tokio::time::sleep;
 use anyhow::Error;
-use crate::cmdl::systemd::{Systemctl, SystemctlAction};
+use crate::backend::msg::{LogErrors, LogInfos, LogWarnings, LoggerMessages};
 use super::{RemoteService, ServiceAuth, ServiceError, ServicePermissionHooks, ServiceProperties, ServiceProperty, SystemdService};
 
 static NGINX_BLOCK:[&'static str;2] = ["/box", "/api"];
@@ -22,25 +24,19 @@ static NGINX_BLOCK:[&'static str;2] = ["/box", "/api"];
 
 pub struct WEBService
 {
-    web_service: Box<SystemdService>
+    web_service: Arc<RwLock<SystemdService>>
 }
 
 impl Deref for WEBService
 {
-    type Target = SystemdService;
+    type Target = RwLock<SystemdService>;
     fn deref(&self) -> &Self::Target
     {
         &self.web_service
     }
 }
 
-impl DerefMut for WEBService
-{
-    fn deref_mut(&mut self) -> &mut Self::Target
-    {
-        &mut self.web_service
-    }
-}
+
 
 #[async_trait]
 impl ServiceProperties for WEBService
@@ -76,7 +72,7 @@ impl WEBService
     {
         WEBService
         {
-            web_service: Box::new(SystemdService::new(
+            web_service: Arc::new(RwLock::new(SystemdService::new(
                 "web",
                 units,
                 PathBuf::from(match detect_distro_family() {
@@ -85,15 +81,15 @@ impl WEBService
                 }),
                 vec![],
                 HashMap::new()
-                )
-
+                ))
             )
         }
     }
 
     async fn read_config(&self) -> Result<Vec<String>, ServiceError>
     {
-        let cmd = Cat(self.get_configuration_file().to_str(),CmdConfig::default())
+        let this = self.read().await;
+        let cmd = Cat(this.get_configuration_file().to_str(),CmdConfig::default())
             .run()
             .await
             .map_err(|e| ServiceError::Configuration(e.to_string()))?
@@ -106,7 +102,9 @@ impl WEBService
 
     async fn flush_config(&self, new_cfg:Vec<String>) -> Result<(), ServiceError>
     {
-        let tmp_filename = match self.cfg.file_name()
+        let this = self.read().await;
+
+        let tmp_filename = match this.cfg.file_name()
         {
             Some(f) => format!("{}.tmp",f.to_str().unwrap()),
             None => "nginx.tmp".to_string()
@@ -121,31 +119,15 @@ impl WEBService
         handle.write_all(new_cfg.join("\n").as_bytes())
             .map_err(|e| ServiceError::TmpFileWrite(tmp_fullpath.clone(),e.to_string()))?;
 
-        MV(tmp_fullpath.to_str().unwrap(),self.cfg.to_str().unwrap(),CmdConfig::default())
+        MV(tmp_fullpath.to_str().unwrap(),this.cfg.to_str().unwrap(),CmdConfig::default())
             .run()
             .await
-            .map_err(|e| ServiceError::TmpFileMove(tmp_fullpath,self.cfg.clone(),e.to_string()))?;
+            .map_err(|e| ServiceError::TmpFileMove(tmp_fullpath,this.cfg.clone(),e.to_string()))?;
 
         Ok(())
     }
 
-    async fn restart_nginx(&self)
-    {
-        let units = self.units().iter().cloned().collect::<Vec<_>>();
 
-        let _ = tokio::spawn(async move { //no need to await it - in needs to run in parallel
-            sleep(Duration::from_secs(1)).await;
-
-            let mut cmd: Vec<CommandLine> = Vec::new();
-
-            for unit in units
-            {
-                cmd.push(Systemctl(unit, &SystemctlAction::Restart,false,CmdConfig::default()));
-            }
-
-            let _ = Transaction::new(cmd).execute().await;
-        });
-    }
 }
 
 #[async_trait]
@@ -183,7 +165,7 @@ impl RemoteService for WEBService
 
         self.flush_config(new_cfg).await?;
 
-        self.restart_nginx().await;
+        self.restart().await?;
 
         Ok(())
     }
@@ -220,7 +202,27 @@ impl RemoteService for WEBService
 
         self.flush_config(new_cfg).await?;
 
-        self.restart_nginx().await;
+        self.restart().await?;
+
+        Ok(())
+    }
+
+    async fn restart(&mut self) -> Result<(), Error>
+    {
+        let this = Arc::clone(&self.web_service);
+
+        let _ = tokio::spawn(async move { //no need to await it - in needs to run in parallel
+            sleep(Duration::from_secs(2)).await;
+
+            LoggerMessages::Warning(LogWarnings::NginxRestart).log();
+
+
+            match this.write().await.restart().await
+            {
+                Ok(_) => LoggerMessages::Info(LogInfos::NginxRestarted).log(),
+                Err(e) => LoggerMessages::Error(LogErrors::NginxRestarted(&e.to_string())).log(),
+            }
+        });
 
         Ok(())
     }
@@ -244,8 +246,8 @@ impl RemoteService for WEBService
         Ok(found.len() == 0)
     }
 
-    fn service_name(&self) -> &'static str
+    async fn service_name(&self) -> &'static str
     {
-        self.service.name
+        self.read().await.service_name().await
     }
 }

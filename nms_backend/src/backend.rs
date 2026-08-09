@@ -44,7 +44,8 @@ use utils::get_notifications_count;
 use utils::{get_quota_for_all, str_to_i64, sudo_group, ts_to_str};
 use crate::dev::get_system_disks;
 use uuid::Uuid;
-use crate::backend::msg::{MessageTypes, SuccessMessages};
+use crate::backend::msg::{SuccessMessages};
+use crate::backend::utils::{parse_mbox, MBoxMail, flush_mailbox};
 use crate::cmdl::error_filters::stderr_contains;
 
 pub static BACKEND_VERSION:&'static str = env!("CARGO_PKG_VERSION");
@@ -108,6 +109,40 @@ pub struct User
     pub uid:Option<u32>,
     pub gid:Option<u32>,
     pub notifications:u32,
+}
+
+impl User
+{
+    pub async fn get_notifications(&self) -> Vec<MBoxMail>
+    {
+        parse_mbox(&self.username).await
+    }
+
+    pub async fn get_notification_by_id(&self, id:&str, mark_as_read:bool) -> Option<MBoxMail>
+    {
+        let mut mailbox = self.get_notifications().await;
+        let mut mail_found:Option<MBoxMail> = None;
+
+        if let Some(found) = mailbox.iter_mut().find(|m| m.get_id() == id)
+        {
+            if mark_as_read
+            {
+                found.as_read();
+                mail_found = Some(found.clone());
+            }
+        }
+        else { return None; }
+
+        if mail_found.is_some() && mark_as_read
+        {
+            if let Err(e) = flush_mailbox(&self.username, mailbox.iter().collect::<Vec<&MBoxMail>>().as_slice()).await
+            {
+                LoggerMessages::Error(LogErrors::MailFlushError(&e.to_string())).log();
+            }
+        }
+
+        mail_found
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -207,13 +242,31 @@ pub struct PoolProperties
     attached_disks:Vec<Device>
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub struct Pool
 {
     pub name:String,
     pub disks:Vec<Device>,
     pub message:Option<String>,
     pub state:Option<String>,
+}
+
+impl Serialize for Pool
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // 3 is the number of fields in the struct.
+        let mut state = serializer.serialize_struct("BackgroundTaskInformation", 4)?;
+
+        state.serialize_field("name", &self.name)?;
+        state.serialize_field("disks", &self.disks.iter().map(|d| d.paths[0].to_string()).collect::<Vec<_>>())?;
+        state.serialize_field("message", &self.message)?;
+        state.serialize_field("state", &self.state)?;
+
+        state.end()
+    }
 }
 
 
@@ -711,10 +764,11 @@ impl Backend
 
             if let Some(pool) = pool_name && let Some(dataset) = dataset_name
             {
-                info!("Unconfigured dataset detected: {}/{}. Configuring.", pool, dataset);
+                LoggerMessages::Info(LogInfos::PoolUnconfigured(&pool, &dataset)).log();
+
                 if let Some(key) = &key_location
                 {
-                    info!("Found pool encryption key in {}",key);
+                    LoggerMessages::Info(LogInfos::PoolKeyDetected(key)).log();
                 }
 
                 let pool = CfgPool {
@@ -725,7 +779,8 @@ impl Backend
 
                 cfg.pool = Some(pool);
                 flush = true;
-                info!("Pool configured successfully.");
+
+                LoggerMessages::Info(LogInfos::PoolConfigured).log();
 
             }
         }
@@ -894,27 +949,38 @@ impl Backend
         Ok(())
     }
 
+    async fn init_pool(&self)
+    {
+        if let Err(e) = self.mount(None).await
+        {
+            LoggerMessages::Error(LogErrors::Automount(&e.1.to_string()));
+        }
+        if let Err(e) = self.init_vfs().await
+        {
+            LoggerMessages::Error(LogErrors::VFSInit(&e.1.to_string()));
+        }
+        if let Err(e) = self.init_pool_snapshots().await
+        {
+            LoggerMessages::Error(LogErrors::SnapshotInit(&e.1.to_string()));
+        }
+    }
+
     async fn init(mut self) -> Arc<Self>
     {
         self.init_configuration().await;
         let be = Arc::new(self);
         be.event_manager.start().await;
         be.init_pool_event_tasks().await;
-                if let Err(e) = be.configure_pool().await
+
+
+        if let Err(e) = be.configure_pool().await
         {
+            be.deinit_pool().await;
             LoggerMessages::Error(LogErrors::PoolConfig(&e.1.to_string()));
         }
-                if let Err(e) = be.mount(None).await
+        else
         {
-            LoggerMessages::Error(LogErrors::Automount(&e.1.to_string()));
-        }
-                if let Err(e) = be.init_vfs().await
-        {
-            LoggerMessages::Error(LogErrors::VFSInit(&e.1.to_string()));
-        }
-                if let Err(e) = be.init_pool_snapshots().await
-        {
-            LoggerMessages::Error(LogErrors::SnapshotInit(&e.1.to_string()));
+            be.init_pool().await;
         }
 
         be.init_users().await;
@@ -1131,21 +1197,22 @@ impl Backend
     //Return quota information for all users
     pub async fn get_quota_info(&self,log:bool) -> Option<HashMap<String,Quota>>
     {
-        let cfg = self.config.lock().await;
+        if self.is_mounted().await
+        {
+            let cfg = self.config.lock().await;
 
-        if let Some(pool) = &cfg.pool
-        {
-            match get_quota_for_all(&pool.name, &pool.dataset).await
+            if let Some(pool) = &cfg.pool
             {
-                Ok(map) => {return Some(map);}
-                Err(e) => {
-                    if log {LoggerMessages::Warning(LogWarnings::ZfsQuota(&e)).log();}
+                match get_quota_for_all(&pool.name, &pool.dataset).await
+                {
+                    Ok(map) => { return Some(map); }
+                    Err(e) => {
+                        if log { LoggerMessages::Warning(LogWarnings::ZfsQuota(&e)).log(); }
+                    }
                 }
+            } else {
+                if log { LoggerMessages::Warning(LogWarnings::ZfsQuotaNoPool).log(); }
             }
-        }
-        else
-        {
-            if log {LoggerMessages::Warning(LogWarnings::ZfsQuotaNoPool).log();}
         }
 
         None
@@ -1264,14 +1331,14 @@ impl Backend
 
 
     //Return the capacity of a pool
-    pub async fn pool_capacity(&self) -> Result<Capacity, HTTPMessage>
+    pub async fn pool_capacity(&self) -> Result<Option<Capacity>, HTTPMessage>
     {
         let vfs = self.mount.read().await;
 
         match vfs.as_ref()
         {
-            Some(v) => Ok(v.capacity.clone()),
-            None => Err(ErrorMessages::E_POOL_MOUNTED.wrap_with_status_code(None))
+            Some(v) => Ok(Some(v.capacity.clone())),
+            None => Ok(None)
         }
     }
 
@@ -1837,15 +1904,15 @@ impl Backend
 
     pub async fn unmount(&self, user:Option<&User>) -> Result<(), HTTPMessage>
     {
-        let mut services = get_remote_services()
+        let services = get_remote_services()
             .await
-            .map_err(|e| propagate_error(ErrorMessages::E_POOL_UNMOUNT, e))?
-            .write()
-            .await;
+            .map_err(|e| propagate_error(ErrorMessages::E_POOL_UNMOUNT, e))?;
 
-        for service in services.iter_mut()
+        for s in services.iter()
         {
-            if service.service_name() != "ssh" //SSH is special - if we disable it we'll lose the possibility to restore the system if needeed (already happened!)
+            let mut service = s.write().await;
+            let service_name = service.service_name().await;
+            if service_name != "ssh" //SSH is special - if we disable it we'll lose the possibility to restore the system if needeed (already happened!)
             {
                 if service.is_active().await.unwrap_or(true)
                 {
@@ -1853,7 +1920,7 @@ impl Backend
                         .await
                         .map_err(|e| propagate_error(ErrorMessages::E_POOL_UNMOUNT, e))?;
 
-                    LoggerMessages::Warning(LogWarnings::RemoteServiceStopped(service.service_name().as_ref(), None)).log();
+                    LoggerMessages::Warning(LogWarnings::RemoteServiceStopped(service_name, None)).log();
                 }
             }
         }
@@ -2196,8 +2263,9 @@ impl Backend
 
         drop(cfg);
 
-
         let _ = self._flush_config();
+
+        LoggerMessages::Info(LogInfos::UserReloaded).log();
     }
 
     pub async fn get_users(&self) -> Vec<User>
@@ -2248,6 +2316,68 @@ impl Backend
         }
 
         Err(ErrorMessages::E_USER_NOT_FOUND.wrap_with_status_code(Some(vec![Value::String(username.to_string())])))
+    }
+
+    pub async fn get_unassociated_sys_users(&self) -> Result<Vec<String>, HTTPMessage>
+    {
+        let mut system_users: Vec<String> = Vec::new();
+
+        let user_uids = self.get_users()
+            .await
+            .iter()
+            .filter_map(|u| u.uid)
+            .collect::<Vec<_>>();
+
+        let output = GetEntPasswd(None,CmdConfig::default()).run()
+            .await
+            .map_err(|e| propagate_error(ErrorMessages::E_USER_SYSTEM,e))?
+            .ok_or( ErrorMessages::E_UNKNOWN.wrap_with_status_code(None))?
+            .is_success()
+            .map_err(|e| propagate_error(ErrorMessages::E_USER_SYSTEM,e))?;
+
+        for u in output.stdout.lines()
+        {
+            let tokens = u.split(":").collect::<Vec<&str>>();
+            let uid = tokens[2].parse::<u32>().unwrap();
+
+            if (uid>=1000) && (!user_uids.contains(&uid))
+            {
+                system_users.push(String::from(tokens[0]));
+            }
+        }
+
+        Ok(system_users)
+    }
+
+    pub async fn change_username(&self, old_username:&str, new_username:&str) -> Result<(), HTTPMessage>
+    {
+        let mut cfg = self.config.lock().await;
+        if let Some(u) = cfg.users.remove(old_username)
+        {
+            cfg.users.insert(new_username.to_string(),u);
+
+        }
+        else
+        {
+            return Err(ErrorMessages::E_USER_NOT_FOUND.wrap_with_status_code(Some(vec![Value::String(old_username.to_string())])))
+        }
+
+        drop(cfg);
+
+        self.flush_config().await?;
+
+        let mut ctx: ContextData = HashMap::new();
+        ctx.insert(ContextVariables::Account, old_username.to_string());
+
+
+        self.event_manager.trigger(
+            Trigger::Event(Events::UserModified),
+            Some(ctx)
+        ).await;
+
+
+
+        Ok(())
     }
 }
 

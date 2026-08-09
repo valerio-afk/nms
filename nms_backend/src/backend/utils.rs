@@ -1,18 +1,28 @@
 use super::Quota;
-use crate::cmdl::coreutils::{Cat, Stat};
+use crate::cmdl::coreutils::{Cat, Stat, MV};
 use crate::cmdl::zfs::{ZFS, ZFSActions, ZFSArgs};
-use crate::cmdl::{CmdConfig, Executable};
-use chrono::DateTime;
+use crate::cmdl::{CmdConfig,  Executable};
+use chrono::{NaiveDateTime,DateTime};
 use core::result::Result;
 use regex::Regex;
 use std::collections::HashMap;
-use std::fs::read_to_string;
+use std::env::temp_dir;
+use std::io::Write;
+use std::fmt::{Display, Formatter};
+use std::fs::{read_to_string, File};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
+use serde_json::Value;
+use case_insensitive_hashmap::CaseInsensitiveHashMap;
+use serde::{Serialize, Serializer};
+use serde::ser::SerializeStruct;
+use crate::backend::msg::{LogWarnings, LoggerMessages};
 
 static DISTRO_FAMILY:OnceLock<DistroFamily> = OnceLock::new();
 static SUDO_GROUP:OnceLock<&'static str> = OnceLock::new();
 const MBOX_BASEPATH:&str = "/var/mail";
+
+static NOTIFICATION_READ_HEADER:&'static str = "X-Notification-Read";
 
 #[derive(PartialEq)]
 pub enum DistroFamily
@@ -32,6 +42,121 @@ impl std::fmt::Display for DistroFamily
             DistroFamily::Rh => write!(f,"RedHat"),
             DistroFamily::Unk => write!(f,"Unknown")
         }    
+    }
+}
+
+
+#[derive(Clone)]
+pub struct MBoxMail
+{
+    from:String,
+    date:NaiveDateTime,
+    headers: CaseInsensitiveHashMap<String>,
+    id: String,
+    body: String,
+}
+
+impl MBoxMail
+{
+    pub fn get_id(&self) -> &str
+    {
+        &self.id
+    }
+
+    pub fn as_read(&mut self)
+    {
+        self.headers.insert(NOTIFICATION_READ_HEADER.to_string(),"1".to_string());
+    }
+}
+
+impl Display for MBoxMail
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
+    {
+        writeln!(f,"{}",self.from)?;
+
+        for (k,v) in self.headers.iter()
+        {
+            writeln!(f,"{}: {}",k,v)?;
+        }
+
+        writeln!(f,"\n{}\n",self.body)
+    }
+}
+
+impl Serialize for MBoxMail
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("MBoxMail", 5)?;
+
+        let subject = if let Some(s) = self.headers.get("Subject") {s} else {&String::from("")};
+
+        state.serialize_field("timestamp", &self.date)?;
+        state.serialize_field("id", &self.id)?;
+        state.serialize_field("subject", subject)?;
+        state.serialize_field("read", &(self.headers.get(NOTIFICATION_READ_HEADER).unwrap_or(&String::from("0")) == "1") )?;
+        state.serialize_field("body", &self.body)?;
+
+        state.end()
+    }
+}
+
+impl TryFrom<&HashMap<&'static str,Value>> for MBoxMail
+{
+    type Error = anyhow::Error;
+    fn try_from(value:&HashMap<&'static str,Value>) -> Result<Self,Self::Error>
+    {
+        let from = value
+            .get("from")
+            .ok_or(anyhow::Error::msg("`From` value missing"))?
+            .as_str()
+            .ok_or(anyhow::Error::msg("`From` value is not a string"))?
+            .to_string();
+
+        let date = value
+            .get("date")
+            .ok_or(anyhow::Error::msg("`date` value missing"))?
+            .as_str()
+            .ok_or(anyhow::Error::msg("`date` value is not a string"))?;
+
+        let date = NaiveDateTime::parse_from_str(date, "%a %b %-d %H:%M:%S %Y")?;
+
+        let headers:CaseInsensitiveHashMap<String> = value
+            .get("headers")
+            .ok_or(anyhow::Error::msg("`headers` value missing"))?
+            .as_object()
+            .ok_or(anyhow::Error::msg("`headers` is not an object"))?
+            .iter()
+            .map(|(k,v)| (k.clone(), v.to_string()))
+            .into_iter()
+            .collect();
+
+        let id  = value
+            .get("id")
+            .ok_or(anyhow::Error::msg("`id` value missing"))?
+            .as_str()
+            .ok_or(anyhow::Error::msg("`id` value is not a string"))?
+            .to_string();
+
+        let body  = value
+            .get("body")
+            .ok_or(anyhow::Error::msg("`body` value missing"))?
+            .as_str()
+            .ok_or(anyhow::Error::msg("`body` value is not a string"))?
+            .to_string();
+
+        Ok(MBoxMail{
+            from,
+            date,
+            headers,
+            id,
+            body
+        })
+
+
     }
 }
 
@@ -196,7 +321,7 @@ pub async fn get_notifications_count(username:&str) -> u32
                     {
                         n_notifications+=1;
                     }
-                    else if l.find("X-Notification-Read").is_some()
+                    else if l.find(NOTIFICATION_READ_HEADER).is_some()
                     {
                         let tokens:Vec<&str> = l.trim().split(":").collect();
 
@@ -217,3 +342,134 @@ pub async fn get_notifications_count(username:&str) -> u32
     return n_notifications;
 }
 
+
+
+pub async fn parse_mbox(username:&str) -> Vec<MBoxMail>
+{
+    let mut mails:Vec<MBoxMail> = Vec::new();
+
+    let mail_file: PathBuf = Path::new(MBOX_BASEPATH).join(username);
+    let stat_result = Stat(mail_file.to_str().unwrap(), None, CmdConfig::default()).run().await;
+
+
+    if let Ok(r) = stat_result && let Some(stat) = r && stat.exit_code == 0
+    {
+        let cat_result = Cat(Some(mail_file.to_str().unwrap()),CmdConfig::default()).run().await;
+        if let Ok(r) = cat_result && let Some(cat) = r && cat.exit_code == 0
+        {
+            let mut current_mail:HashMap<&'static str,Value> = HashMap::new();
+            let mut last_header:Option<String> = None;
+            let mut body_started = false;
+            let mut body = String::new();
+
+            let pattern_begin = Regex::new(r"^From [a-zA-Z0-9_-]+(@[a-zA-Z0-9_\-.]+)?\s+(.*)$").unwrap();
+            let pattern_header = Regex::new(r"^([a-zA-Z0-9_-]+):\s*(.*)$").unwrap();
+            let pattern_header_cnt = Regex::new(r"^(\s+)(.*)$").unwrap();
+            let pattern_msg_id = Regex::new(r"^\s*<([0-9a-zA-Z.-]+)(@(.+))?>\s*$").unwrap();
+
+            for l in cat.stdout.lines()
+            {
+                if let Some(m) = pattern_begin.captures(l)
+                {
+                    body_started = false;
+                    if current_mail.len() > 0
+                    {
+                        current_mail.insert("body", Value::String(body.trim().to_string()));
+                        match MBoxMail::try_from(&current_mail)
+                        {
+                            Ok(mail) => mails.push(mail),
+                            Err(e) => LoggerMessages::Warning(LogWarnings::MailParsingError(e.to_string().as_str())).log()
+                        }
+                    }
+
+                    current_mail.clear();
+                    current_mail.insert("from", Value::String(l.trim().to_string()));
+                    current_mail.insert("date", Value::String(m[2].to_string()));
+
+                    continue;
+                }
+
+                if !body_started
+                {
+                    if let Some(m) = pattern_header.captures(l)
+                    {
+                        let hdr = m[1].to_string();
+                        let hdr_lc = hdr.to_lowercase();
+                        let value = m[2].to_string();
+
+                        last_header = Some(hdr.to_string());
+
+                        if hdr_lc == "message-id"
+                        {
+                            if let Some(id_m) = pattern_msg_id.captures(&value)
+                            {
+                                current_mail.insert("id", Value::String(id_m[1].to_string()));
+                            }
+                        }
+                        // else if hdr_lc == "date"
+                        // {
+                        //     current_mail.insert("date", Value::String(value.to_string()));
+                        // }
+
+                        let mut headers = if let Some(h) = current_mail.remove("headers")
+                        { serde_json::from_value(h).unwrap() }
+                        else { HashMap::new() };
+
+                        headers.insert(hdr,value);
+                        current_mail.insert("headers", serde_json::to_value(headers).unwrap());
+                    }
+                    if let Some(m) = pattern_header_cnt.captures(l) && let Some(last_hdr) = last_header.as_ref()
+                    {
+                        let h = current_mail.remove("headers").unwrap(); //if we are here, it must be there - unwrap should be safe
+                        let mut headers:HashMap<String,String> = serde_json::from_value(h).unwrap();
+                        let (k,mut v) = headers.remove_entry(last_hdr).unwrap();
+                        v.push_str(&m[0]);
+                        headers.insert(k,v);
+                        current_mail.insert("headers", serde_json::to_value(headers).unwrap());
+                    }
+                    if l.trim().len() == 0
+                    {
+                        body = String::new();
+                        body_started = true;
+                    }
+                }
+                else
+                {
+                    body+=&format!("\n{}",l);
+                }
+            }
+
+            if current_mail.len() > 0
+            {
+                current_mail.insert("body", Value::String(String::from(body.trim())));
+
+                match MBoxMail::try_from(&current_mail)
+                {
+                    Ok(mail) => mails.push(mail),
+                    Err(e) => LoggerMessages::Warning(LogWarnings::MailParsingError(e.to_string().as_str())).log()
+                }
+            }
+        }
+    }
+
+    mails
+}
+
+pub async fn flush_mailbox(username:&str, mailbox:&[&MBoxMail]) -> Result<(), anyhow::Error>
+{
+    let file_content = mailbox.iter().map(|m|m.to_string()).collect::<Vec<String>>().join("");
+    let mail_filename = format!("{}/{}",MBOX_BASEPATH, username);
+    let tmp_filename = format!("{username}.mail");
+
+    let mut tmp_fullpath = temp_dir();
+    tmp_fullpath.push(tmp_filename);
+
+    let mut handle = File::create(&tmp_fullpath)?;
+    handle.write_all(file_content.as_bytes())?;
+
+    MV(tmp_fullpath.to_str().unwrap(),mail_filename.clone(),CmdConfig::default())
+        .run()
+        .await?;
+
+    Ok(())
+}

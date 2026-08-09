@@ -6,7 +6,7 @@ use std::pin::Pin;
 use anyhow::Error;
 use async_trait::async_trait;
 use tokio::task::{JoinError, JoinHandle};
-use tokio::sync::{Mutex, RwLock, Notify};
+use tokio::sync::{Mutex, RwLock};
 use tracing::{debug};
 use uuid::Uuid;
 
@@ -262,8 +262,7 @@ where
 pub struct BackgroundTaskManager<R>
 {
     tasks: RwLock<HashMap<String,Arc<BackgroundTask<R>>>>,
-    handle: RwLock<Option<JoinHandle<()>>>,
-    notify: Notify
+    handle: RwLock<Option<JoinHandle<()>>>
 }
 
 impl<R> BackgroundTaskManager<R>
@@ -275,8 +274,7 @@ where
         Arc::new(BackgroundTaskManager
         {
             tasks: RwLock::new(HashMap::new()),
-            handle: RwLock::new(None),
-            notify: Notify::new()
+            handle: RwLock::new(None)
         })
     }
 

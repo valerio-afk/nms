@@ -15,7 +15,8 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Display;
 use std::path::{PathBuf, Path};
-use tokio::sync::{OnceCell,RwLock};
+use std::sync::Arc;
+use tokio::sync::{OnceCell, RwLock};
 use crate::backend::config::{AccessService};
 use crate::backend::remote_access::ssh::SSHService;
 use crate::backend::remote_access::ftp::FTPService;
@@ -29,9 +30,9 @@ use crate::cmdl::error_filters::stderr_contains;
 
 pub trait AgnosticRemoteService:RemoteService + ServiceProperties {}
 
-type AbstractRemoteService = Box::<dyn AgnosticRemoteService + Send + Sync + 'static>;
+pub type AbstractRemoteService = Arc::<RwLock<dyn AgnosticRemoteService + Send + Sync + 'static>>;
 
-static SYSTEM_SERVICES:OnceCell<RwLock<Vec<AbstractRemoteService>>> = OnceCell::const_new();
+static SYSTEM_SERVICES:OnceCell<Vec<AbstractRemoteService>> = OnceCell::const_new();
 
 #[derive(Debug)]
 pub enum ServiceError
@@ -81,6 +82,8 @@ pub enum ServiceProperty
     Port,
     PortRange,
     Mountpoint,
+
+    #[serde(rename="ip")]
     IpAddr,
     Path
 }
@@ -115,8 +118,9 @@ pub trait RemoteService
 {
     async fn start(&mut self) -> Result<(),anyhow::Error>;
     async fn stop(&mut self) -> Result<(),anyhow::Error>;
+    async fn restart(&mut self) -> Result<(),anyhow::Error>;
     async fn is_active(&self) -> Result<bool,anyhow::Error>;
-    fn service_name(&self) -> &'static str;
+    async fn service_name(&self) -> &'static str;
 }
 
 
@@ -218,9 +222,9 @@ impl RemoteService for SystemdService
         {
             systemd_cmds.extend(
                 vec![
-                    Systemctl(unit,&SystemctlAction::Unmask,true,CmdConfig::Empty),
-                    Systemctl(unit,&SystemctlAction::Enable,true,CmdConfig::Empty),
-                    Systemctl(unit,&SystemctlAction::Start,true,CmdConfig::Empty),
+                    Systemctl(unit,SystemctlAction::Unmask,true,CmdConfig::Empty),
+                    Systemctl(unit,SystemctlAction::Enable,true,CmdConfig::Empty),
+                    Systemctl(unit,SystemctlAction::Start,true,CmdConfig::Empty),
                 ]
             )
         }
@@ -234,19 +238,36 @@ impl RemoteService for SystemdService
     async fn stop(&mut self) -> Result<(),anyhow::Error>
     {
         let mut systemd_cmds:Vec<CommandLine> = Vec::new();
-
         for unit in &self.units
         {
             systemd_cmds.extend(
                 vec![
-                    Systemctl(unit,&SystemctlAction::Stop,true,CmdConfig::Empty),
-                    Systemctl(unit,&SystemctlAction::Disable,true,CmdConfig::Empty),
-                    Systemctl(unit,&SystemctlAction::Mask,true,CmdConfig::Empty),
+                    Systemctl(unit,SystemctlAction::Stop,true,CmdConfig::Empty),
+                    Systemctl(unit,SystemctlAction::Disable,true,CmdConfig::Empty),
+                    Systemctl(unit,SystemctlAction::Mask,true,CmdConfig::Empty),
                 ]
             )
         }
 
         let transaction = Transaction::new_sudo(systemd_cmds);
+        transaction.execute().await?;
+
+
+        Ok(())
+    }
+
+    async fn restart(&mut self) -> Result<(),anyhow::Error>
+    {
+        let units = self.units().iter().cloned().collect::<Vec<_>>();
+
+        let mut cmd: Vec<CommandLine> = Vec::new();
+
+        for unit in units
+        {
+            cmd.push(Systemctl(unit, SystemctlAction::Restart,false,CmdConfig::Empty));
+        }
+
+        let transaction = Transaction::new_sudo(cmd);
         transaction.execute().await?;
 
         Ok(())
@@ -255,7 +276,7 @@ impl RemoteService for SystemdService
     async fn is_active(&self) -> Result<bool,anyhow::Error>
     {
         let systemd_cmds:Vec<CommandLine> = self.units.iter().map(
-            |u| Systemctl(u,&SystemctlAction::IsActive,false,CmdConfig::Provided {
+            |u| Systemctl(u,SystemctlAction::IsActive,false,CmdConfig::Provided {
                 sudo: true,
                 strict: false, //systemctl can return 3 if the unit is not running,
                 stdin:None,
@@ -270,7 +291,7 @@ impl RemoteService for SystemdService
         Ok(outputs.iter().map(|o| o.stdout.trim() == "active").all(|r| r == true))
     }
 
-    fn service_name(&self) -> &'static str
+    async fn service_name(&self) -> &'static str
     {
         self.service.name()
     }
@@ -353,6 +374,14 @@ impl RemoteService for DockerService
         Ok(())
     }
 
+    async fn restart(&mut self) -> Result<(),anyhow::Error>
+    {
+        self.stop().await?;
+        self.start().await?;
+
+        Ok(())
+    }
+
     async fn is_active(&self) -> Result<bool,anyhow::Error>
     {
         let docker = DockerInspect(
@@ -373,7 +402,9 @@ impl RemoteService for DockerService
         }
     }
 
-    fn service_name(&self) -> &'static str
+
+
+    async fn service_name(&self) -> &'static str
     {
         self.service.name()
     }
@@ -388,7 +419,7 @@ async fn _remote_services(
     cfg:Option<&HashMap<String,AccessService>>,
     mountpoint: Option<PathBuf>,
     users: Option<&[User]>
-) -> Result<&'static RwLock<Vec<AbstractRemoteService>>,ServiceError>
+) -> Result<&'static Vec<AbstractRemoteService>,ServiceError>
 {
     SYSTEM_SERVICES.get_or_try_init(
         || async
@@ -400,7 +431,7 @@ async fn _remote_services(
                 //ssh configuration
                 if let Some(ssh) = c.get("ssh") && let AccessService::Systemd(sshd) = ssh
                 {
-                    services.push(Box::new(SSHService::new(sshd.get_units())));
+                    services.push(Arc::new(RwLock::new(SSHService::new(sshd.get_units()))));
                 }
                 else
                 {
@@ -412,7 +443,7 @@ async fn _remote_services(
                 //ftp configuration
                 if let Some(ftp) = c.get("ftp") && let AccessService::Systemd(ftpd) = ftp
                 {
-                    services.push(Box::new(FTPService::new(ftpd.get_units())));
+                    services.push(Arc::new(RwLock::new(FTPService::new(ftpd.get_units()))));
                 }
                 else
                 {
@@ -424,7 +455,7 @@ async fn _remote_services(
                 //nfs configuration
                 if let Some(nfs) = c.get("nfs") && let AccessService::Systemd(nfsd) = nfs
                 {
-                    services.push(Box::new(NFSService::new(nfsd.get_units(), mountpoint.clone()).await?));
+                    services.push(Arc::new(RwLock::new(NFSService::new(nfsd.get_units(), mountpoint.clone()).await?)));
                 }
                 else
                 {
@@ -436,7 +467,7 @@ async fn _remote_services(
                 //smb configuration
                 if let Some(smb) = c.get("smb") && let AccessService::Systemd(smbd) = smb
                 {
-                    services.push(Box::new(SMBService::new(smbd.get_units(), mountpoint)));
+                    services.push(Arc::new(RwLock::new(SMBService::new(smbd.get_units(), mountpoint))));
                 }
                 else
                 {
@@ -448,7 +479,7 @@ async fn _remote_services(
                 //web configuration
                 if let Some(web) = c.get("web") && let AccessService::Systemd(nginx) = web
                 {
-                    services.push(Box::new(WEBService::new(nginx.get_units())));
+                    services.push(Arc::new(RwLock::new(WEBService::new(nginx.get_units()))));
                 }
                 else
                 {
@@ -472,12 +503,12 @@ async fn _remote_services(
                         }
                     }
 
-                    services.push(Box::new(MEDIAService::new(
+                    services.push(Arc::new(RwLock::new(MEDIAService::new(
                         msd.image_name.clone(),
                         msd.container_name.clone(),
                         msd.port,
                         media_root
-                    )));
+                    ))));
                 }
                 else
                 {
@@ -486,7 +517,7 @@ async fn _remote_services(
 
                 tracing::info!("MEDIASERVER service initialised");
 
-                Ok(RwLock::new(services))
+                Ok(services)
             }
     ).await
 }
@@ -494,28 +525,16 @@ pub async fn init_remote_services(
     cfg:&HashMap<String,AccessService>,
     mountpoint: Option<PathBuf>,
     users:Option<&[User]>
-) -> Result<&'static RwLock<Vec<AbstractRemoteService>>,ServiceError>
+) -> Result<&'static Vec<AbstractRemoteService>,ServiceError>
 
 {
     _remote_services(Some(cfg),mountpoint, users).await
 }
 
 
-pub async fn get_remote_services() -> Result<&'static RwLock<Vec<AbstractRemoteService>>,ServiceError>
+pub async fn get_remote_services() -> Result<&'static Vec<AbstractRemoteService>,ServiceError>
 {
     _remote_services(None,None, None).await
 }
-//
-// pub async fn get_remote_service(name: &str) -> Result<Option<&'static AbstractRemoteService>,ServiceError>
-// {
-//     let services = get_remote_services().await?.read().await;
-//
-//     for service in services.read().await.iter()
-//     {
-//         if service.service_name() == name
-//         {
-//             return Ok(Some(service));
-//         }
-//     }
-//     Ok(None)
-// }
+
+

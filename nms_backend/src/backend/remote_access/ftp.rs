@@ -372,14 +372,19 @@ impl RemoteService for FTPService
         
         Ok(())
     }
+    
+    async fn restart(&mut self) -> Result<(), Error>
+    {
+        self.ftp_service.restart().await
+    }
 
     async fn is_active(&self) -> Result<bool, Error>
     {
         self.ftp_service.is_active().await
     }
 
-    fn service_name(&self) -> &'static str
+    async fn service_name(&self) -> &'static str
     {
-        self.ftp_service.service_name()
+        self.ftp_service.service_name().await
     }
 }

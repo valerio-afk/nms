@@ -4,7 +4,8 @@ use std::path::PathBuf;
 use anyhow::Error;
 use async_trait::async_trait;
 use serde_json::{Value};
-use crate::backend::remote_access::{DockerService, RemoteService, Service, ServiceAuth, ServiceError, ServicePermissionHooks, ServiceProperties, ServiceProperty};
+use crate::backend::remote_access::{DockerService, RemoteService, ServiceAuth, ServiceError,
+                                    ServicePermissionHooks, ServiceProperties, ServiceProperty};
 use crate::backend::utils::{detect_distro_family, DistroFamily};
 use crate::cmdl::{CmdConfig, CommandLine, Transaction, Executable};
 use crate::cmdl::firewall::{Firewall, FirewallAction, FirewallPort};
@@ -143,20 +144,18 @@ impl MEDIAService
 
         MEDIAService {
             media_service: Box::new(
-                DockerService {
-                    service: Service::new(
-                        "mediaserver",
-                        vec![],
-                        props
-                    ),
+                DockerService::new(
+                    "mediaserver",
                     image_name,
                     container_name,
+                    vec![],
+                    props,
                     volumes,
-                    port_forwarding: vec![
+                    vec![
                         (port, JELLYFIN_SERVICE_PORT),
                         (JELLYFIN_DISCOVERY_PORT, JELLYFIN_DISCOVERY_PORT)
                     ]
-                }
+                )
             )
         }
     }
@@ -224,12 +223,17 @@ impl RemoteService for MEDIAService
         }
         self.media_service.stop().await
     }
+
+    async fn restart(&mut self) -> Result<(), Error> 
+    {
+        self.media_service.restart().await
+    }
     async fn is_active(&self) -> Result<bool, Error>
     {
         self.media_service.is_active().await
     }
 
-    fn service_name(&self) -> &'static str
+    async fn service_name(&self) -> &'static str
     {
         self.service.name
     }

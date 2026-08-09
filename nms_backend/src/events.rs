@@ -419,7 +419,7 @@ impl EventManager
                                                         }
                                                     }
                                                 }
-                                                LoggerMessages::Warning(LogWarnings::INotifyStopped()).log();
+                                                LoggerMessages::Warning(LogWarnings::INotifyStopped).log();
                                             }
                                         }
                                     }
