@@ -1,11 +1,13 @@
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use strum::{EnumString,Display,EnumIter,IntoEnumIterator};
+use std::str::Split;
+use strum::{EnumString, Display, EnumIter, IntoEnumIterator, VariantNames};
 use serde_json::Value;
 use super::msg::{StatusMessage,ErrorMessages};
 use crate::backend::{HTTPMessage, User};
+use tree_ds::prelude::{Tree, Node, TraversalStrategy, NodeRemovalStrategy};
 
-#[derive(Display,EnumString,EnumIter, PartialEq)]
+#[derive(Display,EnumString,EnumIter, PartialEq, VariantNames)]
 pub enum UserPermissions
 {
 
@@ -172,6 +174,97 @@ pub async fn check_permission(user:&Arc<RwLock<User>>, perm: UserPermissions) ->
     
     Err(ErrorMessages::E_NO_PERM.wrap_with_status_code(Some(vec![Value::String(perm.to_string())])))
     
+}
+
+pub fn collapse_permissions<T>(mut perms:Vec<T>) -> Vec<String>
+where T: AsRef<str> + ToString + Ord
+{   fn build_tree<T>(perms:Vec<T>) -> Tree<String,i32>
+    where T: AsRef<str> + ToString
+    {
+
+        let mut tree:Tree<String, i32>  = Tree::new(None);
+
+        let root = tree.add_node(Node::new(String::from("/"),Some(0)),None).unwrap();
+
+        for perm in perms
+        {
+            let mut node =  root.clone();
+            let parts = perm.as_ref().split(".").collect::<Vec<&str>>();
+
+            for (lvl,part) in parts.iter().enumerate()
+            {
+                let node_id = parts[0..=lvl].join(".");
+                if let Some(n) = tree.get_node_by_id(&node_id)
+                {
+                    node = n.get_node_id().unwrap();
+                }
+                else
+                {
+                    node = tree.add_node(Node::new(node_id.clone(), Some((lvl+1) as i32)), Some(&node)).unwrap();
+                }
+            }
+        }
+
+        tree
+    }
+
+
+    let mut all_perms_sorted = UserPermissions::VARIANTS.iter().map(|s| *s).collect::<Vec<&'static str>>();
+    all_perms_sorted.sort();
+    perms.sort();
+
+    let mut user_perms_tree = build_tree(perms);
+    let all_perms_tree = build_tree(all_perms_sorted);
+
+    if user_perms_tree == all_perms_tree { return vec![String::from("*")]; }
+
+    let user_tree_traverse=user_perms_tree.traverse(&user_perms_tree.get_root_node().unwrap().get_node_id().unwrap(),TraversalStrategy::PostOrder).unwrap();
+
+    for node_id in user_tree_traverse
+    {
+        if let Some(node) = user_perms_tree.get_node_by_id(&node_id)
+        {
+            if let Ok(children) = node.get_children_ids() && children.len() > 0
+            {
+                if let Some(all_perm_node) = all_perms_tree.get_node_by_id(&node_id)
+                {
+                    if children == all_perm_node.get_children_ids().unwrap()
+                    {
+                        if let Ok(Some(parent_id)) = node.get_parent_id()
+                        {
+                            let lvl = node.get_value().unwrap().unwrap();
+                            user_perms_tree.remove_node(&node_id,NodeRemovalStrategy::RemoveNodeAndChildren).unwrap();
+                            user_perms_tree.add_node(Node::new(
+                                node_id.clone(),
+                                Some(lvl)),
+                                Some(&parent_id)
+                            ).unwrap();
+
+                            let mut new_node_id = node_id.clone();
+                            new_node_id.push_str(".*");
+
+                            user_perms_tree.add_node(Node::new(
+                                new_node_id,
+                                Some(lvl+1)),
+                                Some(&node_id)
+                            ).unwrap();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+
+
+    user_perms_tree
+        .get_nodes()
+        .iter()
+        .filter(|n| n.get_children_ids().unwrap().len() == 0)
+        .map(|n| n.get_node_id().unwrap())
+        .collect::<Vec<String>>()
+
 }
 
 
@@ -352,6 +445,109 @@ mod test
             "sys.admin.logs",
             "users.account.manage",
         ]));
+    }
+
+    #[test]
+    fn collapse_perm_test()
+    {
+
+        let v = collapse_permissions(vec!["client.dashboard.access",
+                                          "client.dashboard.disks",
+                                          "client.dashboard.networks",
+                                          "client.dashboard.services",
+                                          "client.dashboard.users",
+                                          "client.dashboard.advanced",
+                                          // "pool.conf.get_info",
+                                          // "pool.disks.health",
+                                          // "pool.disks.format",
+                                          // "pool.disks.replace",
+                                          // "pool.tools.verify",
+                                          // "pool.tools.mount",
+                                          // "pool.tools.recovery",
+                                          "pool.tools.snapshot",
+                                          "pool.conf.create",
+                                          "pool.conf.import",
+                                          "pool.conf.expand",
+                                          "pool.conf.destroy",
+                                          "pool.conf.format",
+                                          "network.interface.manage",
+                                          "network.ddns.manage",
+                                          "network.vpn.manage",
+                                          "services.ssh.access",
+                                          "services.ssh.manage",
+                                          "services.ftp.access",
+                                          "services.ftp.manage",
+                                          "services.nfs.manage",
+                                          "services.smb.access",
+                                          "services.smb.manage",
+                                          "services.web.access",
+                                          "services.web.manage",
+                                          "services.mediaserver.manage",
+                                          "sys.admin.acpi",
+                                          "sys.admin.events",
+                                          "sys.admin.updates",
+                                          "sys.admin.systemctl",
+                                          "sys.admin.logs",
+                                          "users.account.manage"]);
+
+
+
+        assert_eq!(v, vec![
+            "pool.conf.create",
+            "pool.conf.destroy",
+            "pool.conf.expand",
+            "pool.conf.format",
+            "pool.conf.import",
+            "pool.tools.snapshot",
+            "client.*",
+            "network.*",
+            "services.*",
+            "sys.*",
+            "users.*"
+        ]);
+
+        let v = collapse_permissions(vec!["client.dashboard.access",
+                                          "client.dashboard.disks",
+                                          "client.dashboard.networks",
+                                          "client.dashboard.services",
+                                          "client.dashboard.users",
+                                          "client.dashboard.advanced",
+                                          "pool.conf.get_info",
+                                          "pool.disks.health",
+                                          "pool.disks.format",
+                                          "pool.disks.replace",
+                                          "pool.tools.verify",
+                                          "pool.tools.mount",
+                                          "pool.tools.recovery",
+                                          "pool.tools.snapshot",
+                                          "pool.conf.create",
+                                          "pool.conf.import",
+                                          "pool.conf.expand",
+                                          "pool.conf.destroy",
+                                          "pool.conf.format",
+                                          "network.interface.manage",
+                                          "network.ddns.manage",
+                                          "network.vpn.manage",
+                                          "services.ssh.access",
+                                          "services.ssh.manage",
+                                          "services.ftp.access",
+                                          "services.ftp.manage",
+                                          "services.nfs.manage",
+                                          "services.smb.access",
+                                          "services.smb.manage",
+                                          "services.web.access",
+                                          "services.web.manage",
+                                          "services.mediaserver.manage",
+                                          "sys.admin.acpi",
+                                          "sys.admin.events",
+                                          "sys.admin.updates",
+                                          "sys.admin.systemctl",
+                                          "sys.admin.logs",
+                                          "users.account.manage"]);
+
+
+
+        assert_eq!(v, vec!["*"]);
     }
 }
 

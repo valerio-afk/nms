@@ -39,3 +39,4 @@ tracing = "0.1"
 tracing-subscriber = "0.3.0"
 uuid = { version = "1", features = ["v4"] }
 case_insensitive_hashmap = "1.0.1"
+tree-ds = "0.2"

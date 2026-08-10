@@ -32,9 +32,9 @@ pub enum DistroFamily
     Unk
 }
 
-impl std::fmt::Display for DistroFamily
+impl Display for DistroFamily
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result 
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
     {
         match self
         {
@@ -47,7 +47,7 @@ impl std::fmt::Display for DistroFamily
 
 
 #[derive(Clone)]
-pub struct MBoxMail
+pub struct InboxMail
 {
     from:String,
     date:NaiveDateTime,
@@ -56,7 +56,7 @@ pub struct MBoxMail
     body: String,
 }
 
-impl MBoxMail
+impl InboxMail
 {
     pub fn get_id(&self) -> &str
     {
@@ -69,7 +69,7 @@ impl MBoxMail
     }
 }
 
-impl Display for MBoxMail
+impl Display for InboxMail
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
     {
@@ -84,7 +84,7 @@ impl Display for MBoxMail
     }
 }
 
-impl Serialize for MBoxMail
+impl Serialize for InboxMail
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -104,7 +104,7 @@ impl Serialize for MBoxMail
     }
 }
 
-impl TryFrom<&HashMap<&'static str,Value>> for MBoxMail
+impl TryFrom<&HashMap<&'static str,Value>> for InboxMail
 {
     type Error = anyhow::Error;
     fn try_from(value:&HashMap<&'static str,Value>) -> Result<Self,Self::Error>
@@ -130,7 +130,13 @@ impl TryFrom<&HashMap<&'static str,Value>> for MBoxMail
             .as_object()
             .ok_or(anyhow::Error::msg("`headers` is not an object"))?
             .iter()
-            .map(|(k,v)| (k.clone(), v.to_string()))
+            .filter_map(|(k,v)|
+                if let Some(value) = v.as_str()
+                {
+                    Some((k.clone(), value.to_string()))
+                }
+                else { None }
+            )
             .into_iter()
             .collect();
 
@@ -148,7 +154,7 @@ impl TryFrom<&HashMap<&'static str,Value>> for MBoxMail
             .ok_or(anyhow::Error::msg("`body` value is not a string"))?
             .to_string();
 
-        Ok(MBoxMail{
+        Ok(InboxMail {
             from,
             date,
             headers,
@@ -344,9 +350,9 @@ pub async fn get_notifications_count(username:&str) -> u32
 
 
 
-pub async fn parse_mbox(username:&str) -> Vec<MBoxMail>
+pub async fn parse_mbox(username:&str) -> Vec<InboxMail>
 {
-    let mut mails:Vec<MBoxMail> = Vec::new();
+    let mut mails:Vec<InboxMail> = Vec::new();
 
     let mail_file: PathBuf = Path::new(MBOX_BASEPATH).join(username);
     let stat_result = Stat(mail_file.to_str().unwrap(), None, CmdConfig::default()).run().await;
@@ -375,7 +381,7 @@ pub async fn parse_mbox(username:&str) -> Vec<MBoxMail>
                     if current_mail.len() > 0
                     {
                         current_mail.insert("body", Value::String(body.trim().to_string()));
-                        match MBoxMail::try_from(&current_mail)
+                        match InboxMail::try_from(&current_mail)
                         {
                             Ok(mail) => mails.push(mail),
                             Err(e) => LoggerMessages::Warning(LogWarnings::MailParsingError(e.to_string().as_str())).log()
@@ -414,7 +420,6 @@ pub async fn parse_mbox(username:&str) -> Vec<MBoxMail>
                         let mut headers = if let Some(h) = current_mail.remove("headers")
                         { serde_json::from_value(h).unwrap() }
                         else { HashMap::new() };
-
                         headers.insert(hdr,value);
                         current_mail.insert("headers", serde_json::to_value(headers).unwrap());
                     }
@@ -443,7 +448,7 @@ pub async fn parse_mbox(username:&str) -> Vec<MBoxMail>
             {
                 current_mail.insert("body", Value::String(String::from(body.trim())));
 
-                match MBoxMail::try_from(&current_mail)
+                match InboxMail::try_from(&current_mail)
                 {
                     Ok(mail) => mails.push(mail),
                     Err(e) => LoggerMessages::Warning(LogWarnings::MailParsingError(e.to_string().as_str())).log()
@@ -455,7 +460,7 @@ pub async fn parse_mbox(username:&str) -> Vec<MBoxMail>
     mails
 }
 
-pub async fn flush_mailbox(username:&str, mailbox:&[&MBoxMail]) -> Result<(), anyhow::Error>
+pub async fn flush_mailbox(username:&str, mailbox:&[&InboxMail]) -> Result<(), anyhow::Error>
 {
     let file_content = mailbox.iter().map(|m|m.to_string()).collect::<Vec<String>>().join("");
     let mail_filename = format!("{}/{}",MBOX_BASEPATH, username);

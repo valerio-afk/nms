@@ -1,7 +1,7 @@
 use axum::http::{HeaderMap, HeaderValue};
 use axum_auth::AuthBearer;
 use axum::Json;
-use axum::routing::{Router, get, head, post};
+use axum::routing::{Router, get, head, post, delete};
 use axum::extract::{State, Path};
 use crate::backend::{Backend, FastAPIComp, HTTPMessage, User};
 use crate::backend::jwt::TokenPurposes;
@@ -10,7 +10,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use crate::backend::msg::{StatusMessage, SuccessMessages};
 use crate::backend::permissions::{check_permission, UserPermissions};
-use crate::backend::utils::MBoxMail;
+use crate::backend::utils::InboxMail;
 
 const NOTIFICATION_HEADER:&str = "X-User-Notifications-Count";
 
@@ -20,6 +20,18 @@ pub struct UsernameChange
     old_username:String,
     new_username: String
 }
+
+#[derive(Debug, Deserialize)]
+pub struct NewUserProfile
+{
+    username:String,
+    visible_username: Option<String>,
+    permissions:Vec<String>,
+    quota: Option<String>,
+    sudo: bool
+}
+
+
 
 async fn get_logged_user(AuthBearer(token): AuthBearer, State(backend):State<Arc<Backend>>) -> FastAPIComp<Option<User>>
 {
@@ -52,7 +64,7 @@ async fn get_user_notification_count(AuthBearer(token): AuthBearer, State(backen
     Ok(headers)
 }
 
-async fn get_user_notifications(AuthBearer(token): AuthBearer, State(backend):State<Arc<Backend>>) -> FastAPIComp<Vec<MBoxMail>>
+async fn get_user_notifications(AuthBearer(token): AuthBearer, State(backend):State<Arc<Backend>>) -> FastAPIComp<Vec<InboxMail>>
 {
     let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
     let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
@@ -66,7 +78,7 @@ async fn get_user_notification_by_id(
     AuthBearer(token): AuthBearer,
     State(backend):State<Arc<Backend>>,
     Path(id): Path<String>
-) -> FastAPIComp<Option<MBoxMail>>
+) -> FastAPIComp<Option<InboxMail>>
 {
     let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
     let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
@@ -74,6 +86,22 @@ async fn get_user_notification_by_id(
     let u = user.read().await;
 
     Ok(Json(u.get_notification_by_id(&id,true).await))
+}
+
+async fn delete_user_notification_by_id(
+    AuthBearer(token): AuthBearer,
+    State(backend):State<Arc<Backend>>,
+    Path(id): Path<String>
+) -> FastAPIComp<()>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    let u = user.read().await;
+
+    u.delete_notification_by_id(id.as_str()).await;
+
+    Ok(Json(()))
 }
 
 async fn get_all_users(AuthBearer(token): AuthBearer, State(backend):State<Arc<Backend>>) -> FastAPIComp<Value>
@@ -135,6 +163,7 @@ pub fn get_route() -> Router<Arc<Backend>>
         .route("/get/notifications", head(get_user_notification_count))
         .route("/get/notifications", get(get_user_notifications))
         .route("/get/notifications/{id}", get(get_user_notification_by_id))
+        .route("/get/notifications/{id}", delete(delete_user_notification_by_id))
         .route("/set/sys-user", post(assign_system_user))
     )
 }

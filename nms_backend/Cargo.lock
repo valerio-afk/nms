@@ -1157,7 +1157,7 @@ dependencies = [
  "httparse",
  "memchr",
  "mime",
- "spin",
+ "spin 0.9.9",
  "version_check",
 ]
 
@@ -1205,6 +1205,7 @@ dependencies = [
  "tower_governor",
  "tracing",
  "tracing-subscriber",
+ "tree-ds",
  "uuid",
 ]
 
@@ -1660,6 +1661,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
+name = "sequential_gen"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d630b1418311e028ceb45e1e567845501a9d9c770a258b80d2edc025ffad17c"
+dependencies = [
+ "lazy_static",
+ "uuid",
+]
+
+[[package]]
 name = "serde"
 version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1828,6 +1839,15 @@ name = "spin"
 version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3763264f6b73151db08c50ff20d7d8a0b8796e021cdea7ceedad07b80155fa0e"
+
+[[package]]
+name = "spin"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "023a211cb3138dbc438680b32560ad89f699977624c9f8dbb95a47d5b4c07dd3"
+dependencies = [
+ "lock_api",
+]
 
 [[package]]
 name = "spinning_top"
@@ -2251,6 +2271,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tree-ds"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "710c388a2bb52d1a7186ae4aa2e92c6fae0606426bf4bdfb4106fa1e8e5c602e"
+dependencies = [
+ "lazy_static",
+ "sequential_gen",
+ "serde",
+ "spin 0.10.1",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2318,6 +2351,7 @@ checksum = "bf3923a6f5c4c6382e0b653c4117f48d631ea17f38ed86e2a828e6f7412f5239"
 dependencies = [
  "getrandom 0.4.3",
  "js-sys",
+ "serde_core",
  "wasm-bindgen",
 ]
 

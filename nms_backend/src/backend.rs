@@ -45,7 +45,7 @@ use utils::{get_quota_for_all, str_to_i64, sudo_group, ts_to_str};
 use crate::dev::get_system_disks;
 use uuid::Uuid;
 use crate::backend::msg::{SuccessMessages};
-use crate::backend::utils::{parse_mbox, MBoxMail, flush_mailbox};
+use crate::backend::utils::{parse_mbox, InboxMail, flush_mailbox};
 use crate::cmdl::error_filters::stderr_contains;
 
 pub static BACKEND_VERSION:&'static str = env!("CARGO_PKG_VERSION");
@@ -113,15 +113,15 @@ pub struct User
 
 impl User
 {
-    pub async fn get_notifications(&self) -> Vec<MBoxMail>
+    pub async fn get_notifications(&self) -> Vec<InboxMail>
     {
         parse_mbox(&self.username).await
     }
 
-    pub async fn get_notification_by_id(&self, id:&str, mark_as_read:bool) -> Option<MBoxMail>
+    pub async fn get_notification_by_id(&self, id:&str, mark_as_read:bool) -> Option<InboxMail>
     {
         let mut mailbox = self.get_notifications().await;
-        let mut mail_found:Option<MBoxMail> = None;
+        let mut mail_found:Option<InboxMail> = None;
 
         if let Some(found) = mailbox.iter_mut().find(|m| m.get_id() == id)
         {
@@ -135,13 +135,28 @@ impl User
 
         if mail_found.is_some() && mark_as_read
         {
-            if let Err(e) = flush_mailbox(&self.username, mailbox.iter().collect::<Vec<&MBoxMail>>().as_slice()).await
+            if let Err(e) = flush_mailbox(&self.username, mailbox.iter().collect::<Vec<&InboxMail>>().as_slice()).await
             {
                 LoggerMessages::Error(LogErrors::MailFlushError(&e.to_string())).log();
             }
         }
 
         mail_found
+    }
+    
+    pub async fn delete_notification_by_id(&self, id:&str)
+    {
+        let mailbox = self.get_notifications()
+            .await
+            .into_iter()
+            .filter(|m| m.get_id() != id)
+            .collect::<Vec<InboxMail>>();
+        
+
+        if let Err(e) = flush_mailbox(&self.username, mailbox.iter().collect::<Vec<&InboxMail>>().as_slice()).await
+        {
+            LoggerMessages::Error(LogErrors::MailFlushError(&e.to_string())).log();
+        }
     }
 }
 
