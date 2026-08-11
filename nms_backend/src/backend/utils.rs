@@ -1,12 +1,14 @@
 use super::Quota;
-use crate::cmdl::coreutils::{Cat, Stat, MV};
+use crate::cmdl::coreutils::{Cat, Stat, MV, Chown, Chmod, OSUser, FileSystemPermissions, UserID};
+use crate::cmdl::passwd::{UserAdd};
 use crate::cmdl::zfs::{ZFS, ZFSActions, ZFSArgs};
-use crate::cmdl::{CmdConfig,  Executable};
+use crate::cmdl::{CmdConfig, Executable, Transaction};
 use chrono::{NaiveDateTime,DateTime};
 use core::result::Result;
 use regex::Regex;
 use std::collections::HashMap;
 use std::env::temp_dir;
+use std::ffi::OsStr;
 use std::io::Write;
 use std::fmt::{Display, Formatter};
 use std::fs::{read_to_string, File};
@@ -20,8 +22,8 @@ use crate::backend::msg::{LogWarnings, LoggerMessages};
 
 static DISTRO_FAMILY:OnceLock<DistroFamily> = OnceLock::new();
 static SUDO_GROUP:OnceLock<&'static str> = OnceLock::new();
-const MBOX_BASEPATH:&str = "/var/mail";
-
+static MBOX_BASEPATH:OnceLock<String> = OnceLock::new();
+//
 static NOTIFICATION_READ_HEADER:&'static str = "X-Notification-Read";
 
 #[derive(PartialEq)]
@@ -166,6 +168,13 @@ impl TryFrom<&HashMap<&'static str,Value>> for InboxMail
     }
 }
 
+pub fn init_mbox_basepath(path:Option<String>) -> &'static str
+{
+    MBOX_BASEPATH.get_or_init( || path.unwrap_or_else(|| String::from("/var/mail"))).as_str()
+}
+
+pub fn get_mbox_basepath() -> &'static str { init_mbox_basepath(None) }
+
 pub fn detect_distro_family() -> &'static DistroFamily
 {
     DISTRO_FAMILY.get_or_init( || {
@@ -307,7 +316,7 @@ pub async fn get_notifications_count(username:&str) -> u32
     let mut n_notifications:u32 = 0;
 
 
-    let mail_file: PathBuf = Path::new(MBOX_BASEPATH).join(username);
+    let mail_file: PathBuf = Path::new(get_mbox_basepath()).join(username);
     let stat_result = Stat(mail_file.to_str().unwrap(),None,CmdConfig::default()).run().await;
 
 
@@ -354,7 +363,7 @@ pub async fn parse_mbox(username:&str) -> Vec<InboxMail>
 {
     let mut mails:Vec<InboxMail> = Vec::new();
 
-    let mail_file: PathBuf = Path::new(MBOX_BASEPATH).join(username);
+    let mail_file: PathBuf = Path::new(get_mbox_basepath()).join(username);
     let stat_result = Stat(mail_file.to_str().unwrap(), None, CmdConfig::default()).run().await;
 
 
@@ -463,7 +472,7 @@ pub async fn parse_mbox(username:&str) -> Vec<InboxMail>
 pub async fn flush_mailbox(username:&str, mailbox:&[&InboxMail]) -> Result<(), anyhow::Error>
 {
     let file_content = mailbox.iter().map(|m|m.to_string()).collect::<Vec<String>>().join("");
-    let mail_filename = format!("{}/{}",MBOX_BASEPATH, username);
+    let mail_filename = format!("{}/{}",get_mbox_basepath(), username);
     let tmp_filename = format!("{username}.mail");
 
     let mut tmp_fullpath = temp_dir();
@@ -477,4 +486,51 @@ pub async fn flush_mailbox(username:&str, mailbox:&[&InboxMail]) -> Result<(), a
         .await?;
 
     Ok(())
+}
+
+pub async fn create_unix_user(username:&str,
+                              homedir_basepath: Option<&str>,
+                              sudo: bool,
+                              mut default_groups:Vec<&str>) -> Result<u32, anyhow::Error>
+{
+    if sudo && let Some(sudo_grp) = SUDO_GROUP.get()
+    {
+        default_groups.push(*sudo_grp);
+    }
+
+    let home_dir:Option<String> = homedir_basepath.map(|s| format!("{}/{}", s, username));
+
+    let output = UserAdd(
+        username,
+        Some(default_groups.as_slice()),
+        home_dir.clone(),
+        false,
+        CmdConfig::default())
+        .run()
+        .await?
+        .ok_or_else(|| anyhow::Error::msg(format!("Unable to create user {username}")))?
+        .is_success()?;
+
+    if let Some(home) = home_dir
+    {
+        let os_user = OSUser::Name(username.to_string());
+        let cmds = vec![
+            Chown(&os_user,&os_user, &OSUser::Empty,&OSUser::Empty,home.as_str(),true,CmdConfig::default()),
+            Chmod(&FileSystemPermissions::from_mode(0700),None,home,true,CmdConfig::default()),
+        ];
+
+        Transaction::new(cmds)
+            .execute()
+            .await?;
+    }
+
+    let uid = UserID(username,CmdConfig::default())
+        .run()
+        .await?
+        .ok_or_else(|| anyhow::Error::msg(format!("Unable to get user uid for {username}")))?
+        .is_success()?
+        .stdout
+        .parse::<u32>()?;
+    
+    Ok(uid)
 }

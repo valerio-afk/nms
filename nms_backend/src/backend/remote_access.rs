@@ -418,7 +418,8 @@ where
 async fn _remote_services(
     cfg:Option<&HashMap<String,AccessService>>,
     mountpoint: Option<PathBuf>,
-    users: Option<&[User]>
+    users: Option<&[User]>,
+    smb_group:Option<String>
 ) -> Result<&'static Vec<AbstractRemoteService>,ServiceError>
 {
     SYSTEM_SERVICES.get_or_try_init(
@@ -465,9 +466,11 @@ async fn _remote_services(
                 tracing::info!("NFS service initialised");
 
                 //smb configuration
-                if let Some(smb) = c.get("smb") && let AccessService::Systemd(smbd) = smb
+                if let Some(smb) = c.get("smb") 
+                    && let AccessService::Systemd(smbd) = smb
+                    && let Some(grp) = smb_group
                 {
-                    services.push(Arc::new(RwLock::new(SMBService::new(smbd.get_units(), mountpoint))));
+                    services.push(Arc::new(RwLock::new(SMBService::new(smbd.get_units(), mountpoint, grp))));
                 }
                 else
                 {
@@ -524,17 +527,19 @@ async fn _remote_services(
 pub async fn init_remote_services(
     cfg:&HashMap<String,AccessService>,
     mountpoint: Option<PathBuf>,
-    users:Option<&[User]>
+    users:Option<&[User]>,
+    smb_group:Option<String>
+    
 ) -> Result<&'static Vec<AbstractRemoteService>,ServiceError>
 
 {
-    _remote_services(Some(cfg),mountpoint, users).await
+    _remote_services(Some(cfg),mountpoint, users,smb_group).await
 }
 
 
 pub async fn get_remote_services() -> Result<&'static Vec<AbstractRemoteService>,ServiceError>
 {
-    _remote_services(None,None, None).await
+    _remote_services(None,None, None,None).await
 }
 
 

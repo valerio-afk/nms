@@ -1,6 +1,6 @@
 use crate::backend::api::v1::msg::{StatusMessage, WrappedResponse};
 use crate::backend::config::{CfgPool, CfgToken};
-use crate::backend::jwt::JWTClaim;
+use crate::backend::jwt::{JWTClaim, PermissiveTokenParameter};
 use crate::backend::remote_access::{get_remote_services, init_remote_services};
 use crate::cmdl::coreutils::Cat;
 use crate::cmdl::passwd::{GetEntPasswd, Groups};
@@ -45,7 +45,7 @@ use utils::{get_quota_for_all, str_to_i64, sudo_group, ts_to_str};
 use crate::dev::get_system_disks;
 use uuid::Uuid;
 use crate::backend::msg::{SuccessMessages};
-use crate::backend::utils::{parse_mbox, InboxMail, flush_mailbox};
+use crate::backend::utils::{parse_mbox, InboxMail, flush_mailbox, init_mbox_basepath};
 use crate::cmdl::error_filters::stderr_contains;
 
 pub static BACKEND_VERSION:&'static str = env!("CARGO_PKG_VERSION");
@@ -524,6 +524,9 @@ impl Backend
             }
         }
 
+        let mbox = self.config.lock().await.daemon.mbox_basepath.clone();
+        init_mbox_basepath(Some(mbox));
+
         LoggerMessages::Info(LogInfos::BackendStarted).log();
     }
 
@@ -637,7 +640,8 @@ impl Backend
         if let Err(e) = init_remote_services(
             &cfg.access_services,
             self.mountpoint().await,
-            Some(self.get_users().await.as_slice())
+            Some(self.get_users().await.as_slice()),
+            Some(cfg.daemon.user_groups.smb.clone())
         ).await
         {
             error!("{:?}", e);
@@ -2282,6 +2286,18 @@ impl Backend
 
         LoggerMessages::Info(LogInfos::UserReloaded).log();
     }
+
+    // pub async fn add_user(
+    //     &self,
+    //     username: String,
+    //     visible_name: Option<String>,
+    //     permissions: Vec<String>,
+    //     quota: Option<String>,
+    //     sudo: bool,
+    // ) -> Result<(),HTTPMessage>
+    // {
+    //
+    // }
 
     pub async fn get_users(&self) -> Vec<User>
     {

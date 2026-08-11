@@ -21,12 +21,13 @@ use crate::backend::utils::{detect_distro_family, DistroFamily};
 use crate::cmdl::smb::{SMBPasswd, SMBPasswdAction};
 use super::RemoteService;
 
-static SAMBASHARE_GRP:&'static str="sambashare";
+// static SAMBASHARE_GRP:&'static str="sambashare";
 static SMB_CFG_SECTION:&'static str="NMS";
 
 pub struct SMBService
 {
     smb_service: Box<SystemdService>,
+    user_group: String
 }
 
 impl Deref for SMBService
@@ -51,12 +52,12 @@ impl ServicePermissionHooks for SMBService
 {
     async fn permission_granted(&self, username:&str)
     {
-        let _ = UserMod(UserModAction::AddGroup(username,SAMBASHARE_GRP),false,CmdConfig::default()).run().await;
+        let _ = UserMod(UserModAction::AddGroup(username,&self.user_group),false,CmdConfig::default()).run().await;
     }
 
     async fn permission_revoked(&self, username: &str)
     {
-        let _ = GPasswd(GPasswdAction::RemoveGroup(username,SAMBASHARE_GRP), CmdConfig::default()).run().await;
+        let _ = GPasswd(GPasswdAction::RemoveGroup(username,&self.user_group), CmdConfig::default()).run().await;
     }
 
     async fn user_deleted(&self, username: &str)
@@ -111,7 +112,7 @@ impl ServiceProperties for SMBService
 
 impl SMBService
 {
-    pub fn new(units:Vec<String>, mountpoint:Option<PathBuf>) -> Self
+    pub fn new(units:Vec<String>, mountpoint:Option<PathBuf>, group:String) -> Self
     {
         let mut properties : HashMap<ServiceProperty,Value> = HashMap::new();
 
@@ -130,7 +131,8 @@ impl SMBService
                     vec![UserPermissions::ServicesSmbAccess],
                     properties
                 )
-            )
+            ),
+            user_group: group
         }
     }
 
@@ -165,7 +167,7 @@ impl SMBService
             .map_err(|e| ServiceError::Configuration(e.to_string()))?;
 
         cfg.set(SMB_CFG_SECTION,"path",Some(mountpoint.to_string()));
-        cfg.set(SMB_CFG_SECTION,"valid users",Some(format!("@{}",SAMBASHARE_GRP)));
+        cfg.set(SMB_CFG_SECTION,"valid users",Some(format!("@{}",self.user_group)));
         cfg.set(SMB_CFG_SECTION,"writable",Some("yes".to_string()));
 
         let new_cfg = cfg.writes();

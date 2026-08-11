@@ -13,13 +13,14 @@ pub enum GPasswdAction<S>
     RemoveGroup(S,S),
 }
 
-pub fn UserAdd(
-    username:&String,
+pub fn UserAdd<S>(
+    username:&str,
     groups:Option<&[&str]>,
-    home_dir:Option<&String>,
+    home_dir:Option<S>,
     allow_login: bool,
     config:CmdConfig
 ) -> CommandLine
+where S: AsRef<str> + ToString
 {
     let mut args:Vec<String> = vec![
         "-U".to_string(),
@@ -40,7 +41,7 @@ pub fn UserAdd(
         args.push(g.join(","))
     }
 
-    args.push(username.clone());
+    args.push(username.to_string());
 
     CommandLine::new(
         "useradd",

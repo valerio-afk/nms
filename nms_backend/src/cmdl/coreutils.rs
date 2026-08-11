@@ -502,7 +502,7 @@ pub fn Chown(
                     group:&OSUser,
                     old_user:&OSUser,
                     old_group:&OSUser,
-                    filename:&String,
+                    filename:&str,
                     recursive:bool,
                     config:CmdConfig
                 ) -> CommandLine
@@ -649,6 +649,19 @@ pub fn Tee<S:AsRef<str>+ToString>(filename:S,append:bool, config:CmdConfig)  -> 
     
     CommandLine::new(
         "tee",
+        Some(args),
+        None,
+        None,
+        config
+    )
+}
+
+pub fn UserID(username:&str,config:CmdConfig)  -> CommandLine
+{
+    let args = vec!["-u",username].iter().map(|x|x.to_string()).collect::<Vec<String>>();
+    
+    CommandLine::new(
+        "id",
         Some(args),
         None,
         None,

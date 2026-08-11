@@ -189,10 +189,19 @@ pub struct CfgToken
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct CfgDaemonUserGroups
+{
+    pub default:Vec<String>,
+    pub smb:String
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct CfgDaemon
 {
     pub host:Ipv4Addr,
-    pub port:u16
+    pub port:u16,
+    pub mbox_basepath:String,
+    pub user_groups: CfgDaemonUserGroups
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -421,7 +430,12 @@ fn init_daemon () -> CfgDaemon
 {
     CfgDaemon {
         host: Ipv4Addr::new(127, 0, 0, 1),
-        port: 8081
+        port: 8081,
+        mbox_basepath: String::from("/var/mail"),
+        user_groups: CfgDaemonUserGroups {
+            default: vec!["plugdev","netdev","users"].iter().map(|x|x.to_string()).collect(),
+            smb: "sambashare".to_string(),
+        }
     }
 }
 
