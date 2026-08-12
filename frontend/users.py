@@ -366,7 +366,7 @@ def set_sudo() -> Response:
     except ValidationError:
         show_flash(code=ErrorMessages.E_CSRF.name)
     else:
-        sudo = request.form.get("sudo",False)
+        sudo = True if request.form.get("sudo", "") == "on" else False
         BACKEND.set_sudo(username,sudo)
 
 
@@ -398,7 +398,7 @@ def new_user() -> Response:
         username = request.form.get("username")
         fullname = request.form.get("fullname")
         quota = request.form.get("quota")
-        sudo = request.form.get("sudo", False)
+        sudo = True if request.form.get("sudo", "") == "on" else False
 
         permissions = [p.split("--")[1].replace("-",".") for p in request.form if p.startswith("switch--")]
 

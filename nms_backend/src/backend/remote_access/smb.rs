@@ -52,7 +52,7 @@ impl ServicePermissionHooks for SMBService
 {
     async fn permission_granted(&self, username:&str)
     {
-        let _ = UserMod(UserModAction::AddGroup(username,&self.user_group),false,CmdConfig::default()).run().await;
+        let _ = UserMod(UserModAction::SetGroups(username,&self.user_group,true),false,CmdConfig::default()).run().await;
     }
 
     async fn permission_revoked(&self, username: &str)
@@ -63,6 +63,11 @@ impl ServicePermissionHooks for SMBService
     async fn user_deleted(&self, username: &str)
     {
         self.permission_revoked(username).await;
+    }
+
+    async fn get_trigger_permissions(&self) -> &[UserPermissions]
+    {
+        self.smb_service.service.trigger_perms()
     }
 
 

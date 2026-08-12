@@ -1,10 +1,9 @@
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use std::str::Split;
-use strum::{EnumString, Display, EnumIter, IntoEnumIterator, VariantNames};
-use serde_json::Value;
-use super::msg::{StatusMessage,ErrorMessages};
 use crate::backend::{HTTPMessage, User};
+use serde_json::Value;
+use std::sync::Arc;
+use strum::{EnumString, Display, EnumIter, IntoEnumIterator, VariantNames};
+use super::msg::{StatusMessage,ErrorMessages};
+use tokio::sync::RwLock;
 use tree_ds::prelude::{Tree, Node, TraversalStrategy, NodeRemovalStrategy};
 
 #[derive(Display,EnumString,EnumIter, PartialEq, VariantNames)]
@@ -158,6 +157,7 @@ impl UserPermissions
     {
         return p.iter().any(|x| self.is_allowed(x));
     }
+
 }
 
 pub async fn check_permission(user:&Arc<RwLock<User>>, perm: UserPermissions) -> Result<(), HTTPMessage>
@@ -191,7 +191,7 @@ where T: AsRef<str> + ToString + Ord
             let mut node =  root.clone();
             let parts = perm.as_ref().split(".").collect::<Vec<&str>>();
 
-            for (lvl,part) in parts.iter().enumerate()
+            for (lvl,_) in parts.iter().enumerate()
             {
                 let node_id = parts[0..=lvl].join(".");
                 if let Some(n) = tree.get_node_by_id(&node_id)
@@ -207,6 +207,8 @@ where T: AsRef<str> + ToString + Ord
 
         tree
     }
+
+    if perms.len() == 0 {return Vec::new();}
 
 
     let mut all_perms_sorted = UserPermissions::VARIANTS.iter().map(|s| *s).collect::<Vec<&'static str>>();
@@ -261,7 +263,7 @@ where T: AsRef<str> + ToString + Ord
     user_perms_tree
         .get_nodes()
         .iter()
-        .filter(|n| n.get_children_ids().unwrap().len() == 0)
+        .filter(|n| n.get_children_ids().unwrap().len() == 0 && n.get_node_id().unwrap()!="/")
         .map(|n| n.get_node_id().unwrap())
         .collect::<Vec<String>>()
 
@@ -548,6 +550,11 @@ mod test
 
 
         assert_eq!(v, vec!["*"]);
+
+        let empty1: Vec<String> = vec![];
+        let empty2: Vec<String> = vec![];
+
+        assert_eq!(collapse_permissions(empty1),empty2);
     }
 }
 

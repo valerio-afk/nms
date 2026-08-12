@@ -118,6 +118,7 @@ class ErrorMessages(Enum):
     E_USER_LOGIN_RESET = "E_USER_LOGIN_RESET"
     E_USER_SYSTEM = "E_USER_SYSTEM"
     E_USER_UID = "E_USER_UID"
+    E_USER_ALREADY_EXISTS = "E_USER_ALREADY_EXISTS"
 
     E_SYSTEM_UPDATES = "E_SYSTEM_UPDATES"
     E_SYSTEM_DIST = "E_SYSTEM_DIST"
@@ -404,6 +405,7 @@ ERROR_MESSAGES = {
     ErrorMessages.E_USER_LOGIN_RESET : lambda user,info: _("Error occurred while resetting the login credentials for %(user)s: %(info)s.") % {'info':info,'user':user}, #<-----
     ErrorMessages.E_USER_SYSTEM: lambda info: _("Error while retrieving the list of system users: %(info)s.") % {'info':info},
     ErrorMessages.E_USER_UID: lambda username, info: _("Error while changing the uid for `%(username)s`: %(info)s.") % {'info':info,'username':username},
+    ErrorMessages.E_USER_ALREADY_EXISTS: lambda uname: _("User %(uname)s already exists.") % {'uname':uname},
 
     ErrorMessages.E_SYSTEM_UPDATES: lambda: _("Unable to retrieve updates."),
     ErrorMessages.E_SYSTEM_DIST: lambda info: _("Error while creating distribution archive: %(info)s.") % {'info':info},

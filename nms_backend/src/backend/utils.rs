@@ -1,6 +1,6 @@
 use super::Quota;
-use crate::cmdl::coreutils::{Cat, Stat, MV, Chown, Chmod, OSUser, FileSystemPermissions, UserID};
-use crate::cmdl::passwd::{UserAdd};
+use crate::cmdl::coreutils::{Cat, Stat, MV, Chown, Chmod, OSUser, FileSystemPermissions, GetID, ID};
+use crate::cmdl::passwd::{UserAdd, UserMod, UserModAction};
 use crate::cmdl::zfs::{ZFS, ZFSActions, ZFSArgs};
 use crate::cmdl::{CmdConfig, Executable, Transaction};
 use chrono::{NaiveDateTime,DateTime};
@@ -8,7 +8,6 @@ use core::result::Result;
 use regex::Regex;
 use std::collections::HashMap;
 use std::env::temp_dir;
-use std::ffi::OsStr;
 use std::io::Write;
 use std::fmt::{Display, Formatter};
 use std::fs::{read_to_string, File};
@@ -24,7 +23,7 @@ static DISTRO_FAMILY:OnceLock<DistroFamily> = OnceLock::new();
 static SUDO_GROUP:OnceLock<&'static str> = OnceLock::new();
 static MBOX_BASEPATH:OnceLock<String> = OnceLock::new();
 //
-static NOTIFICATION_READ_HEADER:&'static str = "X-Notification-Read";
+pub static NOTIFICATION_READ_HEADER:&'static str = "X-Notification-Read";
 
 #[derive(PartialEq)]
 pub enum DistroFamily
@@ -488,19 +487,55 @@ pub async fn flush_mailbox(username:&str, mailbox:&[&InboxMail]) -> Result<(), a
     Ok(())
 }
 
+
+pub async fn get_user_uid(username:&str) -> Result<u32,anyhow::Error>
+{
+    let uid = GetID(username, ID::User, CmdConfig::default())
+    .run()
+    .await?
+    .ok_or_else(|| anyhow::Error::msg(format!("Unable to get user uid for {username}")))?
+    .is_success()?
+    .stdout
+    .trim()
+    .parse::<u32>()?;
+
+    Ok(uid)
+}
+
+pub async fn get_user_gid(username:&str) -> Result<u32,anyhow::Error>
+{
+    let gid = GetID(username, ID::Group, CmdConfig::default())
+        .run()
+        .await?
+        .ok_or_else(|| anyhow::Error::msg(format!("Unable to get user gid for {username}")))?
+        .is_success()?
+        .stdout
+        .trim()
+        .parse::<u32>()?;
+
+    Ok(gid)
+}
+
 pub async fn create_unix_user(username:&str,
-                              homedir_basepath: Option<&str>,
+                              homedir_basepath: Option<PathBuf>,
                               sudo: bool,
-                              mut default_groups:Vec<&str>) -> Result<u32, anyhow::Error>
+                              mut default_groups:Vec<String>) -> Result<u32, anyhow::Error>
 {
     if sudo && let Some(sudo_grp) = SUDO_GROUP.get()
     {
-        default_groups.push(*sudo_grp);
+        default_groups.push(sudo_grp.to_string());
     }
 
-    let home_dir:Option<String> = homedir_basepath.map(|s| format!("{}/{}", s, username));
+    let home_dir:Option<String> = homedir_basepath.clone().map
+    (
+        |mut p|
+            {
+                p.push(username);
+                p.to_str().unwrap().to_string()
+            }
+    );
 
-    let output = UserAdd(
+    UserAdd(
         username,
         Some(default_groups.as_slice()),
         home_dir.clone(),
@@ -511,12 +546,44 @@ pub async fn create_unix_user(username:&str,
         .ok_or_else(|| anyhow::Error::msg(format!("Unable to create user {username}")))?
         .is_success()?;
 
+    restore_user_home_dir(homedir_basepath,username).await?;
+    get_user_uid(username).await
+}
+
+pub async fn try_create_unix_user(username:&str,
+                              homedir_basepath: Option<PathBuf>,
+                              sudo: bool,
+                              default_groups:Vec<String>) -> Result<u32, anyhow::Error>
+{
+    match create_unix_user(username,homedir_basepath.clone(),sudo,default_groups).await
+    {
+        Err(_) => { //it can be the user already exists and we just need to change perms and return its uid
+            restore_user_home_dir(homedir_basepath,username).await?;
+            get_user_uid(username).await
+        }
+        uid @ Ok(_) => uid
+    }
+}
+
+pub async fn restore_user_home_dir(homedir_basepath:Option<PathBuf>,username:&str) -> Result<(), anyhow::Error>
+{
+    let home_dir: Option<String> = homedir_basepath.map
+    (
+        |mut p|
+            {
+                p.push(username);
+                p.to_str().unwrap().to_string()
+            }
+    );
+
     if let Some(home) = home_dir
     {
+        println!("Restoring user home dir: {home}");
         let os_user = OSUser::Name(username.to_string());
         let cmds = vec![
-            Chown(&os_user,&os_user, &OSUser::Empty,&OSUser::Empty,home.as_str(),true,CmdConfig::default()),
-            Chmod(&FileSystemPermissions::from_mode(0700),None,home,true,CmdConfig::default()),
+            UserMod(UserModAction::ChangeHomedir(username, &home), false, CmdConfig::default()),
+            Chown(&os_user, &os_user, &OSUser::Empty, &OSUser::Empty, home.as_str(), true, CmdConfig::default()),
+            Chmod(&FileSystemPermissions::from_mode(0700), None, home, true, CmdConfig::default()),
         ];
 
         Transaction::new(cmds)
@@ -524,13 +591,5 @@ pub async fn create_unix_user(username:&str,
             .await?;
     }
 
-    let uid = UserID(username,CmdConfig::default())
-        .run()
-        .await?
-        .ok_or_else(|| anyhow::Error::msg(format!("Unable to get user uid for {username}")))?
-        .is_success()?
-        .stdout
-        .parse::<u32>()?;
-    
-    Ok(uid)
+    Ok(())
 }

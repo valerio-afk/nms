@@ -1,5 +1,6 @@
 use super::*;
 use std::fmt::{Display,Formatter,Result};
+use strum::Display;
 use tracing::error;
 
 #[derive(PartialEq)]
@@ -656,9 +657,18 @@ pub fn Tee<S:AsRef<str>+ToString>(filename:S,append:bool, config:CmdConfig)  -> 
     )
 }
 
-pub fn UserID(username:&str,config:CmdConfig)  -> CommandLine
+#[derive(Debug, Display, PartialEq, Clone)]
+pub enum ID
 {
-    let args = vec!["-u",username].iter().map(|x|x.to_string()).collect::<Vec<String>>();
+    #[strum(to_string="-u")]
+    User,
+    #[strum(to_string="-g")]
+    Group,
+}
+
+pub fn GetID(username:&str,what: ID, config:CmdConfig) -> CommandLine
+{
+    let args = vec![what.to_string(),username.to_string()];
     
     CommandLine::new(
         "id",

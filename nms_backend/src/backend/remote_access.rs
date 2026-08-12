@@ -48,7 +48,7 @@ pub enum ServiceError
     InitialisationError(String),
     Selinux(String),
     Firewall(String),
-    Systemd(String),
+    // Systemd(String),
 }
 
 impl Display for ServiceError
@@ -68,7 +68,7 @@ impl Display for ServiceError
             ServiceError::InitialisationError(err) => write!(f, "Initialisation Error: {}", err),
             ServiceError::Selinux(err) => write!(f, "Error while setting up SeLinux: {}", err),
             ServiceError::Firewall(err) => write!(f, "Error while setting up the firewall: {}", err),
-            ServiceError::Systemd(err) => write!(f, "Error while using systemd: {}", err),
+            // ServiceError::Systemd(err) => write!(f, "Error while using systemd: {}", err),
         }
     }
 }
@@ -88,15 +88,16 @@ pub enum ServiceProperty
     Path
 }
 #[async_trait]
-pub trait ServicePermissionHooks
+pub trait ServicePermissionHooks: Sync
 {
     async fn permission_granted(&self, username:&str);
     async fn permission_revoked(&self, username:&str);
     async fn user_deleted(&self, username:&str);
+    async fn get_trigger_permissions(&self) -> &[UserPermissions];
 }
 
 #[async_trait]
-pub trait ServiceAuth
+pub trait ServiceAuth: Sync
 {
     async fn change_password(&self, username:&str, password:&str) -> Result<(), ServiceError>;
 }
@@ -150,7 +151,7 @@ impl Service
         self.name
     }
 
-    pub fn trigger_perms(&self) -> &Vec<UserPermissions>
+    pub fn trigger_perms(&self) -> &[UserPermissions]
     {
         &self.trigger_perms
     }

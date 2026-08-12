@@ -51,7 +51,7 @@ pub struct CfgUser
     #[serde(default)]
     pub otp_secret: Option<String>,
 
-    uid: u32,
+    pub uid: u32,
     
     #[serde(default)]
     pub fullname:Option<String>,

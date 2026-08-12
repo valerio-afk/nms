@@ -23,7 +23,7 @@ use uuid::Uuid;
 pub mod actions;
 
 pub type ContextData = HashMap<ContextVariables,String>;
-pub type EventCallback = Runner<Option<ContextData>>;
+pub type EventCallback = Runner<(Trigger,Option<ContextData>)>;
 pub type EventData = (Trigger,Option<ContextData>);
 
 static INOTIFY_TASK:&'static str = "inotify_task";
@@ -240,7 +240,7 @@ pub struct EventManager
     internal: Arc<EventManageInternal>
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub enum Trigger
 {
     Event(Events),
@@ -485,37 +485,37 @@ impl Task for EventManager
 
                                     let map = this.registered_actions.lock().await;
 
-                                    if let Trigger::Event(ev) = trigger
+                                    match &trigger
                                     {
-                                        if let Some(lst) = map.get(&ev)
-                                        {
-                                            for action in lst
+                                        Trigger::Event(ev) => {
+                                            if let Some(lst) = map.get( & ev)
                                             {
-                                                uuids.push(&action.uuid);
-                                                (action.callback)(&ctx).await;
-                                            }
-                                        }
-
-                                        if uuids.len()>0
-                                        {
-                                            debug!("{ev} dispatched to: {}.",uuids.join(", "));
-                                        }
-                                    }
-                                    else if let Trigger::Action(uuid) = &trigger
-                                    {
-
-                                        for (_,lst) in map.iter()
-                                        {
-                                            for action in lst
-                                            {
-
-                                                if action.uuid == *uuid
+                                                for action in lst
                                                 {
-                                                    (action.callback)(&ctx).await;
-                                                    break;
+                                                    uuids.push( & action.uuid);
+                                                    (action.callback)( & (trigger.clone(), ctx.clone())).await;
                                                 }
                                             }
+
+                                            if uuids.len() > 0
+                                            {
+                                                debug!("{ev} dispatched to: {}.", uuids.join(", "));
+                                            }
                                         }
+                                        Trigger::Action(uuid)=>
+                                            {
+                                                for (_, lst) in map.iter()
+                                                {
+                                                    for action in lst
+                                                    {
+                                                        if action.uuid == *uuid
+                                                        {
+                                                            (action.callback)(&(trigger.clone(), ctx.clone())).await;
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                            }
                                     }
                                 }
                         }

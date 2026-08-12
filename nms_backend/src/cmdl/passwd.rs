@@ -4,8 +4,15 @@ pub enum UserModAction<S>
 {
     ChangeUsername(S,S),
     ChangeUID(S,u32,u32),
-    AddGroup(S,S),
+    SetGroups(S,S,bool),
+    ChangeHomedir(S,S),
     ChangeShell(S,S)
+}
+
+pub enum GroupModAction<S>
+{
+    ChangeGID(S,u32,u32),
+    ChangeName(S,S)
 }
 
 pub enum GPasswdAction<S>
@@ -13,14 +20,15 @@ pub enum GPasswdAction<S>
     RemoveGroup(S,S),
 }
 
-pub fn UserAdd<S>(
+pub fn UserAdd<S1,S2>(
     username:&str,
-    groups:Option<&[&str]>,
-    home_dir:Option<S>,
+    groups:Option<&[S1]>,
+    home_dir:Option<S2>,
     allow_login: bool,
     config:CmdConfig
 ) -> CommandLine
-where S: AsRef<str> + ToString
+where S1: AsRef<str> + ToString,
+      S2: AsRef<str> + ToString
 {
     let mut args:Vec<String> = vec![
         "-U".to_string(),
@@ -38,7 +46,7 @@ where S: AsRef<str> + ToString
     if let Some(g) = groups
     {
         args.push("-G".to_string());
-        args.push(g.join(","))
+        args.push(g.iter().map(|s|s.to_string()).collect::<Vec<String>>().join(","))
     }
 
     args.push(username.to_string());
@@ -81,9 +89,11 @@ pub fn UserMod<S:AsRef<str>+ToString> (action:UserModAction<S>, revertible:bool,
                     revert_cmd = Some(Box::new(UserMod(UserModAction::ChangeUID(uname,new, old),false,config.clone())));
                 }
             }
-        UserModAction::AddGroup(uname,grpname) =>
+        UserModAction::SetGroups(uname,grpname,add) =>
             {
-                args.push("-aG".to_string());
+                if add { args.push("-aG".to_string()); }
+                else { args.push("-G".to_string()); }
+
                 args.push(grpname.to_string());
                 args.push(uname.to_string());
                 
@@ -98,6 +108,12 @@ pub fn UserMod<S:AsRef<str>+ToString> (action:UserModAction<S>, revertible:bool,
                 args.push(shell.to_string());
                 args.push(uname.to_string());
             }
+        UserModAction::ChangeHomedir(uname, home_dir) =>
+            {
+                args.push("-d".to_string());
+                args.push(home_dir.to_string());
+                args.push(uname.to_string());
+            }
     }
 
     CommandLine::new(
@@ -108,6 +124,7 @@ pub fn UserMod<S:AsRef<str>+ToString> (action:UserModAction<S>, revertible:bool,
         config
     )
 }
+
 
 pub fn UserDel<S:AsRef<str>+ToString> (username:S,keep_home:bool,config:CmdConfig) -> CommandLine
 {
@@ -176,8 +193,8 @@ pub fn GPasswd<S:AsRef<str>+ToString>(action:GPasswdAction<S>,config:CmdConfig) 
         GPasswdAction::RemoveGroup(uname,grpname) =>
             {
                 args.push("-d".to_string());
-                args.push(grpname.to_string());
                 args.push(uname.to_string());
+                args.push(grpname.to_string());
             }
     }
 
@@ -209,4 +226,44 @@ pub fn ChPasswd<S:AsRef<str>+ToString>(username:S, password:S, config:CmdConfig)
         cfg
     )
 
+}
+
+pub fn GroupMod<S:AsRef<str>+ToString> (action:GroupModAction<S>, revertible:bool,config:CmdConfig) -> CommandLine
+{
+    let mut args: Vec<String> = Vec::new();
+    let mut revert_cmd :Option<Box<CommandLine>> = None;
+
+    match action
+    {
+        GroupModAction::ChangeName(old,new) =>
+            {
+                args.push("-n".to_string());
+                args.push(new.to_string());
+                args.push(old.to_string());
+
+                if revertible
+                {
+                    revert_cmd = Some(Box::new(GroupMod(GroupModAction::ChangeName(new,old),false,config.clone())));
+                }
+            }
+        GroupModAction::ChangeGID(name, old, new) =>
+            {
+                args.push("-g".to_string());
+                args.push(format!("{}",new));
+                args.push(name.to_string());
+
+                if revertible
+                {
+                    revert_cmd = Some(Box::new(GroupMod(GroupModAction::ChangeGID(name,new, old),false,config.clone())));
+                }
+            }
+    }
+
+    CommandLine::new(
+        "groupmod",
+        Some(args),
+        revert_cmd,
+        None,
+        config
+    )
 }

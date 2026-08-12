@@ -103,6 +103,11 @@ impl ServicePermissionHooks for FTPService
         self.permission_revoked(username).await;
     }
 
+    async fn get_trigger_permissions(&self) -> &[UserPermissions] 
+    {
+        self.ftp_service.service.trigger_perms()
+    }
+
 }
 #[async_trait]
 impl ServiceProperties for FTPService

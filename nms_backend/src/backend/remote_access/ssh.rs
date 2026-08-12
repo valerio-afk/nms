@@ -54,6 +54,11 @@ impl ServicePermissionHooks for SSHService
 
     async fn user_deleted(&self, _: &str) {} //Nothing to do here
 
+    async fn get_trigger_permissions(&self) -> &[UserPermissions]
+    {
+        self.ssh_service.service.trigger_perms()
+    }
+
 
 }
 #[async_trait]
@@ -116,6 +121,8 @@ impl ServiceProperties for SSHService
     {
         Some(Box::new(self))
     }
+
+    
 }
 
 impl SSHService

@@ -100,8 +100,8 @@ where S:AsRef<str> + ToString + Display
 
 pub struct ZFSQuotaArgs
 {
-    username:String,
-    quota:ZFSQuota
+    pub username:String,
+    pub quota:ZFSQuota
 }
 
 pub enum ZFSListType

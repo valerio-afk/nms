@@ -229,6 +229,7 @@ pub enum ErrorMessages
     E_USER_LOGIN_RESET,
     E_USER_SYSTEM,
     E_USER_UID,
+    E_USER_ALREADY_EXISTS,
 
     E_SYSTEM_UPDATES,
     E_SYSTEM_DIST,
@@ -399,6 +400,7 @@ pub enum LogErrors<'a>
     TaskError(Option<&'a String>, &'a String),
     NginxRestarted(&'a String),
     MailFlushError(&'a String),
+    AccessServiceTriggerError(&'a String),
 }
 
 impl<'a> Display for LogErrors<'a>
@@ -457,6 +459,7 @@ impl<'a> Display for LogErrors<'a>
 
             }
             LogErrors::MailFlushError(e) => write!(f,"Unable to flush mails: {}",e),
+            LogErrors::AccessServiceTriggerError(e) => write!(f,"Access service trigger error: {}",e),
         }
     }
 }
@@ -474,7 +477,8 @@ pub enum LogWarnings<'a>
     PoolExport(Option<&'a str>),
     INotifyStopped,
     NginxRestart,
-    MailParsingError(&'a str)
+    MailParsingError(&'a str),
+    UserSudo(&'a str,bool)
 }
 
 impl<'a> Display for LogWarnings<'a>
@@ -507,6 +511,11 @@ impl<'a> Display for LogWarnings<'a>
             LogWarnings::INotifyStopped => write!(f,"Inotify task terminated"),
             LogWarnings::NginxRestart => write!(f,"Server web nginx is being restarted"),
             LogWarnings::MailParsingError(msg) => write!(f,"Error parsing mail: {}",msg),
+            LogWarnings::UserSudo(uname, is_sudo) => {
+                if *is_sudo { write!(f, "{} is in the group of sudoers", uname) }
+                else { write!(f, "{} is not a sudoer", uname) }
+            }
+
         }
     }
 }
@@ -529,7 +538,11 @@ pub enum LogInfos<'a>
     ScrubFinished,
     NginxRestarted,
     UserReloaded,
-    
+    UserCreated(&'a str),
+    ServicePermGranted(&'a str,&'a str),
+    ServicePermRevoked(&'a str,&'a str),
+    AccessServiceTrigger,
+    UserChangePermissions(&'a str),
 }
 
 impl<'a> Display for LogInfos<'a>
@@ -564,7 +577,11 @@ impl<'a> Display for LogInfos<'a>
             LogInfos::PoolConfigured => write!(f,"Pool configured successfully."),
             LogInfos::PoolKeyDetected(key) => write!(f,"Found pool encryption key in {}",key),
             LogInfos::UserReloaded => write!(f,"User list reloaded successfully."),
-            
+            LogInfos::UserCreated(uname) => write!(f,"New user {} created", uname),
+            LogInfos::ServicePermGranted(svc, uname) => write!(f,"Remote access service {} granted for {}",svc, uname),
+            LogInfos::ServicePermRevoked(svc, uname) => write!(f,"Remote access service {} revoked for {}",svc, uname),
+            LogInfos::AccessServiceTrigger => write!(f,"Access service user permission triggered"),
+            LogInfos::UserChangePermissions(uname) => write!(f,"Permissions changed for {}",uname),
         }
     }
 }

@@ -1,25 +1,32 @@
-use crate::backend::api::v1::msg::{StatusMessage, WrappedResponse};
-use crate::backend::config::{CfgPool, CfgToken};
-use crate::backend::jwt::{JWTClaim, PermissiveTokenParameter};
-use crate::backend::remote_access::{get_remote_services, init_remote_services};
-use crate::cmdl::coreutils::Cat;
-use crate::cmdl::passwd::{GetEntPasswd, Groups};
-use crate::cmdl::zfs::{ZFSActions, ZFSListArgs, ZFSListType, ZFSLoadKeyArgs, ZPool, ZPoolActions, ZFS, ZFSArgs, ZPoolImportArgs};
-use crate::cmdl::{CmdConfig, CommandLine, Executable, Transaction};
-use crate::dev::{Device, DiskState};
-use crate::events::{ContextBuilder, ContextData, ContextVariables, EventManager, EventParameters, Events, Trigger};
-use crate::task::{BackgroundTaskManager, Task, BackgroundTask};
-use crate::vfs::{Capacity, VFS};
+use anyhow::anyhow;
 use api::v1::jwt::{TokenPurposes, create_token, token_verification};
+use api::v1::msg::{StatusMessage, WrappedResponse};
 use axum::Json;
 use axum::http::StatusCode;
 use base64::prelude::*;
 use chrono::TimeDelta;
-use config::Config;
+use config::{CfgPool, CfgToken};
+use config::{Config, CfgUser};
+use crate::cmdl::coreutils::Cat;
+use crate::cmdl::error_filters::stderr_contains;
+use crate::cmdl::passwd::{GPasswd, GPasswdAction, GetEntPasswd, GroupMod, GroupModAction, Groups, UserMod, UserModAction};
+use crate::cmdl::zfs::{ZFS, ZFSArgs, ZPoolImportArgs, ZFSQuotaArgs, ZFSQuota};
+use crate::cmdl::zfs::{ZFSActions, ZFSListArgs, ZFSListType, ZFSLoadKeyArgs, ZPool, ZPoolActions};
+use crate::cmdl::{CmdConfig, CommandLine, Executable, Transaction};
+use crate::dev::get_system_disks;
+use crate::dev::{Device, DiskState};
+use crate::events::{ContextBuilder, ContextData, ContextVariables, EventManager, EventParameters, Events, Trigger};
+use crate::task::{BackgroundTaskManager, Task, BackgroundTask};
+use crate::vfs::{Capacity, VFS};
 use futures::stream::{self, StreamExt};
+use jwt::{JWTClaim};
 use msg::{ErrorMessages, LogErrors, LogInfos, LogWarnings, LoggerMessages};
+use msg::{SuccessMessages};
 use permissions::is_admin;
+use permissions::{collapse_permissions};
 use regex::RegexBuilder;
+use remote_access::{get_remote_services, init_remote_services};
+use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
 use serde_json::{Number, Value};
 use std::collections::HashMap;
@@ -32,21 +39,17 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use anyhow::anyhow;
-use serde::ser::SerializeStruct;
 use sysinfo::Networks;
 use tokio::fs::{File, read_to_string, rename};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{Mutex, OnceCell, RwLock};
 use tokio::time::sleep;
 use tracing::{error, info};
-use utils::get_notifications_count;
-use utils::{get_quota_for_all, str_to_i64, sudo_group, ts_to_str};
-use crate::dev::get_system_disks;
+use utils::{get_quota_for_all, str_to_i64, sudo_group, ts_to_str, get_notifications_count};
+use utils::{parse_mbox, InboxMail, flush_mailbox, init_mbox_basepath};
+use utils::{try_create_unix_user, get_user_uid, get_user_gid, restore_user_home_dir};
 use uuid::Uuid;
-use crate::backend::msg::{SuccessMessages};
-use crate::backend::utils::{parse_mbox, InboxMail, flush_mailbox, init_mbox_basepath};
-use crate::cmdl::error_filters::stderr_contains;
+use crate::backend::remote_access::AbstractRemoteService;
 
 pub static BACKEND_VERSION:&'static str = env!("CARGO_PKG_VERSION");
 static POOL_KEY_PATH: &'static str = "/root/tank.key";
@@ -540,13 +543,47 @@ impl Backend
             &[&Events::UserCreated,&Events::UserDeleted, &Events::UserModified],
             Arc::new(
                 Box::new(
-                    move |_ctx: &Option<ContextData>|
+                    move |(trigger,ctx):&(Trigger,Option<ContextData>)|
                         {
                             let b = Arc::clone(&task_backend);
+                            let t = trigger.clone();
+                            let context = ctx.clone();
                             Box::pin(
                                 async move
                                     {
                                         b.reload_users().await;
+
+                                        if let Trigger::Event(e) = t &&
+                                            let Some(ctx) = context &&
+                                            let Some(account) = ctx.get(&ContextVariables::Account)
+
+                                        {
+                                            LoggerMessages::Info(LogInfos::AccessServiceTrigger).log();
+
+                                            if e != Events::UserDeleted
+                                            {
+                                                match b.get_user(account).await
+                                                {
+                                                    Ok(u) => {
+                                                        let user = u.read().await;
+                                                        let perms = user.permissions.as_ref();
+                                                        if let Err(e) = Backend::trigger_remote_access_services_permissions(account.as_str(),perms,false).await
+                                                        {
+                                                            LoggerMessages::Error(LogErrors::AccessServiceTriggerError(&e.to_string())).log();
+                                                        }
+                                                    }
+                                                    Err(e) => { LoggerMessages::Error(LogErrors::AccessServiceTriggerError(&e.1.to_string())).log(); }
+                                                }
+
+                                            }
+                                            else
+                                            {
+                                                if let Err(e) = Backend::trigger_remote_access_services_permissions(account.as_str(),None,true).await
+                                                {
+                                                    LoggerMessages::Error(LogErrors::AccessServiceTriggerError(&e.to_string())).log();
+                                                }
+                                            }
+                                        }
                                     }
                             )
                         }
@@ -567,7 +604,7 @@ impl Backend
             &Events::Timer,
             Arc::new(
                 Box::new(
-                    move |_ctx: &Option<ContextData>|
+                    move |(_trigger,_ctx):&(Trigger,Option<ContextData>)|
                         {
                             let mut net = Networks::new_with_refreshed_list();
                             let b = Arc::clone(&task_backend);
@@ -617,7 +654,7 @@ impl Backend
             &Events::Timer,
             Arc::new(
                 Box::new(
-                    move |_ctx: &Option<ContextData>|
+                    move |(_trigger,_ctx):&(Trigger,Option<ContextData>)|
                         {
                             let b = Arc::clone(&task_backend);
                             Box::pin(
@@ -656,7 +693,7 @@ impl Backend
             &Events::PoolMount,
             Arc::new(
                 Box::new(
-                    move |_ctx: &Option<ContextData>|
+                    move |(_trigger,_ctx):&(Trigger,Option<ContextData>)|
                         {
                             let b = Arc::clone(&task_backend);
                             Box::pin(
@@ -690,7 +727,7 @@ impl Backend
             &Events::PoolUnmount,
             Arc::new(
                 Box::new(
-                    move |_ctx: &Option<ContextData>|
+                    move |(_trigger,_ctx):&(Trigger,Option<ContextData>)|
                         {
                             let b = Arc::clone(&task_backend);
                             Box::pin(
@@ -2105,6 +2142,68 @@ impl Backend
     }
 }
 
+// Remote access services-related Methods
+
+impl Backend
+{
+    pub async fn trigger_remote_access_services_permissions(username:&str, permissions:Option<&Vec<String>>,user_deleted:bool) -> Result<(), anyhow::Error>
+    {
+
+        for svc in get_remote_services().await?
+        {
+            let service = svc.read().await;
+            if let Some(hooks) = service.permission_hooks()
+            {
+                if user_deleted
+                {
+                    if let Some(perms) = permissions && hooks.get_trigger_permissions().await.iter().all(|p| p.is_any_allowed(perms))
+                    {
+                        hooks.permission_granted(username).await;
+                    } else {
+                        hooks.permission_revoked(username).await;
+                    }
+                }
+                else
+                {
+                    hooks.user_deleted(username).await;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn access_service_change_password(&self, service_name: &str, username:&str, password:&str) -> Result<(), HTTPMessage>
+    {
+        let services = get_remote_services()
+            .await
+            .map_err(|e| propagate_error(ErrorMessages::E_USER_PASSWD,e))?;
+
+        let mut svc:Option<&AbstractRemoteService> = None;
+
+        for s in services.iter()
+        {
+            if s.read().await.service_name().await == service_name
+            {
+                svc=Some(s);
+                break;
+            }
+        }
+
+        if let Some(service) = svc && let Some(auth) = service.read().await.auth()
+        {
+            auth.change_password(username, password).await
+                .map_err(|e| propagate_error(ErrorMessages::E_USER_PASSWD,e))?;
+        }
+        else
+        {
+            return Err(ErrorMessages::E_ACCESS_SERV_UNK.wrap_with_status_code(Some(vec![Value::String(service_name.to_string())])) );
+        }
+
+
+
+        Ok(())
+    }
+}
 
 // User-related Methods
 impl Backend
@@ -2287,17 +2386,75 @@ impl Backend
         LoggerMessages::Info(LogInfos::UserReloaded).log();
     }
 
-    // pub async fn add_user(
-    //     &self,
-    //     username: String,
-    //     visible_name: Option<String>,
-    //     permissions: Vec<String>,
-    //     quota: Option<String>,
-    //     sudo: bool,
-    // ) -> Result<(),HTTPMessage>
-    // {
-    //
-    // }
+    pub async fn add_user(
+        &self,
+        username: String,
+        visible_name: Option<String>,
+        permissions: Vec<String>,
+        quota: Option<String>,
+        sudo: bool,
+    ) -> Result<(),HTTPMessage>
+    {
+        let uname=username.trim();
+
+        if self.get_user(uname).await.is_ok()
+        {
+            return Err(ErrorMessages::E_USER_ALREADY_EXISTS.wrap_with_status_code(Some(vec![Value::String(uname.to_string())])));
+        }
+
+        {
+            let mut cfg = self.config.lock().await;
+            let uid = try_create_unix_user(
+                uname,
+                self.mountpoint().await,
+                sudo,
+                cfg.daemon.user_groups.default.clone(),
+            ).await.map_err(|e| propagate_error(ErrorMessages::E_NEW_USER, e))?;
+
+            cfg.users.insert(uname.to_string(), CfgUser {
+                otp_secret: None,
+                uid,
+                fullname: visible_name,
+                permissions: Some(collapse_permissions(permissions)),
+            });
+        }
+
+        self.flush_config().await?;
+
+        self.set_user_quota(uname,quota).await?; //this methods also triggers event
+
+        LoggerMessages::Info(LogInfos::UserCreated(uname));
+
+        Ok(())
+    }
+
+    pub async fn set_user_quota(&self, uname:&str,quota:Option<String>) -> Result<(),HTTPMessage>
+    {
+        if let Some((pool,dataset)) = self.get_pool_identifier().await &&
+            let Some(q) = quota
+            && q.len() > 0
+        {
+            ZFS(
+                ZFSActions::SetQuota(
+                    ZFSArgs {pool,dataset:Some(dataset)},
+                    ZFSQuotaArgs{username:uname.to_string(),quota: ZFSQuota::Formatted(q)}
+                ),false,CmdConfig::default())
+                .run()
+                .await
+                .map_err(|e| propagate_error(ErrorMessages::E_USER_QUOTA,e))?
+                .ok_or_else(|| ErrorMessages::E_USER_QUOTA.wrap_with_status_code(None))?
+                .is_success()
+                .map_err(|e| propagate_error(ErrorMessages::E_USER_QUOTA,e))?;
+
+            let mut ctx:ContextData=HashMap::new();
+            ctx.insert(ContextVariables::Account,uname.to_string());
+
+            self.event_manager.trigger(Trigger::Event(Events::UserCreated),Some(ctx)).await;
+        }
+
+
+        Ok(())
+    }
 
     pub async fn get_users(&self) -> Vec<User>
     {
@@ -2410,6 +2567,145 @@ impl Backend
 
         Ok(())
     }
+
+    pub async fn change_fullname(&self, username:&str, fullname:&str) -> Result<(), HTTPMessage>
+    {
+        let mut cfg = self.config.lock().await;
+        if let Some(u) = cfg.users.get_mut(username)
+        {
+            u.fullname = Some(fullname.to_string());
+        }
+        else
+        {
+            return Err(ErrorMessages::E_USER_NOT_FOUND.wrap_with_status_code(Some(vec![Value::String(username.to_string())])))
+        }
+
+        drop(cfg);
+
+        self.flush_config().await?;
+
+        let mut ctx: ContextData = HashMap::new();
+        ctx.insert(ContextVariables::Account, username.to_string());
+
+
+        self.event_manager.trigger(
+            Trigger::Event(Events::UserModified),
+            Some(ctx)
+        ).await;
+
+
+        Ok(())
+    }
+
+    pub async fn set_user_permissions(&self, username:&str, permissions:Vec<String>) -> Result<(), HTTPMessage>
+    {
+        let mut cfg = self.config.lock().await;
+        if let Some(u) = cfg.users.get_mut(username)
+        {
+            u.permissions = Some(collapse_permissions(permissions));
+        }
+        else
+        {
+            return Err(ErrorMessages::E_USER_NOT_FOUND.wrap_with_status_code(Some(vec![Value::String(username.to_string())])))
+        }
+
+        drop(cfg);
+
+        self.flush_config().await?;
+
+        LoggerMessages::Info(LogInfos::UserChangePermissions(username)).log();
+
+        let mut ctx: ContextData = HashMap::new();
+        ctx.insert(ContextVariables::Account, username.to_string());
+
+        self.event_manager.trigger(
+            Trigger::Event(Events::UserModified),
+            Some(ctx)
+        ).await;
+
+        Ok(())
+    }
+
+    pub async fn change_uid(&self, username:&str, new_uid:u32) -> Result<(), HTTPMessage>
+    {
+
+        let return_err = |info:anyhow::Error| {
+            ErrorMessages::E_USER_UID.wrap_with_status_code(Some(
+                vec![Value::String(username.to_string()),Value::String(info.to_string())]
+            ))
+        };
+
+        let current_uid = get_user_uid(username)
+            .await
+            .map_err(return_err)?;
+
+        let current_gid = get_user_gid(username)
+            .await
+            .map_err(return_err)?;
+
+        let cmds = vec![
+            UserMod(UserModAction::ChangeUID(username,current_uid,new_uid),true,CmdConfig::default()),
+            GroupMod(GroupModAction::ChangeGID(username,current_gid,new_uid),true, CmdConfig::default())
+        ];
+
+        Transaction::new(cmds)
+            .execute()
+            .await
+            .map_err(|e| return_err(anyhow::Error::new(e)))?;
+
+        restore_user_home_dir(self.mountpoint().await,username)
+            .await
+            .map_err(return_err)?;
+
+
+        {
+            let mut cfg = self.config.lock().await;
+            if let Some(u) = cfg.users.get_mut(username)
+            {
+                u.uid = new_uid;
+            } else {
+                return Err(ErrorMessages::E_USER_NOT_FOUND.wrap_with_status_code(Some(vec![Value::String(username.to_string())])));
+            }
+        }
+
+        self.flush_config().await?;
+
+        let mut ctx: ContextData = HashMap::new();
+        ctx.insert(ContextVariables::Account, username.to_string());
+
+
+        self.event_manager.trigger(
+            Trigger::Event(Events::UserModified),
+            Some(ctx)
+        ).await;
+
+        Ok(())
+    }
+
+    pub async fn set_sudo_group(&self, username:&str, sudo:bool) -> Result<(), HTTPMessage>
+    {
+        let cmd = if sudo { UserMod(UserModAction::SetGroups(username,sudo_group(),true),false,CmdConfig::default()) }
+        else { GPasswd(GPasswdAction::RemoveGroup(username,sudo_group()),CmdConfig::default()) };
+
+        cmd.run()
+            .await
+            .map_err(|e| propagate_error(ErrorMessages::E_USER_SUDO,e))?
+            .ok_or_else(|| ErrorMessages::E_USER_SUDO.wrap_with_status_code(None))?
+            .is_success()
+            .map_err(|e| propagate_error(ErrorMessages::E_USER_SUDO,e))?;
+
+        let mut ctx: ContextData = HashMap::new();
+        ctx.insert(ContextVariables::Account, username.to_string());
+
+        LoggerMessages::Warning(LogWarnings::UserSudo(username,sudo)).log();
+
+        self.event_manager.trigger(
+            Trigger::Event(Events::UserModified),
+            Some(ctx)
+        ).await;
+
+        Ok(())
+    }
 }
 
 
@@ -2420,36 +2716,3 @@ pub async fn get_backend() -> Arc<Backend>
         backend
     }).await.clone()
 }
-
-// mod test
-// {
-//     #[allow(unused)]
-//     use super::*;
-//
-//     #[test]
-//     fn importable_pools_test() -> Result<(), HTTPError>
-//     {
-//         let p = get_backend().get_importable_pools()?;
-//
-//         println!("{:?}",p);
-//
-//         Ok(())
-//     }
-//
-//     #[test]
-//     fn key_base64_test() -> Result<(), Box<dyn Error>>
-//     {
-//         let mut cat = Cat(Some("/root/tank.key"), Some(&CmdConfig::new(true,true,None,None))).spawn()?;
-//
-//         let exit_code = cat.wait()?;
-//
-//         if exit_code.code().unwrap() != 0 {panic!("Status code: {}",exit_code)}
-//         let mut buf:Vec<u8> = Vec::new();
-//         let stdout = cat.stdout.unwrap().read_to_end(&mut buf);
-//
-//         println!("{}",BASE64_STANDARD.encode(buf));
-//
-//
-//         Ok(())
-//     }
-// }
