@@ -1,18 +1,23 @@
 
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
-use std::net::{Ipv4Addr, Ipv6Addr};
-use crate::cmdl::net::{NMCLIDevice, NMCLIConnection};
-use crate::cmdl::coreutils::Cat;
-use crate::cmdl::{Executable, CmdConfig};
-use regex::{Regex, Captures};
-use std::collections::HashMap;
 use anyhow::Error;
-use ipnet::{Ipv4Net, Ipv6Net};
 use configparser::ini::Ini;
-use crate::backend::{propagate_error, HTTPMessage};
 use crate::backend::msg::{ErrorMessages, StatusMessage};
+use crate::backend::{propagate_error, HTTPMessage};
+use crate::cmdl::coreutils::{Cat, MV};
+use crate::cmdl::net::{NMCLIDevice, NMCLIConnection};
+use crate::cmdl::{Executable, CmdConfig};
+use ipnet::{Ipv4Net, Ipv6Net};
+use regex::{Regex, Captures};
+use serde::{Serialize, Deserialize, Serializer, Deserializer};
+use std::collections::HashMap;
+use std::env::temp_dir;
+use std::fs::File;
+use std::io::{Write};
+use std::net::{Ipv4Addr, Ipv6Addr};
 
 const WIREGUARD_CONF:&'static str = "/etc/wireguard/wg0.conf";
+pub const VPN_PUBLIC_KEY:&'static str = "/root/vpn_public.key";
+pub const VPN_PRIVATE_KEY:&'static str = "/root/vpn_private.key";
 const IFACE_TYPE_TO_SKIP: [&'static str;2] = ["loopback","bridge"];
 
 #[derive(Debug)]
@@ -193,7 +198,9 @@ pub async fn get_network_ifaces() -> Vec<NetworkInterface>
                     for line in output2.stdout.lines()
                     {
                         
-                        let tok = line.split(":").collect::<Vec<&str>>();
+                        let tok = line.splitn(2,':').collect::<Vec<&str>>();
+
+                        if tok.len() == 0 { continue; }
 
                         let property = tok[0].trim();
                         let value = if tok.len() == 2 {Some(tok[1].trim())} else {None};
@@ -246,7 +253,6 @@ pub async fn get_network_ifaces() -> Vec<NetworkInterface>
                             "IP6.ADDRESS[1]" => if let Some(v) = value && (v.len()>0)
                             {
                                 let ip6 = v.parse::<Ipv6Net>();
-
                                 if let Ok(ip) = ip6
                                 {
                                     ipv6_info.as_mut().map(|v| {
@@ -311,7 +317,6 @@ pub async fn get_network_ifaces() -> Vec<NetworkInterface>
                                     }
                                 }
                             }
-                            // _ => todo!()
                         }
                     }
                 }
@@ -365,4 +370,28 @@ pub async fn read_wireguard_config_file() -> Result<Ini, HTTPMessage>
     cfg_parser.read(cfg.to_string()).map_err(|e| propagate_error(ErrorMessages::E_NET_VPN_CONF,Error::msg(e)))?;
 
     Ok(cfg_parser)
+}
+
+pub async fn write_wireguard_config_file(cfg:Ini) -> Result<(),HTTPMessage>
+{
+    let mut cfg_content = cfg.writes();
+
+    let re = Regex::new(r"\[([^\]@]+)@\d+\]").map_err(|e| propagate_error(ErrorMessages::E_NET_VPN_CONF,e))?;
+    cfg_content = re.replace_all(&cfg_content,"[$1]").to_string();
+
+    let mut tmp_fullpath = temp_dir();
+    tmp_fullpath.push("wg0.conf.tmp");
+
+    let mut handle = File::create(&tmp_fullpath)
+        .map_err(|e| propagate_error(ErrorMessages::E_NET_VPN_CONF,e))?;
+
+    handle.write_all(cfg_content.as_bytes())
+        .map_err(|e| propagate_error(ErrorMessages::E_NET_VPN_CONF,e))?;
+
+    MV(tmp_fullpath.to_str().unwrap(),WIREGUARD_CONF,CmdConfig::default())
+        .run()
+        .await
+        .map_err(|e| propagate_error(ErrorMessages::E_NET_VPN_CONF,e))?;
+
+    Ok(())
 }

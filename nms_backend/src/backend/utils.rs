@@ -18,6 +18,7 @@ use case_insensitive_hashmap::CaseInsensitiveHashMap;
 use serde::{Serialize, Serializer};
 use serde::ser::SerializeStruct;
 use crate::backend::msg::{LogWarnings, LoggerMessages};
+use crate::cmdl::error_filters::stderr_contains;
 
 static DISTRO_FAMILY:OnceLock<DistroFamily> = OnceLock::new();
 static SUDO_GROUP:OnceLock<&'static str> = OnceLock::new();
@@ -578,15 +579,17 @@ pub async fn restore_user_home_dir(homedir_basepath:Option<PathBuf>,username:&st
 
     if let Some(home) = home_dir
     {
-        println!("Restoring user home dir: {home}");
+        let perm = FileSystemPermissions::from_mode(0o700);
         let os_user = OSUser::Name(username.to_string());
+
         let cmds = vec![
             UserMod(UserModAction::ChangeHomedir(username, &home), false, CmdConfig::default()),
             Chown(&os_user, &os_user, &OSUser::Empty, &OSUser::Empty, home.as_str(), true, CmdConfig::default()),
-            Chmod(&FileSystemPermissions::from_mode(0700), None, home, true, CmdConfig::default()),
+            Chmod(&perm, None, home, true, CmdConfig::default()),
         ];
 
         Transaction::new(cmds)
+            .accept_error_if(stderr_contains("mail spool"))
             .execute()
             .await?;
     }

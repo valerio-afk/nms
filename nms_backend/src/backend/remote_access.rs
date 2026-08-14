@@ -203,12 +203,12 @@ impl SystemdService
 
     pub fn get_properties_mut(&mut self) -> &mut HashMap<ServiceProperty,Value>
     {
-        &mut self.service.properties
+        self.service.properties_mut()
     }
 
     pub fn get_properties(&self) -> &HashMap<ServiceProperty,Value>
     {
-        &self.service.properties
+        self.service.properties()
     }
 }
 

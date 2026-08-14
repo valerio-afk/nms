@@ -1,4 +1,4 @@
-use super::HTTPMessage;
+use super::{HTTPMessage, IfaceStatusAction};
 use axum::{Json, http::StatusCode};
 use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
@@ -478,7 +478,8 @@ pub enum LogWarnings<'a>
     INotifyStopped,
     NginxRestart,
     MailParsingError(&'a str),
-    UserSudo(&'a str,bool)
+    UserSudo(&'a str,bool),
+    UserDeleted(&'a str),
 }
 
 impl<'a> Display for LogWarnings<'a>
@@ -515,7 +516,7 @@ impl<'a> Display for LogWarnings<'a>
                 if *is_sudo { write!(f, "{} is in the group of sudoers", uname) }
                 else { write!(f, "{} is not a sudoer", uname) }
             }
-
+            LogWarnings::UserDeleted(uname) => write!(f,"User {} deleted",uname),
         }
     }
 }
@@ -543,6 +544,9 @@ pub enum LogInfos<'a>
     ServicePermRevoked(&'a str,&'a str),
     AccessServiceTrigger,
     UserChangePermissions(&'a str),
+    IfaceStatusChange(IfaceStatusAction, &'a str),
+    VPNConf,
+    VPNNewPeer(&'a str, &'a str),
 }
 
 impl<'a> Display for LogInfos<'a>
@@ -582,6 +586,9 @@ impl<'a> Display for LogInfos<'a>
             LogInfos::ServicePermRevoked(svc, uname) => write!(f,"Remote access service {} revoked for {}",svc, uname),
             LogInfos::AccessServiceTrigger => write!(f,"Access service user permission triggered"),
             LogInfos::UserChangePermissions(uname) => write!(f,"Permissions changed for {}",uname),
+            LogInfos::IfaceStatusChange(status, iface) => write!(f,"Network interface {} {}ed",iface, status.to_string()),
+            LogInfos::VPNConf => {write!(f,"VPN configuration changed successfully")},
+            LogInfos::VPNNewPeer(name,ip) => { write!(f,"Added new VPN peer {} with IP {}",name, ip) },
         }
     }
 }

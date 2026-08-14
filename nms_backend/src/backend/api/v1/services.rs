@@ -13,7 +13,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
-
+use crate::events::{ContextBuilder, ContextVariables, Events, Trigger};
 
 #[derive(Serialize, Debug)]
 struct RemoteService
@@ -34,7 +34,7 @@ enum ServiceAction
 
 async fn service_manage(
     service: &AbstractRemoteService,
-    action: ServiceAction,
+    action: &ServiceAction,
 ) -> Result<(),HTTPMessage>
 {
 
@@ -60,6 +60,7 @@ async fn service_manage(
 
             ]
         )))?;
+
 
     Ok(())
 }
@@ -168,7 +169,18 @@ async fn enable_disable_service(
         }
     }
 
-    service_manage(service, action).await?;
+    service_manage(service, &action).await?;
+
+    let ctx = ContextBuilder::new()
+        .push(ContextVariables::Service,requested_service.to_uppercase())
+        .finish();
+
+    match action
+    {
+        ServiceAction::Enable => backend.event_manager.trigger(Trigger::Event(Events::AccessEnabled),ctx).await,
+        ServiceAction::Disable => backend.event_manager.trigger(Trigger::Event(Events::AccessDisabled),ctx).await,
+        _ => ()
+    }
 
     Ok(response_ok.wrap_with_status_code(
         Some(vec![Value::String(requested_service.to_uppercase())])

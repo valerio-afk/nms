@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use strum::Display;
 use crate::cmdl::{CmdConfig, CommandLine};
 
@@ -5,7 +6,7 @@ use crate::cmdl::{CmdConfig, CommandLine};
 pub enum SMBPasswdAction<S: AsRef<str>+ToString>
 {
     #[strum(to_string="a")]
-    Add,
+    Add(S),
 
     #[strum(to_string="x")]
     Delete,
@@ -22,8 +23,8 @@ pub enum SMBPasswdAction<S: AsRef<str>+ToString>
 
 pub fn SMBPasswd<S1,S2>(action:SMBPasswdAction<S1>, username:S2, mut config:CmdConfig) -> CommandLine
 where
-    S1: AsRef<str>+ToString,
-    S2: AsRef<str>+ToString
+    S1: AsRef<str>+ToString+Display,
+    S2: AsRef<str>+ToString+Display
 {
     let mut args:Vec<String> = Vec::new();
     
@@ -33,10 +34,16 @@ where
     }
     
     args.push(username.to_string());
+
     
-    if let SMBPasswdAction::Update(pwd) = action
+    match action
     {
-        config.set_stdin_data(pwd.to_string().as_bytes().to_vec()); 
+        SMBPasswdAction::Update(pwd) | SMBPasswdAction::Add(pwd) =>
+            {
+                let pwd_data = format!("{}\n{}\n",pwd,pwd);
+                config.set_stdin_data(pwd_data.as_bytes().to_vec());
+            }
+        _ => (),
     }
         
     CommandLine::new(

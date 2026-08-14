@@ -5,11 +5,15 @@ use axum::Json;
 use axum::http::StatusCode;
 use base64::prelude::*;
 use chrono::TimeDelta;
+use config::{CfgDynDNS};
 use config::{CfgPool, CfgToken};
 use config::{Config, CfgUser};
-use crate::cmdl::coreutils::Cat;
+use crate::cmdl::coreutils::{Cat, Chown, FileSystemPermissions, Mkdir, OSUser, MV};
 use crate::cmdl::error_filters::stderr_contains;
-use crate::cmdl::passwd::{GPasswd, GPasswdAction, GetEntPasswd, GroupMod, GroupModAction, Groups, UserMod, UserModAction};
+use crate::cmdl::net::{NMCLIConnection, NMCLIDevice, WireGuard, WireGuardAction};
+use crate::cmdl::others::RSync;
+use crate::cmdl::passwd::{GPasswd, GPasswdAction, GetEntPasswd, GroupMod, GroupModAction, Groups};
+use crate::cmdl::passwd::{UserDel, UserMod, UserModAction};
 use crate::cmdl::zfs::{ZFS, ZFSArgs, ZPoolImportArgs, ZFSQuotaArgs, ZFSQuota};
 use crate::cmdl::zfs::{ZFSActions, ZFSListArgs, ZFSListType, ZFSLoadKeyArgs, ZPool, ZPoolActions};
 use crate::cmdl::{CmdConfig, CommandLine, Executable, Transaction};
@@ -19,26 +23,33 @@ use crate::events::{ContextBuilder, ContextData, ContextVariables, EventManager,
 use crate::task::{BackgroundTaskManager, Task, BackgroundTask};
 use crate::vfs::{Capacity, VFS};
 use futures::stream::{self, StreamExt};
+use indexmap::IndexMap;
 use jwt::{JWTClaim};
 use msg::{ErrorMessages, LogErrors, LogInfos, LogWarnings, LoggerMessages};
 use msg::{SuccessMessages};
+use net::{get_network_ifaces, read_wireguard_config_file, write_wireguard_config_file};
 use permissions::is_admin;
 use permissions::{collapse_permissions};
 use regex::RegexBuilder;
+use remote_access::AbstractRemoteService;
 use remote_access::{get_remote_services, init_remote_services};
 use serde::ser::SerializeStruct;
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Number, Value};
 use std::collections::HashMap;
+use std::env::temp_dir;
 use std::error::Error;
 use std::fmt::{Debug, Display};
 use std::marker::Send;
-use std::net::SocketAddrV4;
+use std::net::{Ipv4Addr, SocketAddrV4};
 use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use ipnet::Ipv4Net;
+use struct_iterable::Iterable;
+use strum::Display;
 use sysinfo::Networks;
 use tokio::fs::{File, read_to_string, rename};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -49,7 +60,10 @@ use utils::{get_quota_for_all, str_to_i64, sudo_group, ts_to_str, get_notificati
 use utils::{parse_mbox, InboxMail, flush_mailbox, init_mbox_basepath};
 use utils::{try_create_unix_user, get_user_uid, get_user_gid, restore_user_home_dir};
 use uuid::Uuid;
-use crate::backend::remote_access::AbstractRemoteService;
+use crate::backend::net::{VPN_PRIVATE_KEY, VPN_PUBLIC_KEY};
+use crate::cmdl::firewall::{Firewall, FirewallAction, FirewallPort};
+use crate::cmdl::selinux::Protocol;
+use crate::cmdl::systemd::{Systemctl, SystemctlAction};
 
 pub static BACKEND_VERSION:&'static str = env!("CARGO_PKG_VERSION");
 static POOL_KEY_PATH: &'static str = "/root/tank.key";
@@ -363,6 +377,70 @@ impl Default for ScrubDetails
         }
     }
 }
+
+#[derive(Debug, Deserialize)]
+pub enum HomeDirAction
+{
+
+    #[serde(rename="k")]
+    Keep,
+    #[serde(rename="d")]
+    Delete,
+    #[serde(rename="m")]
+    Move
+}
+
+#[derive(Debug, Serialize)]
+pub struct VPNPeer
+{
+    name: String,
+    ip: Ipv4Addr,
+}
+
+impl VPNPeer
+{
+    pub fn new(name:String, ip:Ipv4Addr) -> Self
+    {
+        VPNPeer{name, ip}
+    }
+}
+
+
+#[derive(Debug, Serialize)]
+pub struct DDNSProvider
+{
+    pub enabled: bool,
+    pub username: Option<String>,
+    pub last_update: Option<u64>,
+    pub next_update: Option<u64>
+}
+
+impl DDNSProvider
+{
+    pub fn new(enabled:bool, username:Option<String>, last_update:Option<u64>, next_update:Option<u64>) -> Self
+    {
+        DDNSProvider{enabled, username, last_update, next_update}
+    }
+}
+
+impl Default for DDNSProvider
+{
+    fn default() -> Self
+    {
+        DDNSProvider::new(false, None, None, None)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Display)]
+#[serde(rename_all = "lowercase")]
+pub enum IfaceStatusAction
+{
+    #[strum(to_string="connect")]
+    Up,
+    #[strum(to_string="disconnect")]
+    Down
+}
+
 
 
 pub struct Backend
@@ -1083,6 +1161,554 @@ impl Backend
     {
         let counter = self.net_counter.read().await;
         counter.clone()
+    }
+
+    pub async fn get_vpn_peers(&self) -> Result<Vec<VPNPeer>,HTTPMessage>
+    {
+
+        let mut cfg = self.config.lock().await;
+        let mut wg_config = read_wireguard_config_file().await?;
+
+        let mut peer_names = if let Some(v) = &cfg.networking.vpn.peers
+        {
+            v.iter().cloned().collect::<Vec<String>>()
+        } else {Vec::new()};
+
+
+        let wg_peers = wg_config
+            .sections()
+            .iter()
+            .filter(|s| s.starts_with("peer"))
+            .cloned()
+            .collect::<Vec<String>>();
+
+
+        let peers = std::iter::zip(&wg_peers, &peer_names).filter_map(
+            |(cfg_section,name)|
+                {
+                    if let Some(ip) = wg_config.get(cfg_section.as_str(),"allowedips") &&
+                        let Ok(ipv4) = Ipv4Net::from_str(ip.as_str())
+                    {
+                       Some(VPNPeer::new(name.clone(),ipv4.addr()))
+                    }
+                    else { None }
+                }
+        )
+        .collect::<Vec<VPNPeer>>();
+
+        println!("{} {}",peers.len(),wg_peers.len());
+
+        //make the two list even in case they are not aligned anymore
+        if peers.len() < peer_names.len()
+        {
+            peer_names.truncate(peers.len());
+            cfg.networking.vpn.peers = if peer_names.len() == 0 {None} else {Some(peer_names)};
+            drop(cfg);
+            self.flush_config().await?;
+        }
+        else if peers.len() < wg_peers.len()
+        {
+
+            for i in  peers.len()..wg_peers.len()
+            {
+
+                let key = format!("peer@{}", i+1);
+                wg_config.remove_section(key.as_str());
+            }
+
+            write_wireguard_config_file(wg_config).await?;
+        }
+
+        Ok(peers)
+    }
+
+    pub async fn get_ddns_providers(&self) -> Result<IndexMap<String,DDNSProvider>, HTTPMessage>
+    {
+        let cfg = self.config.lock().await;
+        let mut providers:IndexMap<String,DDNSProvider> = IndexMap::new();
+        for (name,prov_conf) in cfg.ddns.iter()
+        {
+            let prov_info = match prov_conf.downcast_ref::<Option<CfgDynDNS>>().unwrap()
+            {
+                Some(prov_info) => DDNSProvider::new
+                (
+                    prov_info.enabled,
+                    Some(prov_info.username.clone()),
+                    Some(prov_info.last_update),
+                    Some(prov_info.last_update + Duration::from_mins(cfg.get_ddns_refresh_time()).as_secs()),
+                ),
+                None => DDNSProvider::default(),
+            };
+
+            providers.insert(name.to_string(), prov_info);
+        }
+
+        Ok(providers)
+    }
+
+    pub async fn iface_down(&self, iface:String) -> Result<(), HTTPMessage>
+    {
+        let mut cmds = vec![
+          NMCLIDevice(IfaceStatusAction::Down.to_string().as_str(),Some(&vec![iface.as_str()]),CmdConfig::default())
+        ];
+
+        get_network_ifaces()
+            .await
+            .iter()
+            .filter(|network| network.name != iface && network.enabled)
+            .for_each(|network| {
+                cmds.extend(vec![
+                    NMCLIConnection(IfaceStatusAction::Down.to_string().as_str(),Some(&vec![network.name.as_str()]),CmdConfig::default()),
+                    NMCLIConnection(IfaceStatusAction::Up.to_string().as_str(),Some(&vec![network.name.as_str()]),CmdConfig::default()),
+                ])
+            });
+
+        Transaction::new(cmds)
+            .execute()
+            .await
+            .map_err(|e| ErrorMessages::E_NET_CHANGE_STATE.wrap_with_status_code(
+                Some(vec![Value::String(iface.clone()),Value::String(e.to_string())])
+            ))?;
+
+        LoggerMessages::Info(LogInfos::IfaceStatusChange(IfaceStatusAction::Down,iface.as_str())).log();
+
+        let ctx = ContextBuilder::new()
+            .push(ContextVariables::Iface,iface)
+            .finish();
+
+        self.event_manager.trigger(Trigger::Event(Events::IfaceDisabled),ctx).await;
+
+        Ok(())
+    }
+
+    pub async fn iface_up(&self, iface:String) -> Result<(), HTTPMessage>
+    {
+        let cmds = vec![
+            NMCLIDevice(IfaceStatusAction::Up.to_string().as_str(),Some(&vec![iface.as_str()]),CmdConfig::default())
+        ];
+
+
+        Transaction::new(cmds)
+            .execute()
+            .await
+            .map_err(|e| ErrorMessages::E_NET_CHANGE_STATE.wrap_with_status_code(
+                Some(vec![Value::String(iface.clone()),Value::String(e.to_string())])
+            ))?;
+
+        LoggerMessages::Info(LogInfos::IfaceStatusChange(IfaceStatusAction::Up,iface.as_str())).log();
+
+        let ctx = ContextBuilder::new()
+            .push(ContextVariables::Iface,iface)
+            .finish();
+
+        self.event_manager.trigger(Trigger::Event(Events::IfaceEnabled),ctx).await;
+
+        Ok(())
+    }
+
+    pub async fn vpn_up(&self) -> Result<(), HTTPMessage>
+    {
+        let mut cmds = vec![
+            Systemctl(
+                self.get_vpn_service()
+                    .await
+                    .ok_or_else(||
+                        ErrorMessages::E_NET_VPN_NOTCONF.wrap_with_status_code(None)
+                    )?,
+                SystemctlAction::Start,
+                true,
+                CmdConfig::default()
+            )
+        ];
+
+        let firewall_cmd = Firewall(
+            FirewallAction::State,
+            false,
+            false,
+            CmdConfig::default()
+        ).run().await;
+
+        if let Ok(Some(output)) = firewall_cmd &&
+            output.exit_code == 0 &&
+            output.stdout.trim() == "running"
+        {
+            let wireguard_port = {
+                let cfg = self.config.lock().await;
+                cfg.networking.vpn.port
+            };
+            cmds.push(
+                Firewall(FirewallAction::AddPort(
+                    FirewallPort::Port(wireguard_port),
+                    Protocol::UDP),
+                         true,
+                         true,
+                         CmdConfig::default()
+                )
+            );
+
+            cmds.push(Firewall(FirewallAction::Reload,false,false,CmdConfig::default()));
+        }
+
+        Transaction::new(cmds)
+            .execute()
+            .await
+            .map_err(|e| ErrorMessages::E_NET_CHANGE_STATE.wrap_with_status_code(
+                Some(vec![Value::String("VPN".to_string()),Value::String(e.to_string())])
+            ))?;
+
+
+        LoggerMessages::Info(LogInfos::IfaceStatusChange(IfaceStatusAction::Up,"VPN")).log();
+
+        self.event_manager.trigger(Trigger::Event(Events::VPNEnabled),None).await;
+
+        Ok(())
+    }
+
+    pub async fn vpn_down(&self) -> Result<(), HTTPMessage>
+    {
+        let mut cmds = vec![
+            Systemctl(
+                self.get_vpn_service()
+                    .await
+                    .ok_or_else(||
+                        ErrorMessages::E_NET_VPN_NOTCONF.wrap_with_status_code(None)
+                    )?,
+                SystemctlAction::Stop,
+                true,
+                CmdConfig::default()
+            )
+        ];
+
+        let firewall_cmd = Firewall(
+            FirewallAction::State,
+            false,
+            false,
+            CmdConfig::default()
+        ).run().await;
+
+        if let Ok(Some(output)) = firewall_cmd &&
+            output.exit_code == 0 &&
+            output.stdout.trim() == "running"
+        {
+            let wireguard_port = {
+                let cfg = self.config.lock().await;
+                cfg.networking.vpn.port
+            };
+
+            cmds.push(
+                Firewall(FirewallAction::RemovePort(
+                    FirewallPort::Port(wireguard_port),
+                    Protocol::UDP),
+                         true,
+                         true,
+                         CmdConfig::default()
+                )
+            );
+
+            cmds.push(Firewall(FirewallAction::Reload,false,false,CmdConfig::default()));
+        }
+
+        Transaction::new(cmds)
+            .execute()
+            .await
+            .map_err(|e| ErrorMessages::E_NET_CHANGE_STATE.wrap_with_status_code(
+                Some(vec![Value::String("VPN".to_string()),Value::String(e.to_string())])
+            ))?;
+
+
+        LoggerMessages::Info(LogInfos::IfaceStatusChange(IfaceStatusAction::Down,"VPN")).log();
+
+        self.event_manager.trigger(Trigger::Event(Events::VPNDisabled),None).await;
+
+        Ok(())
+    }
+
+    pub async fn get_vpn_service(&self) -> Option<String>
+    {
+        let cfg = self.config.lock().await;
+
+        cfg.systemd.iter().find(|s| s.starts_with("wg-quick")).cloned()
+    }
+
+    pub async fn is_vpn_active(&self) -> Result<bool, HTTPMessage>
+    {
+        let output = Systemctl(
+            self.get_vpn_service()
+                .await
+                .ok_or_else(||
+                    ErrorMessages::E_NET_VPN_NOTCONF.wrap_with_status_code(None)
+                )?,
+            SystemctlAction::Stop,
+            true,
+            CmdConfig::default())
+            .run()
+            .await
+            .map_err(|e| propagate_error(ErrorMessages::E_NET_VPN_STATE,e))?
+            .ok_or_else(|| ErrorMessages::E_NET_VPN_STATE.wrap_with_status_code(None))?;
+
+        if output.exit_code == 0 || output.exit_code == 3
+        {
+            if output.stdout.contains("inactive") { Ok(false) } else { Ok(true) }
+        }
+        else
+        {
+            Err(ErrorMessages::E_NET_VPN_STATE.wrap_with_status_code(
+                Some(vec![Value::String(output.stdout.clone())])
+            ))
+        }
+    }
+
+    pub async fn set_vpn_config(&self, address:Ipv4Addr,netmask: Ipv4Addr, endpoint:Ipv4Addr) -> Result<(), HTTPMessage>
+    {
+        let mut cfg = self.config.lock().await;
+        cfg.networking.vpn.endpoint=Some(endpoint.clone());
+        let wireguard_port = cfg.networking.vpn.port;
+        drop(cfg);
+
+
+        let wg_address = Ipv4Net::with_netmask(address,netmask)
+            .map_err(|e| propagate_error(ErrorMessages::E_NET_INVALID_IP_ADDRESS,e))?;
+        let wg_endpoint = format!("{}:{}",endpoint.to_string(),wireguard_port);
+
+        let mut wg = read_wireguard_config_file().await?;
+
+        wg.setstr("Interface","Address",Some(wg_address.to_string().as_str()));
+        wg.setstr("Interface","listenport",Some(wireguard_port.to_string().as_str()));
+
+        for section in wg.sections().iter().filter(|s| s.to_lowercase().starts_with("peer"))
+        {
+            wg.setstr(section,"endpoint",Some(wg_endpoint.as_str()));
+        }
+
+        write_wireguard_config_file(wg).await?;
+        self.flush_config().await?;
+
+        Systemctl(
+            self.get_vpn_service().await.ok_or_else(||ErrorMessages::E_NET_VPN_NOTCONF.wrap_with_status_code(None))?,
+            SystemctlAction::Restart,
+            false,
+            CmdConfig::default()
+        ).run()
+            .await
+            .map_err(|e| propagate_error(ErrorMessages::E_NET_VPN_STATE,e))?
+            .ok_or_else(|| ErrorMessages::E_NET_VPN_STATE.wrap_with_status_code(None))?
+            .is_success()
+            .map_err(|e| propagate_error(ErrorMessages::E_NET_VPN_STATE,e))?;
+
+        LoggerMessages::Info(LogInfos::VPNConf).log();
+
+        Ok(())
+    }
+
+    pub async fn get_vpn_endpoint(&self) -> Option<Ipv4Addr>
+    {
+        let cfg = self.config.lock().await;
+        cfg.networking.vpn.endpoint.clone()
+    }
+
+    pub async fn vpn_genkeys(&self) -> Result<(), HTTPMessage>
+    {
+
+        // private key gen
+        let cmd_genkey = WireGuard(WireGuardAction::GenPrivateKey,CmdConfig::Empty)
+            .run()
+            .await
+            .map_err(|e|propagate_error(ErrorMessages::E_NET_VPN_GEN_PRIVATE,e))?
+            .ok_or_else(|| ErrorMessages::E_NET_VPN_GEN_PRIVATE.wrap_with_status_code(None))?
+            .is_success()
+            .map_err(|e|propagate_error(ErrorMessages::E_NET_VPN_GEN_PRIVATE,e))?;
+
+        let private_key = cmd_genkey.stdout.trim();
+        let tmp_filename = "vpn_private.key";
+
+        let mut tmp_fullpath = temp_dir();
+        tmp_fullpath.push(tmp_filename);
+
+        let mut handle = File::create(&tmp_fullpath)
+            .await
+            .map_err(|e|propagate_error(ErrorMessages::E_NET_VPN_GEN_PRIVATE,e))?;
+
+        handle
+            .write_all(private_key.as_bytes())
+            .await
+            .map_err(|e|propagate_error(ErrorMessages::E_NET_VPN_GEN_PRIVATE,e))?;
+
+        MV(tmp_fullpath.to_str().unwrap(),VPN_PRIVATE_KEY,CmdConfig::default())
+            .run()
+            .await
+            .map_err(|e|propagate_error(ErrorMessages::E_NET_VPN_GEN_PRIVATE,e))?;
+
+        //public key gen
+        let cfg_pubkey = CmdConfig::new(
+            false,
+            true,
+            Some(format!("{}\n",private_key).as_bytes()),
+            None
+        );
+
+        let cmd_genkey = WireGuard(WireGuardAction::GenPublicKey,cfg_pubkey)
+            .run()
+            .await
+            .map_err(|e|propagate_error(ErrorMessages::E_NET_VPN_GEN_PUBLIC,e))?
+            .ok_or_else(|| ErrorMessages::E_NET_VPN_GEN_PUBLIC.wrap_with_status_code(None))?
+            .is_success()
+            .map_err(|e|propagate_error(ErrorMessages::E_NET_VPN_GEN_PUBLIC,e))?;
+
+        let tmp_filename = "vpn_public.key";
+
+        let mut tmp_fullpath = temp_dir();
+        tmp_fullpath.push(tmp_filename);
+
+        let mut handle = File::create(&tmp_fullpath)
+            .await
+            .map_err(|e|propagate_error(ErrorMessages::E_NET_VPN_GEN_PUBLIC,e))?;
+
+        handle
+            .write_all(cmd_genkey.stdout.trim().as_bytes())
+            .await
+            .map_err(|e|propagate_error(ErrorMessages::E_NET_VPN_GEN_PUBLIC,e))?;
+
+        MV(tmp_fullpath.to_str().unwrap(),VPN_PUBLIC_KEY,CmdConfig::default())
+            .run()
+            .await
+            .map_err(|e|propagate_error(ErrorMessages::E_NET_VPN_GEN_PUBLIC,e))?;
+
+        // change wg conf
+
+        let mut wg_conf = read_wireguard_config_file().await?;
+        wg_conf.setstr("Interface","PrivateKey",Some(private_key));
+        write_wireguard_config_file(wg_conf).await?;
+
+
+
+        Ok(())
+    }
+
+    pub async fn get_vpn_public_key(&self) -> Option<String>
+    {
+        let cmd = Cat(
+            Some(VPN_PUBLIC_KEY),
+            CmdConfig::default(),
+        ).run()
+        .await
+        .unwrap_or(None);
+
+        if let Some(output) = cmd
+        {
+            Some(output.stdout.trim().to_string())
+        }
+        else { None }
+    }
+
+    pub async fn add_vpn_peer(&self, name:&str, public_key:String) -> Result<(), HTTPMessage>
+    {
+        let mut cfg = self.config.lock().await;
+        let name = name.trim();
+
+        //dont want empty names or duplicates
+        if name.len() == 0 || cfg.networking.vpn.peers.as_ref().unwrap_or(&Vec::new()).iter().find(|s| s.as_str() == name ).is_some()
+        {
+            return Err(ErrorMessages::E_NET_VPN_USER_INVALID.wrap_with_status_code(None));
+        }
+
+        if let Some(peers) = cfg.networking.vpn.peers.as_mut()
+        {
+            peers.push(name.to_string());
+        }
+        else
+        {
+            cfg.networking.vpn.peers = Some(vec![name.to_string()]);
+        }
+
+        let idx = cfg
+            .networking
+            .vpn
+            .peers
+            .as_ref()
+            .unwrap() //this should be safe
+            .len();
+
+
+        let mut wg_conf = read_wireguard_config_file().await?;
+
+        let vpn_address = wg_conf.get("Interface","Address")
+            .ok_or_else(|| ErrorMessages::E_NET_VPN_NOTCONF.wrap_with_status_code(None))?
+            .parse::<Ipv4Net>()
+            .map_err(|e| propagate_error(ErrorMessages::E_NET_INVALID_NETMASK,e))?;
+
+
+        let ip_prefix = vpn_address.prefix_len();
+        let mut used_addresses = vec![vpn_address.addr()];
+
+        let peer_endpoint = format!("{}:{}",used_addresses[0],cfg.networking.vpn.port);
+        drop(cfg);
+
+        for peer in wg_conf.sections().iter().filter(|s| s.to_lowercase().starts_with("peer"))
+        {
+            if let Ok(ip) = wg_conf.get(peer,"AllowedIPs").unwrap().parse::<Ipv4Net>()
+            {
+            used_addresses.push(ip.addr());
+            }
+        }
+
+        let mut assigned_ip:Option<Ipv4Addr> = None;
+
+        for host in vpn_address.hosts()
+        {
+            if !used_addresses.contains(&host)
+            {
+                assigned_ip = Some(host);
+                break;
+            }
+        }
+
+        if let Some(ip) = assigned_ip && let Ok(peer_ip) =Ipv4Net::new(ip,ip_prefix)
+        {
+            let section_name = format!("Peer@{}", idx);
+            wg_conf.set(section_name.as_str(), "PublicKey", Some(public_key));
+            wg_conf.set(section_name.as_str(), "AllowedIPs", Some(peer_ip.to_string()));
+            wg_conf.setstr(section_name.as_str(), "PersistentKeepalive", Some("25"));
+            wg_conf.set(section_name.as_str(), "Endpoint", Some(peer_endpoint));
+
+            LoggerMessages::Info(LogInfos::VPNNewPeer(name.as_ref(),peer_ip.to_string().as_str())).log();
+        }
+        else
+        {
+            return Err(ErrorMessages::E_NET_VPN_IP_MAX.wrap_with_status_code(None));
+        }
+
+
+
+        self.flush_config().await?;
+        write_wireguard_config_file(wg_conf).await?;
+
+        Ok(())
+    }
+
+    pub async fn remove_vpn_peer(&self, name: &str) -> Result<(), HTTPMessage>
+    {
+        {
+            let mut cfg = self.config.lock().await;
+            if let Some(peers) = cfg.networking.vpn.peers.as_mut()
+            {
+                let idx = peers.iter().position(|s| s.as_str() == name );
+
+                if let Some(pos) = idx
+                {
+                    peers.retain(|p| p.as_str() != name);
+
+                    let mut wg_conf = read_wireguard_config_file().await?;
+
+                    wg_conf.remove_section(format!("Peer@{}", pos+1).as_str());
+                    write_wireguard_config_file(wg_conf).await?;
+                }
+            }
+        }
+
+        self.flush_config().await?;
+
+        Ok(())
+
     }
 
 }
@@ -2148,18 +2774,18 @@ impl Backend
 {
     pub async fn trigger_remote_access_services_permissions(username:&str, permissions:Option<&Vec<String>>,user_deleted:bool) -> Result<(), anyhow::Error>
     {
-
         for svc in get_remote_services().await?
         {
             let service = svc.read().await;
             if let Some(hooks) = service.permission_hooks()
             {
-                if user_deleted
+                if !user_deleted
                 {
                     if let Some(perms) = permissions && hooks.get_trigger_permissions().await.iter().all(|p| p.is_any_allowed(perms))
                     {
                         hooks.permission_granted(username).await;
-                    } else {
+                    } else
+                    {
                         hooks.permission_revoked(username).await;
                     }
                 }
@@ -2182,7 +2808,8 @@ impl Backend
 
         for s in services.iter()
         {
-            if s.read().await.service_name().await == service_name
+            let curr_serv_name = s.read().await.service_name().await;
+            if  curr_serv_name == service_name
             {
                 svc=Some(s);
                 break;
@@ -2445,12 +3072,12 @@ impl Backend
                 .ok_or_else(|| ErrorMessages::E_USER_QUOTA.wrap_with_status_code(None))?
                 .is_success()
                 .map_err(|e| propagate_error(ErrorMessages::E_USER_QUOTA,e))?;
-
-            let mut ctx:ContextData=HashMap::new();
-            ctx.insert(ContextVariables::Account,uname.to_string());
-
-            self.event_manager.trigger(Trigger::Event(Events::UserCreated),Some(ctx)).await;
         }
+
+        let mut ctx:ContextData=HashMap::new();
+        ctx.insert(ContextVariables::Account,uname.to_string());
+
+        self.event_manager.trigger(Trigger::Event(Events::UserCreated),Some(ctx)).await;
 
 
         Ok(())
@@ -2537,22 +3164,27 @@ impl Backend
         Ok(system_users)
     }
 
-    pub async fn change_username(&self, old_username:&str, new_username:&str) -> Result<(), HTTPMessage>
+    pub async fn change_username(&self, old_username:&str, new_username:&str, change_sys_user:bool) -> Result<(), HTTPMessage>
     {
-        let mut cfg = self.config.lock().await;
-        if let Some(u) = cfg.users.remove(old_username)
+        if old_username != new_username
         {
-            cfg.users.insert(new_username.to_string(),u);
+            let mut cfg = self.config.lock().await;
+            if let Some(u) = cfg.users.remove(old_username)
+            {
+                cfg.users.insert(new_username.to_string(), u);
+            } else {
+                return Err(ErrorMessages::E_USER_NOT_FOUND.wrap_with_status_code(Some(vec![Value::String(old_username.to_string())])))
+            }
 
+            drop(cfg);
+
+            self.flush_config().await?;
         }
-        else
+
+        if change_sys_user
         {
-            return Err(ErrorMessages::E_USER_NOT_FOUND.wrap_with_status_code(Some(vec![Value::String(old_username.to_string())])))
+            self.change_system_username(old_username, new_username).await?;
         }
-
-        drop(cfg);
-
-        self.flush_config().await?;
 
         let mut ctx: ContextData = HashMap::new();
         ctx.insert(ContextVariables::Account, old_username.to_string());
@@ -2564,9 +3196,71 @@ impl Backend
         ).await;
 
 
+        Ok(())
+    }
+
+    async fn change_system_username(&self, old_username:&str, new_username:&str) -> Result<(), HTTPMessage>
+    {
+        let mut create_new = true;
+
+        let mountpoint = self.mountpoint().await;
+        let mut new_homedir = mountpoint.clone();
+
+        if let Some(mut m) = new_homedir
+        {
+            m.push(new_username);
+            new_homedir = Some(m);
+        }
+
+        if let Ok(u) = self.get_user(new_username).await
+        {
+            let user = u.read().await;
+            if user.uid.is_some()
+            {
+                create_new = false;
+                let mut cmds = vec![
+                    UserMod(UserModAction::ChangeUsername(old_username,new_username),true,CmdConfig::default()),
+                    GroupMod(GroupModAction::ChangeName(old_username,new_username),true,CmdConfig::default()),
+                ];
+
+                if let Some(new_home) = &new_homedir && let Some(new_path) = new_home.to_str()
+                {
+                    //the user had a previous home dir => let's rename it
+                    if let Some(old_homedir) = &user.home_dir && let Some(old_path) = old_homedir.to_str()
+                    {
+                        cmds.push(MV(old_path,new_path,CmdConfig::default())); //technically, as the UID hasn't changed, no need to update permissions on FS
+                    }
+                    else //the user didn't have a home dir - so let's make it
+                    {
+                        let os_user = OSUser::Name(new_username.to_string());
+                        cmds.push(Mkdir(new_path,Some(FileSystemPermissions::from_mode(0o700)),true,CmdConfig::default()));
+                        cmds.push(Chown(&os_user, &os_user, &OSUser::Empty, &OSUser::Empty, new_path, false, CmdConfig::default()));
+                    }
+
+                    Transaction::new(cmds)
+                        .execute()
+                        .await
+                        .map_err(|e| propagate_error(ErrorMessages::E_USER_SYSTEM,e))?;
+
+                }
+            }
+        }
+
+        if create_new
+        {
+            let cfg = self.config.lock().await;
+
+            try_create_unix_user(
+                new_username, mountpoint, false,
+                cfg.daemon.user_groups.default.clone())
+                .await
+                .map_err(|e| propagate_error(ErrorMessages::E_USER_SYSTEM,e))?;
+        }
 
         Ok(())
     }
+
+
 
     pub async fn change_fullname(&self, username:&str, fullname:&str) -> Result<(), HTTPMessage>
     {
@@ -2701,6 +3395,123 @@ impl Backend
 
         self.event_manager.trigger(
             Trigger::Event(Events::UserModified),
+            Some(ctx)
+        ).await;
+
+        Ok(())
+    }
+
+    pub async fn delete_user(&self, username:&str, home_dir_action: HomeDirAction, other_username:Option<&str>) -> Result<(), HTTPMessage>
+    {
+        {
+            let admins = self.get_admin_users().await;
+
+            //self preserving check: avoids that the user deletes the only admin account
+            if (admins.len() == 1) && (admins[0].read().await.username == username)
+            {
+                return Err(ErrorMessages::E_PERM_ADMIN.wrap_with_status_code(None));
+            }
+        }
+
+        let user_to_delete_lock = self.get_user(username).await?;
+        let user_to_delete = user_to_delete_lock.read().await;
+
+        let mut keep_home = false;
+
+        match home_dir_action
+        {
+            HomeDirAction::Keep => keep_home = true,
+            HomeDirAction::Move => {
+                if let Some (uname) = other_username
+                {
+                    let host_user_lock = self.get_user(uname).await?;
+
+                   
+                    let host_user = host_user_lock.read().await;
+
+                    let src = user_to_delete.home_dir.as_ref();
+                    let dst = host_user.home_dir.as_ref();
+
+                    if let Some(s) = src && let Some(d) = dst
+                    {
+                        let mut destination = d.clone();
+                        destination.push(user_to_delete.username.as_str());
+
+                        if let Some(src_path) = s.to_str() && let Some(dst_path) = destination.to_str()
+                        {
+                            let chown_user = OSUser::Name(host_user.username.clone());
+                            let cmds = vec![
+                              Mkdir(dst_path,Some(FileSystemPermissions::from_mode(0o700)),true,CmdConfig::default()),
+                              RSync(src_path,dst_path,Some(&["-a"]),CmdConfig::default()),
+                              Chown(&chown_user,&chown_user,&chown_user,&chown_user,dst_path,true,CmdConfig::default())
+                            ];
+                            
+                            Transaction::new(cmds)
+                                .execute()
+                                .await
+                                .map_err(|e|
+                                    ErrorMessages::E_USER_COPY_FILES.wrap_with_status_code(Some(
+                                        vec![
+                                            Value::String(user_to_delete.username.to_string()),
+                                            Value::String(e.to_string()),
+                                        ]
+                                    ))
+                                )?;
+                        }
+                    }
+                }
+                else { keep_home = true } // in case an other user is not specified, let's use the safest option to keep the home dir
+            }
+
+            _ => ()
+        }
+        
+        UserDel(user_to_delete.username.as_str(),keep_home,CmdConfig::default())
+            .run()
+            .await
+            .map_err(|e|
+                ErrorMessages::E_USER_DELETE.wrap_with_status_code(Some(
+                    vec![
+                        Value::String(user_to_delete.username.to_string()),
+                        Value::String(e.to_string()),
+                    ]
+                ))
+            )?
+            .ok_or_else(||
+                ErrorMessages::E_USER_DELETE.wrap_with_status_code(Some(
+                    vec![
+                        Value::String(user_to_delete.username.to_string()),
+                        Value::String(String::from("Unable to run userdel")),
+                    ]
+                ))
+            )?
+            .is_success()
+            .map_err(|e|
+                ErrorMessages::E_USER_DELETE.wrap_with_status_code(Some(
+                    vec![
+                        Value::String(user_to_delete.username.to_string()),
+                        Value::String(e.to_string()),
+                    ]
+                ))
+            )?;
+
+
+        {
+            let mut cfg = self.config.lock().await;
+            cfg.users.remove(user_to_delete.username.as_str());
+        }
+
+        LoggerMessages::Warning(LogWarnings::UserDeleted(user_to_delete.username.as_str())).log();
+
+        drop(user_to_delete);
+        
+        self.flush_config().await?;
+
+        let mut ctx: ContextData = HashMap::new();
+        ctx.insert(ContextVariables::Account, username.to_string());
+        
+        self.event_manager.trigger(
+            Trigger::Event(Events::UserDeleted),
             Some(ctx)
         ).await;
 

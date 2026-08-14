@@ -539,9 +539,15 @@ pub fn Chown(
     )
 }
 
-pub fn Mkdir(path:&String,permissions:Option<FileSystemPermissions>,config:CmdConfig) -> CommandLine
+pub fn Mkdir<S>(path:S,permissions:Option<FileSystemPermissions>,parents:bool,config:CmdConfig) -> CommandLine
+where S: AsRef<str> + ToString
 {
     let mut args:Vec<String> = Vec::new();
+
+    if parents
+    {
+        args.push("-p".to_string());
+    }
 
     if let Some(p) = permissions
     {
@@ -549,7 +555,7 @@ pub fn Mkdir(path:&String,permissions:Option<FileSystemPermissions>,config:CmdCo
         args.push(p.to_string());
     }
 
-    args.push(path.clone());
+    args.push(path.to_string());
 
 
     CommandLine::new(

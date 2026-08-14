@@ -111,7 +111,7 @@ impl ServiceProperties for SMBService
     }
     fn auth(&self) -> Option<Box<&dyn ServiceAuth>>
     {
-        None
+        Some(Box::new(self))
     }
 }
 
@@ -325,9 +325,13 @@ impl ServiceAuth for SMBService
 {
     async fn change_password(&self, username: &str, password: &str) -> Result<(), ServiceError>
     {
-        SMBPasswd(SMBPasswdAction::Update(password),username,CmdConfig::default())
+        SMBPasswd(SMBPasswdAction::Add(password),username,CmdConfig::default())
             .run()
-            .await.map_err(|e| ServiceError::SetPassword(username.to_string(),e.to_string()))?;
+            .await.map_err(|e| ServiceError::SetPassword(username.to_string(),e.to_string()))?
+            .ok_or_else(|| ServiceError::SetPassword(username.to_string(),"Unable to run SMB".to_string()))?
+            .is_success()
+            .map_err(|e| ServiceError::SetPassword(username.to_string(),e.to_string()))?;
+
         Ok(())
     }
 }

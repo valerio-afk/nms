@@ -51,6 +51,8 @@ pub enum Events
     AccessDisabled,
     VPNEnabled,
     VPNDisabled,
+    IfaceEnabled,
+    IfaceDisabled,
     FileCreated,
     FileDeleted,
     FileModified,
@@ -90,6 +92,8 @@ impl std::fmt::Display for Events
             Events::AccessDisabled => write!(f,"AccessDisabled"),
             Events::VPNEnabled => write!(f,"VPNEnabled"),
             Events::VPNDisabled => write!(f,"VPNDisabled"),
+            Events::IfaceEnabled => write!(f,"IfaceEnabled"),
+            Events::IfaceDisabled => write!(f,"IfaceDisabled"),
             Events::FileCreated => write!(f,"FileCreated"),
             Events::FileDeleted => write!(f,"FileDeleted"),
             Events::FileModified => write!(f,"FileModified"),
@@ -117,10 +121,10 @@ impl Events
             Events::UserLoggedIn => ctx_var.push(ContextVariables::TriggerUser),
             Events::UserCreated => ctx_var.extend(vec![ContextVariables::TriggerUser,ContextVariables::Account]),
             Events::UserDeleted => ctx_var.extend(vec![ContextVariables::TriggerUser,ContextVariables::Account]),
-            Events::AccessEnabled => ctx_var.extend(vec![ContextVariables::TriggerUser,ContextVariables::Account,ContextVariables::Service]),
-            Events::AccessDisabled => ctx_var.extend(vec![ContextVariables::TriggerUser,ContextVariables::Account,ContextVariables::Service]),
-            Events::VPNEnabled => ctx_var.push(ContextVariables::TriggerUser),
-            Events::VPNDisabled => ctx_var.push(ContextVariables::TriggerUser),
+            Events::AccessEnabled => ctx_var.extend(vec![ContextVariables::Service]),
+            Events::AccessDisabled => ctx_var.extend(vec![ContextVariables::Service]),
+            Events::IfaceEnabled => ctx_var.push(ContextVariables::Iface),
+            Events::IfaceDisabled => ctx_var.push(ContextVariables::Iface),
             Events::FileShared  => ctx_var.extend(vec![ContextVariables::TriggerUser,ContextVariables::Account,ContextVariables::Token]),
             Events::FileCreated => ctx_var.extend(inotfy_ctx),
             Events::FileModified => ctx_var.extend(inotfy_ctx),
@@ -147,7 +151,8 @@ pub enum ContextVariables
     IsDir,
     HomeOwner,
     Permissions,
-    Token
+    Token,
+    Iface
 }
 
 pub struct ContextBuilder
@@ -199,6 +204,7 @@ impl std::fmt::Display for ContextVariables
             ContextVariables::HomeOwner => write!(f,"HOME_OWNER"),
             ContextVariables::Permissions => write!(f,"PERMISSIONS"),
             ContextVariables::Token => write!(f,"TOKEN"),
+            ContextVariables::Iface => write!(f,"IFACE"),
         }
     }
 }

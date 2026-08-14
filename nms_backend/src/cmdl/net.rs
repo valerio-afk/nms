@@ -1,4 +1,14 @@
 use super::*;
+use strum::Display;
+
+#[derive(Display)]
+pub enum WireGuardAction
+{
+    #[strum(to_string="genkey")]
+    GenPrivateKey,
+    #[strum(to_string="pubkey")]
+    GenPublicKey
+}
 
 const NMCLI_DEFAULT_PARAMS:&[&str] = &["-c", "no","-t"]; //no colours, terse
 
@@ -65,5 +75,16 @@ pub fn NMCLIConnection(
         None,
         None,
         config
+    )
+}
+
+pub fn WireGuard(action: WireGuardAction, cmd_config: CmdConfig) -> CommandLine
+{
+    CommandLine::new(
+        "wg",
+        Some(vec![action.to_string()]),
+        None,
+        None,
+        cmd_config
     )
 }

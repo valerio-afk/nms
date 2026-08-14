@@ -1,11 +1,12 @@
+use chrono::Utc;
+use crate::events::Events;
+use crate::events::actions::UserDefinedActions;
 use serde::{Deserialize,Serialize};
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
-use chrono::Utc;
+use struct_iterable::Iterable;
 use super::api::v1::jwt::TokenPurposes;
 use super::utils::{DistroFamily, detect_distro_family};
-use crate::events::Events;
-use crate::events::actions::UserDefinedActions;
 
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -64,11 +65,13 @@ pub struct CfgUser
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CfgVPN
 {
-    #[serde(default)]
-    peers: Option<Vec<String>>,
+    pub port: u32,
 
     #[serde(default)]
-    endpoint: Option<Ipv4Addr>
+    pub peers: Option<Vec<String>>,
+
+    #[serde(default)]
+    pub endpoint: Option<Ipv4Addr>
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -82,23 +85,24 @@ pub struct CfgAP
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CfgNetworking
 {
-    vpn:CfgVPN,
+    #[serde(default="init_vpn")]
+    pub vpn:CfgVPN,
     
     #[serde(default)]
-    ap:Option<CfgAP>
+    pub ap:Option<CfgAP>
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CfgDynDNS
 {
     #[serde(default)]
-    enabled:bool,
-    username: String,
-    password: String,
-    last_update:u64
+    pub enabled:bool,
+    pub username: String,
+    pub password: String,
+    pub last_update:u64
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Iterable)]
 pub struct CfgDynDNSServices
 {
     #[serde(default)]
@@ -123,6 +127,8 @@ pub struct CfgDynDNSServices
     cloudns:Option<CfgDynDNS>
 
 }
+
+
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CfgAPTUpdates
@@ -201,7 +207,8 @@ pub struct CfgDaemon
     pub host:Ipv4Addr,
     pub port:u16,
     pub mbox_basepath:String,
-    pub user_groups: CfgDaemonUserGroups
+    pub user_groups: CfgDaemonUserGroups,
+    pub ddns_refresh_time:u8
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -220,6 +227,8 @@ pub struct Config
     pub access_services:HashMap<String,AccessService>,
 
     pub ddns:CfgDynDNSServices,
+    
+    pub networking:CfgNetworking,
 
     pub updates: CfgUpdates,
 
@@ -253,6 +262,10 @@ impl Default for Config
                 dynv6: None, 
                 cloudns: None 
             }, 
+            networking: CfgNetworking { 
+                vpn: init_vpn(), 
+                ap: None,
+            },
             updates: CfgUpdates { 
                 apt: CfgAPTUpdates { last_check: None, packages: None }, 
                 releases: None,
@@ -338,6 +351,11 @@ impl Config
     pub fn get_user(self:&Self,username:&String) -> Option<CfgUser>
     {
         self.users.get(username).cloned()
+    }
+    
+    pub fn get_ddns_refresh_time(self:&Self) -> u64
+    {
+        self.daemon.ddns_refresh_time as u64
     }
 }
 
@@ -435,7 +453,8 @@ fn init_daemon () -> CfgDaemon
         user_groups: CfgDaemonUserGroups {
             default: vec!["plugdev","netdev","users"].iter().map(|x|x.to_string()).collect(),
             smb: "sambashare".to_string(),
-        }
+        },
+        ddns_refresh_time: 10
     }
 }
 
@@ -450,5 +469,15 @@ fn init_users() -> HashMap<String,CfgUser>
         permissions: Some(vec!["*".to_string()]),
     });
 
-    return map;
+    map
+}
+
+fn init_vpn() -> CfgVPN
+{
+    CfgVPN
+    {
+        port: 51820,
+        peers: None,
+        endpoint: None
+    }
 }

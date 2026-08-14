@@ -445,7 +445,7 @@ class BackEndProxy:
 
     @property
     def vpn_public_ip(this) -> List[Tuple[str, str]]:
-        return this._request("net/vpn/public-ip", RequestMethod.GET)
+        return this._request("net/vpn/endpoint", RequestMethod.GET)
 
     @property
     def ddns_providers(this) -> Dict[str,dict]:

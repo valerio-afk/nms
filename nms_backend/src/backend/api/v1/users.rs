@@ -3,7 +3,7 @@ use axum_auth::AuthBearer;
 use axum::Json;
 use axum::routing::{Router, get, head, post, delete};
 use axum::extract::{State, Path};
-use crate::backend::{Backend, FastAPIComp, HTTPMessage, User};
+use crate::backend::{Backend, FastAPIComp, HTTPMessage, HomeDirAction, User};
 use crate::backend::jwt::TokenPurposes;
 use std::sync::{Arc};
 use serde::Deserialize;
@@ -79,6 +79,15 @@ pub struct NewUserProfile
     quota: Option<String>,
     sudo: bool
 }
+
+#[derive(Debug, Deserialize)]
+pub struct DeleteUser
+{
+    username:String,
+    home_files: HomeDirAction,
+    move_to: Option<String>
+}
+
 
 
 
@@ -183,24 +192,46 @@ async fn get_unassociated_system_users(
     Ok(Json(backend.get_unassociated_sys_users().await?))
 }
 
-async fn assign_system_user(
-    AuthBearer(token): AuthBearer,
-    State(backend):State<Arc<Backend>>,
-    Json(data): Json<UsernameChange>,
+async fn change_username_internal(
+    token: String,
+    backend:Arc<Backend>,
+    data: UsernameChange,
+    change_sys_user:bool
 ) -> Result<HTTPMessage, HTTPMessage>
 {
     let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
     let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
     check_permission(&user, UserPermissions::UsersAccountManage).await?;
+    
 
     backend.change_username(
         data.old_username.as_str(),
-        data.new_username.as_str()
+        data.new_username.as_str(),
+        change_sys_user
     ).await?;
 
 
     Ok(SuccessMessages::S_USER_NAME.wrap_with_status_code(None))
 }
+
+async fn assign_system_user(
+    AuthBearer(token): AuthBearer,
+    State(backend):State<Arc<Backend>>,
+    Json(data): Json<UsernameChange>
+) -> Result<HTTPMessage, HTTPMessage>
+{
+    change_username_internal(token, backend, data, false).await
+}
+
+async fn change_username(
+    AuthBearer(token): AuthBearer,
+    State(backend):State<Arc<Backend>>,
+    Json(data): Json<UsernameChange>
+) -> Result<HTTPMessage, HTTPMessage>
+{
+    change_username_internal(token, backend, data, true).await
+}
+
 
 async fn new_user(
     AuthBearer(token): AuthBearer,
@@ -335,6 +366,29 @@ async fn set_permissions(
     Ok(SuccessMessages::S_USER_PERM.wrap_with_status_code(None))
 }
 
+async fn delete_user(
+    AuthBearer(token): AuthBearer,
+    State(backend):State<Arc<Backend>>,
+    Json(data): Json<DeleteUser>,
+) -> Result<HTTPMessage, HTTPMessage>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+    check_permission(&user, UserPermissions::UsersAccountManage).await?;
+
+    backend.delete_user(
+        data.username.as_str(),
+        data.home_files,
+        data.move_to.as_deref()
+    ).await?;
+
+    Ok(SuccessMessages::S_DEL_USER.wrap_with_status_code(
+        Some(vec![
+            Value::String(data.username)
+        ])
+    ))
+}
+
 pub fn get_route() -> Router<Arc<Backend>>
 {
     Router::new().nest("/users",
@@ -351,8 +405,10 @@ pub fn get_route() -> Router<Arc<Backend>>
         .route("/set/permissions", post(set_permissions))
         .route("/set/uid", post(set_uid))
         .route("/set/sudo", post(set_sudo))
+        .route("/set/username", post(change_username))
         .route("/set/quota", post(set_quota))
         .route("/new", post(new_user))
+        .route("/delete", post(delete_user))
         .route("/service/{svc}", post(change_pwd_service))
     )
 }
