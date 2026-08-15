@@ -18,6 +18,7 @@ base64 = "0.23"
 chrono = { version = "0.4", features = ["alloc","serde"] }
 configparser = {  version = "3.2", features = ["indexmap"] }
 console-subscriber = "0.5"
+fernet = "0.2.2"
 futures = "0.3.33"
 indexmap = { version = "2", features = ["serde"] }
 inventory = "0.3.24"
@@ -29,7 +30,8 @@ reqwest = { version = "0.13", features = ["json","query"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0"
 serde_repr = "0.1"
-struct_iterable = {path = "3thparty/rust_struct_iterable/struct_iterable"}
+sha2 = "0.11"
+struct_iterable = {path = "3rdparty/rust_struct_iterable/struct_iterable" }
 strum = { version = "0.28", features = ["derive"] }
 sysinfo = "0.39.6"
 tokio = { version = "1", features = ["full","tracing"] }

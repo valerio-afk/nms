@@ -4,3 +4,6 @@
 [submodule "static/morphdom"]
 	path = static/morphdom
 	url = https://github.com/patrick-steele-idem/morphdom.git
+[submodule "nms_backend/3thparty/rust_struct_iterable"]
+	path = nms_backend/3thparty/rust_struct_iterable
+	url = https://github.com/decomoraes/rust_struct_iterable

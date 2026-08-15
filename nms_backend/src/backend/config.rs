@@ -4,7 +4,7 @@ use crate::events::actions::UserDefinedActions;
 use serde::{Deserialize,Serialize};
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
-use struct_iterable::{Iterable, IterableAs};
+use struct_iterable::{Iterable, IterableMut};
 use super::api::v1::jwt::TokenPurposes;
 use super::utils::{DistroFamily, detect_distro_family};
 
@@ -362,15 +362,57 @@ impl Config
 
     pub fn ddns_service_updated(&mut self, name:&str)
     {
-        let mut found_svc = self
-            .ddns
-            .iter_as()
-            .find(|(n,d)| (*n).eq(name))
-            .map(|(_,d)| d.downcast_mut::<Option<CfgDynDNS>>().unwrap());
-
-        if let Some(Some(svc)) = found_svc.as_mut()
+        for i in 0..self.ddns.field_count()
         {
-            svc.last_update = chrono::Local::now().timestamp() as u64;
+            if let Some((svc_name, f)) = self.ddns.field_at_mut(i)
+            {
+                if svc_name == name
+                {
+                    if let Some(svc) =f.downcast_mut::<Option<CfgDynDNS>>().unwrap()
+                    {
+                        svc.last_update = chrono::Local::now().timestamp() as u64;
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    pub fn ddns_service_set_credential(&mut self, name:&str, username:Option<String>, password:String, enable:bool)
+    {
+        for i in 0..self.ddns.field_count()
+        {
+            if let Some((svc_name, f)) = self.ddns.field_at_mut(i)
+            {
+                if svc_name == name
+                {
+                    if let Some(svc) =f.downcast_mut::<Option<CfgDynDNS>>().unwrap()
+                    {
+                        svc.username = username;
+                        svc.password = password;
+                        svc.enabled = enable;
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    pub fn ddns_service_set_enable(&mut self, name:&str, enable:bool)
+    {
+        for i in 0..self.ddns.field_count()
+        {
+            if let Some((svc_name, f)) = self.ddns.field_at_mut(i)
+            {
+                if svc_name == name
+                {
+                    if let Some(svc) =f.downcast_mut::<Option<CfgDynDNS>>().unwrap()
+                    {
+                       svc.enabled = enable;
+                    }
+                    break;
+                }
+            }
         }
     }
 }

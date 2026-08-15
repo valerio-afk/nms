@@ -39,6 +39,13 @@ struct VPNPeerDelete
     pub name: String,
 }
 
+#[derive(Clone,Deserialize)]
+pub struct DDNSCredentials
+{
+    pub username: Option<String>,
+    pub password: String,
+}
+
 
 
 async fn net_ifaces(
@@ -134,6 +141,48 @@ async fn get_ddns_providers(
     let providers = backend.get_ddns_providers().await?;
 
     Ok(Json(providers))
+}
+
+async fn start_ddns_provider(
+    Path(provider): Path<String>,
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>,
+    Json(credentials): Json<DDNSCredentials>
+) -> Result<HTTPMessage,HTTPMessage>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+    check_permission(&user, UserPermissions::NetworkDdnsManage).await?;
+
+
+    backend.set_ddns_provider_credentials(
+        provider.as_str(),
+        credentials.username,
+        credentials.password,
+        true
+    ).await?;
+
+    Ok(SuccessMessages::S_NET_DDNS_ENABLED.wrap_with_status_code(
+        Some(vec![Value::String(provider)])
+    ))
+}
+
+async fn stop_ddns_provider(
+    Path(provider): Path<String>,
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>
+) -> Result<HTTPMessage,HTTPMessage>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+    check_permission(&user, UserPermissions::NetworkDdnsManage).await?;
+
+
+    backend.enable_ddns_provider(provider.as_str(),false).await?;
+
+    Ok(SuccessMessages::S_NET_DDNS_ENABLED.wrap_with_status_code(
+        Some(vec![Value::String(provider)])
+    ))
 }
 
 async fn get_vpn_endpoint(
@@ -263,6 +312,8 @@ pub fn get_route() -> Router<Arc<Backend>>
     Router::new().nest("/net",
         Router::new()
         .route("/ddns", get(get_ddns_providers))
+        .route("/ddns/{provider}/start", post(start_ddns_provider))
+        .route("/ddns/{provider}/stop", post(stop_ddns_provider))
         .route("/vpn", get(net_get_vpn_config))
         .route("/vpn", patch(vpn_config))
         .route("/vpn/gen-keys", post(vpn_genkeys))

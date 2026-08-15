@@ -45,6 +45,8 @@ PACKAGES_APT=(
     atool
     util-linux
     python3-dev
+    libssl-dev
+    pkg-config
 )
 
 PACKAGES_DNF=(
@@ -81,6 +83,7 @@ PACKAGES_DNF=(
     atool
     util-linux
     python3-devel
+    openssl-devel
 )
 
 SERVICES_TO_DISABLE_APT=(
