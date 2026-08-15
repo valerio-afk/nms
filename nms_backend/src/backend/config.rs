@@ -4,7 +4,7 @@ use crate::events::actions::UserDefinedActions;
 use serde::{Deserialize,Serialize};
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
-use struct_iterable::Iterable;
+use struct_iterable::{Iterable, IterableAs};
 use super::api::v1::jwt::TokenPurposes;
 use super::utils::{DistroFamily, detect_distro_family};
 
@@ -97,7 +97,9 @@ pub struct CfgDynDNS
 {
     #[serde(default)]
     pub enabled:bool,
-    pub username: String,
+
+    #[serde(default)]
+    pub username: Option<String>,
     pub password: String,
     pub last_update:u64
 }
@@ -280,7 +282,7 @@ impl Default for Config
 
 impl Config
 {
-    pub fn cleanup_tokens(self:&mut Self)
+    pub fn cleanup_tokens(&mut self)
     {
         if let Some(map) = &mut self.released_tokens
         {
@@ -289,7 +291,7 @@ impl Config
         }
     }
 
-    pub fn find_tokens_by_purpose(self:&Self, purpose: TokenPurposes,username:Option<&String>) -> HashMap<String, CfgToken>
+    pub fn find_tokens_by_purpose(&self, purpose: TokenPurposes,username:Option<&String>) -> HashMap<String, CfgToken>
     {
         if let Some(map) = &self.released_tokens
         {
@@ -311,7 +313,7 @@ impl Config
         else {HashMap::new()}
     }
 
-    pub fn approve_token(self:&mut Self, uuid:String,token:CfgToken)
+    pub fn approve_token(&mut self, uuid:String,token:CfgToken)
     {
         self.cleanup_tokens();
 
@@ -324,7 +326,7 @@ impl Config
         
     }
 
-    pub fn revoke_token(self:&mut Self, uuid:&String)
+    pub fn revoke_token(&mut self, uuid:&String)
     {
         self.cleanup_tokens();
 
@@ -334,7 +336,7 @@ impl Config
         }
     }
 
-    pub fn get_token(self:&Self,uuid:&String) -> Option<CfgToken>
+    pub fn get_token(&self,uuid:&String) -> Option<CfgToken>
     {
         match &self.released_tokens
         {
@@ -343,19 +345,33 @@ impl Config
         }        
     }
 
-    pub fn is_token_issued(self:&Self,uuid:&String) -> bool
+    pub fn is_token_issued(&self,uuid:&String) -> bool
     {
         self.get_token(uuid).is_some()
     }
 
-    pub fn get_user(self:&Self,username:&String) -> Option<CfgUser>
+    pub fn get_user(&self,username:&String) -> Option<CfgUser>
     {
         self.users.get(username).cloned()
     }
     
-    pub fn get_ddns_refresh_time(self:&Self) -> u64
+    pub fn get_ddns_refresh_time(&self) -> u64
     {
         self.daemon.ddns_refresh_time as u64
+    }
+
+    pub fn ddns_service_updated(&mut self, name:&str)
+    {
+        let mut found_svc = self
+            .ddns
+            .iter_as()
+            .find(|(n,d)| (*n).eq(name))
+            .map(|(_,d)| d.downcast_mut::<Option<CfgDynDNS>>().unwrap());
+
+        if let Some(Some(svc)) = found_svc.as_mut()
+        {
+            svc.last_update = chrono::Local::now().timestamp() as u64;
+        }
     }
 }
 

@@ -1,0 +1,648 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="0ddb49fd-44e3-4605-a704-cc1f15248c46" name="Changes" comment="all pool properties implemented - most to be tested">
+      <change afterPath="$PROJECT_DIR$/nms_backend/src/backend/ddns.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/Cargo.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend.rs" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="JavaScript File" />
+        <option value="Python Script" />
+        <option value="HTML File" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="PUSH_TAGS">
+      <GitPushTagMode>
+        <option name="argument" value="--tags" />
+        <option name="title" value="All" />
+      </GitPushTagMode>
+    </option>
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="main" />
+      </map>
+    </option>
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+    <option name="ROOT_SYNC" value="DONT_SYNC" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;valerio-afk&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/valerio-afk/nms.git&quot;,
+    &quot;accountId&quot;: &quot;85feb621-985c-434f-92c4-5dcdd0fe0c43&quot;
+  }
+}</component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 0
+}</component>
+  <component name="ProjectId" id="34tYLupHY4VyXkN7C2ZOXTBdh53" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;DefaultHtmlFileTemplate&quot;: &quot;HTML File&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.app.executor&quot;: &quot;Run&quot;,
+    &quot;Python.backend.executor&quot;: &quot;Run&quot;,
+    &quot;Python.check_perms.executor&quot;: &quot;Run&quot;,
+    &quot;Python.nms.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.nms_utils.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;SHELLCHECK.PATH&quot;: &quot;I do mind&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;rust__backend&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/tuttoweb/Documents/repositories/nms&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;project.propVCSSupport.DirectoryMappings&quot;
+  }
+}</component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/frontend/templates" />
+      <recent name="$PROJECT_DIR$/images" />
+      <recent name="$PROJECT_DIR$/frontend/static" />
+      <recent name="$PROJECT_DIR$/templates" />
+      <recent name="$PROJECT_DIR$/backend_server/v1" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/backend_server/events" />
+      <recent name="$PROJECT_DIR$" />
+      <recent name="$PROJECT_DIR$/frontend" />
+      <recent name="$PROJECT_DIR$/box/src/utils" />
+      <recent name="$PROJECT_DIR$/frontend/utils" />
+    </key>
+  </component>
+  <component name="RunManager" selected="Python.app">
+    <configuration name="app" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="nms" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="SDK_NAME" value="$USER_HOME$/miniconda3" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="DEBUG_JUST_MY_CODE" value="true" />
+      <option name="RUN_TOOL" value="" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/frontend/app.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="check_perms" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="nms" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="SDK_NAME" value="$USER_HOME$/miniconda3" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="DEBUG_JUST_MY_CODE" value="true" />
+      <option name="RUN_TOOL" value="" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/check_perms.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <list>
+      <item itemvalue="Python.app" />
+      <item itemvalue="Python.check_perms" />
+    </list>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.app" />
+        <item itemvalue="Python.check_perms" />
+        <item itemvalue="Python.check_perms" />
+        <item itemvalue="Python.app" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-python-sdk-6fa658e1df1a-5bd6d13a2a75-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-262.8665.369" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="0ddb49fd-44e3-4605-a704-cc1f15248c46" name="Changes" comment="" />
+      <created>1762034282613</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1762034282613</updated>
+    </task>
+    <task id="LOCAL-00040" summary="need to restore the pool import bc it wasn't restored in the backend. It appears only import-key is there. Some bugs in net.py of the backend should be fixed now">
+      <option name="closed" value="true" />
+      <created>1773691097734</created>
+      <option name="number" value="00040" />
+      <option name="presentableId" value="LOCAL-00040" />
+      <option name="project" value="LOCAL" />
+      <updated>1773691097734</updated>
+    </task>
+    <task id="LOCAL-00041" summary="restored pool import (attach). Fixed the installation program. Handled the alignment between users and home dir when a new pool is created/imported. All to be tested :)">
+      <option name="closed" value="true" />
+      <created>1773705859236</created>
+      <option name="number" value="00041" />
+      <option name="presentableId" value="LOCAL-00041" />
+      <option name="project" value="LOCAL" />
+      <updated>1773705859236</updated>
+    </task>
+    <task id="LOCAL-00042" summary="fixed again the bash installation file">
+      <option name="closed" value="true" />
+      <created>1773707067539</created>
+      <option name="number" value="00042" />
+      <option name="presentableId" value="LOCAL-00042" />
+      <option name="project" value="LOCAL" />
+      <updated>1773707067539</updated>
+    </task>
+    <task id="LOCAL-00043" summary="too much copy and paste can hurt">
+      <option name="closed" value="true" />
+      <created>1773707750274</created>
+      <option name="number" value="00043" />
+      <option name="presentableId" value="LOCAL-00043" />
+      <option name="project" value="LOCAL" />
+      <updated>1773707750274</updated>
+    </task>
+    <task id="LOCAL-00044" summary="fixed a minor bug in importing pools">
+      <option name="closed" value="true" />
+      <created>1773708207535</created>
+      <option name="number" value="00044" />
+      <option name="presentableId" value="LOCAL-00044" />
+      <option name="project" value="LOCAL" />
+      <updated>1773708207535</updated>
+    </task>
+    <task id="LOCAL-00045" summary="minor bugs with forms fixed">
+      <option name="closed" value="true" />
+      <created>1773709303356</created>
+      <option name="number" value="00045" />
+      <option name="presentableId" value="LOCAL-00045" />
+      <option name="project" value="LOCAL" />
+      <updated>1773709303356</updated>
+    </task>
+    <task id="LOCAL-00046" summary="minor bug in changing username fixed (hopefully)">
+      <option name="closed" value="true" />
+      <created>1773709585240</created>
+      <option name="number" value="00046" />
+      <option name="presentableId" value="LOCAL-00046" />
+      <option name="project" value="LOCAL" />
+      <updated>1773709585240</updated>
+    </task>
+    <task id="LOCAL-00047" summary="minor bug in changing fullname fixed (hopefully)">
+      <option name="closed" value="true" />
+      <created>1773710219339</created>
+      <option name="number" value="00047" />
+      <option name="presentableId" value="LOCAL-00047" />
+      <option name="project" value="LOCAL" />
+      <updated>1773710219339</updated>
+    </task>
+    <task id="LOCAL-00048" summary="fix frontend nms update issue. self install now picks from last release (untested yet - no releases yet). Improved logging (Still some work needs to be done, but now it's better). Italian support improved. New badass readme">
+      <option name="closed" value="true" />
+      <created>1774053263213</created>
+      <option name="number" value="00048" />
+      <option name="presentableId" value="LOCAL-00048" />
+      <option name="project" value="LOCAL" />
+      <updated>1774053263213</updated>
+    </task>
+    <task id="LOCAL-00049" summary="box almost over: zip/unzip implemented, file dowload. What it's missing is babel and we are good to go. Added some files that for some reasons they were not in github. added some packages in the installation to support multiple unzipping. For this reason, README has been updated accordingly. API.md also updated.">
+      <option name="closed" value="true" />
+      <created>1774224388213</created>
+      <option name="number" value="00049" />
+      <option name="presentableId" value="LOCAL-00049" />
+      <option name="project" value="LOCAL" />
+      <updated>1774224388213</updated>
+    </task>
+    <task id="LOCAL-00050" summary="fixed syntax error in install script">
+      <option name="closed" value="true" />
+      <created>1774299828631</created>
+      <option name="number" value="00050" />
+      <option name="presentableId" value="LOCAL-00050" />
+      <option name="project" value="LOCAL" />
+      <updated>1774299828631</updated>
+    </task>
+    <task id="LOCAL-00051" summary="fixed raspi-config error into warning. raspbian trixie comes with networkmanager already configured apparently. So that step can be skipped.">
+      <option name="closed" value="true" />
+      <created>1774302777620</created>
+      <option name="number" value="00051" />
+      <option name="presentableId" value="LOCAL-00051" />
+      <option name="project" value="LOCAL" />
+      <updated>1774302777621</updated>
+    </task>
+    <task id="LOCAL-00052" summary="raspbian config getting closer">
+      <option name="closed" value="true" />
+      <created>1774303463991</created>
+      <option name="number" value="00052" />
+      <option name="presentableId" value="LOCAL-00052" />
+      <option name="project" value="LOCAL" />
+      <updated>1774303463991</updated>
+    </task>
+    <task id="LOCAL-00053" summary="i think the installation script had a big fat bug when it was running as a user &amp; sudo'd">
+      <option name="closed" value="true" />
+      <created>1774303769159</created>
+      <option name="number" value="00053" />
+      <option name="presentableId" value="LOCAL-00053" />
+      <option name="project" value="LOCAL" />
+      <updated>1774303769159</updated>
+    </task>
+    <task id="LOCAL-00054" summary="fedora should be now good to go">
+      <option name="closed" value="true" />
+      <created>1774651778722</created>
+      <option name="number" value="00054" />
+      <option name="presentableId" value="LOCAL-00054" />
+      <option name="project" value="LOCAL" />
+      <updated>1774651778722</updated>
+    </task>
+    <task id="LOCAL-00055" summary="box app finished. nginx configuration adapted to deal with routes in box. backend cp fixed. I think this can be considered the first 0.1beta release. What it's missing is the SMART tools stuff. That will be done when I have real drives to play with.">
+      <option name="closed" value="true" />
+      <created>1774702508090</created>
+      <option name="number" value="00055" />
+      <option name="presentableId" value="LOCAL-00055" />
+      <option name="project" value="LOCAL" />
+      <updated>1774702508091</updated>
+    </task>
+    <task id="LOCAL-00056" summary="some minor issues in make-dist">
+      <option name="closed" value="true" />
+      <created>1774708722355</created>
+      <option name="number" value="00056" />
+      <option name="presentableId" value="LOCAL-00056" />
+      <option name="project" value="LOCAL" />
+      <updated>1774708722355</updated>
+    </task>
+    <task id="LOCAL-00057" summary="security fixes">
+      <option name="closed" value="true" />
+      <created>1774716221266</created>
+      <option name="number" value="00057" />
+      <option name="presentableId" value="LOCAL-00057" />
+      <option name="project" value="LOCAL" />
+      <updated>1774716221266</updated>
+    </task>
+    <task id="LOCAL-00058" summary="minor fix in the nms update thread">
+      <option name="closed" value="true" />
+      <created>1774717570009</created>
+      <option name="number" value="00058" />
+      <option name="presentableId" value="LOCAL-00058" />
+      <option name="project" value="LOCAL" />
+      <updated>1774717570009</updated>
+    </task>
+    <task id="LOCAL-00059" summary="stale import removed">
+      <option name="closed" value="true" />
+      <created>1774717675619</created>
+      <option name="number" value="00059" />
+      <option name="presentableId" value="LOCAL-00059" />
+      <option name="project" value="LOCAL" />
+      <updated>1774717675619</updated>
+    </task>
+    <task id="LOCAL-00060" summary="the first two releases helped me two test if the installation from last release worked (it did) and if the self-update worked (nope). This has been fixed and these changes will be added in the next release">
+      <option name="closed" value="true" />
+      <created>1774720618538</created>
+      <option name="number" value="00060" />
+      <option name="presentableId" value="LOCAL-00060" />
+      <option name="project" value="LOCAL" />
+      <updated>1774720618538</updated>
+    </task>
+    <task id="LOCAL-00061" summary="Added more stuff about radxa (untested yet)">
+      <option name="closed" value="true" />
+      <created>1776020657880</created>
+      <option name="number" value="00061" />
+      <option name="presentableId" value="LOCAL-00061" />
+      <option name="project" value="LOCAL" />
+      <updated>1776020657880</updated>
+    </task>
+    <task id="LOCAL-00062" summary="converted events into classes/objects and starting my inotify journey">
+      <option name="closed" value="true" />
+      <created>1776988363951</created>
+      <option name="number" value="00062" />
+      <option name="presentableId" value="LOCAL-00062" />
+      <option name="project" value="LOCAL" />
+      <updated>1776988363951</updated>
+    </task>
+    <task id="LOCAL-00063" summary="implemented wifi hotspot which also activates when no ifaces are configured as a safe guard. this needs to be documented">
+      <option name="closed" value="true" />
+      <created>1777506841076</created>
+      <option name="number" value="00063" />
+      <option name="presentableId" value="LOCAL-00063" />
+      <option name="project" value="LOCAL" />
+      <updated>1777506841076</updated>
+    </task>
+    <task id="LOCAL-00064" summary="file sharing implemented (a few stuff needs to be still made, such as the possibility to upload files in shared dir) and of course needs to be tested">
+      <option name="closed" value="true" />
+      <created>1778954478386</created>
+      <option name="number" value="00064" />
+      <option name="presentableId" value="LOCAL-00064" />
+      <option name="project" value="LOCAL" />
+      <updated>1778954478386</updated>
+    </task>
+    <task id="LOCAL-00065" summary="jellyfin integration done">
+      <option name="closed" value="true" />
+      <created>1779582201799</created>
+      <option name="number" value="00065" />
+      <option name="presentableId" value="LOCAL-00065" />
+      <option name="project" value="LOCAL" />
+      <updated>1779582201799</updated>
+    </task>
+    <task id="LOCAL-00066" summary="minor production bug fixed. Rpi temp/volt now should be integrated. SMARTCTL bug fixed. HDD detection also fixed in production. These minor bugs should be solved by now.">
+      <option name="closed" value="true" />
+      <created>1782173957127</created>
+      <option name="number" value="00066" />
+      <option name="presentableId" value="LOCAL-00066" />
+      <option name="project" value="LOCAL" />
+      <updated>1782173957128</updated>
+    </task>
+    <task id="LOCAL-00067" summary="Apart from some unexpected minor bug that will come up in production, rc1 seems complete">
+      <option name="closed" value="true" />
+      <created>1782245080127</created>
+      <option name="number" value="00067" />
+      <option name="presentableId" value="LOCAL-00067" />
+      <option name="project" value="LOCAL" />
+      <updated>1782245080127</updated>
+    </task>
+    <task id="LOCAL-00068" summary="security improved in several areas - licence changed to AGPL, install file can update nginx config file when required now.">
+      <option name="closed" value="true" />
+      <created>1782259005607</created>
+      <option name="number" value="00068" />
+      <option name="presentableId" value="LOCAL-00068" />
+      <option name="project" value="LOCAL" />
+      <updated>1782259005607</updated>
+    </task>
+    <task id="LOCAL-00069" summary="now uid can be changed, facilitating integration with NFS and existing linux users">
+      <option name="closed" value="true" />
+      <created>1782344654378</created>
+      <option name="number" value="00069" />
+      <option name="presentableId" value="LOCAL-00069" />
+      <option name="project" value="LOCAL" />
+      <updated>1782344654379</updated>
+    </task>
+    <task id="LOCAL-00070" summary="added info to README">
+      <option name="closed" value="true" />
+      <created>1782344869229</created>
+      <option name="number" value="00070" />
+      <option name="presentableId" value="LOCAL-00070" />
+      <option name="project" value="LOCAL" />
+      <updated>1782344869229</updated>
+    </task>
+    <task id="LOCAL-00071" summary="improved install procedure because it didn't include pip install -r requirements">
+      <option name="closed" value="true" />
+      <created>1782347374460</created>
+      <option name="number" value="00071" />
+      <option name="presentableId" value="LOCAL-00071" />
+      <option name="project" value="LOCAL" />
+      <updated>1782347374460</updated>
+    </task>
+    <task id="LOCAL-00072" summary="tiny change to nms_sysconf.sh">
+      <option name="closed" value="true" />
+      <created>1782349882765</created>
+      <option name="number" value="00072" />
+      <option name="presentableId" value="LOCAL-00072" />
+      <option name="project" value="LOCAL" />
+      <updated>1782349882765</updated>
+    </task>
+    <task id="LOCAL-00073" summary="forgotten these files">
+      <option name="closed" value="true" />
+      <created>1782376871447</created>
+      <option name="number" value="00073" />
+      <option name="presentableId" value="LOCAL-00073" />
+      <option name="project" value="LOCAL" />
+      <updated>1782376871447</updated>
+    </task>
+    <task id="LOCAL-00074" summary="forgotten these files">
+      <option name="closed" value="true" />
+      <created>1782376890062</created>
+      <option name="number" value="00074" />
+      <option name="presentableId" value="LOCAL-00074" />
+      <option name="project" value="LOCAL" />
+      <updated>1782376890062</updated>
+    </task>
+    <task id="LOCAL-00075" summary="added splash screen + bug fixed in nfs">
+      <option name="closed" value="true" />
+      <created>1782399674195</created>
+      <option name="number" value="00075" />
+      <option name="presentableId" value="LOCAL-00075" />
+      <option name="project" value="LOCAL" />
+      <updated>1782399674195</updated>
+    </task>
+    <task id="LOCAL-00076" summary="minor bug fixed in hdd temp detection and disk symlink path detection. Improved radxactl both script and systemd configuration">
+      <option name="closed" value="true" />
+      <created>1782431143440</created>
+      <option name="number" value="00076" />
+      <option name="presentableId" value="LOCAL-00076" />
+      <option name="project" value="LOCAL" />
+      <updated>1782431143441</updated>
+    </task>
+    <task id="LOCAL-00077" summary="fixed minor bug with ddns forms">
+      <option name="closed" value="true" />
+      <created>1784045758343</created>
+      <option name="number" value="00077" />
+      <option name="presentableId" value="LOCAL-00077" />
+      <option name="project" value="LOCAL" />
+      <updated>1784045758344</updated>
+    </task>
+    <task id="LOCAL-00078" summary="reimplemented most of the cmdl wrappers in rust, although still missing the most important ones">
+      <option name="closed" value="true" />
+      <created>1784064357342</created>
+      <option name="number" value="00078" />
+      <option name="presentableId" value="LOCAL-00078" />
+      <option name="project" value="LOCAL" />
+      <updated>1784064357342</updated>
+    </task>
+    <task id="LOCAL-00079" summary="implemented first route with axum and preparing the backend to manage users.">
+      <option name="closed" value="true" />
+      <created>1784362675777</created>
+      <option name="number" value="00079" />
+      <option name="presentableId" value="LOCAL-00079" />
+      <option name="project" value="LOCAL" />
+      <updated>1784362675777</updated>
+    </task>
+    <task id="LOCAL-00080" summary="implemented user loading and events to reload users. Next step is to do the permission check">
+      <option name="closed" value="true" />
+      <created>1784378136752</created>
+      <option name="number" value="00080" />
+      <option name="presentableId" value="LOCAL-00080" />
+      <option name="project" value="LOCAL" />
+      <updated>1784378136752</updated>
+    </task>
+    <task id="LOCAL-00081" summary="so much has been implemented that I forgot what.&#10;Permission and permission basic check (still pending the homogenisation but that will come much later). Token JWT generation done (what's it's missing is to read the key from the env). First login token generation seems working.">
+      <option name="closed" value="true" />
+      <created>1784421498543</created>
+      <option name="number" value="00081" />
+      <option name="presentableId" value="LOCAL-00081" />
+      <option name="project" value="LOCAL" />
+      <updated>1784421498543</updated>
+    </task>
+    <task id="LOCAL-00082" summary="habemus OTP">
+      <option name="closed" value="true" />
+      <created>1784456626040</created>
+      <option name="number" value="00082" />
+      <option name="presentableId" value="LOCAL-00082" />
+      <option name="project" value="LOCAL" />
+      <updated>1784456626041</updated>
+    </task>
+    <task id="LOCAL-00083" summary="JWT expired?">
+      <option name="closed" value="true" />
+      <created>1784673817016</created>
+      <option name="number" value="00083" />
+      <option name="presentableId" value="LOCAL-00083" />
+      <option name="project" value="LOCAL" />
+      <updated>1784673817016</updated>
+    </task>
+    <task id="LOCAL-00084" summary="moving the first steps towards VFS with ZFS integration">
+      <option name="closed" value="true" />
+      <created>1784850537748</created>
+      <option name="number" value="00084" />
+      <option name="presentableId" value="LOCAL-00084" />
+      <option name="project" value="LOCAL" />
+      <updated>1784850537748</updated>
+    </task>
+    <task id="LOCAL-00085" summary="a lot of warnings fixed">
+      <option name="closed" value="true" />
+      <created>1784919830222</created>
+      <option name="number" value="00085" />
+      <option name="presentableId" value="LOCAL-00085" />
+      <option name="project" value="LOCAL" />
+      <updated>1784919830222</updated>
+    </task>
+    <task id="LOCAL-00086" summary="forgot to add these files">
+      <option name="closed" value="true" />
+      <created>1784919861031</created>
+      <option name="number" value="00086" />
+      <option name="presentableId" value="LOCAL-00086" />
+      <option name="project" value="LOCAL" />
+      <updated>1784919861031</updated>
+    </task>
+    <task id="LOCAL-00087" summary="keeping making strides with adding pool properties.">
+      <option name="closed" value="true" />
+      <created>1785002249785</created>
+      <option name="number" value="00087" />
+      <option name="presentableId" value="LOCAL-00087" />
+      <option name="project" value="LOCAL" />
+      <updated>1785002249785</updated>
+    </task>
+    <task id="LOCAL-00088" summary="all pool properties implemented - most to be tested">
+      <option name="closed" value="true" />
+      <created>1785016770429</created>
+      <option name="number" value="00088" />
+      <option name="presentableId" value="LOCAL-00088" />
+      <option name="project" value="LOCAL" />
+      <updated>1785016770429</updated>
+    </task>
+    <option name="localTasksCounter" value="89" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <ignored-roots>
+      <path value="$PROJECT_DIR$/nms_backend" />
+    </ignored-roots>
+    <MESSAGE value="implemented wifi hotspot which also activates when no ifaces are configured as a safe guard. this needs to be documented" />
+    <MESSAGE value="file sharing implemented (a few stuff needs to be still made, such as the possibility to upload files in shared dir) and of course needs to be tested" />
+    <MESSAGE value="jellyfin integration done" />
+    <MESSAGE value="minor production bug fixed. Rpi temp/volt now should be integrated. SMARTCTL bug fixed. HDD detection also fixed in production. These minor bugs should be solved by now." />
+    <MESSAGE value="Apart from some unexpected minor bug that will come up in production, rc1 seems complete" />
+    <MESSAGE value="security improved in several areas - licence changed to AGPL, install file can update nginx config file when required now." />
+    <MESSAGE value="now uid can be changed, facilitating integration with NFS and existing linux users" />
+    <MESSAGE value="added info to README" />
+    <MESSAGE value="improved install procedure because it didn't include pip install -r requirements" />
+    <MESSAGE value="tiny change to nms_sysconf.sh" />
+    <MESSAGE value="forgotten these files" />
+    <MESSAGE value="added splash screen + bug fixed in nfs" />
+    <MESSAGE value="minor bug fixed in hdd temp detection and disk symlink path detection. Improved radxactl both script and systemd configuration" />
+    <MESSAGE value="fixed minor bug with ddns forms" />
+    <MESSAGE value="reimplemented most of the cmdl wrappers in rust, although still missing the most important ones" />
+    <MESSAGE value="implemented first route with axum and preparing the backend to manage users." />
+    <MESSAGE value="implemented user loading and events to reload users. Next step is to do the permission check" />
+    <MESSAGE value="so much has been implemented that I forgot what.&#10;Permission and permission basic check (still pending the homogenisation but that will come much later). Token JWT generation done (what's it's missing is to read the key from the env). First login token generation seems working." />
+    <MESSAGE value="habemus OTP" />
+    <MESSAGE value="JWT expired?" />
+    <MESSAGE value="moving the first steps towards VFS with ZFS integration" />
+    <MESSAGE value="a lot of warnings fixed" />
+    <MESSAGE value="forgot to add these files" />
+    <MESSAGE value="keeping making strides with adding pool properties." />
+    <MESSAGE value="all pool properties implemented - most to be tested" />
+    <option name="LAST_COMMIT_MESSAGE" value="all pool properties implemented - most to be tested" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/backend_client/config.py</url>
+          <line>2</line>
+          <option name="timeStamp" value="13" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/frontend/__init__.py</url>
+          <option name="timeStamp" value="22" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/nms_shared/src/nms_shared/constants.py</url>
+          <option name="timeStamp" value="25" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/backend_server/utils/cmdl.py</url>
+          <line>1031</line>
+          <option name="timeStamp" value="32" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/backend_server/v1/system.py</url>
+          <option name="timeStamp" value="33" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
+  </component>
+</project>

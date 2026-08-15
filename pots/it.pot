@@ -1,0 +1,2700 @@
+# Translations template for PROJECT.
+# Copyright (C) 2026 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-06-25 00:36+0100\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: frontend/advanced.py:66 frontend/disks.py:67
+#: frontend/templates/card.ddns.html:26
+msgid "Never"
+msgstr ""
+
+#: frontend/advanced.py:295 frontend/advanced.py:346
+#: frontend/templates/advanced.html:3 frontend/templates/index.html:54
+#: frontend/users.py:23
+msgid "Advanced"
+msgstr ""
+
+#: frontend/advanced.py:296 frontend/templates/advanced.logs.html:3
+#: frontend/templates/card.sys_admin.html:11
+msgid "System Logs"
+msgstr ""
+
+#: frontend/advanced.py:347 frontend/templates/card.sys_admin.html:27
+#: frontend/templates/events.html:3
+msgid "Events"
+msgstr ""
+
+#: frontend/advanced.py:553
+msgid ""
+"Update in progress. At the end of this operation, NMS will be restarted. "
+"You may refresh this page. If it becomes unresponsive, wait a few more "
+"seconds and retry."
+msgstr ""
+
+#: frontend/disks.py:97 frontend/templates/card.disk_list.html:39
+#: frontend/templates/card.disk_usage.html:61
+#: frontend/templates/disk_mngt.html:3 frontend/templates/index.html:34
+msgid "Disk Management"
+msgstr ""
+
+#: frontend/disks.py:98 frontend/templates/card.disk.html:26
+msgid "Check disk health"
+msgstr ""
+
+#: frontend/users.py:17
+msgid "Web Client"
+msgstr ""
+
+#: frontend/templates/dashboard.html:3 frontend/templates/index.html:6
+#: frontend/templates/index.html:30 frontend/users.py:18
+msgid "Dashboard"
+msgstr ""
+
+#: frontend/users.py:19
+msgid "Access"
+msgstr ""
+
+#: frontend/templates/card.network_list.html:3
+#: frontend/templates/card.network_list.html:26
+#: frontend/templates/index.html:39 frontend/templates/network.html:3
+#: frontend/users.py:20 frontend/users.py:41
+msgid "Network"
+msgstr ""
+
+#: frontend/templates/card.access_list.html:3
+#: frontend/templates/card.account_services.html:3
+#: frontend/templates/card.user_admin_services.html:3 frontend/users.py:21
+msgid "Access Services"
+msgstr ""
+
+#: frontend/templates/index.html:44 frontend/templates/users.html:3
+#: frontend/users.py:22
+msgid "Users"
+msgstr ""
+
+#: frontend/templates/card.disk_usage.html:9 frontend/users.py:25
+msgid "Disk Array"
+msgstr ""
+
+#: frontend/users.py:26 frontend/utils/forms.py:88
+msgid "Disks"
+msgstr ""
+
+#: frontend/users.py:27
+msgid "Health"
+msgstr ""
+
+#: frontend/users.py:28
+msgid "Format"
+msgstr ""
+
+#: frontend/users.py:29
+msgid "Tools"
+msgstr ""
+
+#: frontend/templates/card.disk_tools.html:10 frontend/users.py:30
+msgid "Verify"
+msgstr ""
+
+#: frontend/templates/card.disk_tools.html:47 frontend/users.py:31
+msgid "Mount"
+msgstr ""
+
+#: frontend/users.py:32
+msgid "Configuration"
+msgstr ""
+
+#: frontend/users.py:33
+msgid "Create"
+msgstr ""
+
+#: frontend/users.py:34
+msgid "Import"
+msgstr ""
+
+#: frontend/users.py:35
+msgid "Expand"
+msgstr ""
+
+#: frontend/users.py:36
+msgid "Destroy"
+msgstr ""
+
+#: frontend/users.py:37
+msgid "Recover"
+msgstr ""
+
+#: frontend/templates/card.disk.html:17 frontend/users.py:38
+msgid "Replace"
+msgstr ""
+
+#: frontend/users.py:39
+msgid "Get Information"
+msgstr ""
+
+#: frontend/users.py:42 frontend/utils/filters.py:64
+msgid "Interface"
+msgstr ""
+
+#: frontend/users.py:43
+msgid "Manage"
+msgstr ""
+
+#: frontend/templates/card.ddns.html:3 frontend/users.py:44
+msgid "Dynamic DNS"
+msgstr ""
+
+#: frontend/templates/card.vpn.html:4 frontend/users.py:45
+msgid "VPN"
+msgstr ""
+
+#: frontend/users.py:47
+msgid "System"
+msgstr ""
+
+#: frontend/users.py:48
+msgid "Administration"
+msgstr ""
+
+#: frontend/users.py:49
+msgid "Power Control"
+msgstr ""
+
+#: frontend/templates/card.apt.html:3 frontend/users.py:50
+msgid "Updates"
+msgstr ""
+
+#: frontend/users.py:51
+msgid "System Services"
+msgstr ""
+
+#: frontend/users.py:52
+msgid "Logs"
+msgstr ""
+
+#: frontend/templates/account.html:3 frontend/templates/card.account.html:3
+#: frontend/templates/card.account_admin.html:9 frontend/users.py:54
+msgid "Account"
+msgstr ""
+
+#: frontend/users.py:179
+msgid "No Title"
+msgstr ""
+
+#: frontend/api/backend_proxy.py:298
+msgid "Uptime"
+msgstr ""
+
+#: frontend/api/backend_proxy.py:298
+msgid "Since"
+msgstr ""
+
+#: frontend/api/backend_proxy.py:299
+msgid "NMS Version"
+msgstr ""
+
+#: frontend/api/backend_proxy.py:300
+msgid "CPU"
+msgstr ""
+
+#: frontend/api/backend_proxy.py:301
+msgid "OS"
+msgstr ""
+
+#: frontend/api/backend_proxy.py:361 frontend/utils/forms.py:84
+msgid "Encryption"
+msgstr ""
+
+#: frontend/api/backend_proxy.py:362 frontend/utils/forms.py:83
+msgid "Redundancy"
+msgstr ""
+
+#: frontend/api/backend_proxy.py:363 frontend/utils/forms.py:85
+msgid "Compression"
+msgstr ""
+
+#: frontend/api/tasks.py:31
+msgid "h"
+msgstr ""
+
+#: frontend/api/tasks.py:33
+msgid "m"
+msgstr ""
+
+#: frontend/api/tasks.py:35
+msgid "s"
+msgstr ""
+
+#: frontend/templates/401.html:13
+msgid "Unauthorized Access"
+msgstr ""
+
+#: frontend/templates/401.html:17
+msgid "You do not have permission to access this resource."
+msgstr ""
+
+#: frontend/templates/401.html:18
+msgid "Please log in with appropriate credentials or contact the administrator."
+msgstr ""
+
+#: frontend/templates/401.html:29
+msgid "Go to Login"
+msgstr ""
+
+#: frontend/templates/access.html:3 frontend/templates/index.html:49
+msgid "Remote Access"
+msgstr ""
+
+#: frontend/templates/advanced.logs.html:10
+msgid "Web App"
+msgstr ""
+
+#: frontend/templates/advanced.logs.html:13
+msgid "Backend"
+msgstr ""
+
+#: frontend/templates/advanced.logs.html:17
+msgid "Web Server"
+msgstr ""
+
+#: frontend/templates/advanced.logs.html:36
+msgid "Filter"
+msgstr ""
+
+#: frontend/templates/card.access.ftp.html:12
+#: frontend/templates/card.access.mediaserver.html:31
+#: frontend/templates/card.access.nfs.html:39
+#: frontend/templates/card.access.smb.html:16
+#: frontend/templates/card.access.ssh.html:21
+#: frontend/templates/card.access.web.html:15
+#: frontend/templates/form.ddns.dnsexit.html:19
+#: frontend/templates/form.ddns.duckdns.html:19
+#: frontend/templates/form.ddns.freedns.html:15
+#: frontend/templates/form.ddns.html:19
+msgid "Disable"
+msgstr ""
+
+#: frontend/templates/card.access.ftp.html:18
+#: frontend/templates/card.access.mediaserver.html:37
+#: frontend/templates/card.access.nfs.html:45
+#: frontend/templates/card.access.smb.html:18
+#: frontend/templates/card.access.ssh.html:23
+#: frontend/templates/card.access.web.html:21
+#: frontend/templates/form.ddns.dnsexit.html:15
+#: frontend/templates/form.ddns.duckdns.html:15
+#: frontend/templates/form.ddns.freedns.html:11
+#: frontend/templates/form.ddns.html:15
+msgid "Enable"
+msgstr ""
+
+#: frontend/templates/card.access.ftp.html:25
+#: frontend/templates/card.access.mediaserver.html:44
+#: frontend/templates/card.access.nfs.html:52
+#: frontend/templates/card.access.smb.html:25
+#: frontend/templates/card.access.ssh.html:30
+#: frontend/templates/card.access.web.html:28
+#, python-format
+msgid "Connecting using %(service)s"
+msgstr ""
+
+#: frontend/templates/card.access.ftp.html:28
+#, python-format
+msgid ""
+"Download an FTP Client. There are many available with pros and cons. If "
+"you are not sure what to use, download %(fz_start)sFileZilla%(fz_end)s, "
+"as it's cross-platform."
+msgstr ""
+
+#: frontend/templates/card.access.ftp.html:29
+#, python-format
+msgid ""
+"Insert the IP of this NAS (you can find in the Network tab) in "
+"%(st_code)sHost%(e_code)s."
+msgstr ""
+
+#: frontend/templates/card.access.ftp.html:30
+#, python-format
+msgid ""
+"The %(st_code)susername%(e_code)s and %(st_code)spassword%(e_code)s to "
+"use here are the same as you set for the %(st_code)sSSH%(e_code)s service"
+" (SSH service is not required to be enabled, but they share the same "
+"username)."
+msgstr ""
+
+#: frontend/templates/card.access.ftp.html:31
+#, python-format
+msgid ""
+"Leave the %(st_code)sPort%(e_code)s either blank or the default value you"
+" already find there."
+msgstr ""
+
+#: frontend/templates/card.access.ftp.html:32
+#, python-format
+msgid ""
+"Press %(st_code)sQuickconnect%(e_code)s (or equivalent for your FTP "
+"client)."
+msgstr ""
+
+#: frontend/templates/card.access.ftp.html:33
+#, python-format
+msgid "Transfer files inside %(st_code)s%(mountpoint)s%(e_code)s"
+msgstr ""
+
+#: frontend/templates/card.access.mediaserver.html:22
+msgid ""
+"Enter the username that will contain all the media (e.g. video) files. It"
+" is recommended to create a specific user that collects all the media you"
+" wish to stream"
+msgstr ""
+
+#: frontend/templates/card.access.mediaserver.html:46
+#, python-format
+msgid ""
+"Using this browser, go to %(st_code)shttp://IP:%(port)s%(e_code)s. "
+"Replace %(st_code)sIP%(e_code)s with the IP address/hostname of this NAS "
+"(you can find in the Network tab)."
+msgstr ""
+
+#: frontend/templates/card.access.mediaserver.html:47
+msgid ""
+"Differently than other services, Jellyfin has an autonomous management of"
+" users. If enabled for the first time, you will be asked to set an "
+"administrator account (which is separated from the one you use here) and "
+"configure your media."
+msgstr ""
+
+#: frontend/templates/card.access.nfs.html:22
+msgid ""
+"Enter the IP address (or a range of IPs) of the device you want to allow "
+"to mount your disk array via NFS. If you use DNS, you may also enter a "
+"hostname instead of an IP. Examples: "
+msgstr ""
+
+#: frontend/templates/card.access.nfs.html:24
+msgid "allows only your current device."
+msgstr ""
+
+#: frontend/templates/card.access.nfs.html:25
+msgid "allows any device in your LAN."
+msgstr ""
+
+#: frontend/templates/card.access.nfs.html:27
+msgid ""
+"If you have a VPN service enabled, remember that your VPN IP will be "
+"different from the local network IP, so you will need to allow that IP "
+"(or VPN subnet) instead."
+msgstr ""
+
+#: frontend/templates/card.access.nfs.html:53
+msgid ""
+"To make NFS mount effectively working, user ids (UIDs) must match in both"
+" ends (e.g. here and remote device)."
+msgstr ""
+
+#: frontend/templates/card.access.nfs.html:58
+#: frontend/templates/card.access.smb.html:55
+msgid "most distributions"
+msgstr ""
+
+#: frontend/templates/card.access.nfs.html:64
+#: frontend/templates/card.access.nfs.html:95
+#: frontend/templates/card.access.smb.html:61
+#: frontend/templates/card.access.ssh.html:41
+#, python-format
+msgid "Open the %(st_st)sTerminal%(e_st)s %(icon)s"
+msgstr ""
+
+#: frontend/templates/card.access.nfs.html:65
+#, python-format
+msgid ""
+"Install %(st_code)snfs%(e_code)s client if it's not already in there. "
+"Here there are some directions to it on major distributions:"
+msgstr ""
+
+#: frontend/templates/card.access.nfs.html:73
+#: frontend/templates/card.access.smb.html:70
+#, python-format
+msgid ""
+"Create a mount directory in either %(st_code)s/media%(e_code)s or "
+"%(st_code)s/mnt%(e_code)s. For example"
+msgstr ""
+
+#: frontend/templates/card.access.nfs.html:76
+#: frontend/templates/card.access.nfs.html:99
+#: frontend/templates/card.access.nfs.html:123
+#: frontend/templates/card.access.smb.html:73
+#: frontend/templates/card.access.ssh.html:42
+msgid "Type the following command"
+msgstr ""
+
+#: frontend/templates/card.access.nfs.html:79
+#: frontend/templates/card.access.nfs.html:102
+#: frontend/templates/card.access.nfs.html:126
+#: frontend/templates/card.access.smb.html:76
+#: frontend/templates/card.access.ssh.html:45
+#, python-format
+msgid ""
+"You should replace %(st_code)sIP%(e_code)s with the IP address you can "
+"find in the Network tab."
+msgstr ""
+
+#: frontend/templates/card.access.nfs.html:80
+#: frontend/templates/card.access.nfs.html:103
+#, python-format
+msgid ""
+"Adapt %(st_code)s/media/nms%(e_code)s as per step (%(step)i) if you used "
+"a different setup."
+msgstr ""
+
+#: frontend/templates/card.access.nfs.html:96
+#, python-format
+msgid "Create a mount directory in %(st_code)s/Volumes%(e_code)s. For example"
+msgstr ""
+
+#: frontend/templates/card.access.nfs.html:122
+#, python-format
+msgid "Open %(st_code)sPowershell%(e_code)s."
+msgstr ""
+
+#: frontend/templates/card.access.nfs.html:127
+#, python-format
+msgid "You can choose a different unit letter than %(st_code)sZ:%(e_code)s."
+msgstr ""
+
+#: frontend/templates/card.access.smb.html:36
+#, python-format
+msgid "Open %(st_code)sFiles%(e_code)s."
+msgstr ""
+
+#: frontend/templates/card.access.smb.html:37
+#, python-format
+msgid "Go to %(st_code)sOther locations%(e_code)s."
+msgstr ""
+
+#: frontend/templates/card.access.smb.html:38
+#, python-format
+msgid ""
+"Go to the textbox at the bottom saying %(st_code)sEnter server "
+"address...%(e_code)s."
+msgstr ""
+
+#: frontend/templates/card.access.smb.html:40
+#, python-format
+msgid ""
+"Type %(st_code)ssmb://IP/NMS%(e_code)s. Replace %(st_code)sIP%(e_code)s "
+"with the IP address/hostname of this NAS (you can find in the Network "
+"tab)."
+msgstr ""
+
+#: frontend/templates/card.access.smb.html:41
+#: frontend/templates/card.access.smb.html:44
+#: frontend/templates/card.access.smb.html:113
+#, python-format
+msgid "Press %(st_code)sConnect%(e_code)s."
+msgstr ""
+
+#: frontend/templates/card.access.smb.html:42
+#, python-format
+msgid "When prompted, selected %(st_code)sRegistered user%(e_code)s."
+msgstr ""
+
+#: frontend/templates/card.access.smb.html:43
+#: frontend/templates/card.access.smb.html:112
+#, python-format
+msgid ""
+"Type %(st_code)s%(uname)s%(e_code)s and the password you have set for "
+"this service."
+msgstr ""
+
+#: frontend/templates/card.access.smb.html:62
+#, python-format
+msgid ""
+"Install the Common Internet File System (%(st_code)sCIFS%(e_code)s) "
+"utilities if they are not already in there. Here there are some "
+"directions to it on major distributions:"
+msgstr ""
+
+#: frontend/templates/card.access.smb.html:77
+#: frontend/templates/card.access.ssh.html:47
+msgid "Type your password once asked."
+msgstr ""
+
+#: frontend/templates/card.access.smb.html:92
+#, python-format
+msgid "Open %(st_code)sFinder%(e_code)s."
+msgstr ""
+
+#: frontend/templates/card.access.smb.html:93
+#, python-format
+msgid "In the menu on top, press %(st_code)sGo > Connect to Server%(e_code)s."
+msgstr ""
+
+#: frontend/templates/card.access.smb.html:109
+#, python-format
+msgid "Open %(st_code)sFile Manager%(e_code)s."
+msgstr ""
+
+#: frontend/templates/card.access.smb.html:110
+#, python-format
+msgid ""
+"In the textbox for the path, insert %(st_code)s\\\\IP\\NMS%(e_code)s. "
+"Replace %(st_code)sIP%(e_code)s with the IP address/hostname of this NAS "
+"(you can find in the Network tab). Then, press %(st_code)sEnter%(e_code)s"
+" key."
+msgstr ""
+
+#: frontend/templates/card.access.smb.html:111
+msgid "When prompted, insert your credential."
+msgstr ""
+
+#: frontend/templates/card.access.ssh.html:46
+#, python-format
+msgid ""
+"The first time you connect, please accept the fingerprint by typing "
+"%(st_code)syes%(e_code)s."
+msgstr ""
+
+#: frontend/templates/card.access.ssh.html:62
+#, python-format
+msgid "Download %(putty)s."
+msgstr ""
+
+#: frontend/templates/card.access.ssh.html:63
+#, python-format
+msgid ""
+"Once you have opened PuTTY, select %(st_code)sSSH%(e_code)s in "
+"%(st_em)sConnection type%(e_em)s."
+msgstr ""
+
+#: frontend/templates/card.access.ssh.html:64
+#, python-format
+msgid ""
+"Insert the IP of this NAS (you can find in the Network tab) in "
+"%(st_code)sHostname%(e_code)s."
+msgstr ""
+
+#: frontend/templates/card.access.ssh.html:65
+#, python-format
+msgid "Change %(st_code)sPort%(e_code)s with %(st_code)s%(port)i%(e_code)s."
+msgstr ""
+
+#: frontend/templates/card.access.ssh.html:66
+#, python-format
+msgid "Press %(st_code)sOpen%(e_code)s."
+msgstr ""
+
+#: frontend/templates/card.access.ssh.html:67
+#, python-format
+msgid ""
+"You will be asked for your %(st_code)slogin%(e_code)s (username) and "
+"%(st_code)spassword%(e_code)s."
+msgstr ""
+
+#: frontend/templates/card.access.web.html:30
+#, python-format
+msgid ""
+"Using this browser, go to %(st_code)shttp://IP/box%(e_code)s. Replace "
+"%(st_code)sIP%(e_code)s with the IP address/hostname of this NAS (you can"
+" find in the Network tab)."
+msgstr ""
+
+#: frontend/templates/card.account.html:9
+msgid "User name"
+msgstr ""
+
+#: frontend/templates/card.account.html:15
+#: frontend/templates/card.account_admin.html:54
+#: frontend/templates/user.add.html:23
+msgid "Visible Name"
+msgstr ""
+
+#: frontend/templates/card.account.html:23
+#: frontend/templates/card.account_admin.html:76
+#: frontend/templates/user.add.html:28
+msgid "Quota"
+msgstr ""
+
+#: frontend/templates/card.account.html:28 frontend/templates/card.apt.html:64
+#: frontend/utils/filters.py:35
+msgid "No"
+msgstr ""
+
+#: frontend/templates/card.account_admin.html:5
+msgid "System Admin"
+msgstr ""
+
+#: frontend/templates/card.account_admin.html:20
+msgid "Available Users"
+msgstr ""
+
+#: frontend/templates/card.account_admin.html:23
+msgid "Create a new system user"
+msgstr ""
+
+#: frontend/templates/card.account_admin.html:35
+msgid ""
+"This user will be renamed according to the system user selected. This may"
+" cause the user to be logged out."
+msgstr ""
+
+#: frontend/templates/card.account_admin.html:45
+#: frontend/templates/form.ddns.html:5 frontend/templates/user.add.html:18
+#: frontend/utils/forms.py:146 nms_shared/src/nms_shared/msg.py:555
+msgid "Username"
+msgstr ""
+
+#: frontend/templates/card.account_admin.html:64
+msgid "User ID"
+msgstr ""
+
+#: frontend/templates/card.account_admin.html:83
+msgid "Used Space"
+msgstr ""
+
+#: frontend/templates/card.account_admin.html:88
+msgid "Unknown"
+msgstr ""
+
+#: frontend/templates/card.account_admin.html:98
+#: frontend/templates/user.add.html:33
+msgid "Superuser"
+msgstr ""
+
+#: frontend/templates/card.account_admin.html:116
+msgid ""
+"Provide the link above to the new user to activate their account. This "
+"token is valid for 24 hours."
+msgstr ""
+
+#: frontend/templates/card.account_admin.html:123
+msgid "Reset login credentials"
+msgstr ""
+
+#: frontend/templates/card.account_admin.html:160
+#: nms_shared/src/nms_shared/msg.py:550
+msgid "Change Permissions"
+msgstr ""
+
+#: frontend/templates/card.account_admin.html:168
+#: frontend/templates/card.account_admin.html:202
+msgid "Delete User"
+msgstr ""
+
+#: frontend/templates/card.account_admin.html:178
+msgid "Retain"
+msgstr ""
+
+#: frontend/templates/card.account_admin.html:184
+msgid "Delete permanently"
+msgstr ""
+
+#: frontend/templates/card.account_admin.html:191
+msgid "Move to"
+msgstr ""
+
+#: frontend/templates/card.account_admin.html:206
+msgid "User deletion is a permanent action and cannot be restored."
+msgstr ""
+
+#: frontend/templates/card.account_notifications.html:3
+msgid "Notifications"
+msgstr ""
+
+#: frontend/templates/card.account_notifications.html:33
+msgid "You have no new notifications."
+msgstr ""
+
+#: frontend/templates/card.account_services.html:20
+#: frontend/templates/card.user_admin_services.html:21
+msgid "Change Password"
+msgstr ""
+
+#: frontend/templates/card.add_disks.html:3
+msgid "Add Disk"
+msgstr ""
+
+#: frontend/templates/card.add_disks.html:8
+msgid "You can add one of these disks to your array."
+msgstr ""
+
+#: frontend/templates/card.add_disks.html:12
+msgid "If your disk array is using redundancy, please be aware of the following:"
+msgstr ""
+
+#: frontend/templates/card.add_disks.html:14
+msgid "This operation is experimental. Make sure your data is backed up."
+msgstr ""
+
+#: frontend/templates/card.add_disks.html:15
+msgid ""
+"Depending on the size of your disk array and its current capacity, this "
+"operation can take several hours."
+msgstr ""
+
+#: frontend/templates/card.add_disks.html:16
+msgid "Do not switch off your device if you proceed."
+msgstr ""
+
+#: frontend/templates/card.add_disks.html:39
+msgid "Add Disk to Array"
+msgstr ""
+
+#: frontend/templates/card.add_event.html:3
+msgid "New Event"
+msgstr ""
+
+#: frontend/templates/card.add_event.html:20
+msgid "Choose an action"
+msgstr ""
+
+#: frontend/templates/card.apt.html:8
+msgid "Base System"
+msgstr ""
+
+#: frontend/templates/card.apt.html:11
+#: frontend/templates/card.disk_tools.html:26
+msgid "Last check:"
+msgstr ""
+
+#: frontend/templates/card.apt.html:14
+msgid "Current updates:"
+msgstr ""
+
+#: frontend/templates/card.apt.html:23 frontend/templates/card.apt.html:72
+msgid "Check for updates"
+msgstr ""
+
+#: frontend/templates/card.apt.html:26
+msgid "Checking for updates..."
+msgstr ""
+
+#: frontend/templates/card.apt.html:35
+msgid "List of packages to update"
+msgstr ""
+
+#: frontend/templates/card.apt.html:50 frontend/templates/card.apt.html:77
+msgid "Update"
+msgstr ""
+
+#: frontend/templates/card.apt.html:53 frontend/templates/card.apt.html:80
+msgid "Updating in progress..."
+msgstr ""
+
+#: frontend/templates/card.apt.html:60
+msgid "NAS Management System"
+msgstr ""
+
+#: frontend/templates/card.apt.html:63
+msgid "New Version Available:"
+msgstr ""
+
+#: frontend/templates/card.danger_zone.html:3
+msgid "Danger Zone"
+msgstr ""
+
+#: frontend/templates/card.danger_zone.html:11
+msgid "Format Disk Array"
+msgstr ""
+
+#: frontend/templates/card.danger_zone.html:19
+msgid "Delete Disk Array"
+msgstr ""
+
+#: frontend/templates/card.danger_zone.html:27
+msgid "Attempt Recovery"
+msgstr ""
+
+#: frontend/templates/card.danger_zone.html:35
+msgid "Format Disk"
+msgstr ""
+
+#: frontend/templates/card.ddns.html:25
+msgid "Last Update"
+msgstr ""
+
+#: frontend/templates/card.ddns.html:32
+msgid "Next Update"
+msgstr ""
+
+#: frontend/templates/card.disk.html:3
+msgid "Disk"
+msgstr ""
+
+#: frontend/templates/card.disk_list.html:3
+msgid "Disk List"
+msgstr ""
+
+#: frontend/templates/card.disk_list.html:11
+#: frontend/templates/card.snapshot_list.html:13
+#: frontend/templates/card.vpn.html:78 frontend/templates/disk_smart.html:41
+msgid "Name"
+msgstr ""
+
+#: frontend/templates/card.disk_list.html:12
+msgid "Model"
+msgstr ""
+
+#: frontend/templates/card.disk_list.html:13
+msgid "Size"
+msgstr ""
+
+#: frontend/templates/card.disk_list.html:39
+msgid "No disk array configuration found."
+msgstr ""
+
+#: frontend/templates/card.disk_list.html:39
+#, python-format
+msgid "Go to %(disk_mngt)s to configure your disk array."
+msgstr ""
+
+#: frontend/templates/card.disk_tools.html:3
+msgid "Disk Tools"
+msgstr ""
+
+#: frontend/templates/card.disk_tools.html:12
+msgid "Last verification:"
+msgstr ""
+
+#: frontend/templates/card.disk_tools.html:16
+msgid "Verification in progress..."
+msgstr ""
+
+#: frontend/templates/card.disk_tools.html:24
+msgid "Check & Fix"
+msgstr ""
+
+#: frontend/templates/card.disk_tools.html:30
+msgid "Checking & Fixing in progress..."
+msgstr ""
+
+#: frontend/templates/card.disk_tools.html:40
+msgid "Unmount"
+msgstr ""
+
+#: frontend/templates/card.disk_tools.html:42
+msgid "Disk array is mounted"
+msgstr ""
+
+#: frontend/templates/card.disk_tools.html:49
+msgid "Disk array is unmounted"
+msgstr ""
+
+#: frontend/templates/card.disk_tools.html:56
+msgid "Create Snapshot"
+msgstr ""
+
+#: frontend/templates/card.disk_usage.html:3
+msgid "Storage Usage"
+msgstr ""
+
+#: frontend/templates/card.disk_usage.html:33
+msgid "Personal"
+msgstr ""
+
+#: frontend/templates/card.disk_usage.html:61
+msgid "The disk array is not mounted. You will not be able to access your data."
+msgstr ""
+
+#: frontend/templates/card.disk_usage.html:61
+#, python-format
+msgid "Go to %(disk_mngt)s and mount it."
+msgstr ""
+
+#: frontend/templates/card.event.html:18
+msgid "Event"
+msgstr ""
+
+#: frontend/templates/card.event.html:21
+msgid "Action"
+msgstr ""
+
+#: frontend/templates/card.event.html:31
+msgid "Parameter"
+msgstr ""
+
+#: frontend/templates/card.event.html:32
+msgid "Value"
+msgstr ""
+
+#: frontend/templates/card.event.html:52
+msgid "Make Changes"
+msgstr ""
+
+#: frontend/templates/card.event.html:67
+msgid "Apply Changes"
+msgstr ""
+
+#: frontend/templates/card.event.html:78
+msgid "Delete Event"
+msgstr ""
+
+#: frontend/templates/card.iface.html:60 frontend/templates/card.vpn.html:40
+msgid "Apply changes"
+msgstr ""
+
+#: frontend/templates/card.iface.html:86
+msgid "Make Hotspot"
+msgstr ""
+
+#: frontend/templates/card.iface.html:93
+msgid ""
+"By enabling the hotspot, you will be able to connect directly to this "
+"device using the network name (SSID) and password as below."
+msgstr ""
+
+#: frontend/templates/card.iface.html:94
+msgid ""
+"If no network interface are properly configured, the hotspot will be "
+"enabled automatically to allow you to configure the proper network "
+"connection."
+msgstr ""
+
+#: frontend/templates/card.iface.html:100
+msgid "Hotspot Name"
+msgstr ""
+
+#: frontend/templates/card.iface.html:101
+#: frontend/templates/card.iface.html:106
+#: frontend/templates/wifi_network_list.html:44
+msgid "If required"
+msgstr ""
+
+#: frontend/templates/card.iface.html:105 frontend/templates/form.ddns.html:10
+#: frontend/templates/wifi_network_list.html:43 frontend/utils/forms.py:168
+msgid "Password"
+msgstr ""
+
+#: frontend/templates/card.iface.html:111
+msgid "Enable Hotspot"
+msgstr ""
+
+#: frontend/templates/card.import_array.html:3
+#, python-format
+msgid "Import %(st_em)s%(pool)s%(e_em)s"
+msgstr ""
+
+#: frontend/templates/card.import_array.html:9
+#, python-format
+msgid ""
+"The following disks belong to the existing disk array "
+"%(st_em)s%(pool)s%(e_em)s:"
+msgstr ""
+
+#: frontend/templates/card.import_array.html:32
+msgid ""
+"If this disk array was encrypted and you have the key, please upload it. "
+"If you lost your key, there is no way to recover this array."
+msgstr ""
+
+#: frontend/templates/card.import_array.html:33
+msgid "If this disk array was not encrypted, just leave it blank."
+msgstr ""
+
+#: frontend/templates/card.import_array.html:39
+#, python-format
+msgid "Import %(pool)s"
+msgstr ""
+
+#: frontend/templates/card.network_list.html:29
+msgid "IPv4 Address"
+msgstr ""
+
+#: frontend/templates/card.network_list.html:36
+msgid "IPv6 Address"
+msgstr ""
+
+#: frontend/templates/card.new_array.html:3
+msgid "Create New Array"
+msgstr ""
+
+#: frontend/templates/card.new_array.html:21
+msgid ""
+"Protects data by distributing it across multiple disks with RAIDZ1 "
+"parity, allowing recovery if a single disk fails. It requires a minimum "
+"of 3 disks"
+msgstr ""
+
+#: frontend/templates/card.new_array.html:39
+msgid ""
+"Secures data by encoding it so only authorised users with the key can "
+"access the information stored on your array."
+msgstr ""
+
+#: frontend/templates/card.new_array.html:57
+msgid ""
+"Reduces storage space by automatically compressing data before writing it"
+" to disk, saving disk space."
+msgstr ""
+
+#: frontend/templates/card.new_array.html:69
+msgid "Advanced Options"
+msgstr ""
+
+#: frontend/templates/card.new_array.html:100
+msgid "Create Array"
+msgstr ""
+
+#: frontend/templates/card.scrub_report.html:3
+msgid "Last Verification Report"
+msgstr ""
+
+#: frontend/templates/card.scrub_report.html:10
+msgid "Started at"
+msgstr ""
+
+#: frontend/templates/card.scrub_report.html:13
+msgid "Ended at"
+msgstr ""
+
+#: frontend/templates/card.scrub_report.html:16
+msgid "Errors"
+msgstr ""
+
+#: frontend/templates/card.sensors.html:3
+msgid "Sensors"
+msgstr ""
+
+#: frontend/templates/card.sensors.html:30
+msgid "No sensors detected"
+msgstr ""
+
+#: frontend/templates/card.snapshot_list.html:3
+msgid "Snapshots"
+msgstr ""
+
+#: frontend/templates/card.snapshot_list.html:14
+msgid "Ref. Size"
+msgstr ""
+
+#: frontend/templates/card.snapshot_list.html:27
+msgid "Rollback"
+msgstr ""
+
+#: frontend/templates/card.snapshot_list.html:28
+msgid "Delete"
+msgstr ""
+
+#: frontend/templates/card.sys_admin.html:3
+msgid "System Administration"
+msgstr ""
+
+#: frontend/templates/card.sys_admin.html:19
+msgid "Restart System Services"
+msgstr ""
+
+#: frontend/templates/card.sys_admin.html:35
+msgid "Download Encryption Key"
+msgstr ""
+
+#: frontend/templates/card.sys_admin.html:38
+msgid ""
+"The encryption key is what keeps your data safe.\n"
+"You may need it if you perform a factory reset and want to keep accessing"
+" your data.\n"
+"\n"
+"**Do not disclose it to anyone!**"
+msgstr ""
+
+#: frontend/templates/card.system_info.html:3
+msgid "System Information"
+msgstr ""
+
+#: frontend/templates/card.system_info.html:19
+msgid "CPU Load:"
+msgstr ""
+
+#: frontend/templates/card.system_info.html:25
+msgid "RAM Usage:"
+msgstr ""
+
+#: frontend/templates/card.system_info.html:34
+msgid "Network:"
+msgstr ""
+
+#: frontend/templates/card.vpn.html:46
+msgid "Get Public Key"
+msgstr ""
+
+#: frontend/templates/card.vpn.html:50
+msgid "Regenerate Keys"
+msgstr ""
+
+#: frontend/templates/card.vpn.html:56
+#, python-format
+msgid ""
+"Use the public key to configure the %(st_link)sWireGuard%(e_link)s on "
+"your device(s)."
+msgstr ""
+
+#: frontend/templates/card.vpn.html:62
+msgid "Allowed Devices"
+msgstr ""
+
+#: frontend/templates/card.vpn.html:79
+msgid "Public Key"
+msgstr ""
+
+#: frontend/templates/card.vpn.html:91
+#, python-format
+msgid ""
+"To configure your device, you need to install "
+"%(st_link1)sWireGuard%(e_link)s. %(st_link2)sRead this%(e_link)s page to "
+"learn how to generate private and public keys from your end. An example "
+"configuration file is provided below:"
+msgstr ""
+
+#: frontend/templates/dashboard.html:7
+msgid "Welcome"
+msgstr ""
+
+#: frontend/templates/disk_smart.html:3
+msgid "Disk Diagnostic"
+msgstr ""
+
+#: frontend/templates/disk_smart.html:6
+msgid "Disk Information"
+msgstr ""
+
+#: frontend/templates/disk_smart.html:7
+msgid "Support"
+msgstr ""
+
+#: frontend/templates/disk_smart.html:10
+msgid "Available"
+msgstr ""
+
+#: frontend/templates/disk_smart.html:13 frontend/utils/filters.py:30
+#: frontend/utils/forms.py:160
+msgid "Enabled"
+msgstr ""
+
+#: frontend/templates/disk_smart.html:17 frontend/templates/disk_smart.html:83
+msgid "Status"
+msgstr ""
+
+#: frontend/templates/disk_smart.html:20
+msgid "Power on time"
+msgstr ""
+
+#: frontend/templates/disk_smart.html:23 frontend/templates/disk_smart.html:84
+msgid "Passed"
+msgstr ""
+
+#: frontend/templates/disk_smart.html:26
+msgid "Temperature"
+msgstr ""
+
+#: frontend/templates/disk_smart.html:40
+msgid "ID"
+msgstr ""
+
+#: frontend/templates/disk_smart.html:42
+msgid "Current Value"
+msgstr ""
+
+#: frontend/templates/disk_smart.html:43
+msgid "Worst Recorded Value"
+msgstr ""
+
+#: frontend/templates/disk_smart.html:44
+msgid "Threshold Value"
+msgstr ""
+
+#: frontend/templates/disk_smart.html:45
+msgid "When Failed"
+msgstr ""
+
+#: frontend/templates/disk_smart.html:76
+msgid "Self-Test Logs"
+msgstr ""
+
+#: frontend/templates/disk_smart.html:82
+msgid "Type"
+msgstr ""
+
+#: frontend/templates/disk_smart.html:112
+msgid "Run Quick Test"
+msgstr ""
+
+#: frontend/templates/disk_smart.html:116
+msgid "Run Long Test"
+msgstr ""
+
+#: frontend/templates/event.parameter.user.html:10
+#: frontend/templates/users.html:10
+msgid "Type a username..."
+msgstr ""
+
+#: frontend/templates/event.parameters.html:18
+msgid "List of context variables"
+msgstr ""
+
+#: frontend/templates/event.parameters.html:26
+#, python-brace-format
+msgid ""
+"You can use these variables in any free text fields using {NAME_VAR}. In "
+"case of a script or program, context variables are passed as environment "
+"variables."
+msgstr ""
+
+#: frontend/templates/event.parameters.html:32
+msgid "Add Event"
+msgstr ""
+
+#: frontend/templates/form.ddns.dnsexit.html:5
+#: frontend/templates/form.ddns.duckdns.html:5
+msgid "Domain"
+msgstr ""
+
+#: frontend/templates/form.ddns.dnsexit.html:10
+msgid "API Key"
+msgstr ""
+
+#: frontend/templates/form.ddns.duckdns.html:10
+#: frontend/templates/form.ddns.freedns.html:6
+msgid "Token"
+msgstr ""
+
+#: frontend/templates/iface.ip_summary.html:2 frontend/utils/forms.py:153
+msgid "Dynamic IP"
+msgstr ""
+
+#: frontend/templates/iface.ip_summary.html:3 frontend/utils/forms.py:154
+#: frontend/utils/forms.py:163
+msgid "Address"
+msgstr ""
+
+#: frontend/templates/iface.ip_summary.html:4 frontend/utils/forms.py:155
+#: frontend/utils/forms.py:164
+msgid "Netmask"
+msgstr ""
+
+#: frontend/templates/iface.ip_summary.html:5 frontend/utils/forms.py:156
+msgid "Gateway"
+msgstr ""
+
+#: frontend/templates/iface.ip_summary.html:6 frontend/utils/forms.py:157
+msgid "DNS"
+msgstr ""
+
+#: frontend/templates/index.html:114
+msgid "Are you sure you want to log out?"
+msgstr ""
+
+#: frontend/templates/index.html:114
+msgid "Logout"
+msgstr ""
+
+#: frontend/templates/index.html:116
+msgid "Are you sure you want to reboot the system?"
+msgstr ""
+
+#: frontend/templates/index.html:116
+msgid "Reboot"
+msgstr ""
+
+#: frontend/templates/index.html:117
+msgid "Are you sure you want to power off the system?"
+msgstr ""
+
+#: frontend/templates/index.html:117
+msgid "Shutdown"
+msgstr ""
+
+#: frontend/templates/login.auth.html:5
+msgid "Enter OTP to log in"
+msgstr ""
+
+#: frontend/templates/login.auth.html:35
+msgid "Login"
+msgstr ""
+
+#: frontend/templates/login.otp.html:5
+msgid "Scan QR Code in your authenticator app"
+msgstr ""
+
+#: frontend/templates/login.otp.html:13
+msgid "I have scanned it"
+msgstr ""
+
+#: frontend/templates/login.reauth.html:5
+msgid "Enter OTP to confirm"
+msgstr ""
+
+#: frontend/templates/login.reauth.html:7
+msgid ""
+"The operation you are going to do is extremely risky and will delete all "
+"of your data."
+msgstr ""
+
+#: frontend/templates/login.reauth.html:8
+msgid ""
+"If you wish to continue (and you are sure what you are doing), enter your"
+" OTP and press again the button of the operation you wanted to do."
+msgstr ""
+
+#: frontend/templates/login.reauth.html:9
+msgid "Good luck!"
+msgstr ""
+
+#: frontend/templates/login.reauth.html:37
+msgid "Yes, I am sure"
+msgstr ""
+
+#: frontend/templates/modal.confirm.html:5
+msgid "Confirm"
+msgstr ""
+
+#: frontend/templates/modal.confirm.html:6
+#: frontend/templates/toast.copy_clipboard.html:7
+msgid "Close"
+msgstr ""
+
+#: frontend/templates/modal.confirm.html:14
+msgid "Cancel"
+msgstr ""
+
+#: frontend/templates/modal.confirm.html:18 frontend/utils/filters.py:35
+msgid "Yes"
+msgstr ""
+
+#: frontend/templates/network.html:20
+msgid "Warning"
+msgstr ""
+
+#: frontend/templates/network.html:25
+msgid ""
+"By rerouting all the VPN traffic, you will be able to access the NAS only"
+" by the VPN. Make sure you have\n"
+"          configured your device(s) properly before proceeding."
+msgstr ""
+
+#: frontend/templates/network.html:30
+msgid "Understood"
+msgstr ""
+
+#: frontend/templates/toast.copy_clipboard.html:5
+msgid "Text copied to clipboard."
+msgstr ""
+
+#: frontend/templates/user.add.html:4 frontend/templates/user.add.html:8
+#: frontend/templates/user.add.html:97 frontend/templates/users.html:22
+msgid "Add User"
+msgstr ""
+
+#: frontend/templates/warning.no_hdd.html:2
+msgid "No hard drive inserted!"
+msgstr ""
+
+#: frontend/templates/wifi_network_list.html:17
+msgid "Connected"
+msgstr ""
+
+#: frontend/templates/wifi_network_list.html:36
+msgid "Insert network name manually"
+msgstr ""
+
+#: frontend/templates/wifi_network_list.html:49
+msgid "Connect"
+msgstr ""
+
+#: frontend/utils/filters.py:24
+msgid "New"
+msgstr ""
+
+#: frontend/utils/filters.py:25
+msgid "Online"
+msgstr ""
+
+#: frontend/utils/filters.py:26
+msgid "Offline"
+msgstr ""
+
+#: frontend/utils/filters.py:27
+msgid "Corrupted"
+msgstr ""
+
+#: frontend/utils/filters.py:30
+msgid "Disabled"
+msgstr ""
+
+#: frontend/utils/filters.py:60
+msgid "Device"
+msgstr ""
+
+#: frontend/utils/filters.py:62
+msgid "Is SSD"
+msgstr ""
+
+#: frontend/utils/filters.py:88
+msgid "Yesterday"
+msgstr ""
+
+#: frontend/utils/forms.py:86
+msgid "Pool Name"
+msgstr ""
+
+#: frontend/utils/forms.py:87
+msgid "Dataset Name"
+msgstr ""
+
+#: frontend/utils/forms.py:88
+msgid "You must select at least one disk to create an array"
+msgstr ""
+
+#: frontend/utils/forms.py:104
+msgid "Key"
+msgstr ""
+
+#: frontend/utils/forms.py:121 frontend/utils/forms.py:145
+msgid "Port"
+msgstr ""
+
+#: frontend/utils/forms.py:121 frontend/utils/forms.py:145
+#, python-format
+msgid "The port number must be between %(port_min)s-%(port_max)s"
+msgstr ""
+
+#: frontend/utils/forms.py:132
+msgid "Hostname"
+msgstr ""
+
+#: frontend/utils/forms.py:146
+msgid ""
+"Invalid username: must start with a letter or _, and contain only "
+"lowercase letters, digits, _ or -."
+msgstr ""
+
+#: frontend/utils/forms.py:165
+msgid "Public IP"
+msgstr ""
+
+#: frontend/utils/forms.py:169
+msgid "Confirm Password"
+msgstr ""
+
+#: frontend/utils/forms.py:169
+msgid "Passwords must match"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:204
+#: nms_shared/src/nms_shared/msg.py:288
+msgid "Unknown Error"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:205
+#: nms_shared/src/nms_shared/msg.py:289
+msgid "Unknown response from server"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:206
+#: nms_shared/src/nms_shared/msg.py:290
+#, python-format
+msgid "Error while getting %(prop)s: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:207
+#: nms_shared/src/nms_shared/msg.py:291
+msgid "Form validation failed"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:208
+#: nms_shared/src/nms_shared/msg.py:292
+msgid "Unknown operation."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:209
+#: nms_shared/src/nms_shared/msg.py:293
+#, python-format
+msgid "Unable to read the file %(file)s: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:211
+#: nms_shared/src/nms_shared/msg.py:301
+msgid "The disk array is already configured."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:212
+#: nms_shared/src/nms_shared/msg.py:302
+msgid "Disk array not configured yet."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:213
+#: nms_shared/src/nms_shared/msg.py:303
+msgid "Disk array is configured."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:214
+#: nms_shared/src/nms_shared/msg.py:304
+#, python-format
+msgid "Disk %(dev)s is not available to be in the new disk array."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:215
+#, python-format
+msgid "Unable to create a new disk array: %(info)s)"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:216
+#, python-format
+msgid "Unable to destroy the disk array: %(info)s)"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:217
+#: nms_shared/src/nms_shared/msg.py:307
+msgid "You must have at least 3 disks connected to opt in redundancy."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:218
+#: nms_shared/src/nms_shared/msg.py:308
+#, python-format
+msgid "Error while adding %(dev)s: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:219
+#: nms_shared/src/nms_shared/msg.py:309
+#, python-format
+msgid "Could not retrieve information for the disk: %(dev)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:220
+#: nms_shared/src/nms_shared/msg.py:310
+#, python-format
+msgid "Unable to get array expansion status: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:221
+#: nms_shared/src/nms_shared/msg.py:311
+#, python-format
+msgid "Error while retrieving the encryption key: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:222
+#: nms_shared/src/nms_shared/msg.py:312
+#, python-format
+msgid "Error while importing the encryption key: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:223
+#: nms_shared/src/nms_shared/msg.py:313
+#, python-format
+msgid "Error while attaching an existing pool: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:224
+#: nms_shared/src/nms_shared/msg.py:314
+msgid "Unable to retrieve the list of pools."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:225
+#: nms_shared/src/nms_shared/msg.py:315
+#, python-format
+msgid "Error while recovering the disk array: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:226
+#: nms_shared/src/nms_shared/msg.py:316
+#, python-format
+msgid "Error while retrieving the disks in the array: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:227
+#: nms_shared/src/nms_shared/msg.py:317
+#, python-format
+msgid "Unable to replace %(dev1)s with %(dev2)s: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:228
+#: nms_shared/src/nms_shared/msg.py:318
+#, python-format
+msgid "Error while detaching the disk array: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:229
+#: nms_shared/src/nms_shared/msg.py:319
+#, python-format
+msgid "Error while mounting the disk array: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:230
+#: nms_shared/src/nms_shared/msg.py:320
+#, python-format
+msgid "Error while unmounting the disk array: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:231
+#: nms_shared/src/nms_shared/msg.py:321
+msgid "Disk array is mounted."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:232
+#: nms_shared/src/nms_shared/msg.py:322
+msgid "Disk array is unmounted."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:233
+#: nms_shared/src/nms_shared/msg.py:323
+#, python-format
+msgid "Error while verifying the disk array: %(info)s."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:234
+#: nms_shared/src/nms_shared/msg.py:324
+msgid "The provided mount point is not valid."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:235
+#: nms_shared/src/nms_shared/msg.py:325
+#, python-format
+msgid "Error while retrieving the mount information the disk array: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:238
+#: nms_shared/src/nms_shared/msg.py:328
+#, python-format
+msgid "Error while retrieving the mount point: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:239
+#: nms_shared/src/nms_shared/msg.py:329
+#, python-format
+msgid "Error while removing the mount point: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:240
+#: nms_shared/src/nms_shared/msg.py:330
+#, python-format
+msgid "Error while formatting the disk array: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:241
+#: nms_shared/src/nms_shared/msg.py:331
+#, python-format
+msgid "Unable to read disk array capacity information: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:244
+#: nms_shared/src/nms_shared/msg.py:334
+msgid ""
+"One or more disks cannot be opened. Your disk array CANNOT be used in "
+"this state. Run a diagnostic to see if the disk is getting faulted and "
+"replace if necessary. Alternatively, you can format it in the Advanced "
+"page (this can likely cause data loss)."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:245
+#: nms_shared/src/nms_shared/msg.py:335
+msgid ""
+"One or more disks seems missing. Your disk array CANNOT be used in this "
+"state. Insert back the missing disk. If the disk is inserted and still "
+"see this error, you can format it in the Advanced page (this can likely "
+"cause data loss)."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:246
+#: nms_shared/src/nms_shared/msg.py:336
+msgid ""
+"The information related your disk array are corrupted. Recovery may be "
+"possible (but not guaranteed) and some data loss can occur. Use the "
+"`Attempt Recovery` button in Advanced. If the problem persists, back up "
+"your data, destroy and create a new array. Consider replacing one or more"
+" disks if their diagnostics suggest so."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:247
+#: nms_shared/src/nms_shared/msg.py:337
+msgid "Your disk array seems to be outdated and cannot be used anymore."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:248
+#: nms_shared/src/nms_shared/msg.py:338
+#, python-format
+msgid "Snapshot name `%(name)s` is invalid."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:249
+#: nms_shared/src/nms_shared/msg.py:339
+#, python-format
+msgid "Error while creating a new snapshot of your disk array: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:250
+#: nms_shared/src/nms_shared/msg.py:340
+#, python-format
+msgid ""
+"Error while deleting the snapshot `%(name)s` from your disk array: "
+"%(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:251
+#: nms_shared/src/nms_shared/msg.py:341
+#, python-format
+msgid "Error while retrieving the list of snapshots: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:252
+#: nms_shared/src/nms_shared/msg.py:342
+#, python-format
+msgid "Error while rolling back to `%(name)s`: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:255
+#: nms_shared/src/nms_shared/msg.py:345
+msgid "Invalid authorisation."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:256
+#: nms_shared/src/nms_shared/msg.py:346
+msgid "Authorisation token expired."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:257
+#: nms_shared/src/nms_shared/msg.py:347
+msgid "Authorisation token revoked."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:258
+#: nms_shared/src/nms_shared/msg.py:348
+msgid "Authorisation token malformed."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:259
+#: nms_shared/src/nms_shared/msg.py:349
+msgid "OTP secret not configured yet."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:260
+#: nms_shared/src/nms_shared/msg.py:350
+msgid "Invalid OTP."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:262
+#: nms_shared/src/nms_shared/msg.py:352
+#, python-format
+msgid "Unable to attach new device to disk array: %(details)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:263
+#: nms_shared/src/nms_shared/msg.py:353
+#, python-format
+msgid "Error while formatting %(dev)s: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:265
+#: nms_shared/src/nms_shared/msg.py:356
+#, python-format
+msgid "Unable to change permissions for %(path)s: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:267
+#: nms_shared/src/nms_shared/msg.py:358
+#, python-format
+msgid "Unable to get system updates: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:269
+#, python-format
+msgid "Error while enabling %(service)s: %(info)s)"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:270
+#, python-format
+msgid "Error while disabling %(service)s: %(info)s)"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:271
+#: nms_shared/src/nms_shared/msg.py:363
+#, python-format
+msgid "Unable to disable %(service)s. Please, disable it manually."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:272
+#: nms_shared/src/nms_shared/msg.py:364
+#, python-format
+msgid "Access service %(service)s not recognised."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:274
+#: nms_shared/src/nms_shared/msg.py:367
+#, python-format
+msgid ""
+"Error while changing the state of the network interface %(iface)s: "
+"%(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:275
+#: nms_shared/src/nms_shared/msg.py:368
+#, python-format
+msgid "Error while retrieving the connection status for %(iface)s: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:276
+#: nms_shared/src/nms_shared/msg.py:369
+msgid "Invalid subnet mask"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:277
+#: nms_shared/src/nms_shared/msg.py:370
+msgid "Invalid IP address "
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:278
+#: nms_shared/src/nms_shared/msg.py:371
+msgid "Invalid gateway"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:279
+#: nms_shared/src/nms_shared/msg.py:372
+msgid "Invalid DNS address(es)"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:280
+#: nms_shared/src/nms_shared/msg.py:373
+#, python-format
+msgid "Error while retrieving the list of WiFi networks for %(iface)s: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:281
+#: nms_shared/src/nms_shared/msg.py:374
+#, python-format
+msgid "Unable to connect to `%(ssid)s`: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:282
+#: nms_shared/src/nms_shared/msg.py:377
+msgid "VPN service not configured."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:283
+#: nms_shared/src/nms_shared/msg.py:378
+#, python-format
+msgid "Unable to get the state of the VPN service: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:284
+#: nms_shared/src/nms_shared/msg.py:379
+#, python-format
+msgid "Error while retrieving the VPN key: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:285
+#: nms_shared/src/nms_shared/msg.py:380
+#, python-format
+msgid "Error occurred while generating the private key: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:286
+#: nms_shared/src/nms_shared/msg.py:381
+#, python-format
+msgid "Error occurred while generating the public key: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:287
+#: nms_shared/src/nms_shared/msg.py:382
+#, python-format
+msgid "Error occurred while reading the VPN configuration file: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:288
+#: nms_shared/src/nms_shared/msg.py:383
+#, python-format
+msgid "VPN device `%(user)s` not found."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:289
+#: nms_shared/src/nms_shared/msg.py:384
+msgid "VPN device not valid."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:290
+#: nms_shared/src/nms_shared/msg.py:385
+msgid "You have reached the maximum number of devices."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:291
+#: nms_shared/src/nms_shared/msg.py:386
+msgid "Invalid dynamic DNS provider `%(provider)`."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:292
+#: nms_shared/src/nms_shared/msg.py:387
+#, python-format
+msgid ""
+"Error occurred during the execution of the dynamic DNS provider "
+"`%(provider)s`: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:293
+#: nms_shared/src/nms_shared/msg.py:388
+msgid ""
+"Missing Dynamic DNS configuration. Check if username/domain and "
+"password/token are properly set for the chosen provider."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:295
+#: nms_shared/src/nms_shared/msg.py:390
+#, python-format
+msgid "User %(user)s not found."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:296
+#: nms_shared/src/nms_shared/msg.py:391
+#, python-format
+msgid "Unable to change the password for %(user)s."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:297
+#: nms_shared/src/nms_shared/msg.py:392
+#, python-format
+msgid "Error occurred while setting the user quota: %(info)s."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:298
+#: nms_shared/src/nms_shared/msg.py:393
+#, python-format
+msgid "Error occurred while changing username: %(info)s."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:299
+#: nms_shared/src/nms_shared/msg.py:394
+#, python-format
+msgid "Unable to change user's system privileges: %(info)s"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:300
+#: nms_shared/src/nms_shared/msg.py:395
+#, python-format
+msgid "Error occurred while creating a new user: %(info)s."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:301
+#: nms_shared/src/nms_shared/msg.py:396
+msgid ""
+"Permission changes are disabled because this is the only administrator "
+"account. At least one additional administrator must exist to prevent "
+"lockout. Users with all permissions are treated as administrators."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:304
+#: nms_shared/src/nms_shared/msg.py:399
+msgid ""
+"You cannot delete this account because this is the only administrator "
+"account. At least one additional administrator must exist to prevent "
+"lockout. Users with all permissions are treated as administrators."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:307
+#: nms_shared/src/nms_shared/msg.py:402
+#, python-format
+msgid "Error occurred while moving files of the user %(user)s: %(info)s."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:308
+#: nms_shared/src/nms_shared/msg.py:403
+#, python-format
+msgid "Error occurred while deleting the user %(user)s: %(info)s."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:309
+#: nms_shared/src/nms_shared/msg.py:404
+#, python-format
+msgid ""
+"Error occurred while resetting the login credentials for %(user)s: "
+"%(info)s."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:313
+#: nms_shared/src/nms_shared/msg.py:426
+msgid ""
+"One or more disks cannot be opened. As you have redundancy activated, you"
+" can still use your disk array. Run a diagnostic to see if the disk is "
+"getting faulted and replace if necessary. Alternatively, you can format "
+"it in the Advanced page."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:314
+#: nms_shared/src/nms_shared/msg.py:427
+msgid ""
+"One or more disks seems missing. As you have redundancy activated, you "
+"can still use your disk array. Insert back the missing disk. If the disk "
+"is inserted and still see this error, press `Replace` in the Disk "
+"Management page."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:315
+#: nms_shared/src/nms_shared/msg.py:428
+msgid ""
+"Some files and/or directories are corrupted and data cannot be recovered."
+" If the problem persists, back up your data, destroy and create a new "
+"array. Consider replacing one or more disks if their diagnostics suggest "
+"so."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:316
+#: nms_shared/src/nms_shared/msg.py:429
+msgid ""
+"One or more disks appear to experience some problems. No imminent actions"
+" are required at the moment. However, you should investigate which "
+"disk(s) is getting old and consider replacing it."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:317
+#: nms_shared/src/nms_shared/msg.py:430
+msgid ""
+"Your disk array is experiencing some format issues. To solve this issue, "
+"press `Verify` in the Disk Management page."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:318
+#: nms_shared/src/nms_shared/msg.py:431
+msgid "You need to configure your disk array before enabling any access services"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:319
+#: nms_shared/src/nms_shared/msg.py:432
+msgid ""
+"One or more of your disks in the array is offline. If redundancy is "
+"active, you can still use the array. Please, reinsert or replace your "
+"disk soon."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:320
+#: nms_shared/src/nms_shared/msg.py:433
+#, python-format
+msgid ""
+"User %(user)s has been created successfully. However, there has been some"
+" issues in setting their quota: %(info)s."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:324
+#: nms_shared/src/nms_shared/msg.py:440
+msgid "Disk array created successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:325
+#: nms_shared/src/nms_shared/msg.py:441
+msgid "Disk array expanded successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:326
+#: nms_shared/src/nms_shared/msg.py:442
+msgid "Disk array formatted successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:327
+#: nms_shared/src/nms_shared/msg.py:443
+msgid "Disk array destroyed successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:328
+#: nms_shared/src/nms_shared/msg.py:444
+msgid "Disk array mounted successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:329
+#: nms_shared/src/nms_shared/msg.py:445
+msgid "Disk array unmounted successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:330
+#: nms_shared/src/nms_shared/msg.py:446
+msgid "Disk array verification performed successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:331
+#: nms_shared/src/nms_shared/msg.py:447
+msgid "Disk replaced successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:332
+#: nms_shared/src/nms_shared/msg.py:448
+msgid "Snapshot created successfully"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:333
+#: nms_shared/src/nms_shared/msg.py:449
+msgid "Snapshot deleted successfully"
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:334
+#: nms_shared/src/nms_shared/msg.py:450
+#, python-format
+msgid "Disk array rolled back to `%(name)s`."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:336
+#: nms_shared/src/nms_shared/msg.py:452
+msgid "System updates retrieved successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:337
+#: nms_shared/src/nms_shared/msg.py:453
+msgid "System updates installed successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:339
+#: nms_shared/src/nms_shared/msg.py:455
+msgid ""
+"OTP Accepted. Please press again the button of the desired dangerous "
+"operation to continue."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:341
+#: nms_shared/src/nms_shared/msg.py:457
+msgid "Disk array recovery attempted."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:343
+#: nms_shared/src/nms_shared/msg.py:459
+#, python-format
+msgid "Service %(service)s enabled successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:344
+#: nms_shared/src/nms_shared/msg.py:460
+#, python-format
+msgid "Service %(service)s settings updated successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:345
+#: nms_shared/src/nms_shared/msg.py:461
+#, python-format
+msgid "Service %(service)s disabled successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:347
+#: nms_shared/src/nms_shared/msg.py:463
+#, python-format
+msgid "Disk %(dev)s formatted successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:349
+#: nms_shared/src/nms_shared/msg.py:466
+msgid "VPN private and public keys generated successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:350
+#: nms_shared/src/nms_shared/msg.py:467
+msgid "VPN configuration changes applied successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:351
+#: nms_shared/src/nms_shared/msg.py:468
+#, python-format
+msgid "Network configuration changes for %(iface)s applied successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:352
+#: nms_shared/src/nms_shared/msg.py:469
+#, python-format
+msgid "Device `%(peer)s` deleted successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:353
+#: nms_shared/src/nms_shared/msg.py:470
+#, python-format
+msgid "Device `%(peer)s` added successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:354
+#: nms_shared/src/nms_shared/msg.py:471
+#, python-format
+msgid "Dynamic DNS provider `%(provider)s` enabled successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:355
+#: nms_shared/src/nms_shared/msg.py:472
+#, python-format
+msgid "Dynamic DNS provider `%(provider)s` disabled successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:357
+#: nms_shared/src/nms_shared/msg.py:475
+msgid "Password changed successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:358
+#: nms_shared/src/nms_shared/msg.py:476
+msgid "Visible name changed successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:359
+#: nms_shared/src/nms_shared/msg.py:477
+msgid "User quota set successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:360
+#: nms_shared/src/nms_shared/msg.py:478
+msgid "Username changed successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:361
+#: nms_shared/src/nms_shared/msg.py:479
+msgid "User's system privileges changed successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:362
+#: nms_shared/src/nms_shared/msg.py:482
+#, python-format
+msgid "User %(user)s created successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:363
+#: nms_shared/src/nms_shared/msg.py:483
+#, python-format
+msgid "User %(user)s deleted successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:364
+#: nms_shared/src/nms_shared/msg.py:484
+msgid "Permissions changed successfully."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:365
+#: nms_shared/src/nms_shared/msg.py:485
+#, python-format
+msgid ""
+"User login reset successfully. Provide to the user %(user)s the new "
+"first-time login link to set new credentials."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:370
+#: nms_shared/src/nms_shared/msg.py:495
+#, python-format
+msgid "Disk expansion is expected to take %(eta)s."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:371
+#: nms_shared/src/nms_shared/msg.py:496
+msgid "Disk expansion in progress."
+msgstr ""
+
+#: nms_shared/build/lib/nms_shared/msg.py:372
+#: nms_shared/src/nms_shared/msg.py:497
+msgid "Disk replacement in progress. This operation may take a while."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:294
+#, python-format
+msgid "Path `%(path1)s` is not relative to `%(path2)s`"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:295
+#, python-format
+msgid "Error while obtaining system information on ports: %(info)s"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:296
+#, python-format
+msgid "Error while starting the system service(s) %(services)s: %(info)s"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:297
+#, python-format
+msgid "Error while stopping the system service(s) %(services)s: %(info)s"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:298
+msgid "Too many requests. Please wait one minute."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:299
+#, python-format
+msgid "Invalid value for %(pop)s: %(val)s"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:305
+#, python-format
+msgid "Unable to create a new disk array: %(info)s"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:306
+#, python-format
+msgid "Unable to destroy the disk array: %(info)s"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:344
+msgid "You have already an OTP credentials configured."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:354
+#, python-format
+msgid "Error while running a self-test on %(dev)s: %(info)s"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:359
+msgid ""
+"Unable to update your current system. You may do so manually by accessing"
+" it via SSH."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:361
+#, python-format
+msgid "Error while enabling %(service)s: %(info)s"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:362
+#, python-format
+msgid "Error while disabling %(service)s: %(info)s"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:365
+#, python-format
+msgid "Error while changing the property `%(prop)s`: %(info)s"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:375
+msgid "No valid WiFi network interfaces detected."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:376
+#, python-format
+msgid "Unable to create hotspot on %(iface)s: %(info)s"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:405
+#, python-format
+msgid "Error while retrieving the list of system users: %(info)s."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:406
+#, python-format
+msgid "Error while changing the uid for `%(username)s`: %(info)s."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:408
+msgid "Unable to retrieve updates."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:409
+#, python-format
+msgid "Error while creating distribution archive: %(info)s."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:411
+#, python-format
+msgid "The provided path `%(path)s` neither exists nor is a file."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:412
+#, python-format
+msgid "Error while zipping: `%(path)s`: %(info)s."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:413
+#, python-format
+msgid "Error while unzipping: `%(path)s`: %(info)s."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:414
+#, python-format
+msgid "Error while copying: `%(path)s`: %(info)s."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:415
+#, python-format
+msgid "Error while moving: `%(path)s`: %(info)s."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:416
+#, python-format
+msgid "Error while creating the directory `%(path)s`: %(info)s."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:418
+#, python-format
+msgid "The action `%(action)s` cannot be used for the event `%(event)s`"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:419
+#, python-format
+msgid "Invalid parameter for the action `%(action)s`: %(parameter)s."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:420
+msgid "Invalid event"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:421
+msgid "Invalid action"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:434
+msgid ""
+"Your user does not have a local user associated. Contact a system "
+"administrator to fix the issue in the Users tab."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:435
+#, python-format
+msgid ""
+"The new uid for `%(username)s` is %(uid)s. However, the gid could not be "
+"changed and remains %(gid)s: %(info)s"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:436
+#, python-format
+msgid ""
+"UID and GID for `%(username)s` has been successfully changed to "
+"%(uid)s:%(gid)s. However, files will keep maintaining the previous GID "
+"and needs to be changed manually via SSH: %(info)s"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:464
+#, python-format
+msgid ""
+"Disk self-test launched successfully on %(dev)s. Check the logs below to "
+"track the progression status and results."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:473
+#, python-format
+msgid "The wifi interface %(iface)s is now a hotspot with the SSID %(ssid)s."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:480
+msgid "User ID changed successfully."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:486
+msgid "Event  added successfully."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:487
+#, python-format
+msgid "Event %(uuid)s enabled successfully."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:488
+#, python-format
+msgid "Event %(uuid)s disabled successfully."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:489
+#, python-format
+msgid "Event %(uuid)s deleted successfully."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:490
+#, python-format
+msgid "Event %(uuid)s updated successfully."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:501
+msgid "System events"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:502
+msgid "When the system starts up"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:503
+msgid "When the system is rebooted"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:504
+msgid "When the system is powering off"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:505
+msgid "When the system is shutting down (either rebooting or powering off)"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:506
+msgid "When the system services are restarted"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:507
+msgid "When new system updates are available"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:508
+msgid "When the system has been upgraded"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:510
+msgid "Disk-related events"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:511
+msgid "When the disk array is mounted"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:512
+msgid "When the disk array is unmounted"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:514
+msgid "User events"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:515
+msgid "When a user logs in"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:516
+msgid "When a user is created"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:517
+msgid "When a user is deleted"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:520
+msgid "Remote access services events"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:521
+msgid "When an access service is enabled"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:522
+msgid "When an access service is disabled"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:524
+msgid "Network events"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:525
+msgid "When the VPN is enabled"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:526
+msgid "When the VPN is disabled"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:528
+msgid "Timed events"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:529
+msgid "At every specified time interval"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:531
+msgid "File events"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:532
+msgid "When a file is created"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:533
+msgid "When a file is deleted"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:534
+msgid "When a file is modified"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:539
+msgid "Send a notification to..."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:540
+msgid "Run..."
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:541
+msgid "File management"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:545
+msgid "A specific user"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:546
+msgid "All users"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:547
+msgid "All admins"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:548
+msgid "A custom program or script"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:549
+msgid "Change Owner"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:556
+msgid "Subject"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:557
+msgid "Message"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:558 nms_shared/src/nms_shared/msg.py:572
+msgid "Path"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:559
+msgid "Run as sudo"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:560
+msgid "Time (minutes)"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:561 nms_shared/src/nms_shared/msg.py:577
+msgid "Group"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:562 nms_shared/src/nms_shared/msg.py:576
+msgid "Permissions"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:566
+msgid "The username who triggered the event"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:567
+msgid "Recipient Username"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:568
+msgid "Created/Deleted Username"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:569
+msgid "Date and time in ISO format"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:570
+msgid "Comma-separated list of packages"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:571
+msgid "Enabled/Disabled access service"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:573
+msgid "File name"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:574
+msgid "Is directory"
+msgstr ""
+
+#: nms_shared/src/nms_shared/msg.py:575
+msgid "User owning the home directory"
+msgstr ""
+

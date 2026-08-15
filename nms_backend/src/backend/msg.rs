@@ -401,6 +401,9 @@ pub enum LogErrors<'a>
     NginxRestarted(&'a String),
     MailFlushError(&'a String),
     AccessServiceTriggerError(&'a String),
+    DDnsUnk(&'a str),
+    DDns(&'a str),
+    DDnsUpdate(&'a str, &'a str)
 }
 
 impl<'a> Display for LogErrors<'a>
@@ -460,6 +463,9 @@ impl<'a> Display for LogErrors<'a>
             }
             LogErrors::MailFlushError(e) => write!(f,"Unable to flush mails: {}",e),
             LogErrors::AccessServiceTriggerError(e) => write!(f,"Access service trigger error: {}",e),
+            LogErrors::DDnsUnk(svc) => write!(f,"Unknown DDNS service: {}",svc),
+            LogErrors::DDns(e) => write!(f,"DDNS error: {}",e),
+            LogErrors::DDnsUpdate(name, err) => write!(f,"Error occurred while updating DDNS service {}: {}",name,err),
         }
     }
 }
@@ -547,6 +553,7 @@ pub enum LogInfos<'a>
     IfaceStatusChange(IfaceStatusAction, &'a str),
     VPNConf,
     VPNNewPeer(&'a str, &'a str),
+    DDNSUpdated(&'a str)
 }
 
 impl<'a> Display for LogInfos<'a>
@@ -589,6 +596,7 @@ impl<'a> Display for LogInfos<'a>
             LogInfos::IfaceStatusChange(status, iface) => write!(f,"Network interface {} {}ed",iface, status.to_string()),
             LogInfos::VPNConf => {write!(f,"VPN configuration changed successfully")},
             LogInfos::VPNNewPeer(name,ip) => { write!(f,"Added new VPN peer {} with IP {}",name, ip) },
+            LogInfos::DDNSUpdated(name) => { write!(f,"DDNS service {} updated successfully", name) }, 
         }
     }
 }

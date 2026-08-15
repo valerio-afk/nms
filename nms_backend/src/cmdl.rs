@@ -71,7 +71,6 @@ const CMD_CONFIG_DEFAULT:CmdConfig = CmdConfig::Provided{
     cwd:None
 };
 
- 
 pub struct CommandLine
 {
     command:&'static str,
@@ -83,6 +82,25 @@ pub struct CommandLine
 
 unsafe impl Send for CommandLine {}
 unsafe impl Sync for CommandLine {}
+
+impl Clone for CommandLine
+{
+    fn clone(&self) -> Self
+    {
+        if self.drop.is_some()
+        {
+            panic!("Cannot clone {} as it has a drop callback",self.command);
+        }
+
+        CommandLine {
+            command: self.command,
+            args: self.args.clone(),
+            revert_cmd: self.revert_cmd.clone(),
+            config: self.config.clone(),
+            drop: None
+        }
+    }
+}
 
 #[derive(Clone,Debug)]
 pub enum CmdConfig

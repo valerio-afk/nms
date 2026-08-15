@@ -1,0 +1,254 @@
+{
+    "pool": {
+        "name": "tank",
+        "encrypted": "/root/tank.key",
+        "redundancy": true,
+        "compressed": true,
+        "disks": [
+            {
+                "name": "sda",
+                "model": "VBOX HARDDISK",
+                "serial": "VB6bb80d47-dfec358a",
+                "size": 1073741824,
+                "path": "/dev/sda",
+                "physical_paths": [
+                    "/dev/disk/by-path/pci-0000:00:0d.0-ata-1",
+                    "/dev/disk/by-path/pci-0000:00:0d.0-ata-1.0"
+                ]
+            },
+            {
+                "name": "sdb",
+                "model": "VBOX HARDDISK",
+                "serial": "VB93fc998e-74114f45",
+                "size": 1073741824,
+                "path": "/dev/sdb",
+                "physical_paths": [
+                    "/dev/disk/by-path/pci-0000:00:0d.0-ata-2",
+                    "/dev/disk/by-path/pci-0000:00:0d.0-ata-2.0"
+                ]
+            },
+            {
+                "name": "sdc",
+                "model": "VBOX HARDDISK",
+                "serial": "VB508f070d-48f6a3c1",
+                "size": 1073741824,
+                "path": "/dev/sdc",
+                "physical_paths": [
+                    "/dev/disk/by-path/pci-0000:00:0d.0-ata-3",
+                    "/dev/disk/by-path/pci-0000:00:0d.0-ata-3.0"
+                ]
+            },
+            {
+                "name": "sdd",
+                "model": "VBOX HARDDISK",
+                "serial": "VB46989533-6e7fa8b1",
+                "size": 1073741824,
+                "path": "/dev/sdd",
+                "physical_paths": [
+                    "/dev/disk/by-path/pci-0000:00:0d.0-ata-4",
+                    "/dev/disk/by-path/pci-0000:00:0d.0-ata-4.0"
+                ]
+            }
+        ],
+        "tools": {
+            "scrub": {
+                "ongoing": false,
+                "last": 1772238957.81342
+            }
+        }
+    },
+    "dataset": "data",
+    "users": {
+        "tuttoweb": {
+            "otp_secret": "5LGNKPPMM2AFWYAPBNWN4BGVQOO343C4",
+            "fullname": "Joe Doe",
+            "permissions": [
+                "*"
+            ],
+            "ssh_uid": 1000
+        },
+        "afk": {
+            "otp_secret": "KNFMPDISVFDGJE7ZVHW25FD4HOYW65QI",
+            "fullname": "Bruno Barbieri",
+            "permissions": [
+                "client.dashboard.access",
+                "client.dashboard.disks",
+                "pool.conf.get_info",
+                "services.ssh.access",
+                "services.web.access"
+            ],
+            "ssh_uid": 1001
+        }
+    },
+    "access": {
+        "services": {
+            "ssh": {
+                "service_name": "ssh.service"
+            },
+            "ftp": {
+                "service_name": "vsftpd.service"
+            },
+            "nfs": {
+                "service_name": [
+                    "rpcbind.service",
+                    "nfs-server.service"
+                ]
+            },
+            "smb": {
+                "service_name": [
+                    "smbd.service",
+                    "nmbd.service"
+                ]
+            },
+            "web": {
+                "service_name": "nginx.service"
+            },
+            "mediaserver": {
+                "service_name": "jellyfin_server",
+                "port": 9000,
+                "user": "tuttoweb"
+            }
+        }
+    },
+    "networking": {
+        "vpn": {
+            "peers": [
+                "Valerio"
+            ],
+            "endpoint": "192.168.1.180"
+        },
+        "ap": {
+            "ssid": "nmsrev1",
+            "psk": "eitekcdi",
+            "iface": "wlxa42b8c5a2c2a"
+        }
+    },
+    "ddns": {
+        "noip": {
+            "enabled": false,
+            "username": "f4he3f4",
+            "password": "gAAAAABpjmhI2sOzpU1b60M-pfXu0W6o7Sz6NeS-i4x5-XkpFkmq6BxfKbdI8AJhGV1MEt0-rbBxTcpjU8xdhmwMNhBQWjlcJA==",
+            "last_update": 1770944167
+        },
+        "duckdns": {
+            "enabled": false,
+            "username": "nms-nas",
+            "password": "gAAAAABpjnkUztruJPyAmwmsuFQdojiqZ83UVZ96_dzqmL99dacUZGaySVIqn_KgHe-bA-_SBPbgluCvngTAjPFeTjUXIb0xExCUf5fEJlkAV2aqaQR7NDDkIU0C8OaGn9mzQMUDCkPt",
+            "last_update": 1770944882
+        },
+        "dynu": {
+            "enabled": false,
+            "username": "tuttoweb",
+            "password": "a1d3713e617c926071817b8da52ca3f2",
+            "last_update": 1770946297
+        },
+        "freedns": {
+            "enabled": false,
+            "username": null,
+            "password": "gAAAAABpjvtTLpfFv9ZMSPnvld_zxdDHSDf3gvpy6Sv2SfXyFqAVrE9i0IglmVkowUo2aDvKojPYWy1j-w3mSuuXfwLIVBjoRJ8nDQqS72zCdRQab83UDODgmKGgwpGFA7MbPk0pKi_D",
+            "last_update": 1771001112
+        },
+        "dnsexit": {
+            "enabled": false,
+            "username": "nms-nas.run.place",
+            "password": "gAAAAABpjwFIa1pRhHm8mpNej10o8bytiaOFP61fkY54UiYgGICG_A3lgFIqPRx4J3RAHr9G26mWvlJd0Kn5jxybtRWpcTSC3Tsilf82yvZNONkeDNsOdFs=",
+            "last_update": 1770979656
+        },
+        "dynv6": {
+            "enabled": false,
+            "username": "nms-nas.dynv6.net",
+            "password": "gAAAAABpj1DC_qo5O_Qejss79WKshgq4KIY8P-2sH9WddO3iWX_594DKFVrdNaXrfc9LqGXxgUXjDG6tO2nAiUnMCnR7b_l9o8glNMgVypYNldqe_jVQVOw=",
+            "last_update": 1771000431
+        },
+        "cloudns": {
+            "enabled": false,
+            "username": null,
+            "password": "gAAAAABpj1ZhRdg8UNpUywSeeV0ftB2GxPN3HdN1Zfg6zXr03aGElWUGEhJJMf7cNtx7wn4bMOH_QVUZNCs_JGYEbZtj_v25HqdWbBFNDBt2nL_XU2bYWRKDrceW4UnqfzlJCgu05kIzXB8a_OodDuO6I44h4yIfaB1SdQ_9Te1VP_RXy7Rta2WwZC5UB-d5nwj5iyNutMW6TNF771loTpjXPzWKiqiW5w==",
+            "last_update": 1771001486
+        }
+    },
+    "updates": {
+        "apt": {
+            "last": 1778943189,
+            "packages": []
+        },
+        "releases": {}
+    },
+    "systemd": {
+        "services": [
+            "nginx.service",
+            "nmswebapp.service",
+            "nmsbackend.service",
+            "wg-quick@wg0.service"
+        ]
+    },
+    "shares": {
+        "/tank/data/tuttoweb/bullshit.zip": {
+            "expire_date": null,
+            "share_with": {
+                "afk": {
+                    "can_edit": false
+                }
+            }
+        },
+        "/tank/data/tuttoweb/OBS": {
+            "expire_date": null,
+            "share_with": {
+                "afk": {
+                    "can_edit": false
+                }
+            }
+        },
+        "/tank/data/afk/sample1.doc": {
+            "expire_date": null,
+            "share_with": {
+                "tuttoweb": {
+                    "can_edit": true
+                }
+            }
+        },
+        "/tank/data/tuttoweb/Documenti Condivisi": {
+            "expire_date": null,
+            "share_with": null
+        }
+    },
+    "events": {
+        "9c61297d-db14-4af0-a7da-8e85f95bbbf5": {
+            "name": "system.startup",
+            "action": "send_to_all",
+            "enabled": false,
+            "parameters": {
+                "action_parameters": {
+                    "subject": "aaa",
+                    "message": "bbbb"
+                },
+                "event_parameters": {}
+            }
+        },
+        "f1097722-b0ab-4fe6-ab28-2fd0205729ac": {
+            "name": "file.created",
+            "action": "change_owner",
+            "enabled": true,
+            "parameters": {
+                "action_parameters": {
+                    "path": "{PATH}{FILENAME}",
+                    "user": "{HOME_OWNER}",
+                    "group": "{HOME_OWNER}"
+                },
+                "event_parameters": {}
+            }
+        },
+        "87182da1-ac6e-4f20-986c-237a01389081": {
+            "name": "file.created",
+            "action": "change_permissions",
+            "enabled": true,
+            "parameters": {
+                "action_parameters": {
+                    "path": "{PATH}{FILENAME}",
+                    "permissions": "700"
+                },
+                "event_parameters": {}
+            }
+        }
+    }
+}
