@@ -101,9 +101,10 @@ class ErrorMessages(Enum):
     E_NET_VPN_USER = "E_VPN_USER"
     E_NET_VPN_USER_INVALID = "E_VPN_USER_INVALID"
     E_NET_VPN_IP_MAX = "E_VPN_IP_MAX"
-    E_NET_DDNS_INVALID = "E_NET_DDNS_INVALID"
-    E_NET_DDNS_SERVICE = "E_NET_DDNS_SERVICE"
+    # E_NET_DDNS_INVALID = "E_NET_DDNS_INVALID"
+    # E_NET_DDNS_SERVICE = "E_NET_DDNS_SERVICE"
     E_NET_DDNS_CONFIG = "E_NET_DDNS_CONFIG"
+    E_NET_DDNS_SVC_EXISTS = "E_NET_DDNS_SVC_EXISTS"
 
     E_USER_NOT_FOUND = "E_USER_NOT_FOUND"
     E_USER_PASSWD = "E_USER_PASSWD"
@@ -384,8 +385,9 @@ ERROR_MESSAGES = {
     ErrorMessages.E_NET_VPN_USER : lambda user: _("VPN device `%(user)s` not found.") % {'user':user},
     ErrorMessages.E_NET_VPN_USER_INVALID : lambda : _("VPN device not valid."),
     ErrorMessages.E_NET_VPN_IP_MAX : lambda : _("You have reached the maximum number of devices."),
-    ErrorMessages.E_NET_DDNS_INVALID : lambda provider : _("Invalid dynamic DNS provider `%(provider)`.") % {'provider':provider},
-    ErrorMessages.E_NET_DDNS_SERVICE : lambda provider,info : _("Error occurred during the execution of the dynamic DNS provider `%(provider)s`: %(info)s") % {'provider':provider,"info":info},
+    # ErrorMessages.E_NET_DDNS_INVALID : lambda provider : _("Invalid dynamic DNS provider `%(provider)`.") % {'provider':provider},
+    # ErrorMessages.E_NET_DDNS_SERVICE : lambda provider,info : _("Error occurred during the execution of the dynamic DNS provider `%(provider)s`: %(info)s") % {'provider':provider,"info":info},
+    ErrorMessages.E_NET_DDNS_SVC_EXISTS : lambda provider : _("Dynamic DDNS provider `%(provider)s` already exists") % {'provider':provider},
     ErrorMessages.E_NET_DDNS_CONFIG : lambda : _("Missing Dynamic DNS configuration. Check if username/domain and password/token are properly set for the chosen provider."),
 
     ErrorMessages.E_USER_NOT_FOUND : lambda user : _("User %(user)s not found.") % {'user':user},

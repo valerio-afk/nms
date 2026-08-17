@@ -20,6 +20,7 @@ configparser = {  version = "3.2", features = ["indexmap"] }
 console-subscriber = "0.5"
 fernet = "0.2.2"
 futures = "0.3.33"
+hex = "0.4.3"
 indexmap = { version = "2", features = ["serde"] }
 inventory = "0.3.24"
 ipnet = "2.12"

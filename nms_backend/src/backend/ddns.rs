@@ -5,6 +5,7 @@ use crate::cmdl::{CmdConfig, CommandLine, Executable};
 use reqwest::{Client, Method, StatusCode};
 use std::pin::Pin;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 
 #[async_trait]
 pub trait DDNSService: Send + Sync + 'static
@@ -205,9 +206,11 @@ pub fn DuckDNS(domain:String, token:String) -> TokenBasedDDNSService
 
 pub fn DynuDDNS(username:String, password:String) -> TokenBasedDDNSService
 {
+    let digest= hex::encode(Sha256::digest(password.as_bytes()));
+
     let mut svc = TokenBasedDDNSService::from_url("http://api.dynu.com/nic/update".to_string())
         .push_param("username".to_string(), username)
-        .push_param("password".to_string(), password);
+        .push_param("password".to_string(), digest);
 
     svc.set_callback(
         Arc::new(|r|{

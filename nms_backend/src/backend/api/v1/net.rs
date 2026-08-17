@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use crate::backend::net::{IPv4, NetworkInterface, read_wireguard_config_file, IfaceType};
 use crate::backend::{propagate_error, Backend, DDNSProvider, FastAPIComp, IfaceStatusAction, HTTPMessage};
@@ -10,9 +11,9 @@ use axum::Json;
 use axum_auth::AuthBearer;
 use ipnet::Ipv4Net;
 use std::sync::Arc;
-use indexmap::IndexMap;
 use serde::Deserialize;
 use serde_json::Value;
+use crate::backend::config::CfgDynDNS;
 use crate::backend::msg::{StatusMessage, SuccessMessages};
 use crate::backend::net::get_network_ifaces;
 use super::msg::ErrorMessages;
@@ -40,11 +41,16 @@ struct VPNPeerDelete
 }
 
 #[derive(Clone,Deserialize)]
-pub struct DDNSCredentials
+pub struct DDNSNewProvider
 {
+    pub name: String,
+    pub proto: String,
+    pub server: Option<String>,
     pub username: Option<String>,
-    pub password: String,
+    pub password: Option<String>,
+    pub hostname: Option<String>,
 }
+
 
 
 
@@ -132,42 +138,92 @@ async fn get_vpn_peers(
 async fn get_ddns_providers(
     AuthBearer(token): AuthBearer,
     State(backend): State<Arc<Backend>>
-) -> FastAPIComp<IndexMap<String,DDNSProvider>>
+) -> FastAPIComp<HashMap<String, CfgDynDNS>>
 {
     let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
     let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
     check_permission(&user, UserPermissions::NetworkDdnsManage).await?;
 
-    let providers = backend.get_ddns_providers().await?;
-
-    Ok(Json(providers))
+    Ok(Json(backend.get_ddns_cfgs().await))
 }
 
-async fn start_ddns_provider(
-    Path(provider): Path<String>,
-    AuthBearer(token): AuthBearer,
-    State(backend): State<Arc<Backend>>,
-    Json(credentials): Json<DDNSCredentials>
+async fn _add_ddns_provider(
+    token: String,
+    backend: Arc<Backend>,
+    cfg : DDNSNewProvider,
+    force:bool
 ) -> Result<HTTPMessage,HTTPMessage>
 {
     let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
     let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
     check_permission(&user, UserPermissions::NetworkDdnsManage).await?;
 
-
-    backend.set_ddns_provider_credentials(
-        provider.as_str(),
-        credentials.username,
-        credentials.password,
-        true
+    backend.add_ddns_service(
+        cfg.name.as_str(),
+        true,
+        cfg.proto,
+        cfg.server,
+        cfg.username,
+        cfg.password,
+        cfg.hostname,
+        force
     ).await?;
 
     Ok(SuccessMessages::S_NET_DDNS_ENABLED.wrap_with_status_code(
-        Some(vec![Value::String(provider)])
+        Some(vec![Value::String(cfg.name)])
     ))
 }
 
-async fn stop_ddns_provider(
+async fn add_ddns_provider(
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>,
+    Json(cfg) : Json<DDNSNewProvider>
+) -> Result<HTTPMessage,HTTPMessage>
+{
+    _add_ddns_provider(token, backend, cfg, false).await
+}
+
+async fn edit_ddns_provider(
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>,
+    Json(cfg) : Json<DDNSNewProvider>
+) -> Result<HTTPMessage,HTTPMessage>
+{
+    _add_ddns_provider(token, backend, cfg, true).await
+}
+//
+// async fn start_ddns_provider(
+//     Path(provider): Path<String>,
+//     AuthBearer(token): AuthBearer,
+//     State(backend): State<Arc<Backend>>,
+//     credentials: Option<Json<DDNSCredentials>>
+// ) -> Result<HTTPMessage,HTTPMessage>
+// {
+//     let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+//     let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+//     check_permission(&user, UserPermissions::NetworkDdnsManage).await?;
+//
+//
+//     if let Some(Json(c)) = credentials && let Some(pwd) = c.password
+//     {
+//         backend.set_ddns_provider_credentials(
+//             provider.as_str(),
+//             c.username,
+//             pwd,
+//             true,
+//         ).await?;
+//     }
+//     else
+//     {
+//         backend.enable_ddns_provider(provider.as_str(), true).await?;
+//     }
+//
+//     Ok(SuccessMessages::S_NET_DDNS_ENABLED.wrap_with_status_code(
+//         Some(vec![Value::String(provider)])
+//     ))
+// }
+//
+async fn delete_ddns_provider(
     Path(provider): Path<String>,
     AuthBearer(token): AuthBearer,
     State(backend): State<Arc<Backend>>
@@ -177,10 +233,9 @@ async fn stop_ddns_provider(
     let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
     check_permission(&user, UserPermissions::NetworkDdnsManage).await?;
 
+    backend.remove_ddns_service(provider.as_str()).await?;
 
-    backend.enable_ddns_provider(provider.as_str(),false).await?;
-
-    Ok(SuccessMessages::S_NET_DDNS_ENABLED.wrap_with_status_code(
+    Ok(SuccessMessages::S_NET_DDNS_DISABLED.wrap_with_status_code(
         Some(vec![Value::String(provider)])
     ))
 }
@@ -312,8 +367,10 @@ pub fn get_route() -> Router<Arc<Backend>>
     Router::new().nest("/net",
         Router::new()
         .route("/ddns", get(get_ddns_providers))
-        .route("/ddns/{provider}/start", post(start_ddns_provider))
-        .route("/ddns/{provider}/stop", post(stop_ddns_provider))
+        .route("/ddns", post(add_ddns_provider))
+        .route("/ddns", patch(edit_ddns_provider))
+        .route("/ddns/{provider}", delete(delete_ddns_provider))
+        // .route("/ddns/{provider}/stop", post(stop_ddns_provider))
         .route("/vpn", get(net_get_vpn_config))
         .route("/vpn", patch(vpn_config))
         .route("/vpn/gen-keys", post(vpn_genkeys))

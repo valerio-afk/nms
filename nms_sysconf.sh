@@ -47,6 +47,7 @@ PACKAGES_APT=(
     python3-dev
     libssl-dev
     pkg-config
+    ddclient
 )
 
 PACKAGES_DNF=(
@@ -84,6 +85,7 @@ PACKAGES_DNF=(
     util-linux
     python3-devel
     openssl-devel
+    ddclient
 )
 
 SERVICES_TO_DISABLE_APT=(
@@ -1028,77 +1030,77 @@ EOF
     log_info "WireGuard configuration created."
 }
 
-install_noip_duc() {
-    local DOWNLOAD_URL="https://www.noip.com/download/linux/latest"
-    local TMP_DIR="/tmp/noip-install"
-
-    local OS_FAMILY=$1
-
-    log_info "Installing No-IP Dynamic Update Client..."
-
-    mkdir -p "$TMP_DIR"
-
-    cd "$TMP_DIR" || {
-        log_error "Failed to enter temporary directory $TMP_DIR"
-        return 1
-    }
-
-    log_info "Downloading latest No-IP package..."
-    if ! wget --content-disposition --trust-server-names "$DOWNLOAD_URL" >> "$LOG_FILE" 2>&1; then
-        log_error "Failed to download No-IP DUC"
-        return 1
-    fi
-
-    shopt -s nullglob
-    local files=(noip-duc_*.tar.gz)
-    TAR_FILE="${files[0]}"
-    shopt -u nullglob
-
-    if [[ -z "$TAR_FILE" ]]; then
-        log_error "Downloaded archive not found"
-        return 1
-    fi
-
-    log_info "Extracting $TAR_FILE..."
-    if ! tar xf "$TAR_FILE" >> "$LOG_FILE" 2>&1; then
-        log_error "Failed to extract No-IP archive"
-        return 1
-    fi
-
-    local EXTRACTED_DIR
-    EXTRACTED_DIR=$(basename "$TAR_FILE" .tar.gz)
-
-    if [[ $OS_FAMILY = "apt" ]]; then
-
-      local ARCH=$(dpkg --print-architecture)
-      local DEB_FILE="$TMP_DIR/$EXTRACTED_DIR/binaries/${EXTRACTED_DIR}_${ARCH}.deb"
-
-      if [[ ! -f "$DEB_FILE" ]]; then
-          log_error "No-IP .deb package not found at $DEB_FILE"
-          return 1
-      fi
-
-      log_info "Installing No-IP DUC package..."
-      if ! apt-get install -y "$DEB_FILE" >> "$LOG_FILE" 2>&1; then
-          log_error "Failed to install No-IP DUC"
-          return 1
-      fi
-    else
-      local ARCH=$(rpm --eval '%{_arch}')
-      local MUSL_BASE_FILENAME="$TMP_DIR/$EXTRACTED_DIR/binaries/${EXTRACTED_DIR}_${ARCH}-musl"
-      if ! gunzip "${MUSL_BASE_FILENAME}.gz"  >> "$LOG_FILE" 2>&1; then
-        log_error "Unable to find no-ip statically linked binary file ${MUSL_BASE_FILENAME}.gz"
-        return 1
-      fi
-      mv ${MUSL_BASE_FILENAME} /usr/local/bin/noip-duc
-      chmod a+x /usr/local/bin/noip-duc
-    fi
-
-    log_info "Cleaning up temporary installation files..."
-    rm -rf "$TMP_DIR"
-
-    log_info "No-IP Dynamic Update Client installed successfully"
-}
+#install_noip_duc() {
+#    local DOWNLOAD_URL="https://www.noip.com/download/linux/latest"
+#    local TMP_DIR="/tmp/noip-install"
+#
+#    local OS_FAMILY=$1
+#
+#    log_info "Installing No-IP Dynamic Update Client..."
+#
+#    mkdir -p "$TMP_DIR"
+#
+#    cd "$TMP_DIR" || {
+#        log_error "Failed to enter temporary directory $TMP_DIR"
+#        return 1
+#    }
+#
+#    log_info "Downloading latest No-IP package..."
+#    if ! wget --content-disposition --trust-server-names "$DOWNLOAD_URL" >> "$LOG_FILE" 2>&1; then
+#        log_error "Failed to download No-IP DUC"
+#        return 1
+#    fi
+#
+#    shopt -s nullglob
+#    local files=(noip-duc_*.tar.gz)
+#    TAR_FILE="${files[0]}"
+#    shopt -u nullglob
+#
+#    if [[ -z "$TAR_FILE" ]]; then
+#        log_error "Downloaded archive not found"
+#        return 1
+#    fi
+#
+#    log_info "Extracting $TAR_FILE..."
+#    if ! tar xf "$TAR_FILE" >> "$LOG_FILE" 2>&1; then
+#        log_error "Failed to extract No-IP archive"
+#        return 1
+#    fi
+#
+#    local EXTRACTED_DIR
+#    EXTRACTED_DIR=$(basename "$TAR_FILE" .tar.gz)
+#
+#    if [[ $OS_FAMILY = "apt" ]]; then
+#
+#      local ARCH=$(dpkg --print-architecture)
+#      local DEB_FILE="$TMP_DIR/$EXTRACTED_DIR/binaries/${EXTRACTED_DIR}_${ARCH}.deb"
+#
+#      if [[ ! -f "$DEB_FILE" ]]; then
+#          log_error "No-IP .deb package not found at $DEB_FILE"
+#          return 1
+#      fi
+#
+#      log_info "Installing No-IP DUC package..."
+#      if ! apt-get install -y "$DEB_FILE" >> "$LOG_FILE" 2>&1; then
+#          log_error "Failed to install No-IP DUC"
+#          return 1
+#      fi
+#    else
+#      local ARCH=$(rpm --eval '%{_arch}')
+#      local MUSL_BASE_FILENAME="$TMP_DIR/$EXTRACTED_DIR/binaries/${EXTRACTED_DIR}_${ARCH}-musl"
+#      if ! gunzip "${MUSL_BASE_FILENAME}.gz"  >> "$LOG_FILE" 2>&1; then
+#        log_error "Unable to find no-ip statically linked binary file ${MUSL_BASE_FILENAME}.gz"
+#        return 1
+#      fi
+#      mv ${MUSL_BASE_FILENAME} /usr/local/bin/noip-duc
+#      chmod a+x /usr/local/bin/noip-duc
+#    fi
+#
+#    log_info "Cleaning up temporary installation files..."
+#    rm -rf "$TMP_DIR"
+#
+#    log_info "No-IP Dynamic Update Client installed successfully"
+#}
 
 configure_nginx_nms() {
     local OS_FAMILY=$1
@@ -1381,7 +1383,7 @@ if [ "$FULL_INSTALLATION" = true ]; then
   configure_wireguard
 
   #Step 12 --- Noip dynamic updater script
-  install_noip_duc "$family"
+#  install_noip_duc "$family" ##replaced by ddclient
 
 fi
 

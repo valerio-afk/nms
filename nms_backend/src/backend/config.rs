@@ -5,6 +5,7 @@ use serde::{Deserialize,Serialize};
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use struct_iterable::{Iterable, IterableMut};
+use strum::Display;
 use super::api::v1::jwt::TokenPurposes;
 use super::utils::{DistroFamily, detect_distro_family};
 
@@ -92,44 +93,21 @@ pub struct CfgNetworking
     pub ap:Option<CfgAP>
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CfgDynDNS
 {
     #[serde(default)]
     pub enabled:bool,
-
+    pub protocol:String,
+    #[serde(default)]
+    pub server: Option<String>,
     #[serde(default)]
     pub username: Option<String>,
-    pub password: String,
-    pub last_update:u64
+    #[serde(default)]
+    pub password: Option<String>,
+    #[serde(default)]
+    pub hostname: Option<String>
 }
-
-#[derive(Debug, Deserialize, Serialize, Iterable)]
-pub struct CfgDynDNSServices
-{
-    #[serde(default)]
-    noip:Option<CfgDynDNS>,
-
-    #[serde(default)]
-    duckdns:Option<CfgDynDNS>,
-
-    #[serde(default)]    
-    dynu:Option<CfgDynDNS>,
-
-    #[serde(default)]
-    freedns:Option<CfgDynDNS>,
-
-    #[serde(default)]
-    dnsexit:Option<CfgDynDNS>,
-
-    #[serde(default)]
-    dynv6:Option<CfgDynDNS>,
-
-    #[serde(default)]
-    cloudns:Option<CfgDynDNS>
-
-}
-
 
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -228,7 +206,8 @@ pub struct Config
     #[serde(default = "init_access_services")]
     pub access_services:HashMap<String,AccessService>,
 
-    pub ddns:CfgDynDNSServices,
+    #[serde(default)]
+    pub ddns:Option<HashMap<String,CfgDynDNS>>,
     
     pub networking:CfgNetworking,
 
@@ -246,6 +225,17 @@ pub struct Config
 
 }
 
+#[derive(Debug, Display)]
+pub enum CfgError
+{
+    DDNSNotFound,
+    DDnsNotConfigured
+}
+
+
+
+
+
 impl Default for Config
 {
     fn default() -> Self 
@@ -255,15 +245,7 @@ impl Default for Config
             pool: None, 
             users: init_users(), 
             access_services: init_access_services(), 
-            ddns: CfgDynDNSServices { 
-                noip: None, 
-                duckdns: None, 
-                dynu: None, 
-                freedns: None, 
-                dnsexit: None, 
-                dynv6: None, 
-                cloudns: None 
-            }, 
+            ddns: None, 
             networking: CfgNetworking { 
                 vpn: init_vpn(), 
                 ap: None,
@@ -360,61 +342,78 @@ impl Config
         self.daemon.ddns_refresh_time as u64
     }
 
-    pub fn ddns_service_updated(&mut self, name:&str)
-    {
-        for i in 0..self.ddns.field_count()
-        {
-            if let Some((svc_name, f)) = self.ddns.field_at_mut(i)
-            {
-                if svc_name == name
-                {
-                    if let Some(svc) =f.downcast_mut::<Option<CfgDynDNS>>().unwrap()
-                    {
-                        svc.last_update = chrono::Local::now().timestamp() as u64;
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    pub fn ddns_service_set_credential(&mut self, name:&str, username:Option<String>, password:String, enable:bool)
-    {
-        for i in 0..self.ddns.field_count()
-        {
-            if let Some((svc_name, f)) = self.ddns.field_at_mut(i)
-            {
-                if svc_name == name
-                {
-                    if let Some(svc) =f.downcast_mut::<Option<CfgDynDNS>>().unwrap()
-                    {
-                        svc.username = username;
-                        svc.password = password;
-                        svc.enabled = enable;
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    pub fn ddns_service_set_enable(&mut self, name:&str, enable:bool)
-    {
-        for i in 0..self.ddns.field_count()
-        {
-            if let Some((svc_name, f)) = self.ddns.field_at_mut(i)
-            {
-                if svc_name == name
-                {
-                    if let Some(svc) =f.downcast_mut::<Option<CfgDynDNS>>().unwrap()
-                    {
-                       svc.enabled = enable;
-                    }
-                    break;
-                }
-            }
-        }
-    }
+    // pub fn ddns_service_updated(&mut self, name:&str) -> Result<(),CfgError>
+    // {
+    //     for i in 0..self.ddns.field_count()
+    //     {
+    //         if let Some((svc_name, f)) = self.ddns.field_at_mut(i)
+    //         {
+    //             if svc_name == name
+    //             {
+    //                 if let Some(svc) =f.downcast_mut::<Option<CfgDynDNS>>().unwrap()
+    //                 {
+    //                     svc.last_update = chrono::Local::now().timestamp() as u64;
+    //                     return Ok(());
+    //                 }
+    //                 return Err(CfgError::DDnsNotConfigured);
+    //             }
+    //         }
+    //     }
+    // 
+    //     Err(CfgError::DDNSNotFound)
+    // }
+    // 
+    // pub fn ddns_service_set_credential(&mut self, name:&str, username:Option<String>, password:String, enable:bool) -> Result<(),CfgError>
+    // {
+    //     for i in 0..self.ddns.field_count()
+    //     {
+    //         if let Some((svc_name, f)) = self.ddns.field_at_mut(i)
+    //         {
+    //             if svc_name == name
+    //             {
+    //                 let service = f.downcast_mut::<Option<CfgDynDNS>>().unwrap();
+    // 
+    //                 if let Some(svc) = service
+    //                 {
+    //                     svc.username = username;
+    //                     svc.password = password;
+    //                     svc.enabled = enable;
+    //                 }
+    //                 else
+    //                 {
+    //                     *service = Some(CfgDynDNS {
+    //                         enabled:enable,
+    //                         username,
+    //                         password,
+    //                         last_update: 0
+    //                     });
+    //                 }
+    //                 return Ok(());
+    //             }
+    //         }
+    //     }
+    //     Err(CfgError::DDNSNotFound)
+    // }
+    // 
+    // pub fn ddns_service_set_enable(&mut self, name:&str, enable:bool) -> Result<(),CfgError>
+    // {
+    //     for i in 0..self.ddns.field_count()
+    //     {
+    //         if let Some((svc_name, f)) = self.ddns.field_at_mut(i)
+    //         {
+    //             if svc_name == name
+    //             {
+    //                 if let Some(svc) =f.downcast_mut::<Option<CfgDynDNS>>().unwrap()
+    //                 {
+    //                    svc.enabled = enable;
+    //                     return Ok(());
+    //                 }
+    //                 return Err(CfgError::DDnsNotConfigured);
+    //             }
+    //         }
+    //     }
+    //     Err(CfgError::DDNSNotFound)
+    // }
 }
 
 
@@ -498,7 +497,8 @@ fn init_systemd_services() -> Vec<String>
         "nginx.service".to_string(),
         "nmswebapp.service".to_string(),
         "nmsbackend.service".to_string(),
-        "wg-quick@wg0.service".to_string()
+        "wg-quick@wg0.service".to_string(),
+        "ddclient.service".to_string()
     ]
 }
 

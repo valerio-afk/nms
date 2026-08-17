@@ -1,5 +1,5 @@
 
-use anyhow::Error;
+use anyhow::{anyhow, Error};
 use configparser::ini::Ini;
 use crate::backend::msg::{ErrorMessages, StatusMessage};
 use crate::backend::{propagate_error, HTTPMessage};
@@ -14,6 +14,10 @@ use std::env::temp_dir;
 use std::fs::File;
 use std::io::{Write};
 use std::net::{Ipv4Addr, Ipv6Addr};
+use std::path::PathBuf;
+use crate::backend::config::CfgDynDNS;
+use crate::backend::remote_access::ServiceError;
+use crate::cmdl::systemd::{Systemctl, SystemctlAction};
 
 const WIREGUARD_CONF:&'static str = "/etc/wireguard/wg0.conf";
 pub const VPN_PUBLIC_KEY:&'static str = "/root/vpn_public.key";
@@ -392,6 +396,50 @@ pub async fn write_wireguard_config_file(cfg:Ini) -> Result<(),HTTPMessage>
         .run()
         .await
         .map_err(|e| propagate_error(ErrorMessages::E_NET_VPN_CONF,e))?;
+
+    Ok(())
+}
+
+pub async fn flush_ddclient_cfg(providers:Vec<CfgDynDNS>, delay:u64, unit:&String) -> Result<(), anyhow::Error>
+{
+    let mut cfg = String::new();
+    cfg.push_str(format!("daemon={}\n",delay*60).as_str());
+    cfg.push_str("pid=/var/run/ddclient.pid\n");
+    cfg.push_str("use=web, web=ipify-ipv4\n");
+    cfg.push_str("syslog=yes\n");
+
+    for p in providers
+    {
+        cfg.push_str(format!("\nprotocol={}\n",p.protocol).as_str());
+        if let Some(server)   = &p.server   { cfg.push_str(format!("server={}\n",server).as_str()); }
+        if let Some(username) = &p.username { cfg.push_str(format!("login={}\n",username).as_str()); }
+        if let Some(password) = &p.password { cfg.push_str(format!("password={}\n",password).as_str()); }
+        if let Some(hostname) = &p.hostname { cfg.push_str(format!("{}\n",hostname).as_str()); }
+    }
+
+    let ddclient_cfg_fname = "ddclient.conf";
+
+    let mut tmp_fullpath = temp_dir();
+    tmp_fullpath.push(ddclient_cfg_fname);
+
+    let mut dst_fullpath = PathBuf::from("/etc");
+    dst_fullpath.push(ddclient_cfg_fname);
+
+    let mut handle = File::create(&tmp_fullpath)
+        .map_err(|e| anyhow!("Unable to create temp file {}: {}", tmp_fullpath.to_str().unwrap(),e.to_string()))?;
+
+    handle.write_all(cfg.as_bytes())
+        .map_err(|e| anyhow!("Unable to write temp file {}: {}", tmp_fullpath.to_str().unwrap(),e.to_string()))?;
+
+    MV(tmp_fullpath.to_str().unwrap(),dst_fullpath.to_str().unwrap(),CmdConfig::default())
+        .run()
+        .await
+        .map_err(|e| anyhow!("Unable to write move file {}: {}", tmp_fullpath.to_str().unwrap(),e.to_string()))?;
+
+    Systemctl(&unit,SystemctlAction::Restart,false,CmdConfig::default())
+        .run()
+        .await
+        .map_err(|e| anyhow!("Unable to write restart {}: {}", unit,e.to_string()))?;
 
     Ok(())
 }

@@ -63,8 +63,9 @@ use utils::{get_quota_for_all, str_to_i64, sudo_group, ts_to_str, get_notificati
 use utils::{parse_mbox, InboxMail, flush_mailbox, init_mbox_basepath};
 use utils::{try_create_unix_user, get_user_uid, get_user_gid, restore_user_home_dir};
 use uuid::Uuid;
+use crate::backend::config::CfgError;
 use crate::backend::ddns::{ClouDNS, DDNSService, DNSExit, DuckDNS, DynuDDNS, Dynv6, FreeDNS, NoIP};
-use crate::backend::net::{VPN_PRIVATE_KEY, VPN_PUBLIC_KEY};
+use crate::backend::net::{flush_ddclient_cfg, VPN_PRIVATE_KEY, VPN_PUBLIC_KEY};
 use crate::cmdl::firewall::{Firewall, FirewallAction, FirewallPort};
 use crate::cmdl::selinux::Protocol;
 use crate::cmdl::systemd::{Systemctl, SystemctlAction};
@@ -463,8 +464,7 @@ pub struct Backend
     pool_properties: RwLock<Option<PoolProperties>>,
     net_counter: RwLock<NetIOCounter>,
     snapshots:RwLock<Vec<Snapshot>>,
-    scrub_details:RwLock<ScrubDetails>,
-    ddns_services:RwLock<HashMap<String,Arc<dyn DDNSService>>>,
+    scrub_details:RwLock<ScrubDetails>
 }
 
 impl Backend
@@ -482,8 +482,7 @@ impl Backend
                 pool_properties:RwLock::new(None),
                 net_counter: RwLock::new(NetIOCounter::default()),
                 snapshots: RwLock::new(Vec::new()),
-                scrub_details: RwLock::new(ScrubDetails::default()),
-                ddns_services: RwLock::new(HashMap::new()),
+                scrub_details: RwLock::new(ScrubDetails::default())
         };
 
         backend.init().await
@@ -684,64 +683,73 @@ impl Backend
         reload_user_ft.await;
     }
 
-    async fn init_ddns_service_task(self: &Arc<Self>)
-    {
-        let duration = {
-            let cfg = self.config.lock().await;
-            let d = cfg.daemon.ddns_refresh_time;
-
-            Duration::from_mins(d as u64).as_secs()
-        };
-
-        let task_backend = Arc::clone(self);
-
-        self.event_manager.register_action (
-            &Events::Timer,
-            Arc::new(
-                Box::new(
-                    move |(_,_):&(Trigger,Option<ContextData>)|
-                        {
-                            let b = Arc::clone(&task_backend);
-                            Box::pin(
-                                async move
-                                    {
-                                        let mut flush=false;
-                                        for (name,provider) in b.ddns_services.read().await.iter()
-                                        {
-                                            match provider.update().await
-                                            {
-                                                Ok(_) =>
-                                                    {
-                                                        LoggerMessages::Info(LogInfos::DDNSUpdated(name)).log();
-                                                        let mut cfg = b.config.lock().await;
-                                                        cfg.ddns_service_updated(name.as_str());
-                                                        flush = true;
-                                                    },
-                                                Err(e) => LoggerMessages::Error(LogErrors::DDnsUpdate(name,&e.to_string())).log(),
-                                            }
-                                        }
-
-                                        if flush
-                                        {
-                                            if let Err(e) = b.flush_config().await
-                                            {
-                                                LoggerMessages::Error(LogErrors::CfgWrite(&e.1.to_string())).log();
-                                            }
-
-                                            if let Err(e) = b.reload_ddns_providers().await
-                                            {
-                                                LoggerMessages::Error(LogErrors::DDns(&e.1.to_string())).log();
-                                            }
-                                        }
-                                    }
-                            )
-                        }
-                )
-            ),
-            None,
-            Some(vec![EventParameters::Timer(duration)])
-        ).await;
-    }
+    // async fn init_ddns_service_task(self: &Arc<Self>)
+    // {
+    //     let duration = {
+    //         let cfg = self.config.lock().await;
+    //         let d = cfg.daemon.ddns_refresh_time;
+    //
+    //         Duration::from_mins(1 as u64).as_secs()
+    //     };
+    //
+    //     let task_backend = Arc::clone(self);
+    //
+    //     self.event_manager.register_action (
+    //         &Events::Timer,
+    //         Arc::new(
+    //             Box::new(
+    //                 move |(_,_):&(Trigger,Option<ContextData>)|
+    //                     {
+    //                         let b = Arc::clone(&task_backend);
+    //                         Box::pin(
+    //                             async move
+    //                                 {
+    //                                     let mut flush=false;
+    //                                     println!("update in progress");
+    //                                     for (name,provider) in b.ddns_services.read().await.iter()
+    //                                     {
+    //                                         println!("update in progress for {}", name);
+    //                                         match provider.update().await
+    //                                         {
+    //                                             Ok(_) =>
+    //                                                 {
+    //                                                     LoggerMessages::Info(LogInfos::DDNSUpdated(name)).log();
+    //                                                     let mut cfg = b.config.lock().await;
+    //                                                     if let Err(e) = cfg.ddns_service_updated(name.as_str())
+    //                                                     {
+    //                                                         LoggerMessages::Error(LogErrors::DDnsUpdate(name,e.to_string().as_str())).log();
+    //                                                     }
+    //                                                     flush = true;
+    //                                                 },
+    //                                             Err(e) => LoggerMessages::Error(LogErrors::DDnsUpdate(name,&e.to_string())).log(),
+    //                                         }
+    //                                     }
+    //
+    //                                     println!("preparing to flush");
+    //                                     if flush
+    //                                     {
+    //                                         println!("flushiiiiinng");
+    //                                         if let Err(e) = b.flush_config().await
+    //                                         {
+    //                                             LoggerMessages::Error(LogErrors::CfgWrite(&e.1.to_string())).log();
+    //                                         }
+    //
+    //                                         if let Err(e) = b.reload_ddns_providers().await
+    //                                         {
+    //                                             LoggerMessages::Error(LogErrors::DDns(&e.1.to_string())).log();
+    //                                         }
+    //                                     }
+    //
+    //                                     println!("flushed");
+    //                                 }
+    //                         )
+    //                     }
+    //             )
+    //         ),
+    //         None,
+    //         Some(vec![EventParameters::Timer(duration)])
+    //     ).await;
+    // }
 
     async fn init_net_counters(self: &Arc<Self>)
     {
@@ -1188,12 +1196,12 @@ impl Backend
 
         be.init_users().await;
 
-        if let Err(e) = be.reload_ddns_providers().await
-        {
-            LoggerMessages::Error(LogErrors::DDns(&e.1.to_string()));
-        }
+        // if let Err(e) = be.reload_ddns_providers().await
+        // {
+        //     LoggerMessages::Error(LogErrors::DDns(&e.1.to_string()));
+        // }
 
-        be.init_ddns_service_task().await;
+        // be.init_ddns_service_task().await;
         be.init_net_counters().await;
         be.init_scrub_details_watcher().await;
         be.init_remote_service().await;
@@ -1220,70 +1228,192 @@ impl Backend
 
 impl Backend
 {
-    pub async fn reload_ddns_providers(&self) -> Result<(), HTTPMessage>
+    pub async fn get_ddns_protocols(&self) -> Result<Vec<String>, HTTPMessage>
     {
-        let digest = Sha256::digest(self.secret_key.as_bytes());
-        let key = URL_SAFE.encode(digest);
-        let fernet = Fernet::new(key.as_str())
-            .ok_or_else(|| ErrorMessages::E_NET_DDNS_CONFIG.wrap_with_status_code(None))?;
+        let cmd = CommandLine::new(
+            "ddclient",
+            Some(vec![String::from("--list-protocols")]),
+            None,
+            None,
+            CmdConfig::Empty)
+            .run()
+            .await
+            .map_err(|e| propagate_error(ErrorMessages::E_UNKNOWN,e))?
+            .ok_or_else(|| propagate_error(ErrorMessages::E_UNKNOWN,"No protocols available"))?
+            .is_success()
+            .map_err(|e| propagate_error(ErrorMessages::E_UNKNOWN,e))?;
 
+        Ok(cmd.stdout.lines().map(|s|s.to_string()).collect())
+    }
 
-        let mut svc: HashMap<String,Arc<dyn DDNSService>> = HashMap::new();
-        let cfg = self.config.lock().await;
+    pub async fn add_ddns_service(
+        &self,
+        name:&str,
+        enabled:bool,
+        protocol:String,
+        server:Option<String>,
+        username:Option<String>,
+        password:Option<String>,
+        hostname:Option<String>,
+        force: bool,
+    ) -> Result<(), HTTPMessage>
+    {
+        let mut cfg = self.config.lock().await;
 
-        for (name,prov_conf) in cfg.ddns.iter()
+        if cfg.ddns.is_none()
         {
-            let prov_info = prov_conf.downcast_ref::<Option<CfgDynDNS>>().unwrap();
+            cfg.ddns=Some(HashMap::new());
+        }
 
-            if let Some(prov_cfg) = prov_info && prov_cfg.enabled
+        let ddns_values = {
+            let ddns = cfg.ddns.as_mut().unwrap();
+
+            let identifier = name.trim().to_string();
+            if force || !ddns.contains_key(&identifier)
             {
-                match name.to_lowercase().as_str()
-                {
-                    "noip" => {
-                        if let Some(u) = &prov_cfg.username
-                        {
-                            svc.insert(name.to_string(), Arc::new(NoIP(u.clone(), String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap())));
-                        }
-                    }
-                    "duckdns" => {
-                        if let Some(domain) = &prov_cfg.username
-                        {
-                            svc.insert(name.to_string(), Arc::new(DuckDNS(domain.clone(), String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap())));
-                        }
-                    }
-                    "dynu" => {
-                        if let Some(u) = &prov_cfg.username
-                        {
-                            svc.insert(name.to_string(), Arc::new(DynuDDNS(u.clone(), String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap())));
-                        }
-                    }
-                    "freedns" => { svc.insert(name.to_string(), Arc::new(FreeDNS(String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap()))); }
-                    "dnsexit" => {
-                        if let Some(u) = &prov_cfg.username
-                        {
-                            svc.insert(name.to_string(), Arc::new(DNSExit(u.clone(), String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap())));
-                        }
-                    }
-                    "dynv6" => {
-                        if let Some(u) = &prov_cfg.username
-                        {
-                            svc.insert(name.to_string(), Arc::new(Dynv6(u.clone(), String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap())));
-                        }
-                    }
-                    "cloudns" => { svc.insert(name.to_string(), Arc::new(ClouDNS(String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap()))); }
-                    _ => { LoggerMessages::Error(LogErrors::DDnsUnk(name)).log(); }
+                ddns.insert(identifier, CfgDynDNS {
+                    enabled,
+                    protocol,
+                    server,
+                    username,
+                    password,
+                    hostname,
+                });
 
-                }
+                Some(ddns.values().map(|c| c.clone()).collect::<Vec<CfgDynDNS>>())
             }
+            else
+            {
+                return Err(ErrorMessages::E_NET_DDNS_SVC_EXISTS.wrap_with_status_code(Some(vec![Value::String(identifier)])));
+            }
+        };
+
+        if let Some(values) = ddns_values
+            && let Some(unit) = cfg.systemd.iter().find(|s| s.contains("ddclient"))
+        {
+            flush_ddclient_cfg(values, cfg.daemon.ddns_refresh_time as u64,unit)
+                .await
+                .map_err(|e| propagate_error(ErrorMessages::E_NET_DDNS_CONFIG, e))?;
+        }
+
+        drop(cfg);
+        self.flush_config().await?;
+
+        Ok(())
+    }
+
+    pub async fn remove_ddns_service(&self,name:&str) -> Result<(), HTTPMessage>
+    {
+        let mut cfg = self.config.lock().await;
+        let mut flush = false;
+
+        {
+            if let Some(ddns) = cfg.ddns.as_mut()
+            {
+                let identifier = name.trim().to_string();
+                ddns.remove(&identifier);
+            }
+        }
+        
+        let values = cfg.ddns
+            .as_ref()
+            .unwrap_or(&HashMap::new())
+            .values()
+            .map(|c| c.clone()).collect::<Vec<CfgDynDNS>>();
+
+        if let Some(unit) = cfg.systemd.iter().find(|s| s.contains("ddclient"))
+        {
+            flush_ddclient_cfg(values, cfg.daemon.ddns_refresh_time as u64,unit)
+                .await
+                .map_err(|e| propagate_error(ErrorMessages::E_NET_DDNS_CONFIG, e))?;
         }
 
         drop(cfg);
 
-        let mut ddns_services = self.ddns_services.write().await;
-        *ddns_services = svc;
+        if flush { self.flush_config().await?; }
 
         Ok(())
     }
+
+    pub async fn get_ddns_cfgs(&self) -> HashMap<String,CfgDynDNS>
+    {
+        let cfg = self.config.lock().await;
+
+        if let Some(ddns) = &cfg.ddns
+        {
+            ddns.clone()
+        }
+        else { HashMap::new() }
+    }
+
+      
+
+
+
+    // pub async fn reload_ddns_providers(&self) -> Result<(), HTTPMessage>
+    // {
+    //     let digest = Sha256::digest(self.secret_key.as_bytes());
+    //     let key = URL_SAFE.encode(digest);
+    //     let fernet = Fernet::new(key.as_str())
+    //         .ok_or_else(|| ErrorMessages::E_NET_DDNS_CONFIG.wrap_with_status_code(None))?;
+    //
+    //
+    //     let mut svc: HashMap<String,Arc<dyn DDNSService>> = HashMap::new();
+    //     let cfg = self.config.lock().await;
+    //
+    //     for (name,prov_conf) in cfg.ddns.iter()
+    //     {
+    //         let prov_info = prov_conf.downcast_ref::<Option<CfgDynDNS>>().unwrap();
+    //
+    //         if let Some(prov_cfg) = prov_info && prov_cfg.enabled
+    //         {
+    //             match name.to_lowercase().as_str()
+    //             {
+    //                 "noip" => {
+    //                     if let Some(u) = &prov_cfg.username
+    //                     {
+    //                         svc.insert(name.to_string(), Arc::new(NoIP(u.clone(), String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap())));
+    //                     }
+    //                 }
+    //                 "duckdns" => {
+    //                     if let Some(domain) = &prov_cfg.username
+    //                     {
+    //                         svc.insert(name.to_string(), Arc::new(DuckDNS(domain.clone(), String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap())));
+    //                     }
+    //                 }
+    //                 "dynu" => {
+    //                     if let Some(u) = &prov_cfg.username
+    //                     {
+    //                         svc.insert(name.to_string(), Arc::new(DynuDDNS(u.clone(), String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap())));
+    //                     }
+    //                 }
+    //                 "freedns" => { svc.insert(name.to_string(), Arc::new(FreeDNS(String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap()))); }
+    //                 "dnsexit" => {
+    //                     if let Some(u) = &prov_cfg.username
+    //                     {
+    //                         svc.insert(name.to_string(), Arc::new(DNSExit(u.clone(), String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap())));
+    //                     }
+    //                 }
+    //                 "dynv6" => {
+    //                     if let Some(u) = &prov_cfg.username
+    //                     {
+    //                         svc.insert(name.to_string(), Arc::new(Dynv6(u.clone(), String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap())));
+    //                     }
+    //                 }
+    //                 "cloudns" => { svc.insert(name.to_string(), Arc::new(ClouDNS(String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap()))); }
+    //                 _ => { LoggerMessages::Error(LogErrors::DDnsUnk(name)).log(); }
+    //
+    //             }
+    //         }
+    //     }
+    //
+    //     drop(cfg);
+    //
+    //     let mut ddns_services = self.ddns_services.write().await;
+    //     *ddns_services = svc;
+    //
+    //     Ok(())
+    // }
     pub async fn get_bind_addr(&self) -> SocketAddrV4
     {
         let cfg = self.config.lock().await;
@@ -1359,57 +1489,82 @@ impl Backend
         Ok(peers)
     }
 
-    pub async fn get_ddns_providers(&self) -> Result<IndexMap<String,DDNSProvider>, HTTPMessage>
-    {
-        let cfg = self.config.lock().await;
-        let mut providers:IndexMap<String,DDNSProvider> = IndexMap::new();
-        for (name,prov_conf) in cfg.ddns.iter()
-        {
-            let prov_info = match prov_conf.downcast_ref::<Option<CfgDynDNS>>().unwrap()
-            {
-                Some(prov_info) => DDNSProvider::new
-                (
-                    prov_info.enabled,
-                    prov_info.username.clone(),
-                    Some(prov_info.last_update),
-                    Some(prov_info.last_update + Duration::from_mins(cfg.get_ddns_refresh_time()).as_secs()),
-                ),
-                None => DDNSProvider::default(),
-            };
-
-            providers.insert(name.to_string(), prov_info);
-        }
-
-        Ok(providers)
-    }
-
-    pub async fn set_ddns_provider_credentials(&self, name:&str, username:Option<String>,password:String, enable:bool) -> Result<(),HTTPMessage>
-    {
-        let digest = Sha256::digest(self.secret_key.as_bytes());
-        let key = URL_SAFE.encode(digest);
-        let fernet = Fernet::new(key.as_str())
-            .ok_or_else(|| ErrorMessages::E_NET_DDNS_CONFIG.wrap_with_status_code(None))?;
-
-        let enc_password = fernet.encrypt(password.as_bytes());
-
-
-        let mut cfg = self.config.lock().await;
-        cfg.ddns_service_set_credential(name,username,enc_password,enable);
-        drop(cfg);
-
-        self.flush_config().await?;
-        Ok(())
-    }
-
-    pub async fn enable_ddns_provider(&self, name:&str, enable:bool) -> Result<(),HTTPMessage>
-    {
-        let mut cfg = self.config.lock().await;
-        cfg.ddns_service_set_enable(name,enable);
-        drop(cfg);
-
-        self.flush_config().await?;
-        Ok(())
-    }
+    // pub async fn get_ddns_providers(&self) -> Result<IndexMap<String,DDNSProvider>, HTTPMessage>
+    // {
+    //     let cfg = self.config.lock().await;
+    //     let mut providers:IndexMap<String,DDNSProvider> = IndexMap::new();
+    //     for (name,prov_conf) in cfg.ddns.iter()
+    //     {
+    //         let prov_info = match prov_conf.downcast_ref::<Option<CfgDynDNS>>().unwrap()
+    //         {
+    //             Some(prov_info) => {
+    //
+    //             let (last_update, next_update): (Option<u64>, Option<u64>) = if prov_info.last_update > 0
+    //             {
+    //                 let t = prov_info.last_update;
+    //                 (Some(t), Some(t + Duration::from_mins(cfg.get_ddns_refresh_time()).as_secs()))
+    //             }
+    //             else { (None, None) };
+    //
+    //             DDNSProvider::new
+    //                     (
+    //                         prov_info.enabled,
+    //                         prov_info.username.clone(),
+    //                         last_update,
+    //                         next_update
+    //                     )
+    //             },
+    //             None => DDNSProvider::default(),
+    //         };
+    //
+    //         providers.insert(name.to_string(), prov_info);
+    //     }
+    //
+    //     Ok(providers)
+    // }
+    //
+    // pub async fn set_ddns_provider_credentials(&self, name:&str, username:Option<String>,password:String, enable:bool) -> Result<(),HTTPMessage>
+    // {
+    //     let digest = Sha256::digest(self.secret_key.as_bytes());
+    //     let key = URL_SAFE.encode(digest);
+    //     let fernet = Fernet::new(key.as_str())
+    //         .ok_or_else(|| ErrorMessages::E_NET_DDNS_CONFIG.wrap_with_status_code(None))?;
+    //
+    //     let enc_password = fernet.encrypt(password.as_bytes());
+    //
+    //     let mut cfg = self.config.lock().await;
+    //     cfg.ddns_service_set_credential(name,username,enc_password,enable)
+    //         .map_err(|e|
+    //             match e
+    //             {
+    //                 CfgError::DDNSNotFound => ErrorMessages::E_NET_DDNS_INVALID.wrap_with_status_code(Some(vec![Value::String(name.to_string())])),
+    //                 _ => unreachable!(),
+    //             }
+    //         )?;
+    //
+    //     println!("\t>>>> D");
+    //     drop(cfg);
+    //
+    //     self.flush_config().await?;
+    //     Ok(())
+    // }
+    //
+    // pub async fn enable_ddns_provider(&self, name:&str, enable:bool) -> Result<(),HTTPMessage>
+    // {
+    //     let mut cfg = self.config.lock().await;
+    //     cfg.ddns_service_set_enable(name,enable) .map_err(|e|
+    //         match e
+    //         {
+    //             CfgError::DDNSNotFound => ErrorMessages::E_NET_DDNS_INVALID.wrap_with_status_code(Some(vec![Value::String(name.to_string())])),
+    //             CfgError::DDnsNotConfigured => ErrorMessages::E_NET_DDNS_CONFIG.wrap_with_status_code(Some(vec![Value::String(name.to_string())])),
+    //             // _ => unreachable!(),
+    //         }
+    //     )?;
+    //     drop(cfg);
+    //
+    //     self.flush_config().await?;
+    //     Ok(())
+    // }
 
     pub async fn iface_down(&self, iface:String) -> Result<(), HTTPMessage>
     {

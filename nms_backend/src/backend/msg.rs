@@ -210,8 +210,7 @@ pub enum ErrorMessages
     E_NET_VPN_USER,
     E_NET_VPN_USER_INVALID,
     E_NET_VPN_IP_MAX,
-    E_NET_DDNS_INVALID,
-    E_NET_DDNS_SERVICE,
+    E_NET_DDNS_SVC_EXISTS,
     E_NET_DDNS_CONFIG,
 
     #[strum(props(status_code="404"))]
