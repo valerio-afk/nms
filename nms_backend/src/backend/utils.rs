@@ -17,9 +17,7 @@ use serde_json::Value;
 use case_insensitive_hashmap::CaseInsensitiveHashMap;
 use serde::{Serialize, Serializer};
 use serde::ser::SerializeStruct;
-use crate::backend::config::CfgDynDNS;
 use crate::backend::msg::{LogWarnings, LoggerMessages};
-use crate::backend::remote_access::ServiceError;
 use crate::cmdl::error_filters::stderr_contains;
 
 static DISTRO_FAMILY:OnceLock<DistroFamily> = OnceLock::new();

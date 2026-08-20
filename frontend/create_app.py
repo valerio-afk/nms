@@ -1,6 +1,6 @@
 from frontend.utils.filters import (human_readable_bytes, enabled_fmt, disk_charm, markdown_filter, smart_label,
                                     boolean_fmt, disk_status_babel, iface_charm, notification_date_format,
-                                    timedelta_fmt)
+                                    timedelta_fmt, slugify)
 from flask import Flask, g, request
 from flask_babel import Babel
 from flask_session import Session
@@ -48,6 +48,7 @@ def create_flask_app():
     app.add_template_filter(disk_status_babel,"disk_status_babel")
     app.add_template_filter(notification_date_format, "notification_date_format")
     app.add_template_filter(timedelta_fmt,"timedelta_fmt")
+    app.add_template_filter(slugify, "slugify")
 
     app.secret_key = os.environ.get("NMS_SECRET_KEY")
 

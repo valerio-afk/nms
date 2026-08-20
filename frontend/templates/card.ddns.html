@@ -3,50 +3,152 @@
 {% block card_title %}<i class="bi bi-sign-turn-slight-left-fill"></i> {{ _("Dynamic DNS") }}{% endblock %}
 
 {% block card_content %}
+<div class="accordion" id="accordion-ddns">
 {% if ddns_providers %}
-    <div class="accordion" id="accordion-ddns">
-    {% for name,properties in ddns_providers.items() %}
+
+    {% for form in ddns_providers %}
+        {% set name = form.name.data | slugify %}
         <div class="accordion-item">
             <h2 class="accordion-header">
               <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#ddns-{{ name }}" aria-expanded="true" aria-controls="ddns-{{ name }}">
                <div class="d-flex w-100 align-items-center">
-                    <span>{{ properties.ui_name }}</span>
+                    <span>{{ form.name.data | truncate(10,True) }}</span>
 
                     <span class="ms-auto me-3">
-                      {{ properties.enabled | enabled_fmt | safe }}
+                      {{ form.enabled.data | enabled_fmt | safe }}
                     </span>
                   </div>
               </button>
             </h2>
 
             <div id="ddns-{{ name }}" class="accordion-collapse collapse" data-bs-parent="#accordion-ddns">
-              <div class="accordion-body">
-                  <div class="mb-3 row">
-                      <div class="col-6">{{ _("Last Update") }}</div>
-                      <div class="col-6">{{ properties.last_update if properties.last_update is not none else _("Never") }}</div>
-                  </div>
+                <div class="accordion-body">
+                    <form action="{{ url_for('main.ddns_conf_edit',provider=form.name.data) }}" method="POST" class="ps-3 pe-3 disable-on-submit">
+                    {{ ddns_new_form.hidden_tag() }}
+                      <div class="mb-3 row">
+                          <div class="col-sm-6 col-form-label">{{ form.enabled.label }}</div>
+                          <div class="col-sm-6">
+                                <span class="form-check form-switch">
+                                    {{ form.enabled(class=form.enabled.render_kw.class ~ " form-check-input") }}
+                                </span>
+                          </div>
+                        </div>
 
-                  {% if properties.next_update %}
+                        <div class="mb-3 row">
+                          <div class="col-sm-6 col-form-label">{{ form.protocol.label }}</div>
+                          <div class="col-sm-6">
+                            {{ form.protocol(class=form.protocol.render_kw.class ~ " form-select") }}
+                          </div>
+                        </div>
 
-                  <div class="mb-3 row">
-                      <div class="col-6">{{ _("Next Update") }}</div>
-                      <div class="col-6">{{ properties.next_update }}</div>
-                  </div>
+                        <div class="mb-3 row">
+                          <div class="col-sm-6 col-form-label">{{ form.server.label }}</div>
+                          <div class="col-sm-6">
+                            {{ form.server(class=form.server.render_kw.class ~ " form-control") }}
+                          </div>
+                        </div>
 
-                  {% endif %}
+                        <div class="mb-3 row">
+                          <div class="col-sm-6 col-form-label">{{ form.username.label }}</div>
+                          <div class="col-sm-6">
+                            {{ form.username(class=form.username.render_kw.class ~ " form-control") }}
+                          </div>
+                        </div>
 
-                  {% include [
-                    "form.ddns." ~ name ~".html",
-                    "form.ddns.html",
-                  ]%}
+                        <div class="mb-3 row">
+                          <div class="col-sm-6 col-form-label">{{ form.password.label }}</div>
+                          <div class="col-sm-6">
+                            {{ form.password(class=form.password.render_kw.class ~ " form-control") }}
+                          </div>
+                        </div>
 
+                        <div class="mb-3 row">
+                          <div class="col-sm-6 col-form-label">{{ form.hostname.label }}</div>
+                          <div class="col-sm-6">
+                            {{ form.hostname(class=form.hostname.render_kw.class ~ " form-control") }}
+                          </div>
+                        </div>
 
-              </div>
+                        <div class="row mb-3">
+                            <div class="col-sm-6 col-form-label">
+                                {{ form.submit_updates(class=form.hostname.render_kw.class ~ " btn btn-success w-100 text-wrap") }}
+                            </div>
+
+                            <div class="col-sm-6 col-form-label">
+                                {{ form.submit_delete(class=form.hostname.render_kw.class ~ " btn btn-danger w-100 text-wrap") }}
+                            </div>
+                        </div>
+                    </div>
+                </form>
             </div>
         </div>
     {% endfor %}
+    {% endif %}
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+              <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#ddns-new-form" aria-expanded="true" aria-controls="ddns-new-form">
+               <div class="d-flex w-100 align-items-center">
+                    {{ _("Add a new DDNS provider configuration") }}
+                  </div>
+              </button>
+            </h2>
+
+            <div id="ddns-new-form" class="accordion-collapse collapse" data-bs-parent="#accordion-ddns">
+                <div class="accordion-body">
+                    <form action="{{ url_for('main.ddns_conf_add') }}" method="POST" class="ps-3 pe-3 disable-on-submit">
+                        {{ ddns_new_form.hidden_tag() }}
+                        <div class="mb-3 row">
+                          <div class="col-sm-6 col-form-label">{{ ddns_new_form.name.label }}</div>
+                          <div class="col-sm-6">
+                            {{ ddns_new_form.name(class=ddns_new_form.name.render_kw.class ~ " form-control") }}
+                          </div>
+                        </div>
+
+                        <div class="mb-3 row">
+                          <div class="col-sm-6 col-form-label">{{ ddns_new_form.protocol.label }}</div>
+                          <div class="col-sm-6">
+                            {{ ddns_new_form.protocol(class=ddns_new_form.protocol.render_kw.class ~ " form-select") }}
+                          </div>
+                        </div>
+
+                        <div class="mb-3 row">
+                          <div class="col-sm-6 col-form-label">{{ ddns_new_form.server.label }}</div>
+                          <div class="col-sm-6">
+                            {{ ddns_new_form.server(class=ddns_new_form.server.render_kw.class ~ " form-control") }}
+                          </div>
+                        </div>
+
+                        <div class="mb-3 row">
+                          <div class="col-sm-6 col-form-label">{{ ddns_new_form.username.label }}</div>
+                          <div class="col-sm-6">
+                            {{ ddns_new_form.username(class=ddns_new_form.username.render_kw.class ~ " form-control") }}
+                          </div>
+                        </div>
+
+                        <div class="mb-3 row">
+                          <div class="col-sm-6 col-form-label">{{ ddns_new_form.password.label }}</div>
+                          <div class="col-sm-6">
+                            {{ ddns_new_form.password(class=ddns_new_form.password.render_kw.class ~ " form-control") }}
+                          </div>
+                        </div>
+
+                        <div class="mb-3 row">
+                          <div class="col-sm-6 col-form-label">{{ ddns_new_form.hostname.label }}</div>
+                          <div class="col-sm-6">
+                            {{ ddns_new_form.hostname(class=ddns_new_form.hostname.render_kw.class ~ " form-control") }}
+                          </div>
+                        </div>
+
+                        <div class="mb-3 row">
+                            <div class="col-sm-12">
+                                <button type="submit" name="action" value="add" class="btn btn-success w-100">{{ _("Add DDNS Provider Configuration") }}</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
     </div>
-{% endif %}
 {% endblock %}
 
 

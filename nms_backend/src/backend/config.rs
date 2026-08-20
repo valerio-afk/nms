@@ -4,7 +4,6 @@ use crate::events::actions::UserDefinedActions;
 use serde::{Deserialize,Serialize};
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
-use struct_iterable::{Iterable, IterableMut};
 use strum::Display;
 use super::api::v1::jwt::TokenPurposes;
 use super::utils::{DistroFamily, detect_distro_family};
@@ -337,83 +336,7 @@ impl Config
         self.users.get(username).cloned()
     }
     
-    pub fn get_ddns_refresh_time(&self) -> u64
-    {
-        self.daemon.ddns_refresh_time as u64
-    }
 
-    // pub fn ddns_service_updated(&mut self, name:&str) -> Result<(),CfgError>
-    // {
-    //     for i in 0..self.ddns.field_count()
-    //     {
-    //         if let Some((svc_name, f)) = self.ddns.field_at_mut(i)
-    //         {
-    //             if svc_name == name
-    //             {
-    //                 if let Some(svc) =f.downcast_mut::<Option<CfgDynDNS>>().unwrap()
-    //                 {
-    //                     svc.last_update = chrono::Local::now().timestamp() as u64;
-    //                     return Ok(());
-    //                 }
-    //                 return Err(CfgError::DDnsNotConfigured);
-    //             }
-    //         }
-    //     }
-    // 
-    //     Err(CfgError::DDNSNotFound)
-    // }
-    // 
-    // pub fn ddns_service_set_credential(&mut self, name:&str, username:Option<String>, password:String, enable:bool) -> Result<(),CfgError>
-    // {
-    //     for i in 0..self.ddns.field_count()
-    //     {
-    //         if let Some((svc_name, f)) = self.ddns.field_at_mut(i)
-    //         {
-    //             if svc_name == name
-    //             {
-    //                 let service = f.downcast_mut::<Option<CfgDynDNS>>().unwrap();
-    // 
-    //                 if let Some(svc) = service
-    //                 {
-    //                     svc.username = username;
-    //                     svc.password = password;
-    //                     svc.enabled = enable;
-    //                 }
-    //                 else
-    //                 {
-    //                     *service = Some(CfgDynDNS {
-    //                         enabled:enable,
-    //                         username,
-    //                         password,
-    //                         last_update: 0
-    //                     });
-    //                 }
-    //                 return Ok(());
-    //             }
-    //         }
-    //     }
-    //     Err(CfgError::DDNSNotFound)
-    // }
-    // 
-    // pub fn ddns_service_set_enable(&mut self, name:&str, enable:bool) -> Result<(),CfgError>
-    // {
-    //     for i in 0..self.ddns.field_count()
-    //     {
-    //         if let Some((svc_name, f)) = self.ddns.field_at_mut(i)
-    //         {
-    //             if svc_name == name
-    //             {
-    //                 if let Some(svc) =f.downcast_mut::<Option<CfgDynDNS>>().unwrap()
-    //                 {
-    //                    svc.enabled = enable;
-    //                     return Ok(());
-    //                 }
-    //                 return Err(CfgError::DDnsNotConfigured);
-    //             }
-    //         }
-    //     }
-    //     Err(CfgError::DDNSNotFound)
-    // }
 }
 
 

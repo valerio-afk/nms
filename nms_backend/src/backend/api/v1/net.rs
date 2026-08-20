@@ -40,7 +40,7 @@ struct VPNPeerDelete
     pub name: String,
 }
 
-#[derive(Clone,Deserialize)]
+#[derive(Clone,Deserialize, Debug)]
 pub struct DDNSNewProvider
 {
     pub name: String,
@@ -49,6 +49,14 @@ pub struct DDNSNewProvider
     pub username: Option<String>,
     pub password: Option<String>,
     pub hostname: Option<String>,
+}
+
+#[derive(Clone,Deserialize, Debug)]
+pub struct DDNSEditProvider
+{
+    pub enabled:bool,
+    #[serde(flatten)]
+    pub data: DDNSNewProvider
 }
 
 
@@ -147,10 +155,23 @@ async fn get_ddns_providers(
     Ok(Json(backend.get_ddns_cfgs().await))
 }
 
+async fn get_ddns_protocols(
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>
+) -> FastAPIComp<Vec<String>>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+    check_permission(&user, UserPermissions::NetworkDdnsManage).await?;
+
+    Ok(Json(backend.get_ddns_protocols().await?))
+}
+
 async fn _add_ddns_provider(
     token: String,
     backend: Arc<Backend>,
     cfg : DDNSNewProvider,
+    enabled:bool,
     force:bool
 ) -> Result<HTTPMessage,HTTPMessage>
 {
@@ -160,7 +181,7 @@ async fn _add_ddns_provider(
 
     backend.add_ddns_service(
         cfg.name.as_str(),
-        true,
+        enabled,
         cfg.proto,
         cfg.server,
         cfg.username,
@@ -180,16 +201,17 @@ async fn add_ddns_provider(
     Json(cfg) : Json<DDNSNewProvider>
 ) -> Result<HTTPMessage,HTTPMessage>
 {
-    _add_ddns_provider(token, backend, cfg, false).await
+    _add_ddns_provider(token, backend, cfg, true,false).await
 }
 
 async fn edit_ddns_provider(
     AuthBearer(token): AuthBearer,
     State(backend): State<Arc<Backend>>,
-    Json(cfg) : Json<DDNSNewProvider>
+    Json(cfg) : Json<DDNSEditProvider>
 ) -> Result<HTTPMessage,HTTPMessage>
 {
-    _add_ddns_provider(token, backend, cfg, true).await
+    println!("{:?}",cfg);
+    _add_ddns_provider(token, backend, cfg.data, cfg.enabled,true).await
 }
 //
 // async fn start_ddns_provider(
@@ -370,6 +392,7 @@ pub fn get_route() -> Router<Arc<Backend>>
         .route("/ddns", post(add_ddns_provider))
         .route("/ddns", patch(edit_ddns_provider))
         .route("/ddns/{provider}", delete(delete_ddns_provider))
+        .route("/ddns/protocols", get(get_ddns_protocols))
         // .route("/ddns/{provider}/stop", post(stop_ddns_provider))
         .route("/vpn", get(net_get_vpn_config))
         .route("/vpn", patch(vpn_config))

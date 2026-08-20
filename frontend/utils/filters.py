@@ -1,3 +1,4 @@
+import re
 from markdown import markdown
 from typing import Optional, Union
 from flask_babel import _, format_timedelta
@@ -92,3 +93,8 @@ def notification_date_format(ts:Union[int,str])->str:
 
 def timedelta_fmt(delta:Dict[str,int])->str:
     return format_timedelta(timedelta(hours=delta["hours"],minutes=delta["minutes"]),granularity="minute")
+
+def slugify(value:str) -> str:
+    value = value.lower().strip()
+    value = re.sub(r'[^a-z0-9_-]+', '-', value)
+    return value.strip('-')

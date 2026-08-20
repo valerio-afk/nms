@@ -4,7 +4,6 @@ use api::v1::msg::{StatusMessage, WrappedResponse};
 use axum::Json;
 use axum::http::StatusCode;
 use base64::prelude::*;
-use base64::engine::general_purpose::URL_SAFE;
 use chrono::TimeDelta;
 use config::{CfgDynDNS};
 use config::{CfgPool, CfgToken};
@@ -23,9 +22,7 @@ use crate::dev::{Device, DiskState};
 use crate::events::{ContextBuilder, ContextData, ContextVariables, EventManager, EventParameters, Events, Trigger};
 use crate::task::{BackgroundTaskManager, Task, BackgroundTask};
 use crate::vfs::{Capacity, VFS};
-use fernet::{Fernet};
 use futures::stream::{self, StreamExt};
-use indexmap::IndexMap;
 use jwt::{JWTClaim};
 use msg::{ErrorMessages, LogErrors, LogInfos, LogWarnings, LoggerMessages};
 use msg::{SuccessMessages};
@@ -38,7 +35,6 @@ use remote_access::{get_remote_services, init_remote_services};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Number, Value};
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::env::temp_dir;
 use std::error::Error;
@@ -51,7 +47,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use ipnet::Ipv4Net;
-use struct_iterable::Iterable;
 use strum::Display;
 use sysinfo::Networks;
 use tokio::fs::{File, read_to_string, rename};
@@ -63,8 +58,6 @@ use utils::{get_quota_for_all, str_to_i64, sudo_group, ts_to_str, get_notificati
 use utils::{parse_mbox, InboxMail, flush_mailbox, init_mbox_basepath};
 use utils::{try_create_unix_user, get_user_uid, get_user_gid, restore_user_home_dir};
 use uuid::Uuid;
-use crate::backend::config::CfgError;
-use crate::backend::ddns::{ClouDNS, DDNSService, DNSExit, DuckDNS, DynuDDNS, Dynv6, FreeDNS, NoIP};
 use crate::backend::net::{flush_ddclient_cfg, VPN_PRIVATE_KEY, VPN_PUBLIC_KEY};
 use crate::cmdl::firewall::{Firewall, FirewallAction, FirewallPort};
 use crate::cmdl::selinux::Protocol;
@@ -83,8 +76,7 @@ pub mod msg;
 pub mod permissions;
 pub mod utils;
 pub mod net;
-mod remote_access;
-pub mod ddns;
+pub mod remote_access;
 
 static BACKEND:OnceCell<Arc<Backend>> = OnceCell::const_new();
 static NMS_CONFIG_FILE:&str = "nms.conf.json";
@@ -540,7 +532,7 @@ impl Backend
                         Err(e) =>
                             {
                                 LoggerMessages::Error(LogErrors::CfgWrite(&e.to_string())).log();
-                                return Err(e.into());
+                                Err(e.into())
                             }
                     }
 
@@ -682,74 +674,6 @@ impl Backend
 
         reload_user_ft.await;
     }
-
-    // async fn init_ddns_service_task(self: &Arc<Self>)
-    // {
-    //     let duration = {
-    //         let cfg = self.config.lock().await;
-    //         let d = cfg.daemon.ddns_refresh_time;
-    //
-    //         Duration::from_mins(1 as u64).as_secs()
-    //     };
-    //
-    //     let task_backend = Arc::clone(self);
-    //
-    //     self.event_manager.register_action (
-    //         &Events::Timer,
-    //         Arc::new(
-    //             Box::new(
-    //                 move |(_,_):&(Trigger,Option<ContextData>)|
-    //                     {
-    //                         let b = Arc::clone(&task_backend);
-    //                         Box::pin(
-    //                             async move
-    //                                 {
-    //                                     let mut flush=false;
-    //                                     println!("update in progress");
-    //                                     for (name,provider) in b.ddns_services.read().await.iter()
-    //                                     {
-    //                                         println!("update in progress for {}", name);
-    //                                         match provider.update().await
-    //                                         {
-    //                                             Ok(_) =>
-    //                                                 {
-    //                                                     LoggerMessages::Info(LogInfos::DDNSUpdated(name)).log();
-    //                                                     let mut cfg = b.config.lock().await;
-    //                                                     if let Err(e) = cfg.ddns_service_updated(name.as_str())
-    //                                                     {
-    //                                                         LoggerMessages::Error(LogErrors::DDnsUpdate(name,e.to_string().as_str())).log();
-    //                                                     }
-    //                                                     flush = true;
-    //                                                 },
-    //                                             Err(e) => LoggerMessages::Error(LogErrors::DDnsUpdate(name,&e.to_string())).log(),
-    //                                         }
-    //                                     }
-    //
-    //                                     println!("preparing to flush");
-    //                                     if flush
-    //                                     {
-    //                                         println!("flushiiiiinng");
-    //                                         if let Err(e) = b.flush_config().await
-    //                                         {
-    //                                             LoggerMessages::Error(LogErrors::CfgWrite(&e.1.to_string())).log();
-    //                                         }
-    //
-    //                                         if let Err(e) = b.reload_ddns_providers().await
-    //                                         {
-    //                                             LoggerMessages::Error(LogErrors::DDns(&e.1.to_string())).log();
-    //                                         }
-    //                                     }
-    //
-    //                                     println!("flushed");
-    //                                 }
-    //                         )
-    //                     }
-    //             )
-    //         ),
-    //         None,
-    //         Some(vec![EventParameters::Timer(duration)])
-    //     ).await;
-    // }
 
     async fn init_net_counters(self: &Arc<Self>)
     {
@@ -1269,7 +1193,7 @@ impl Backend
             let ddns = cfg.ddns.as_mut().unwrap();
 
             let identifier = name.trim().to_string();
-            if force || !ddns.contains_key(&identifier)
+            if !ddns.contains_key(&identifier)
             {
                 ddns.insert(identifier, CfgDynDNS {
                     enabled,
@@ -1277,6 +1201,21 @@ impl Backend
                     server,
                     username,
                     password,
+                    hostname,
+                });
+
+                Some(ddns.values().map(|c| c.clone()).collect::<Vec<CfgDynDNS>>())
+            }
+            else if let Some(prev_cfg) = ddns.get(&identifier) && force
+            {
+                let new_password = if password.is_some() {password} else {prev_cfg.password.clone()};
+
+                ddns.insert(identifier, CfgDynDNS {
+                    enabled,
+                    protocol,
+                    server,
+                    username,
+                    password: new_password,
                     hostname,
                 });
 
@@ -1305,7 +1244,7 @@ impl Backend
     pub async fn remove_ddns_service(&self,name:&str) -> Result<(), HTTPMessage>
     {
         let mut cfg = self.config.lock().await;
-        let mut flush = false;
+        let flush = false;
 
         {
             if let Some(ddns) = cfg.ddns.as_mut()
@@ -1345,75 +1284,7 @@ impl Backend
         }
         else { HashMap::new() }
     }
-
-      
-
-
-
-    // pub async fn reload_ddns_providers(&self) -> Result<(), HTTPMessage>
-    // {
-    //     let digest = Sha256::digest(self.secret_key.as_bytes());
-    //     let key = URL_SAFE.encode(digest);
-    //     let fernet = Fernet::new(key.as_str())
-    //         .ok_or_else(|| ErrorMessages::E_NET_DDNS_CONFIG.wrap_with_status_code(None))?;
-    //
-    //
-    //     let mut svc: HashMap<String,Arc<dyn DDNSService>> = HashMap::new();
-    //     let cfg = self.config.lock().await;
-    //
-    //     for (name,prov_conf) in cfg.ddns.iter()
-    //     {
-    //         let prov_info = prov_conf.downcast_ref::<Option<CfgDynDNS>>().unwrap();
-    //
-    //         if let Some(prov_cfg) = prov_info && prov_cfg.enabled
-    //         {
-    //             match name.to_lowercase().as_str()
-    //             {
-    //                 "noip" => {
-    //                     if let Some(u) = &prov_cfg.username
-    //                     {
-    //                         svc.insert(name.to_string(), Arc::new(NoIP(u.clone(), String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap())));
-    //                     }
-    //                 }
-    //                 "duckdns" => {
-    //                     if let Some(domain) = &prov_cfg.username
-    //                     {
-    //                         svc.insert(name.to_string(), Arc::new(DuckDNS(domain.clone(), String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap())));
-    //                     }
-    //                 }
-    //                 "dynu" => {
-    //                     if let Some(u) = &prov_cfg.username
-    //                     {
-    //                         svc.insert(name.to_string(), Arc::new(DynuDDNS(u.clone(), String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap())));
-    //                     }
-    //                 }
-    //                 "freedns" => { svc.insert(name.to_string(), Arc::new(FreeDNS(String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap()))); }
-    //                 "dnsexit" => {
-    //                     if let Some(u) = &prov_cfg.username
-    //                     {
-    //                         svc.insert(name.to_string(), Arc::new(DNSExit(u.clone(), String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap())));
-    //                     }
-    //                 }
-    //                 "dynv6" => {
-    //                     if let Some(u) = &prov_cfg.username
-    //                     {
-    //                         svc.insert(name.to_string(), Arc::new(Dynv6(u.clone(), String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap())));
-    //                     }
-    //                 }
-    //                 "cloudns" => { svc.insert(name.to_string(), Arc::new(ClouDNS(String::from_utf8(fernet.decrypt(prov_cfg.password.as_str()).unwrap()).unwrap()))); }
-    //                 _ => { LoggerMessages::Error(LogErrors::DDnsUnk(name)).log(); }
-    //
-    //             }
-    //         }
-    //     }
-    //
-    //     drop(cfg);
-    //
-    //     let mut ddns_services = self.ddns_services.write().await;
-    //     *ddns_services = svc;
-    //
-    //     Ok(())
-    // }
+    
     pub async fn get_bind_addr(&self) -> SocketAddrV4
     {
         let cfg = self.config.lock().await;
@@ -1462,9 +1333,7 @@ impl Backend
                 }
         )
         .collect::<Vec<VPNPeer>>();
-
-        println!("{} {}",peers.len(),wg_peers.len());
-
+        
         //make the two list even in case they are not aligned anymore
         if peers.len() < peer_names.len()
         {
@@ -1488,83 +1357,6 @@ impl Backend
 
         Ok(peers)
     }
-
-    // pub async fn get_ddns_providers(&self) -> Result<IndexMap<String,DDNSProvider>, HTTPMessage>
-    // {
-    //     let cfg = self.config.lock().await;
-    //     let mut providers:IndexMap<String,DDNSProvider> = IndexMap::new();
-    //     for (name,prov_conf) in cfg.ddns.iter()
-    //     {
-    //         let prov_info = match prov_conf.downcast_ref::<Option<CfgDynDNS>>().unwrap()
-    //         {
-    //             Some(prov_info) => {
-    //
-    //             let (last_update, next_update): (Option<u64>, Option<u64>) = if prov_info.last_update > 0
-    //             {
-    //                 let t = prov_info.last_update;
-    //                 (Some(t), Some(t + Duration::from_mins(cfg.get_ddns_refresh_time()).as_secs()))
-    //             }
-    //             else { (None, None) };
-    //
-    //             DDNSProvider::new
-    //                     (
-    //                         prov_info.enabled,
-    //                         prov_info.username.clone(),
-    //                         last_update,
-    //                         next_update
-    //                     )
-    //             },
-    //             None => DDNSProvider::default(),
-    //         };
-    //
-    //         providers.insert(name.to_string(), prov_info);
-    //     }
-    //
-    //     Ok(providers)
-    // }
-    //
-    // pub async fn set_ddns_provider_credentials(&self, name:&str, username:Option<String>,password:String, enable:bool) -> Result<(),HTTPMessage>
-    // {
-    //     let digest = Sha256::digest(self.secret_key.as_bytes());
-    //     let key = URL_SAFE.encode(digest);
-    //     let fernet = Fernet::new(key.as_str())
-    //         .ok_or_else(|| ErrorMessages::E_NET_DDNS_CONFIG.wrap_with_status_code(None))?;
-    //
-    //     let enc_password = fernet.encrypt(password.as_bytes());
-    //
-    //     let mut cfg = self.config.lock().await;
-    //     cfg.ddns_service_set_credential(name,username,enc_password,enable)
-    //         .map_err(|e|
-    //             match e
-    //             {
-    //                 CfgError::DDNSNotFound => ErrorMessages::E_NET_DDNS_INVALID.wrap_with_status_code(Some(vec![Value::String(name.to_string())])),
-    //                 _ => unreachable!(),
-    //             }
-    //         )?;
-    //
-    //     println!("\t>>>> D");
-    //     drop(cfg);
-    //
-    //     self.flush_config().await?;
-    //     Ok(())
-    // }
-    //
-    // pub async fn enable_ddns_provider(&self, name:&str, enable:bool) -> Result<(),HTTPMessage>
-    // {
-    //     let mut cfg = self.config.lock().await;
-    //     cfg.ddns_service_set_enable(name,enable) .map_err(|e|
-    //         match e
-    //         {
-    //             CfgError::DDNSNotFound => ErrorMessages::E_NET_DDNS_INVALID.wrap_with_status_code(Some(vec![Value::String(name.to_string())])),
-    //             CfgError::DDnsNotConfigured => ErrorMessages::E_NET_DDNS_CONFIG.wrap_with_status_code(Some(vec![Value::String(name.to_string())])),
-    //             // _ => unreachable!(),
-    //         }
-    //     )?;
-    //     drop(cfg);
-    //
-    //     self.flush_config().await?;
-    //     Ok(())
-    // }
 
     pub async fn iface_down(&self, iface:String) -> Result<(), HTTPMessage>
     {
@@ -2087,7 +1879,7 @@ impl Backend
                 }
             }
         }
-        return configured;
+        configured
     }
 
     pub async fn has_otp_secret(&self,username:&String) -> bool
@@ -2097,7 +1889,7 @@ impl Backend
         {
             return user.otp_secret.is_some();
         }
-        return false;
+        false
     }
 
     pub async fn add_temporary_secret(&self,username:Option<String>,secret:String)
@@ -2140,9 +1932,9 @@ impl Backend
                 {
                     let tmp_sec = secrets.remove(uuid).unwrap();
                     user.otp_secret = Some(tmp_sec.secret);
-                    return Ok(tmp_sec.username.unwrap());
+                    Ok(tmp_sec.username.unwrap())
                 }
-                None => return Err(ErrorMessages::E_USER_NOT_FOUND.wrap_with_status_code(None))
+                None => Err(ErrorMessages::E_USER_NOT_FOUND.wrap_with_status_code(None))
 
             }
         }
@@ -2169,7 +1961,7 @@ impl Backend
             }
 
             LoggerMessages::Error(LogErrors::AdminOTPAlreadyConf).log();
-            return Err(ErrorMessages::E_AUTH_ALREADY_CONFIG.wrap_with_status_code(None));
+            Err(ErrorMessages::E_AUTH_ALREADY_CONFIG.wrap_with_status_code(None))
         }
     }
 
@@ -2328,7 +2120,7 @@ impl Backend
             }
         }
 
-        return false;
+        false
     }
 
 
@@ -2593,7 +2385,7 @@ impl Backend
             pools.push(p);
         }
 
-        return Ok(pools);
+        Ok(pools)
                 
     }
 
@@ -3083,7 +2875,7 @@ impl Backend
 
         detected_disks.sort_by_key(|a| a.name.clone() );
 
-        return detected_disks;
+        detected_disks
         
     }
 }
@@ -3307,8 +3099,8 @@ impl Backend
                             None => None
                         }
                     },
-                    uid: uid,
-                    gid:gid,
+                    uid,
+                    gid,
                     notifications:get_notifications_count(uname).await
                 };
 

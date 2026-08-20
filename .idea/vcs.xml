@@ -2,5 +2,6 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/nms_backend/3rdparty/rust_struct_iterable" vcs="Git" />
   </component>
 </project>

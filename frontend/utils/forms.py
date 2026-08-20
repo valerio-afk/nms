@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
 from flask_babel import lazy_gettext as _
-from wtforms import StringField, IntegerField,PasswordField,BooleanField, SelectMultipleField, FileField
+from wtforms import StringField, IntegerField,PasswordField,BooleanField, SelectMultipleField, FileField, SelectField, SubmitField
 from wtforms.fields.choices import RadioField
 from wtforms.fields.simple import HiddenField, TextAreaField
 from wtforms.validators import DataRequired,NumberRange, EqualTo, Regexp,StopValidation
@@ -167,3 +167,22 @@ class VPNForm(FlaskForm):
 class ChangePasswordForm(FlaskForm):
     password = PasswordField(_("Password"), validators=[DataRequired()])
     confirm_password = PasswordField(_("Confirm Password"), validators=[EqualTo('password', message=_('Passwords must match'))])
+
+class DDNSProviderNewForm(FlaskForm):
+    name = StringField(_("Name"), validators=[DataRequired()])
+    protocol = SelectField(_("Protocol"), choices=[],coerce=str)
+    server = StringField(_("Server"), validators=[DataRequired()])
+    username = StringField(_("Username"))
+    password = PasswordField(_("Password"))
+    hostname = StringField(_("Hostname"))
+
+class DDNSProviderEditForm(FlaskForm):
+    name = HiddenField()
+    enabled = BooleanField(_("Enabled"))
+    protocol = SelectField(_("Protocol"), choices=[],coerce=str)
+    server = StringField(_("Server"), validators=[DataRequired()])
+    username = StringField(_("Username"))
+    password = PasswordField(_("Password"))
+    hostname = StringField(_("Hostname"))
+    submit_updates = SubmitField(_("Apply Changes"))
+    submit_delete = SubmitField(_("Delete Configuration"))

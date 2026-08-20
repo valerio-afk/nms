@@ -5,20 +5,22 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="0ddb49fd-44e3-4605-a704-cc1f15248c46" name="Changes" comment="all pool properties implemented - most to be tested">
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/.idea/vcs.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/3thparty/rust_struct_iterable" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/api/backend_proxy.py" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/api/backend_proxy.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/create_app.py" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/create_app.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/network.py" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/network.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/templates/card.ddns.html" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/templates/card.ddns.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/utils/filters.py" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/utils/filters.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/utils/forms.py" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/utils/forms.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/nms_backend/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/Cargo.lock" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/nms_backend/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/Cargo.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/nms_backend/src/backend.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/api/v1/net.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/api/v1/net.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/config.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/config.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/ddns.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/ddns.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/msg.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/msg.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/ddns.rs" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/net.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/net.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/utils.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/utils.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_shared/src/nms_shared/msg.py" beforeDir="false" afterPath="$PROJECT_DIR$/nms_shared/src/nms_shared/msg.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_sysconf.sh" beforeDir="false" afterPath="$PROJECT_DIR$/nms_sysconf.sh" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

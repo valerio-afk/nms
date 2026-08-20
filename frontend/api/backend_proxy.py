@@ -6,6 +6,7 @@ from requests.structures import CaseInsensitiveDict
 from frontend.api.tasks import BackgroundTask, ResilverStatusTask
 from frontend.api.threads import TimerThread
 from frontend.utils.exception import NotAuthenticatedError
+from functools import cached_property
 from nms_shared import ErrorMessages, SuccessMessages, WarningMessages
 from nms_shared.disks import Disk, DiskStatus
 from nms_shared.enums import LogFilter
@@ -451,6 +452,10 @@ class BackEndProxy:
     def ddns_providers(this) -> Dict[str,dict]:
         return this._request("net/ddns", RequestMethod.GET)
 
+    @cached_property
+    def ddns_list_protocols(this) -> List[str]:
+        return this._request("net/ddns/protocols", RequestMethod.GET)
+
     #ACCESS SERVICES PROPERTIES
     @property
     def access_services(this) -> Dict[str,dict]:
@@ -742,6 +747,31 @@ class BackEndProxy:
 
     def ddns_disable(this,provider:str) -> None:
         this._request(f"net/ddns/{provider}/stop",RequestMethod.POST)
+
+    def ddns_add(this,name:str, proto:str,server:str, username:Optional[str]=None, password:Optional[str]=None,hostname:Optional[str]=None) -> None:
+        this._request(f"net/ddns",RequestMethod.POST,body_params={
+            "name":name,
+            "proto":proto,
+            "server":server,
+            "username":username,
+            "password":password,
+            "hostname":hostname
+        })
+
+    def ddns_edit(this,name:str, enabled:bool, proto:str,server:str, username:Optional[str]=None, password:Optional[str]=None,hostname:Optional[str]=None) -> None:
+        this._request(f"net/ddns",RequestMethod.PATCH,body_params={
+            "name":name,
+            "enabled":enabled,
+            "proto":proto,
+            "server":server,
+            "username":username if len(username)>0 else None,
+            "password":password if len(password)>0 else None,
+            "hostname":hostname if len(hostname)>0 else None
+        })
+
+    def ddns_delete(this,name:str) -> None:
+        this._request(f"net/ddns",RequestMethod.DELETE,url_params=[name])
+
 
     #USERS METHODS
 

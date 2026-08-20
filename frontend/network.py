@@ -1,6 +1,6 @@
 from . import frontend as bp, NMSBACKEND as BACKEND
 from .api.backend_proxy import show_flash
-from .utils.forms import IFaceEnableForm, IPEnableForm, IPForm, VPNForm
+from .utils.forms import IFaceEnableForm, IPEnableForm, IPForm, VPNForm, DDNSProviderNewForm,DDNSProviderEditForm
 from .utils.widget import render_widget
 from enum import Enum
 from flask import render_template,  redirect, url_for, Response, request, g, send_file
@@ -91,17 +91,26 @@ def network() -> str:
     widgets.append(vpn_widget)
 
     #ddns is also special
-    ddns_providers = BACKEND.ddns_providers
-    if (ddns_providers is not None):
-        for k in ddns_providers.keys():
-            ddns_providers[k]['ui_name'] = DDNSProviders[k].value
-            if (ddns_providers[k].get("last_update") is not None):
-                ddns_providers[k]['last_update'] = format_datetime(datetime.datetime.fromtimestamp(ddns_providers[k]['last_update']),"EEEE, d MMMM yyyy HH:mm:ss").title()
+    ddns_providers = []
+    ddns_protocols = BACKEND.ddns_list_protocols
+    for name,cfg in BACKEND.ddns_providers.items():
+        form = DDNSProviderEditForm()
+        form.name.data = name
+        form.enabled.data = cfg['enabled']
+        form.protocol.choices = ddns_protocols
+        form.protocol.data = cfg['protocol']
+        form.server.data = cfg['server']
+        form.username.data = cfg['username']
+        form.password.data = cfg['password']
+        form.hostname.data = cfg['hostname']
 
-            if (ddns_providers[k].get("next_update") is not None):
-                ddns_providers[k]['next_update'] = format_datetime(datetime.datetime.fromtimestamp(ddns_providers[k]['next_update']), "EEEE, d MMMM yyyy HH:mm:ss").title()
+        ddns_providers.append(form)
 
-    ddns_widget,_ = render_widget("ddns",ddns_providers=ddns_providers)
+    ddns_new_form = DDNSProviderNewForm()
+    ddns_new_form.protocol.choices = ddns_protocols
+
+
+    ddns_widget,_ = render_widget("ddns",ddns_providers=ddns_providers, ddns_new_form=ddns_new_form)
     widgets.append(ddns_widget)
 
     return render_template("network.html",
@@ -262,24 +271,72 @@ def vpn_peers() -> Response:
             BACKEND.vpn_add_peer(name, public_key)
     return redirect(url_for("main.network"))
 
-@bp.route("/network/ddns/<string:provider>", methods=['POST'])
-def ddns_conf(provider:str) -> Response:
-    form = request.form
+# @bp.route("/network/ddns/<string:provider>", methods=['POST'])
+# def ddns_conf(provider:str) -> Response:
+#     form = request.form
+#
+#     try:
+#         validate_csrf(form.get("csrf_token"))
+#     except ValidationError:
+#         show_flash(code=ErrorMessages.E_CSRF.name)
+#     else:
+#         if form.get("action") == "enable":
+#             username = form.get("username")
+#             password = form.get("password")
+#
+#             if (isinstance(username,str) and (len(username) == 0)): username = None
+#             if (isinstance(password, str) and (len(password) == 0)): password = None
+#
+#             BACKEND.ddns_enable(provider,{"username":username,"password":password})
+#         elif form.get("action") == "disable":
+#             BACKEND.ddns_disable(provider)
+#
+#     return redirect(url_for("main.network"))
 
-    try:
-        validate_csrf(form.get("csrf_token"))
-    except ValidationError:
-        show_flash(code=ErrorMessages.E_CSRF.name)
+@bp.route("/network/ddns/add", methods=['POST'])
+def ddns_conf_add() -> Response:
+    form = DDNSProviderNewForm()
+
+    form.protocol.choices = BACKEND.ddns_list_protocols
+
+    if form.validate_on_submit():
+        BACKEND.ddns_add(
+            form.name.data,
+            form.protocol.data,
+            form.server.data,
+            form.username.data,
+            form.password.data,
+            form.hostname.data
+        )
     else:
-        if form.get("action") == "enable":
-            username = form.get("username")
-            password = form.get("password")
+        show_flash(code=ErrorMessages.E_CSRF.name)
 
-            if (isinstance(username,str) and (len(username) == 0)): username = None
-            if (isinstance(password, str) and (len(password) == 0)): password = None
 
-            BACKEND.ddns_enable(provider,{"username":username,"password":password})
-        elif form.get("action") == "disable":
-            BACKEND.ddns_disable(provider)
+
+    return redirect(url_for("main.network"))
+
+@bp.route("/network/ddns/edit/<string:provider>", methods=['POST'])
+def ddns_conf_edit(provider:str) -> Response:
+    form = DDNSProviderEditForm()
+
+    form.protocol.choices = BACKEND.ddns_list_protocols
+
+    if form.validate_on_submit():
+        if form.submit_updates.data:
+            BACKEND.ddns_edit(
+                provider,
+                form.enabled.data,
+                form.protocol.data,
+                form.server.data,
+                form.username.data,
+                form.password.data,
+                form.hostname.data
+            )
+        elif form.submit_delete.data:
+            BACKEND.ddns_delete(provider)
+    else:
+        show_flash(code=ErrorMessages.E_CSRF.name)
+
+
 
     return redirect(url_for("main.network"))

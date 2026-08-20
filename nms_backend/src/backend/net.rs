@@ -16,7 +16,6 @@ use std::io::{Write};
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::path::PathBuf;
 use crate::backend::config::CfgDynDNS;
-use crate::backend::remote_access::ServiceError;
 use crate::cmdl::systemd::{Systemctl, SystemctlAction};
 
 const WIREGUARD_CONF:&'static str = "/etc/wireguard/wg0.conf";
@@ -333,7 +332,7 @@ pub async fn get_network_ifaces() -> Vec<NetworkInterface>
                 ipv4: ipv4_info, 
                 ipv6: ipv6_info, 
                 network_name: connection.to_string(), 
-                iface_type: iface_type, 
+                iface_type,
                 has_profile,
                 ap: hotspot 
             });
@@ -341,7 +340,7 @@ pub async fn get_network_ifaces() -> Vec<NetworkInterface>
         }
     }
 
-    return ifaces;
+    ifaces
 
 }
 
@@ -400,15 +399,16 @@ pub async fn write_wireguard_config_file(cfg:Ini) -> Result<(),HTTPMessage>
     Ok(())
 }
 
-pub async fn flush_ddclient_cfg(providers:Vec<CfgDynDNS>, delay:u64, unit:&String) -> Result<(), anyhow::Error>
+pub async fn flush_ddclient_cfg(providers:Vec<CfgDynDNS>, delay:u64, unit:&String) -> Result<(), Error>
 {
     let mut cfg = String::new();
     cfg.push_str(format!("daemon={}\n",delay*60).as_str());
     cfg.push_str("pid=/var/run/ddclient.pid\n");
     cfg.push_str("use=web, web=ipify-ipv4\n");
     cfg.push_str("syslog=yes\n");
+    cfg.push_str("verbose=yes\n");
 
-    for p in providers
+    for p in providers.iter().filter(|p| p.enabled)
     {
         cfg.push_str(format!("\nprotocol={}\n",p.protocol).as_str());
         if let Some(server)   = &p.server   { cfg.push_str(format!("server={}\n",server).as_str()); }
