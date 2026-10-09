@@ -2,7 +2,9 @@
 
 {% block card_title %}<i class="bi bi-sign-turn-slight-left-fill"></i> {{ _("Dynamic DNS") }}{% endblock %}
 
+
 {% block card_content %}
+<p>{% trans st_code="<code>"|safe,e_code="</code>"|safe %}DDNS is provided through {{ st_code }}DDNS{{ e_code }}.{% endtrans %} {% trans st_code="<a href='https://ddclient.net' target='_blank'>"|safe,e_code="</a>"|safe %}More information can be found {{ st_code }}here{{ e_code }}.{% endtrans %}</p>
 <div class="accordion" id="accordion-ddns">
 {% if ddns_providers %}
 
@@ -78,8 +80,8 @@
                                 {{ form.submit_delete(class=form.hostname.render_kw.class ~ " btn btn-danger w-100 text-wrap") }}
                             </div>
                         </div>
-                    </div>
-                </form>
+                    </form>
+                </div>
             </div>
         </div>
     {% endfor %}
