@@ -475,6 +475,7 @@ pub enum LogWarnings<'a>
     CfgDefault,
     ZfsQuota(&'a str),
     ZfsQuotaNoPool,
+    ZfsDkms(&'a str),
     TmpSecretNotFound(&'a str),
     EMStopped,
     PoolUnmountedBy(&'a str),
@@ -485,6 +486,8 @@ pub enum LogWarnings<'a>
     MailParsingError(&'a str),
     UserSudo(&'a str,bool),
     UserDeleted(&'a str),
+    CommandExecution(&'a str, &'a str),
+    NoOutput(&'a str),
 }
 
 impl<'a> Display for LogWarnings<'a>
@@ -522,6 +525,9 @@ impl<'a> Display for LogWarnings<'a>
                 else { write!(f, "{} is not a sudoer", uname) }
             }
             LogWarnings::UserDeleted(uname) => write!(f,"User {} deleted",uname),
+            LogWarnings::CommandExecution(cmd, err) => write!(f,"Error executing command {}: {}",cmd,err),
+            LogWarnings::NoOutput(cmd) => write!(f,"No output when running {}",cmd),
+            LogWarnings::ZfsDkms(kernel_rel) => write!(f,"No ZFS DKMS module found for the kernel version {}",kernel_rel),
         }
     }
 }

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use crate::backend::net::{IPv4, NetworkInterface, read_wireguard_config_file, IfaceType};
-use crate::backend::{propagate_error, Backend, DDNSProvider, FastAPIComp, IfaceStatusAction, HTTPMessage};
+use crate::backend::{propagate_error, Backend, FastAPIComp, IfaceStatusAction, HTTPMessage};
 use crate::backend::permissions::{UserPermissions, check_permission};
 use crate::backend::jwt::TokenPurposes;
 use axum::extract::{State, Path, Query};

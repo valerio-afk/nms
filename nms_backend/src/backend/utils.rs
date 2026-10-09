@@ -258,14 +258,14 @@ pub fn ts_to_str(ts:Option<i64>) -> String
         return dt.format("%c").to_string();
     }
 
-    return "-".to_string()
+    "-".to_string()
 }
 
 pub async fn get_quota_for_all(pool:&str, dataset:&str) -> Result<HashMap<String,Quota>,String>
 {
     let output = ZFS(
         ZFSActions::GetQuota::<&str>(ZFSArgs{
-            pool: pool,
+            pool,
             dataset: Some(dataset)
         }),
         false,
@@ -301,14 +301,14 @@ pub async fn get_quota_for_all(pool:&str, dataset:&str) -> Result<HashMap<String
 
             map.insert(uname.to_string(),Quota {
                 quota:limit,
-                used: used
+                used
             });
         }
 
         return Ok(map);
     }
 
-    return Err("Unable to execute zfs".to_string());
+    Err("Unable to execute zfs".to_string())
 }
 
 pub async fn get_notifications_count(username:&str) -> u32
@@ -354,7 +354,7 @@ pub async fn get_notifications_count(username:&str) -> u32
     }
 
 
-    return n_notifications;
+    n_notifications
 }
 
 
@@ -421,10 +421,6 @@ pub async fn parse_mbox(username:&str) -> Vec<InboxMail>
                                 current_mail.insert("id", Value::String(id_m[1].to_string()));
                             }
                         }
-                        // else if hdr_lc == "date"
-                        // {
-                        //     current_mail.insert("date", Value::String(value.to_string()));
-                        // }
 
                         let mut headers = if let Some(h) = current_mail.remove("headers")
                         { serde_json::from_value(h).unwrap() }

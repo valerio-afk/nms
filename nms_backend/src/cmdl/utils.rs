@@ -174,6 +174,37 @@ impl std::fmt::Display for SmartctlActions
     }
 }
 
+#[derive(Display, Debug)]
+pub enum UnameOptions
+{
+    #[strum(to_string="a")]
+    All,
+
+    #[strum(to_string="s")]
+    KernelName,
+
+    #[strum(to_string="n")]
+    NodeName,
+
+    #[strum(to_string="r")]
+    KernelRelease,
+
+    #[strum(to_string="v")]
+    KernelVersion,
+
+    #[strum(to_string="m")]
+    Machine,
+
+    #[strum(to_string="p")]
+    Processor,
+
+    #[strum(to_string="i")]
+    HardwarePlatform,
+
+    #[strum(to_string="o")]
+    OperatingSystem,
+}
+
 pub fn LSBLK(
     properties:Option<&[LsblkProperties]>,
     dev_path:Option<&String>,
@@ -356,6 +387,26 @@ pub fn Sensors(config:CmdConfig) -> CommandLine
     CommandLine::new(
         "sensors",
         Some(vec!["-j".to_string()]),
+        None,
+        None,
+        config
+    )
+}
+
+pub fn Uname(options:Option<Vec<UnameOptions>>, config:CmdConfig) -> CommandLine
+{
+    let mut options_str = "-".to_string();
+    if let Some(o) = options && o.len()>0
+    {
+        for opt in o
+        {
+            options_str.push_str(&opt.to_string());
+        }
+    }
+
+    CommandLine::new(
+        "uname",
+        if options_str.len()>1 {Some(vec![options_str])} else {None},
         None,
         None,
         config

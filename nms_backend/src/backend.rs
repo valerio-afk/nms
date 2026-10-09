@@ -62,6 +62,7 @@ use crate::backend::net::{flush_ddclient_cfg, VPN_PRIVATE_KEY, VPN_PUBLIC_KEY};
 use crate::cmdl::firewall::{Firewall, FirewallAction, FirewallPort};
 use crate::cmdl::selinux::Protocol;
 use crate::cmdl::systemd::{Systemctl, SystemctlAction};
+use crate::cmdl::utils::{Find, Uname, UnameOptions};
 
 pub static BACKEND_VERSION:&'static str = env!("CARGO_PKG_VERSION");
 static POOL_KEY_PATH: &'static str = "/root/tank.key";
@@ -1100,8 +1101,83 @@ impl Backend
         }
     }
 
+    async fn check_zfs_dkms()
+    {
+        let uname_result = Uname(
+            Some(vec![UnameOptions::KernelRelease]),
+            CmdConfig::Empty
+        ).run().await;
+
+        let kernel_release = match uname_result
+        {
+            Err(e) =>
+            {
+                LoggerMessages::Warning(LogWarnings::CommandExecution("uname",e.to_string().as_str())).log();
+                return
+            },
+            Ok(output) => if let Some(o) = output
+            {
+                o.stdout
+            }
+            else
+            {
+                LoggerMessages::Warning(LogWarnings::NoOutput("uname")).log();
+                return
+            }
+        };
+
+        let find_result = Find(
+            "/var/lib/dkms".to_string(),
+            Some("*zfs*".to_string()),
+            None,
+            None,
+            false,
+            CmdConfig::Provided {
+                sudo: true,
+                stdin: None,
+                cwd: None,
+                strict: true
+            }
+        ).run().await;
+
+
+
+        let mut dkms_zfs = false;
+
+        match find_result
+        {
+            Err(e) => {
+                LoggerMessages::Warning(LogWarnings::CommandExecution("find",e.to_string().as_str())).log();
+                return
+            }
+            Ok(output) => if let Some(o) = output
+            {
+                for l in o.stdout.lines()
+                {
+                    if l.contains(&kernel_release)
+                    {
+
+                        dkms_zfs = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if dkms_zfs { return }
+
+        LoggerMessages::Warning(LogWarnings::ZfsDkms(kernel_release.as_str())).log();
+
+        //install kernel headers wrt distro
+        //reinstall module
+        //depmod -a maybe?
+        //load module
+    }
+
     async fn init(mut self) -> Arc<Self>
     {
+        Self::check_zfs_dkms().await;
+
         self.init_configuration().await;
         let be = Arc::new(self);
         be.event_manager.start().await;
@@ -1550,7 +1626,7 @@ impl Backend
                 .ok_or_else(||
                     ErrorMessages::E_NET_VPN_NOTCONF.wrap_with_status_code(None)
                 )?,
-            SystemctlAction::Stop,
+            SystemctlAction::IsActive,
             true,
             CmdConfig::default())
             .run()
@@ -1707,7 +1783,8 @@ impl Backend
 
         if let Some(output) = cmd
         {
-            Some(output.stdout.trim().to_string())
+            let k = output.stdout.trim().to_string();
+            Some(BASE64_STANDARD.encode(k))
         }
         else { None }
     }
