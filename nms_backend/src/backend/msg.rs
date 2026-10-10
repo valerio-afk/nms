@@ -402,7 +402,8 @@ pub enum LogErrors<'a>
     AccessServiceTriggerError(&'a String),
     DDnsUnk(&'a str),
     DDns(&'a str),
-    DDnsUpdate(&'a str, &'a str)
+    DDnsUpdate(&'a str, &'a str),
+    SystemUpdate(&'a str)
 }
 
 impl<'a> Display for LogErrors<'a>
@@ -465,6 +466,7 @@ impl<'a> Display for LogErrors<'a>
             LogErrors::DDnsUnk(svc) => write!(f,"Unknown DDNS service: {}",svc),
             LogErrors::DDns(e) => write!(f,"DDNS error: {}",e),
             LogErrors::DDnsUpdate(name, err) => write!(f,"Error occurred while updating DDNS service {}: {}",name,err),
+            LogErrors::SystemUpdate(e) => write!(f,"System update failed: {}",e),
         }
     }
 }
@@ -527,7 +529,7 @@ impl<'a> Display for LogWarnings<'a>
             LogWarnings::UserDeleted(uname) => write!(f,"User {} deleted",uname),
             LogWarnings::CommandExecution(cmd, err) => write!(f,"Error executing command {}: {}",cmd,err),
             LogWarnings::NoOutput(cmd) => write!(f,"No output when running {}",cmd),
-            LogWarnings::ZfsDkms(kernel_rel) => write!(f,"No ZFS DKMS module found for the kernel version {}",kernel_rel),
+            LogWarnings::ZfsDkms(kernel_rel) => write!(f,"No ZFS DKMS module found for the kernel version {}. An attempt to install it will be made, but it will take a while...",kernel_rel),
         }
     }
 }
@@ -558,7 +560,8 @@ pub enum LogInfos<'a>
     IfaceStatusChange(IfaceStatusAction, &'a str),
     VPNConf,
     VPNNewPeer(&'a str, &'a str),
-    DDNSUpdated(&'a str)
+    DDNSUpdated(&'a str),
+    SystemUpdate,
 }
 
 impl<'a> Display for LogInfos<'a>
@@ -601,7 +604,8 @@ impl<'a> Display for LogInfos<'a>
             LogInfos::IfaceStatusChange(status, iface) => write!(f,"Network interface {} {}ed",iface, status.to_string()),
             LogInfos::VPNConf => {write!(f,"VPN configuration changed successfully")},
             LogInfos::VPNNewPeer(name,ip) => { write!(f,"Added new VPN peer {} with IP {}",name, ip) },
-            LogInfos::DDNSUpdated(name) => { write!(f,"DDNS service {} updated successfully", name) }, 
+            LogInfos::DDNSUpdated(name) => { write!(f,"DDNS service {} updated successfully", name) },
+            LogInfos::SystemUpdate => {write!(f,"System update successfully")},
         }
     }
 }

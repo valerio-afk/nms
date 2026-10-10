@@ -33,7 +33,7 @@ pub struct ZPoolCreateArgs
 {
     devices:Vec<String>,
     pool: String,
-    redudancy:bool,
+    redundancy:bool,
     encryption:Option<String>,
     compression:bool,
     posix_acl:bool
@@ -332,7 +332,7 @@ pub fn ZPool(
 
             args.push(params.pool.to_string());
 
-            if params.redudancy
+            if params.redundancy
             {
                 args.push("raidz1".to_string());
             }

@@ -9,7 +9,8 @@ pub struct PackageMngtUpgradeParameters
 pub enum PackageManagerActions
 {
     Update,
-    Upgrade(PackageMngtUpgradeParameters)
+    Upgrade(PackageMngtUpgradeParameters),
+    Install(Vec<String>)
 }
 
 struct AptActions;
@@ -23,7 +24,8 @@ impl CmdFlag<PackageManagerActions> for AptActions
         match action 
         {
             PackageManagerActions::Update => "update",
-            PackageManagerActions::Upgrade(_)=> "upgrade"
+            PackageManagerActions::Upgrade(_)=> "upgrade",
+            PackageManagerActions::Install(_) => "install"
         }
     }
 }
@@ -35,7 +37,8 @@ impl CmdFlag<PackageManagerActions> for  DnfActions
         match action 
         {
             PackageManagerActions::Update => "check-update",
-            PackageManagerActions::Upgrade(_) => "upgrade"
+            PackageManagerActions::Upgrade(_) => "upgrade",
+            PackageManagerActions::Install(_) => "install"
         }
     }
 }
@@ -108,6 +111,11 @@ pub fn AptGet(action:PackageManagerActions,config:CmdConfig) -> CommandLine
         if params.dry_run { args.push("--just-print".to_string()); }
         if params.yes { args.push("-y".to_string()); }
     }
+    else if let PackageManagerActions::Install(mut pkgs) = action
+    {
+        args.push("-y".to_string());
+        args.append(&mut pkgs);
+    }
 
     CommandLine::new(
         "apt-get",
@@ -127,6 +135,11 @@ pub fn DNF(action:PackageManagerActions,config:CmdConfig) -> CommandLine
         args.push("--refresh".to_string());
         if params.yes { args.push("-y".to_string()); }
     }
+    else if let PackageManagerActions::Install(mut pkgs) = action
+    {
+        args.append(&mut pkgs);
+    }
+
 
     CommandLine::new(
         "dnf",

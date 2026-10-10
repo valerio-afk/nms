@@ -59,7 +59,10 @@ use utils::{parse_mbox, InboxMail, flush_mailbox, init_mbox_basepath};
 use utils::{try_create_unix_user, get_user_uid, get_user_gid, restore_user_home_dir};
 use uuid::Uuid;
 use crate::backend::net::{flush_ddclient_cfg, VPN_PRIVATE_KEY, VPN_PUBLIC_KEY};
+use crate::backend::utils::{detect_distro_family, DistroFamily};
+use crate::cmdl::dkms::{DKMSActions, DKMS, DepMod, DepModActions, ModProbe, ModInfoActions, ModInfo};
 use crate::cmdl::firewall::{Firewall, FirewallAction, FirewallPort};
+use crate::cmdl::package_mngt::{PackageManagerActions, DNF, AptGet};
 use crate::cmdl::selinux::Protocol;
 use crate::cmdl::systemd::{Systemctl, SystemctlAction};
 use crate::cmdl::utils::{Find, Uname, UnameOptions};
@@ -1117,7 +1120,7 @@ impl Backend
             },
             Ok(output) => if let Some(o) = output
             {
-                o.stdout
+                o.stdout.trim().to_string()
             }
             else
             {
@@ -1168,10 +1171,45 @@ impl Backend
 
         LoggerMessages::Warning(LogWarnings::ZfsDkms(kernel_release.as_str())).log();
 
+        let mut commands:Vec<CommandLine> = Vec::new();
+
         //install kernel headers wrt distro
+
+        match detect_distro_family()
+        {
+            DistroFamily::Rh => {
+                let pkg = vec![format!("kernel-devel-{}",kernel_release)];
+                commands.push(
+                    DNF(PackageManagerActions::Install(pkg),CmdConfig::Empty)
+                )
+            }
+            _ => {
+                let pkg = vec![format!("linux-headers-{}",kernel_release)];
+                commands.push(
+                    AptGet(PackageManagerActions::Install(pkg),CmdConfig::Empty)
+                )
+            }
+        }
+
         //reinstall module
+        commands.push(DKMS(DKMSActions::Autoinstall,CmdConfig::Empty));
+
         //depmod -a maybe?
+        commands.push(DepMod(vec![DepModActions::All],CmdConfig::Empty));
         //load module
+        let zfs_modulename = "zfs".to_string();
+
+        commands.push(ModProbe(zfs_modulename.clone(),CmdConfig::Empty));
+
+        commands.push(ModInfo(vec![ModInfoActions::Filename(zfs_modulename)],CmdConfig::Empty));
+
+        let trans = Transaction::new_sudo(commands);
+
+        match trans.execute().await
+        {
+            Err(e) => LoggerMessages::Error(LogErrors::SystemUpdate(e.to_string().as_str())).log(),
+            Ok(_) => LoggerMessages::Info(LogInfos::SystemUpdate).log(),
+        }
     }
 
     async fn init(mut self) -> Arc<Self>
@@ -1496,13 +1534,21 @@ impl Backend
 
     pub async fn vpn_up(&self) -> Result<(), HTTPMessage>
     {
+        let vpn_service = self.get_vpn_service()
+            .await
+            .ok_or_else(||
+                ErrorMessages::E_NET_VPN_NOTCONF.wrap_with_status_code(None)
+            )?;
+
         let mut cmds = vec![
             Systemctl(
-                self.get_vpn_service()
-                    .await
-                    .ok_or_else(||
-                        ErrorMessages::E_NET_VPN_NOTCONF.wrap_with_status_code(None)
-                    )?,
+                vpn_service.clone(),
+                SystemctlAction::Enable,
+                true,
+                CmdConfig::default()
+            ),
+            Systemctl(
+                vpn_service,
                 SystemctlAction::Start,
                 true,
                 CmdConfig::default()
@@ -1554,14 +1600,22 @@ impl Backend
 
     pub async fn vpn_down(&self) -> Result<(), HTTPMessage>
     {
+        let vpn_service = self.get_vpn_service()
+        .await
+        .ok_or_else(||
+            ErrorMessages::E_NET_VPN_NOTCONF.wrap_with_status_code(None)
+        )?;
+
         let mut cmds = vec![
             Systemctl(
-                self.get_vpn_service()
-                    .await
-                    .ok_or_else(||
-                        ErrorMessages::E_NET_VPN_NOTCONF.wrap_with_status_code(None)
-                    )?,
+                vpn_service.clone(),
                 SystemctlAction::Stop,
+                true,
+                CmdConfig::default()
+            ),
+            Systemctl(
+                vpn_service,
+                SystemctlAction::Disable,
                 true,
                 CmdConfig::default()
             )

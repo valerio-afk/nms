@@ -18,6 +18,7 @@ pub mod firewall;
 pub mod smb;
 pub mod acl;
 pub mod error_filters;
+pub mod dkms;
 
 use core::error::Error;
 use std::sync::Arc;
