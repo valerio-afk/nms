@@ -122,7 +122,7 @@ impl Default for IPv6
     }
 }
 
-#[derive(Debug,Serialize,Deserialize)]
+#[derive(Debug,Serialize,Deserialize, PartialEq, Eq)]
 #[serde(rename_all="lowercase")]
 pub enum IfaceType
 {

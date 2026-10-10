@@ -10,7 +10,7 @@ use config::{CfgPool, CfgToken};
 use config::{Config, CfgUser};
 use crate::cmdl::coreutils::{Cat, Chown, FileSystemPermissions, Mkdir, OSUser, MV};
 use crate::cmdl::error_filters::stderr_contains;
-use crate::cmdl::net::{NMCLIConnection, NMCLIDevice, WireGuard, WireGuardAction};
+use crate::cmdl::net::{NMCLIDevice, WireGuard, WireGuardAction};
 use crate::cmdl::others::RSync;
 use crate::cmdl::passwd::{GPasswd, GPasswdAction, GetEntPasswd, GroupMod, GroupModAction, Groups};
 use crate::cmdl::passwd::{UserDel, UserMod, UserModAction};
@@ -58,7 +58,7 @@ use utils::{get_quota_for_all, str_to_i64, sudo_group, ts_to_str, get_notificati
 use utils::{parse_mbox, InboxMail, flush_mailbox, init_mbox_basepath};
 use utils::{try_create_unix_user, get_user_uid, get_user_gid, restore_user_home_dir};
 use uuid::Uuid;
-use crate::backend::net::{flush_ddclient_cfg, VPN_PRIVATE_KEY, VPN_PUBLIC_KEY};
+use crate::backend::net::{flush_ddclient_cfg, VPN_PRIVATE_KEY, VPN_PUBLIC_KEY, NetworkInterface, IfaceType};
 use crate::backend::utils::{detect_distro_family, DistroFamily};
 use crate::cmdl::dkms::{DKMSActions, DKMS, DepMod, DepModActions, ModProbe, ModInfoActions, ModInfo};
 use crate::cmdl::firewall::{Firewall, FirewallAction, FirewallPort};
@@ -830,6 +830,52 @@ impl Backend
         ).await;
     }
 
+    async fn init_net_watcher(self: &Arc<Self>)
+    {
+        let task_backend = Arc::clone(self);
+
+        self.event_manager.register_action(
+            &Events::IfaceDisabled,
+            Arc::new(
+                Box::new(
+                    move |(_trigger,ctx):&(Trigger,Option<ContextData>)|
+                        {
+                            let b = Arc::clone(&task_backend);
+                            let context_data = ctx.clone();
+
+                            Box::pin(
+                                async move
+                                {
+                                    let iface: Option<String> = {
+                                        let mut r:Option<String> = None;
+                                        if let Some(data) = context_data
+                                        {
+                                            for (k,v) in data.iter()
+                                            {
+                                                if ContextVariables::Iface.eq(k)
+                                                {
+                                                    r = Some(v.as_str().to_string());
+                                                }
+                                            }
+                                        }
+                                        r
+                                    };
+
+                                    if let Err(e) = b.net_failsafe(iface).await
+                                    {
+                                        LoggerMessages::Error(LogErrors::SnapshotInit(&e.1.to_string())).log();
+                                    }
+                                }
+                            )
+                        }
+                )
+            ),
+            None,
+            None
+        ).await;
+    }
+
+
     pub async fn configure_pool(&self) -> Result<(), HTTPMessage>
     {
         let mut flush = false;
@@ -1243,6 +1289,12 @@ impl Backend
         be.init_net_counters().await;
         be.init_scrub_details_watcher().await;
         be.init_remote_service().await;
+        be.init_net_watcher().await;
+
+        if let Err(e) = be.net_failsafe(None).await
+        {
+            LoggerMessages::Error(LogErrors::NetworkFailsafe(e.1.to_string().as_str())).log();
+        }
 
         be
     }
@@ -1474,20 +1526,20 @@ impl Backend
 
     pub async fn iface_down(&self, iface:String) -> Result<(), HTTPMessage>
     {
-        let mut cmds = vec![
+        let cmds = vec![
           NMCLIDevice(IfaceStatusAction::Down.to_string().as_str(),Some(&vec![iface.as_str()]),CmdConfig::default())
         ];
 
-        get_network_ifaces()
-            .await
-            .iter()
-            .filter(|network| network.name != iface && network.enabled)
-            .for_each(|network| {
-                cmds.extend(vec![
-                    NMCLIConnection(IfaceStatusAction::Down.to_string().as_str(),Some(&vec![network.name.as_str()]),CmdConfig::default()),
-                    NMCLIConnection(IfaceStatusAction::Up.to_string().as_str(),Some(&vec![network.name.as_str()]),CmdConfig::default()),
-                ])
-            });
+        // get_network_ifaces()
+        //     .await
+        //     .iter()
+        //     .filter(|network| network.name != iface && network.enabled)
+        //     .for_each(|network| {
+        //         cmds.extend(vec![
+        //             NMCLIConnection(IfaceStatusAction::Down.to_string().as_str(),Some(&vec![network.name.as_str()]),CmdConfig::default()),
+        //             NMCLIConnection(IfaceStatusAction::Up.to_string().as_str(),Some(&vec![network.name.as_str()]),CmdConfig::default()),
+        //         ])
+        //     });
 
         Transaction::new(cmds)
             .execute()
@@ -1528,6 +1580,40 @@ impl Backend
             .finish();
 
         self.event_manager.trigger(Trigger::Event(Events::IfaceEnabled),ctx).await;
+
+        Ok(())
+    }
+
+    pub async fn net_failsafe(&self, last_iface:Option<String>) -> Result<(), HTTPMessage>
+    {
+        // todo: this fn needs to return errors
+        let ifaces = get_network_ifaces().await;
+
+        let wifi_iface:Vec<&NetworkInterface> = ifaces.iter().filter(|x|x.iface_type==IfaceType::WIFI).collect();
+
+        if !ifaces.iter().any(|x|x.enabled)
+        {
+            LoggerMessages::Warning(LogWarnings::NetworkFailsafeEnganged).log();
+
+            if wifi_iface.len()>0
+            {
+                LoggerMessages::Error(LogErrors::NotImplemented("Wifi hot spot creation")).log();
+            }
+            else
+            {
+                if let Some(iface) = last_iface
+                {
+                    if let Err(_) = self.iface_up(iface.clone()).await
+                    {
+                        LoggerMessages::Error(LogErrors::NetworkFailsafe(format!("Unable to enable {}",iface).as_str())).log();
+                    }
+                    else
+                    {
+                        LoggerMessages::Info(LogInfos::NetworkFailsafeRestored(iface.as_str())).log();
+                    }
+                }
+            }
+        }
 
         Ok(())
     }

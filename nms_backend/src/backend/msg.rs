@@ -403,7 +403,9 @@ pub enum LogErrors<'a>
     DDnsUnk(&'a str),
     DDns(&'a str),
     DDnsUpdate(&'a str, &'a str),
-    SystemUpdate(&'a str)
+    SystemUpdate(&'a str),
+    NetworkFailsafe(&'a str),
+    NotImplemented(&'a str)
 }
 
 impl<'a> Display for LogErrors<'a>
@@ -467,6 +469,8 @@ impl<'a> Display for LogErrors<'a>
             LogErrors::DDns(e) => write!(f,"DDNS error: {}",e),
             LogErrors::DDnsUpdate(name, err) => write!(f,"Error occurred while updating DDNS service {}: {}",name,err),
             LogErrors::SystemUpdate(e) => write!(f,"System update failed: {}",e),
+            LogErrors::NetworkFailsafe(e) => write!(f,"Error while running network failsafe: {}",e),
+            LogErrors::NotImplemented(e) => write!(f,"Not implemented: {}",e),
         }
     }
 }
@@ -490,6 +494,7 @@ pub enum LogWarnings<'a>
     UserDeleted(&'a str),
     CommandExecution(&'a str, &'a str),
     NoOutput(&'a str),
+    NetworkFailsafeEnganged,
 }
 
 impl<'a> Display for LogWarnings<'a>
@@ -530,6 +535,7 @@ impl<'a> Display for LogWarnings<'a>
             LogWarnings::CommandExecution(cmd, err) => write!(f,"Error executing command {}: {}",cmd,err),
             LogWarnings::NoOutput(cmd) => write!(f,"No output when running {}",cmd),
             LogWarnings::ZfsDkms(kernel_rel) => write!(f,"No ZFS DKMS module found for the kernel version {}. An attempt to install it will be made, but it will take a while...",kernel_rel),
+            LogWarnings::NetworkFailsafeEnganged => write!(f,"It seems there is no network interface active. Activating failsafe..."),
         }
     }
 }
@@ -562,6 +568,7 @@ pub enum LogInfos<'a>
     VPNNewPeer(&'a str, &'a str),
     DDNSUpdated(&'a str),
     SystemUpdate,
+    NetworkFailsafeRestored(&'a str)
 }
 
 impl<'a> Display for LogInfos<'a>
@@ -606,6 +613,7 @@ impl<'a> Display for LogInfos<'a>
             LogInfos::VPNNewPeer(name,ip) => { write!(f,"Added new VPN peer {} with IP {}",name, ip) },
             LogInfos::DDNSUpdated(name) => { write!(f,"DDNS service {} updated successfully", name) },
             LogInfos::SystemUpdate => {write!(f,"System update successfully")},
+            LogInfos::NetworkFailsafeRestored(iface) => write!(f,"Network interface {} re-enabled to guarantee connectivity",iface),
         }
     }
 }
