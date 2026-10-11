@@ -14,7 +14,7 @@ use crate::cmdl::net::{NMCLIDevice, WireGuard, WireGuardAction};
 use crate::cmdl::others::RSync;
 use crate::cmdl::passwd::{GPasswd, GPasswdAction, GetEntPasswd, GroupMod, GroupModAction, Groups};
 use crate::cmdl::passwd::{UserDel, UserMod, UserModAction};
-use crate::cmdl::zfs::{ZFS, ZFSArgs, ZPoolImportArgs, ZFSQuotaArgs, ZFSQuota};
+use crate::cmdl::zfs::{ZFS, ZFSArgs, ZPoolImportArgs, ZFSQuotaArgs, ZFSQuota, ZFSSnapshotArgs};
 use crate::cmdl::zfs::{ZFSActions, ZFSListArgs, ZFSListType, ZFSLoadKeyArgs, ZPool, ZPoolActions};
 use crate::cmdl::{CmdConfig, CommandLine, Executable, Transaction};
 use crate::dev::get_system_disks;
@@ -29,12 +29,12 @@ use msg::{SuccessMessages};
 use net::{get_network_ifaces, read_wireguard_config_file, write_wireguard_config_file};
 use permissions::is_admin;
 use permissions::{collapse_permissions};
-use regex::RegexBuilder;
+use regex::{RegexBuilder, Regex};
 use remote_access::AbstractRemoteService;
 use remote_access::{get_remote_services, init_remote_services};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
-use serde_json::{Number, Value};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::env::temp_dir;
 use std::error::Error;
@@ -861,10 +861,8 @@ impl Backend
                                         r
                                     };
 
-                                    if let Err(e) = b.net_failsafe(iface).await
-                                    {
-                                        LoggerMessages::Error(LogErrors::SnapshotInit(&e.1.to_string())).log();
-                                    }
+                                    let _ = b.net_failsafe(iface).await; //this result is already logged
+
                                 }
                             )
                         }
@@ -1098,38 +1096,53 @@ impl Backend
             .is_success()
             .map_err(|e| propagate_error(ErrorMessages::E_POOL_SNAPSHOTS, e))?;
 
+
         let json:Value = serde_json::from_str(&output.stdout).or::<Value>(Ok(Value::Null)).unwrap();
         let mut snapshots:Vec<Snapshot> = Vec::new();
 
         if let Some(d) = json.as_object() &&
             let Some(datasets) = d.get("datasets") &&
-            let Some(list_datasets) = datasets.as_array()
+            let Some(list_datasets) = datasets.as_object()
         {
-            let mut list_datasets = list_datasets.clone();
-            list_datasets.sort_by_key(|k| k.get("createtxg").unwrap_or(&Value::Number(Number::from(0))).as_number().unwrap().as_i128().unwrap() );
+            let mut list_datasets = list_datasets.values().filter_map(|v| v.as_object()).collect::<Vec<_>>();
+            list_datasets.sort_by_key(|k|
+                {
+                    let createtxg = k.get("createtxg");
+
+                    createtxg
+                        .unwrap_or(&Value::String("1".to_string()))
+                        .as_str()
+                        .unwrap_or("1")
+                        .parse::<u64>()
+                        .unwrap_or(1)
+                }
+            );
 
             for dataset in list_datasets
             {
-                if let Some(dataset) = dataset.as_object()
+                if let Some(tp) = dataset.get("type") &&
+                    let Some(dataset_type) = tp.as_str() &&
+                    dataset_type == "SNAPSHOT"
                 {
-                    if let Some(tp) = dataset.get("type") &&
-                        let Some(dataset_type) = tp.as_str() &&
-                        dataset_type == "SNAPSHOT"
-                    {
-                        let name = &dataset["snapshot_name"];
-                        let ref_size = &dataset["properties"]["referenced"]["value"];
+                    let name = &dataset["snapshot_name"];
+                    let ref_size = &dataset["properties"]["referenced"]["value"];
 
-                        if let Some(name) = name.as_str() && let Some(size) = ref_size.as_u64()
-                        {
-                            snapshots.push(Snapshot::new(name.to_string(), size));
-                        }
+                    if  let Some(name) = name.as_str() &&
+                        let Some(size) = ref_size.as_str() &&
+                        let Ok(sz) = size.parse::<u64>()
+
+                    {
+                        snapshots.push(Snapshot::new(name.to_string(), sz));
                     }
                 }
+
             }
         }
 
         let mut snapshot_cache = self.snapshots.write().await;
         *snapshot_cache = snapshots;
+
+
 
         Ok(())
     }
@@ -1144,10 +1157,10 @@ impl Backend
         {
             LoggerMessages::Error(LogErrors::VFSInit(&e.1.to_string()));
         }
-        if let Err(e) = self.init_pool_snapshots().await
-        {
-            LoggerMessages::Error(LogErrors::SnapshotInit(&e.1.to_string()));
-        }
+        // if let Err(e) = self.init_pool_snapshots().await
+        // {
+        //     LoggerMessages::Error(LogErrors::SnapshotInit(&e.1.to_string()));
+        // }
     }
 
     async fn check_zfs_dkms()
@@ -1291,10 +1304,7 @@ impl Backend
         be.init_remote_service().await;
         be.init_net_watcher().await;
 
-        if let Err(e) = be.net_failsafe(None).await
-        {
-            LoggerMessages::Error(LogErrors::NetworkFailsafe(e.1.to_string().as_str())).log();
-        }
+        let _ = be.net_failsafe(None).await; // this result is internally logged
 
         be
     }
@@ -1584,9 +1594,8 @@ impl Backend
         Ok(())
     }
 
-    pub async fn net_failsafe(&self, last_iface:Option<String>) -> Result<(), HTTPMessage>
+    pub async fn net_failsafe(&self, last_iface:Option<String>) -> anyhow::Result<()>
     {
-        // todo: this fn needs to return errors
         let ifaces = get_network_ifaces().await;
 
         let wifi_iface:Vec<&NetworkInterface> = ifaces.iter().filter(|x|x.iface_type==IfaceType::WIFI).collect();
@@ -1598,6 +1607,7 @@ impl Backend
             if wifi_iface.len()>0
             {
                 LoggerMessages::Error(LogErrors::NotImplemented("Wifi hot spot creation")).log();
+                return Err(anyhow!("Wifi hot spot creation failed"));
             }
             else
             {
@@ -1605,7 +1615,9 @@ impl Backend
                 {
                     if let Err(_) = self.iface_up(iface.clone()).await
                     {
-                        LoggerMessages::Error(LogErrors::NetworkFailsafe(format!("Unable to enable {}",iface).as_str())).log();
+                        let err_msg = format!("Unable to enable {}",iface);
+                        LoggerMessages::Error(LogErrors::NetworkFailsafe(err_msg.as_str())).log();
+                        return Err(anyhow!(err_msg));
                     }
                     else
                     {
@@ -3059,6 +3071,97 @@ impl Backend
         Ok(())
     }
 
+    pub async fn create_snapshot(&self, snapshot_name:String) -> Result<(), HTTPMessage>
+    {
+        let re = Regex::new(r"^[A-Za-z0-9_.:-]+$")
+            .map_err(|e| propagate_error(ErrorMessages::E_POOL_SNAPSHOT_NAME,e))?;
+
+        let name = snapshot_name.trim();
+
+        if !re.is_match(name)
+        {
+            return Err(ErrorMessages::E_POOL_SNAPSHOT_NAME.wrap_with_status_code(Some(vec![Value::from_str(name).unwrap_or(Value::Null)])));
+        }
+
+        if let Some((pool,dataset)) = self.get_pool_identifier().await
+        {
+            ZFS(
+                ZFSActions::Snapshot(
+                    ZFSSnapshotArgs {
+                        pool,
+                        dataset,
+                        snapshot: name.to_string()
+                    }
+                ),
+                true,
+                CmdConfig::default()
+            ).run()
+            .await
+            .map_err(|e| propagate_error(ErrorMessages::E_POOL_SNAPSHOT_CREATE,e))?;
+
+            self.init_pool_snapshots().await?;
+
+            Ok(())
+        }
+        else
+        {
+            Err(ErrorMessages::E_POOL_NO_CONF.wrap_with_status_code(None))
+        }
+    }
+
+    pub async fn delete_snapshot(&self, snapshot_name:String) -> Result<(), HTTPMessage>
+    {
+        if let Some((pool,dataset)) = self.get_pool_identifier().await
+        {
+            ZFS(
+                ZFSActions::Destroy(
+                    ZFSArgs {
+                        pool,
+                        dataset: Some(dataset),
+                    },
+                    Some(snapshot_name.trim().to_string())
+                ),
+                false,
+                CmdConfig::default()
+            ).run()
+                .await
+                .map_err(|e| propagate_error(ErrorMessages::E_POOL_SNAPSHOT_DELETE,e))?;
+
+            self.init_pool_snapshots().await?;
+
+            Ok(())
+        }
+        else
+        {
+            Err(ErrorMessages::E_POOL_NO_CONF.wrap_with_status_code(None))
+        }
+    }
+
+    pub async fn rollback_to_snapshot(&self, snapshot_name:String) -> Result<(), HTTPMessage>
+    {
+        if let Some((pool,dataset)) = self.get_pool_identifier().await
+        {
+            ZFS(
+                ZFSActions::Rollback(
+                    ZFSSnapshotArgs {
+                        pool,
+                        dataset,
+                        snapshot: snapshot_name.trim().to_string()
+                    },
+                ),
+                false,
+                CmdConfig::default()
+            ).run()
+                .await
+                .map_err(|e| propagate_error(ErrorMessages::E_POOL_SNAPSHOT_ROLLBACK,e))?;
+
+            Ok(())
+        }
+        else
+        {
+            Err(ErrorMessages::E_POOL_NO_CONF.wrap_with_status_code(None))
+        }
+    }
 }
 
 //Device-related Methods

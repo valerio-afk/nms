@@ -170,9 +170,9 @@ pub struct ZFSLoadKeyArgs<S>
 pub struct ZFSSnapshotArgs<S>
 where S:AsRef<str> + ToString + Display
 {
-    pool:S,
-    dataset:S,
-    snapshot:S
+    pub pool:S,
+    pub dataset:S,
+    pub snapshot:S
 }
 
 impl<S> Display for ZFSSnapshotArgs<S>

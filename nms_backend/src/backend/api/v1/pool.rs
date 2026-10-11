@@ -10,12 +10,12 @@ use crate::backend::jwt::TokenPurposes;
 use super::disks::CompatibleDisk;
 use std::sync::Arc;
 use axum::{Json, Router};
-use axum::routing::{get, post};
+use axum::routing::{delete, get, patch, post};
 use axum::extract::{State,Path, Multipart};
 use axum_auth::AuthBearer;
 use serde_json::Value;
 use serde::{Deserialize, Serialize};
-use crate::backend::msg::{ErrorMessages, LogInfos, LogWarnings, LoggerMessages, StatusMessage, SuccessMessages};
+use crate::backend::msg::{ErrorMessages, LogErrors, LogInfos, LogWarnings, LoggerMessages, StatusMessage, SuccessMessages};
 use crate::cmdl::{CmdConfig, Executable};
 use crate::cmdl::coreutils::MV;
 use crate::dev::{get_system_disks, DiskState, Device};
@@ -349,6 +349,77 @@ async fn upload_key(
 
     Ok(Json(()))
 }
+async fn create_snapshot(
+    Path(snapshot_name):Path<String>,
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>
+) -> Result<HTTPMessage, HTTPMessage>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::PoolToolsSnapshot).await?;
+
+    match backend.create_snapshot(snapshot_name.clone()).await
+    {
+        Err(e) => {
+            LoggerMessages::Error(LogErrors::SnapshotCreate(snapshot_name.as_str(),e.1.to_string().as_str())).log();
+            Err(e)
+        }
+        Ok(_) => {
+            LoggerMessages::Info(LogInfos::SnapshotCreated(snapshot_name.as_str())).log();
+            Ok(SuccessMessages::S_POOL_SNAPSHOT_CREATE.wrap_with_status_code(None))
+        }
+    }
+}
+
+async fn delete_snapshot(
+    Path(snapshot_name):Path<String>,
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>
+) -> Result<HTTPMessage, HTTPMessage>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::PoolToolsSnapshot).await?;
+
+    match backend.delete_snapshot(snapshot_name.clone()).await
+    {
+        Err(e) => {
+            LoggerMessages::Error(LogErrors::SnapshotDelete(snapshot_name.as_str(),e.1.to_string().as_str())).log();
+            Err(e)
+        }
+        Ok(_) => {
+            LoggerMessages::Info(LogInfos::SnapshotCreated(snapshot_name.as_str())).log();
+            Ok(SuccessMessages::S_POOL_SNAPSHOT_DELETE.wrap_with_status_code(None))
+        }
+    }
+}
+
+async fn rollback_to_snapshot(
+    Path(snapshot_name):Path<String>,
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>
+) -> Result<HTTPMessage, HTTPMessage>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::PoolToolsSnapshot).await?;
+
+    match backend.rollback_to_snapshot(snapshot_name.clone()).await
+    {
+        Err(e) => {
+            LoggerMessages::Error(LogErrors::SnapshotRollback(snapshot_name.as_str(),e.1.to_string().as_str())).log();
+            Err(e)
+        }
+        Ok(_) => {
+            LoggerMessages::Info(LogInfos::SnapshotRolledback(snapshot_name.as_str())).log();
+            Ok(SuccessMessages::S_POOL_SNAPSHOT_ROLLBACK.wrap_with_status_code(None))
+        }
+    }
+}
 
 
 pub fn get_route() -> Router<Arc<Backend>>
@@ -363,6 +434,9 @@ pub fn get_route() -> Router<Arc<Backend>>
             .route("/attach", post(pool_attach))
             .route("/scrub", post(start_scrub))
             .route("/import/key",post(upload_key))
+            .route("/snapshot/{snapshot_name}", post(create_snapshot))
+            .route("/snapshot/{snapshot_name}", delete(delete_snapshot))
+            .route("/snapshot/{snapshot_name}", patch(rollback_to_snapshot))
     )
 }
 

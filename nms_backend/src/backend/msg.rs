@@ -405,7 +405,10 @@ pub enum LogErrors<'a>
     DDnsUpdate(&'a str, &'a str),
     SystemUpdate(&'a str),
     NetworkFailsafe(&'a str),
-    NotImplemented(&'a str)
+    NotImplemented(&'a str),
+    SnapshotCreate(&'a str,&'a str),
+    SnapshotDelete(&'a str, &'a str),
+    SnapshotRollback(&'a str, &'a str),
 }
 
 impl<'a> Display for LogErrors<'a>
@@ -471,6 +474,9 @@ impl<'a> Display for LogErrors<'a>
             LogErrors::SystemUpdate(e) => write!(f,"System update failed: {}",e),
             LogErrors::NetworkFailsafe(e) => write!(f,"Error while running network failsafe: {}",e),
             LogErrors::NotImplemented(e) => write!(f,"Not implemented: {}",e),
+            LogErrors::SnapshotCreate(name,err) => write!(f,"Snapshot {} creation failed: {}",name, err),
+            LogErrors::SnapshotDelete(name,err) => write!(f,"Snapshot {} deletion failed: {}",name, err),
+            LogErrors::SnapshotRollback(name,err) => write!(f,"Snapshot {} rollback failed: {}",name, err),
         }
     }
 }
@@ -568,7 +574,10 @@ pub enum LogInfos<'a>
     VPNNewPeer(&'a str, &'a str),
     DDNSUpdated(&'a str),
     SystemUpdate,
-    NetworkFailsafeRestored(&'a str)
+    NetworkFailsafeRestored(&'a str),
+    SnapshotCreated(&'a str),
+    SnapshotDeleted(&'a str),
+    SnapshotRolledback(&'a str),
 }
 
 impl<'a> Display for LogInfos<'a>
@@ -614,6 +623,9 @@ impl<'a> Display for LogInfos<'a>
             LogInfos::DDNSUpdated(name) => { write!(f,"DDNS service {} updated successfully", name) },
             LogInfos::SystemUpdate => {write!(f,"System update successfully")},
             LogInfos::NetworkFailsafeRestored(iface) => write!(f,"Network interface {} re-enabled to guarantee connectivity",iface),
+            LogInfos::SnapshotCreated(snapshot_name) => write!(f,"Snapshot {} created successfully", snapshot_name),
+            LogInfos::SnapshotDeleted(snapshot_name) => write!(f,"Snapshot {} deleted successfully", snapshot_name),
+            LogInfos::SnapshotRolledback(snapshot_name) => write!(f,"Pool rolled back to snapshot {}",snapshot_name),
         }
     }
 }
