@@ -416,7 +416,9 @@ async fn rollback_to_snapshot(
         }
         Ok(_) => {
             LoggerMessages::Info(LogInfos::SnapshotRolledback(snapshot_name.as_str())).log();
-            Ok(SuccessMessages::S_POOL_SNAPSHOT_ROLLBACK.wrap_with_status_code(None))
+            Ok(SuccessMessages::S_POOL_SNAPSHOT_ROLLBACK.wrap_with_status_code(
+                Some(vec![Value::String(snapshot_name)])
+            ))
         }
     }
 }

@@ -532,8 +532,9 @@ where S:AsRef<str> + Display
             {
                 args = vec![
                     "rollback".to_string(),
+                    "-r".to_string(),
                     p.to_string()
-                ]  
+                ];
             },
         ZFSActions::Mount(p)=>
             {

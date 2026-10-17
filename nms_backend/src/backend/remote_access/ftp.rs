@@ -267,6 +267,7 @@ impl FTPService
                 {
                     if line.trim().starts_with('#') || tokens[1] != value
                     {
+                        updated = true;
                         new_cfg[idx] = format!("{}={}", key, value);
                     }
                 }
@@ -298,7 +299,7 @@ impl FTPService
             let mut handle = File::create(&tmp_fullpath)
                 .map_err(|e| ServiceError::TmpFileCreate(tmp_fullpath.clone(),e.to_string()))?;
 
-            handle.write_all(cfg.join("\n").as_bytes())
+            handle.write_all(new_cfg.join("\n").as_bytes())
                 .map_err(|e| ServiceError::TmpFileWrite(tmp_fullpath.clone(),e.to_string()))?;
 
             MV(tmp_fullpath.to_str().unwrap(),self.cfg.to_str().unwrap(),CmdConfig::default())

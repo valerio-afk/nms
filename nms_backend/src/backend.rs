@@ -3085,7 +3085,7 @@ impl Backend
 
         if let Some((pool,dataset)) = self.get_pool_identifier().await
         {
-            ZFS(
+            let output = ZFS(
                 ZFSActions::Snapshot(
                     ZFSSnapshotArgs {
                         pool,
@@ -3099,9 +3099,19 @@ impl Backend
             .await
             .map_err(|e| propagate_error(ErrorMessages::E_POOL_SNAPSHOT_CREATE,e))?;
 
-            self.init_pool_snapshots().await?;
-
-            Ok(())
+            if let Some(o) = output
+            {
+                if o.exit_code == 0
+                {
+                    self.init_pool_snapshots().await?;
+                    Ok(())
+                }
+                else { Err(propagate_error(ErrorMessages::E_POOL_SNAPSHOT_DELETE,o.stderr)) }
+            }
+            else
+            {
+                Err(propagate_error(ErrorMessages::E_POOL_SNAPSHOT_DELETE,"Unknown error"))
+            }
         }
         else
         {
@@ -3113,7 +3123,7 @@ impl Backend
     {
         if let Some((pool,dataset)) = self.get_pool_identifier().await
         {
-            ZFS(
+            let output = ZFS(
                 ZFSActions::Destroy(
                     ZFSArgs {
                         pool,
@@ -3125,11 +3135,45 @@ impl Backend
                 CmdConfig::default()
             ).run()
                 .await
-                .map_err(|e| propagate_error(ErrorMessages::E_POOL_SNAPSHOT_DELETE,e))?;
+                .map_err(|e|
+                    ErrorMessages::E_POOL_SNAPSHOT_DELETE.wrap_with_status_code(
+                        Some(vec![
+                            Value::String(snapshot_name.to_string()),
+                            Value::String(e.to_string())
+                        ])
+                    )
+                )?;
 
-            self.init_pool_snapshots().await?;
-
-            Ok(())
+            if let Some(o) = output
+            {
+                if o.exit_code == 0
+                {
+                    self.init_pool_snapshots().await?;
+                    Ok(())
+                }
+                else
+                {
+                    Err(
+                        ErrorMessages::E_POOL_SNAPSHOT_DELETE.wrap_with_status_code(
+                            Some(vec![
+                                Value::String(snapshot_name),
+                                Value::String(o.stderr)
+                            ])
+                        )
+                    )
+                }
+            }
+            else
+            {
+                Err(
+                    ErrorMessages::E_POOL_SNAPSHOT_DELETE.wrap_with_status_code(
+                        Some(vec![
+                            Value::String(snapshot_name),
+                            Value::String("Unknown error".to_string())
+                        ])
+                    )
+                )
+            }
         }
         else
         {
@@ -3141,7 +3185,7 @@ impl Backend
     {
         if let Some((pool,dataset)) = self.get_pool_identifier().await
         {
-            ZFS(
+            let output = ZFS(
                 ZFSActions::Rollback(
                     ZFSSnapshotArgs {
                         pool,
@@ -3153,9 +3197,45 @@ impl Backend
                 CmdConfig::default()
             ).run()
                 .await
-                .map_err(|e| propagate_error(ErrorMessages::E_POOL_SNAPSHOT_ROLLBACK,e))?;
+                .map_err(|e|
+                    ErrorMessages::E_POOL_SNAPSHOT_ROLLBACK.wrap_with_status_code(
+                        Some(vec![
+                            Value::String(snapshot_name.clone()),
+                            Value::String(e.to_string())
+                        ])
+                    )
+                )?;
 
-            Ok(())
+            if let Some(o) = output
+            {
+                if o.exit_code == 0
+                {
+                    self.init_pool_snapshots().await?;
+                    Ok(())
+                }
+                else
+                {
+                    Err(
+                        ErrorMessages::E_POOL_SNAPSHOT_ROLLBACK.wrap_with_status_code(
+                            Some(vec![
+                                Value::String(snapshot_name),
+                                Value::String(o.stderr)
+                            ])
+                        )
+                    )
+                }
+            }
+            else
+            {
+                Err(
+                    ErrorMessages::E_POOL_SNAPSHOT_ROLLBACK.wrap_with_status_code(
+                        Some(vec![
+                            Value::String(snapshot_name),
+                            Value::String("Unknown error".to_string())
+                        ])
+                    )
+                )
+            }
         }
         else
         {
