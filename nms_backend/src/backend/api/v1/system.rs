@@ -2,18 +2,16 @@ use axum_auth::AuthBearer;
 use axum::Json;
 use axum::routing::{Router, get, post};
 use axum::extract::{Path, State};
-use crate::backend::{Backend, FastAPIComp, BACKEND_VERSION, HTTPMessage, propagate_unknown_error, BackgroundTaskInformation};
+use crate::backend::{Backend, FastAPIComp, HTTPMessage, propagate_unknown_error, BackgroundTaskInformation};
 use crate::backend::jwt::TokenPurposes;
 use crate::backend::permissions::{UserPermissions, check_permission};
 use std::sync::Arc;
-use std::time::UNIX_EPOCH;
-use sysinfo::{System, MINIMUM_CPU_UPDATE_INTERVAL};
 use serde_json::Value;
-use indexmap::IndexMap;
-use psutil::host::{boot_time};
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 use crate::backend::api::BackendPropertyResponse;
+use crate::backend::config::CfgNMSRelease;
+use crate::backend::msg::{StatusMessage, SuccessMessages};
 use crate::cmdl::acpi::{Reboot, Shutdown};
 use crate::cmdl::{CmdConfig, CommandLine, Executable};
 use crate::events::{ContextData, ContextVariables, Events, Trigger};
@@ -24,40 +22,12 @@ enum SystemProperties
 {
     #[serde(rename = "system_information")]
     SysInfo,
-}
 
-async fn get_system_information(backend: Arc<Backend>) -> IndexMap<&'static str, Value>
-{
-    let mut sys_info: IndexMap<&'static str, Value> = IndexMap::new();
+    #[serde(rename = "last_apt_time")]
+    LastUpdate,
 
-    if let Ok(bt) = boot_time() && let Ok(secs) = bt.duration_since(UNIX_EPOCH)
-    {
-        sys_info.insert("uptime", Value::from(secs.as_secs()));
-    }
-    sys_info.insert("nms_ver", Value::from(BACKEND_VERSION));
-
-    let sys = System::new_all();
-
-    tokio::time::sleep(MINIMUM_CPU_UPDATE_INTERVAL).await;
-
-    let cpus = sys.cpus();
-
-    if cpus.len() > 0
-    {
-        let cpu = &cpus[0];
-        sys_info.insert("cpu", Value::from(format!("{} with {} core(s)", cpu.vendor_id(), cpus.len())));
-    }
-
-    sys_info.insert("os", Value::from(System::long_os_version()));
-    sys_info.insert("cpu_load", Value::from(sys.global_cpu_usage().round() as u32));
-
-    sys_info.insert("memory_load", Value::from(((sys.used_memory() as f32)/(sys.total_memory() as f32) * 100.0).round() as u32));
-    sys_info.insert("swap_load", Value::from(((sys.used_swap() as f32)/(sys.total_swap() as f32) * 100.0).round() as u32));
-
-
-    sys_info.insert("net_counters", serde_json::to_value(&backend.get_net_counter().await).unwrap());
-
-    return sys_info;
+    #[serde(rename = "system_updates")]
+    Packages
 }
 
 async fn get_sys_property(
@@ -77,8 +47,23 @@ async fn get_sys_property(
         {
             SystemProperties::SysInfo =>
                 {
-                    Value::from_iter(get_system_information(backend).await)
+                    Value::from_iter(backend.get_system_information().await)
                 },
+            SystemProperties::LastUpdate =>
+                {
+                    Value::from(backend.get_last_apt_update_time().await)
+                }
+            SystemProperties::Packages =>
+                {
+                    if let Some(pkg) = backend.get_upgradeable_packages().await
+                    {
+                        Value::from_iter(pkg)
+                    }
+                    else
+                    {
+                        Value::Null
+                    }
+                }
         }
     }))
 }
@@ -163,6 +148,28 @@ async fn get_task_info(
 
 }
 
+async fn get_nms_cached_release(AuthBearer(token): AuthBearer, State(backend): State<Arc<Backend>>) -> FastAPIComp<Option<CfgNMSRelease>>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::ClientDashboardAdvanced).await?;
+
+    Ok(Json(backend.get_nms_release().await))
+}
+
+async fn restart_services(AuthBearer(token): AuthBearer, State(backend): State<Arc<Backend>>) -> Result<HTTPMessage,HTTPMessage>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::SysAdminSystemctl).await?;
+
+    backend.restart_systemd_services().await?;
+
+    Ok(SuccessMessages::S_SYSTEMD_RESTART.wrap_with_status_code(None))
+}
+
 pub fn get_route() -> Router<Arc<Backend>>
 {
     Router::new().nest("/system",
@@ -173,5 +180,7 @@ pub fn get_route() -> Router<Arc<Backend>>
         .route("/sensors", get(system_sensors))
         .route("/get/{prop}", get(get_sys_property))
         .route("/task/{task_id}", get(get_task_info))
+        .route("/nms/updates",get(get_nms_cached_release))
+        .route("/restart-systemd-services",post(restart_services))
     )
 }

@@ -44,11 +44,13 @@ use std::net::{Ipv4Addr, SocketAddrV4};
 use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
+use std::sync::{Arc};
+use std::time::{Duration, UNIX_EPOCH};
+use indexmap::IndexMap;
 use ipnet::Ipv4Net;
+use psutil::host::boot_time;
 use strum::Display;
-use sysinfo::Networks;
+use sysinfo::{Networks, System, MINIMUM_CPU_UPDATE_INTERVAL};
 use tokio::fs::{File, read_to_string, rename};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{Mutex, OnceCell, RwLock};
@@ -58,13 +60,14 @@ use utils::{get_quota_for_all, str_to_i64, sudo_group, ts_to_str, get_notificati
 use utils::{parse_mbox, InboxMail, flush_mailbox, init_mbox_basepath};
 use utils::{try_create_unix_user, get_user_uid, get_user_gid, restore_user_home_dir};
 use uuid::Uuid;
+use crate::backend::config::CfgNMSRelease;
 use crate::backend::net::{flush_ddclient_cfg, VPN_PRIVATE_KEY, VPN_PUBLIC_KEY, NetworkInterface, IfaceType};
 use crate::backend::utils::{detect_distro_family, DistroFamily};
 use crate::cmdl::dkms::{DKMSActions, DKMS, DepMod, DepModActions, ModProbe, ModInfoActions, ModInfo};
 use crate::cmdl::firewall::{Firewall, FirewallAction, FirewallPort};
 use crate::cmdl::package_mngt::{PackageManagerActions, DNF, AptGet};
 use crate::cmdl::selinux::Protocol;
-use crate::cmdl::systemd::{Systemctl, SystemctlAction};
+use crate::cmdl::systemd::{Systemctl, SystemctlAction, SystemdRun};
 use crate::cmdl::utils::{Find, Uname, UnameOptions};
 
 pub static BACKEND_VERSION:&'static str = env!("CARGO_PKG_VERSION");
@@ -4028,6 +4031,138 @@ impl Backend
         ).await;
 
         Ok(())
+    }
+}
+
+// System-related Methods
+impl Backend
+{
+    async fn get_system_information(&self) -> IndexMap<&'static str, Value>
+    {
+        let mut sys_info: IndexMap<&'static str, Value> = IndexMap::new();
+
+        if let Ok(bt) = boot_time() && let Ok(secs) = bt.duration_since(UNIX_EPOCH)
+        {
+            sys_info.insert("uptime", Value::from(secs.as_secs()));
+        }
+        sys_info.insert("nms_ver", Value::from(BACKEND_VERSION));
+
+        let sys = System::new_all();
+
+        tokio::time::sleep(MINIMUM_CPU_UPDATE_INTERVAL).await;
+
+        let cpus = sys.cpus();
+
+        if cpus.len() > 0
+        {
+            let cpu = &cpus[0];
+            sys_info.insert("cpu", Value::from(format!("{} with {} core(s)", cpu.vendor_id(), cpus.len())));
+        }
+
+        sys_info.insert("os", Value::from(System::long_os_version()));
+        sys_info.insert("cpu_load", Value::from(sys.global_cpu_usage().round() as u32));
+
+        sys_info.insert("memory_load", Value::from(((sys.used_memory() as f32)/(sys.total_memory() as f32) * 100.0).round() as u32));
+        sys_info.insert("swap_load", Value::from(((sys.used_swap() as f32)/(sys.total_swap() as f32) * 100.0).round() as u32));
+
+
+        sys_info.insert("net_counters", serde_json::to_value(&self.get_net_counter().await).unwrap());
+
+        return sys_info;
+    }
+
+    // async fn retrieve_last_apt_update(&self) -> Result<(),HTTPMessage>
+    // {
+    //     let path = get_pkg_mngt_path();
+    //
+    //     if let Some(p) = path
+    //     {
+    //         let output = Stat(
+    //             p,
+    //             Some(vec![StatFormat::TimeLastEditEpoch]),
+    //             CmdConfig::default(),
+    //         ).run()
+    //         .await
+    //         .map_err(|e| propagate_error(ErrorMessages::E_APT_GET,e.to_string()))?;
+    //
+    //         if let Some(o) = output
+    //         {
+    //             if o.exit_code == 0
+    //             {
+    //                 match o.stdout.trim().parse::<u64>()
+    //                 {
+    //                     Ok(t) => {
+    //                         let mut cfg = self.config.lock().await;
+    //                         cfg.updates.apt.last_check = Some(t);
+    //                         Ok(())
+    //                     },
+    //                     Err(e) => Err(propagate_error(ErrorMessages::E_APT_GET,e.to_string()))
+    //                 }
+    //             }
+    //             else { Err(propagate_error(ErrorMessages::E_APT_GET,o.stderr)) }
+    //         }
+    //         else { Err(propagate_error(ErrorMessages::E_APT_GET,"Unknown error".to_string())) }
+    //
+    //     }
+    //     else { Ok(()) }
+    // }
+
+    async fn get_last_apt_update_time(&self) -> Option<u64>
+    {
+        let cfg = self.config.lock().await;
+
+        if let Some(t) = cfg.updates.apt.last_check { Some(t) }
+        else { None }
+    }
+
+    async fn get_upgradeable_packages(&self) -> Option<Vec<String>>
+    {
+        let cfg = self.config.lock().await;
+
+        if let Some(pkg) = cfg.updates.apt.packages.as_ref()
+        {
+            Some(pkg.clone())
+        }
+        else { None }
+    }
+
+    async fn get_nms_release(&self) -> Option<CfgNMSRelease>
+    {
+        let cfg = self.config.lock().await;
+
+        if let Some(release) = cfg.updates.releases.as_ref()
+        {
+            Some(release.clone())
+        }
+        else { None }
+    }
+
+    async fn restart_systemd_services(&self) -> Result<(),HTTPMessage>
+    {
+        let cfg = self.config.lock().await;
+
+        let cmds = cfg
+            .systemd
+            .iter()
+            .map(|u| {
+                    let cmd = Systemctl(u, SystemctlAction::Restart, false, CmdConfig::default());
+                    SystemdRun(Duration::from_secs(1), cmd, CmdConfig::default())
+                }
+            )
+            .collect::<Vec<CommandLine>>();
+
+        LoggerMessages::Warning(LogWarnings::SystemdRestart).log();
+        self.event_manager.trigger(Trigger::Event(Events::SystemSystemd),None).await;
+
+        let trans = Transaction::new(cmds);
+        match trans.execute().await
+        {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                LoggerMessages::Error(LogErrors::SystemdRestart(err.to_string().as_str())).log();
+                Err(propagate_error(ErrorMessages::E_SYSTEMD_RESTART, err.to_string()))
+            }
+        }
     }
 }
 

@@ -1,3 +1,5 @@
+use shlex::try_join;
+
 pub mod acpi;
 pub mod compression;
 pub mod coreutils;
@@ -83,6 +85,28 @@ pub struct CommandLine
 
 unsafe impl Send for CommandLine {}
 unsafe impl Sync for CommandLine {}
+
+impl Display for CommandLine
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result
+    {
+        let mut all_args = vec![self.command];
+        if let Some(args) = &self.args
+        {
+            for a in args
+            {
+                all_args.push(a.as_str());
+            }
+        }
+
+        if let Ok(repr) = try_join(all_args)
+        {
+            write!(f,"{}",repr)
+        }
+        else { Err(fmt::Error) }
+
+    }
+}
 
 impl Clone for CommandLine
 {

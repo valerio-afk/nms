@@ -1,3 +1,4 @@
+use std::time::Duration;
 use super::*;
 
 
@@ -112,6 +113,27 @@ pub fn Systemctl<S: AsRef<str> + ToString>
         ),
         if let Some(cmd) = revert_cmd { Some(Box::new(cmd)) } else {None}
         ,
+        None,
+        config
+    )
+}
+
+pub fn SystemdRun(timer:Duration, cmd:CommandLine, config:CmdConfig) -> CommandLine
+{
+    let mut args = vec![
+        format!("--on-active={}s",timer.as_secs()),
+        cmd.command.to_string()
+    ];
+
+    if let Some(a) = cmd.args.as_ref()
+    {
+        args.extend(a.iter().map(|s| s.to_string()).collect::<Vec<String>>());
+    }
+    
+    CommandLine::new(
+        "systemd-run",
+        Some(args),
+        None,
         None,
         config
     )

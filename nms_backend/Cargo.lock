@@ -1442,6 +1442,7 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "sha2 0.11.0",
+ "shlex",
  "strum",
  "sysinfo",
  "tokio",

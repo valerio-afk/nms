@@ -17,6 +17,7 @@ class ErrorMessages(Enum):
     E_SELINUX_PORT = "E_SELINUX_PORT"
     E_SYSTEMD_START = "E_SYSTEMD_START"
     E_SYSTEMD_STOP = "E_SYSTEMD_STOP"
+    E_SYSTEMD_RESTART = "E_SYSTEMD_RESTART"
     E_TOO_MANY_REQ = "E_TOO_MANY_REQ"
     E_INVALID_VALUE = "E_INVALID_VALUE"
 
@@ -224,6 +225,8 @@ class SuccessMessages(Enum):
     S_EVENT_DISABLED = "S_EVENT_DISABLED"
     S_EVENT_DELETED = "S_EVENT_DELETED"
     S_EVENT_UPDATED = "S_EVENT_UPDATED"
+
+    S_SYSTEMD_RESTART = "S_SYSTEMD_RESTART"
 
 
     @staticmethod
@@ -492,6 +495,7 @@ SUCCESS_MESSAGES = {
     SuccessMessages.S_EVENT_DISABLED : lambda uuid : _("Event %(uuid)s disabled successfully.") % {'uuid':uuid},
     SuccessMessages.S_EVENT_DELETED : lambda uuid : _("Event %(uuid)s deleted successfully.") % {'uuid':uuid},
     SuccessMessages.S_EVENT_UPDATED : lambda uuid : _("Event %(uuid)s updated successfully.") % {'uuid':uuid},
+    SuccessMessages.S_SYSTEMD_RESTART : lambda : ("System services will be restarted shortly. The system will be unresponsive for about one minute.")
 
 }
 

@@ -323,7 +323,7 @@ async fn auth_token_refresh(
         }
         Err(e) => {
             LoggerMessages::Error(LogErrors::LoginToken(&username, &e.to_string())).log();
-            return Err(ErrorMessages::E_UNKNOWN.wrap_with_status_code(None));
+            Err(ErrorMessages::E_UNKNOWN.wrap_with_status_code(None))
         }
     }    
 }

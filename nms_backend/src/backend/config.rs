@@ -113,19 +113,29 @@ pub struct CfgDynDNS
 pub struct CfgAPTUpdates
 {
     #[serde(default)]
-    last_check:Option<u64>,
+    pub last_check:Option<u64>,
 
     #[serde(default)]
-    packages: Option<Vec<String>>
+    pub packages: Option<Vec<String>>
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct CfgNMSRelease
+{
+    #[serde(default)]
+    pub version:String,
+
+    #[serde(default)]
+    pub tarball_url: String
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CfgUpdates
 {
-    apt:CfgAPTUpdates,
+    pub apt:CfgAPTUpdates,
     
     #[serde(default)]
-    releases:Option<String>,
+    pub releases:Option<CfgNMSRelease>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

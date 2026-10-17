@@ -5,22 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="0ddb49fd-44e3-4605-a704-cc1f15248c46" name="Changes" comment="all pool properties implemented - most to be tested">
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/api/backend_proxy.py" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/api/backend_proxy.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/create_app.py" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/create_app.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/network.py" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/network.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/templates/card.ddns.html" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/templates/card.ddns.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/utils/filters.py" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/utils/filters.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/utils/forms.py" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/utils/forms.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/nms_backend/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/Cargo.lock" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/nms_backend/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/Cargo.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/nms_backend/src/backend.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/api/v1/net.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/api/v1/net.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/config.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/config.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/ddns.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/net.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/net.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/utils.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/utils.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_shared/src/nms_shared/msg.py" beforeDir="false" afterPath="$PROJECT_DIR$/nms_shared/src/nms_shared/msg.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -91,6 +80,7 @@
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
     &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;python.packages.toolwindow.project.migrated.to.right.top.v2&quot;: &quot;true&quot;,
     &quot;settings.editor.selected.configurable&quot;: &quot;project.propVCSSupport.DirectoryMappings&quot;
   }
 }</component>
@@ -177,7 +167,7 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-python-sdk-6fa658e1df1a-5bd6d13a2a75-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-262.8665.369" />
+        <option value="bundled-python-sdk-73a66231627c-5bd6d13a2a75-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-262.10968.92" />
       </set>
     </attachedChunks>
   </component>

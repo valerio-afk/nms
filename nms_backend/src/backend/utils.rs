@@ -23,6 +23,7 @@ use crate::cmdl::error_filters::stderr_contains;
 static DISTRO_FAMILY:OnceLock<DistroFamily> = OnceLock::new();
 static SUDO_GROUP:OnceLock<&'static str> = OnceLock::new();
 static MBOX_BASEPATH:OnceLock<String> = OnceLock::new();
+static PKG_MNGT_PATH: OnceLock<Option<&'static str>> = OnceLock::new();
 //
 pub static NOTIFICATION_READ_HEADER:&'static str = "X-Notification-Read";
 
@@ -229,6 +230,19 @@ pub fn sudo_group() -> &'static str
         {
             DistroFamily::Deb => "sudo",
             _ => "wheel"
+        }
+    })
+}
+
+pub fn get_pkg_mngt_path() -> &'static Option<&'static str>
+{
+    PKG_MNGT_PATH.get_or_init( ||
+    {
+        match detect_distro_family()
+        {
+            DistroFamily::Deb => { Some("/var/lib/apt/lists") }
+            DistroFamily::Rh => { Some("/var/cache/dnf") }
+            _ => None
         }
     })
 }

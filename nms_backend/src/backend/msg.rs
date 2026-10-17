@@ -110,6 +110,7 @@ pub enum ErrorMessages
     E_SELINUX_PORT,
     E_SYSTEMD_START,
     E_SYSTEMD_STOP,
+    E_SYSTEMD_RESTART,
     E_TOO_MANY_REQ,
     E_INVALID_VALUE,
     
@@ -339,7 +340,9 @@ pub enum SuccessMessages
     S_EVENT_ENABLED,
     S_EVENT_DISABLED,
     S_EVENT_DELETED,
-    S_EVENT_UPDATED
+    S_EVENT_UPDATED,
+    
+    S_SYSTEMD_RESTART,
 }
 
 impl StatusMessage for SuccessMessages
@@ -409,6 +412,7 @@ pub enum LogErrors<'a>
     SnapshotCreate(&'a str,&'a str),
     SnapshotDelete(&'a str, &'a str),
     SnapshotRollback(&'a str, &'a str),
+    SystemdRestart(&'a str),
 }
 
 impl<'a> Display for LogErrors<'a>
@@ -477,6 +481,7 @@ impl<'a> Display for LogErrors<'a>
             LogErrors::SnapshotCreate(name,err) => write!(f,"Snapshot {} creation failed: {}",name, err),
             LogErrors::SnapshotDelete(name,err) => write!(f,"Snapshot {} deletion failed: {}",name, err),
             LogErrors::SnapshotRollback(name,err) => write!(f,"Snapshot {} rollback failed: {}",name, err),
+            LogErrors::SystemdRestart(err) => write!(f,"Systemd restart failed: {}",err),
         }
     }
 }
@@ -501,6 +506,7 @@ pub enum LogWarnings<'a>
     CommandExecution(&'a str, &'a str),
     NoOutput(&'a str),
     NetworkFailsafeEnganged,
+    SystemdRestart,
 }
 
 impl<'a> Display for LogWarnings<'a>
@@ -542,6 +548,7 @@ impl<'a> Display for LogWarnings<'a>
             LogWarnings::NoOutput(cmd) => write!(f,"No output when running {}",cmd),
             LogWarnings::ZfsDkms(kernel_rel) => write!(f,"No ZFS DKMS module found for the kernel version {}. An attempt to install it will be made, but it will take a while...",kernel_rel),
             LogWarnings::NetworkFailsafeEnganged => write!(f,"It seems there is no network interface active. Activating failsafe..."),
+            LogWarnings::SystemdRestart => write!(f,"Restarting systemd services. Be right back..."),
         }
     }
 }
