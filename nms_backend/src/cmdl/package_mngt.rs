@@ -6,6 +6,14 @@ pub struct PackageMngtUpgradeParameters
     yes: bool
 }
 
+impl PackageMngtUpgradeParameters
+{
+    pub fn new(dry_run:bool, yes: bool) -> PackageMngtUpgradeParameters
+    {
+        PackageMngtUpgradeParameters{ dry_run, yes}
+    }
+}
+
 pub enum PackageManagerActions
 {
     Update,
@@ -129,7 +137,7 @@ pub fn AptGet(action:PackageManagerActions,config:CmdConfig) -> CommandLine
 pub fn DNF(action:PackageManagerActions,config:CmdConfig) -> CommandLine
 {
     let mut args:Vec<String> = vec![DnfActions::flag(&action).to_string()];
-
+    
     if let PackageManagerActions::Upgrade(params) = action
     {
         args.push("--refresh".to_string());

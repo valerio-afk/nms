@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use tracing::warn;
 use crate::backend::api::BackendPropertyResponse;
 use crate::backend::config::CfgNMSRelease;
-use crate::backend::msg::{StatusMessage, SuccessMessages};
+use crate::backend::msg::{ErrorMessages, StatusMessage, SuccessMessages};
 use crate::cmdl::acpi::{Reboot, Shutdown};
 use crate::cmdl::{CmdConfig, CommandLine, Executable};
 use crate::events::{ContextData, ContextVariables, Events, Trigger};
@@ -28,6 +28,14 @@ enum SystemProperties
 
     #[serde(rename = "system_updates")]
     Packages
+}
+
+#[derive(Debug,Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum APTActions
+{
+    Update,
+    Upgrade,
 }
 
 async fn get_sys_property(
@@ -145,7 +153,6 @@ async fn get_task_info(
     check_permission(&user, UserPermissions::ClientDashboardAdvanced).await?;
 
     Ok(Json(backend.get_task_by_id(&task_id).await))
-
 }
 
 async fn get_nms_cached_release(AuthBearer(token): AuthBearer, State(backend): State<Arc<Backend>>) -> FastAPIComp<Option<CfgNMSRelease>>
@@ -170,6 +177,30 @@ async fn restart_services(AuthBearer(token): AuthBearer, State(backend): State<A
     Ok(SuccessMessages::S_SYSTEMD_RESTART.wrap_with_status_code(None))
 }
 
+async fn apt_get(
+    Path(action): Path<APTActions>,
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>
+) -> FastAPIComp<BackgroundTaskInformation>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::SysAdminUpdates).await?;
+
+    let uuid = match action
+    {
+        APTActions::Update => backend.apt_get_update().await?,
+        APTActions::Upgrade=> backend.apt_get_update().await?,
+    };
+
+    let task = backend.get_task_by_id(&uuid.to_string()).await;
+
+    if let Some(task) = task { Ok(Json(task)) }
+    else { Err(ErrorMessages::E_APT_GET.wrap_with_status_code(None)) }
+
+}
+
 pub fn get_route() -> Router<Arc<Backend>>
 {
     Router::new().nest("/system",
@@ -180,6 +211,7 @@ pub fn get_route() -> Router<Arc<Backend>>
         .route("/sensors", get(system_sensors))
         .route("/get/{prop}", get(get_sys_property))
         .route("/task/{task_id}", get(get_task_info))
+        .route("/apt/{action}", post(apt_get))
         .route("/nms/updates",get(get_nms_cached_release))
         .route("/restart-systemd-services",post(restart_services))
     )

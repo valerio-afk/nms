@@ -65,7 +65,7 @@ use crate::backend::net::{flush_ddclient_cfg, VPN_PRIVATE_KEY, VPN_PUBLIC_KEY, N
 use crate::backend::utils::{detect_distro_family, DistroFamily};
 use crate::cmdl::dkms::{DKMSActions, DKMS, DepMod, DepModActions, ModProbe, ModInfoActions, ModInfo};
 use crate::cmdl::firewall::{Firewall, FirewallAction, FirewallPort};
-use crate::cmdl::package_mngt::{PackageManagerActions, DNF, AptGet};
+use crate::cmdl::package_mngt::{PackageManagerActions, DNF, AptGet, PackageMngtUpgradeParameters};
 use crate::cmdl::selinux::Protocol;
 use crate::cmdl::systemd::{Systemctl, SystemctlAction, SystemdRun};
 use crate::cmdl::utils::{Find, Uname, UnameOptions};
@@ -4163,6 +4163,155 @@ impl Backend
                 Err(propagate_error(ErrorMessages::E_SYSTEMD_RESTART, err.to_string()))
             }
         }
+    }
+
+    async fn apt_get_update(self:&Arc<Self>) -> Result<Uuid, HTTPMessage>
+    {
+        let backend = Arc::clone(self);
+        let update_task =
+            match detect_distro_family()
+            {
+                DistroFamily::Deb => Arc::new(
+                    BackgroundTask::new(
+                        Box::new(move |_| {
+                            let b = Arc::clone(&backend);
+                            Box::pin(async move {
+                                let apt_get_result = AptGet(PackageManagerActions::Update, CmdConfig::default())
+                                    .run().await;
+
+                                match apt_get_result
+                                {
+                                    Err(e) => return Err(anyhow![ErrorMessages::E_APT_GET.wrap(Some(vec! [Value::String(e.to_string())]))]),
+                                    Ok(out) => {
+                                        if let Some(output) = out
+                                        {
+                                            if output.exit_code != 0
+                                            {
+                                                return Err(anyhow![ErrorMessages::E_APT_GET.wrap(Some(vec ! [Value::String(output.stderr)]))]);
+                                            }
+                                        } else {
+                                            return Err(anyhow![ErrorMessages::E_APT_GET.wrap(Some(vec ! [Value::String("Unknown error".to_string())]))]);
+                                        }
+                                    }
+                                }
+
+                                let apt_get_result = AptGet(PackageManagerActions::Upgrade(PackageMngtUpgradeParameters::new(true, false)), CmdConfig::default())
+                                    .run().await;
+
+                                match apt_get_result
+                                {
+                                    Err(e) => return Err(anyhow![ErrorMessages::E_APT_GET.wrap(Some(vec! [Value::String(e.to_string())]))]),
+                                    Ok(out) => {
+                                        if let Some(output) = out
+                                        {
+                                            if output.exit_code != 0
+                                            {
+                                                return Err(anyhow![ErrorMessages::E_APT_GET.wrap(Some(vec ! [Value::String(output.stderr)]))]);
+                                            }
+
+                                            let pkgs: Vec<String> = output.stdout.lines().filter_map(|line| {
+                                                if line.starts_with("Inst ")
+                                                {
+                                                    let tokens = line.split_whitespace().collect::<Vec<_>>();
+                                                    if tokens.len() >= 2 { return Some(tokens[1].to_string()); }
+                                                }
+                                                None
+                                            }).collect();
+
+                                            let ctx = ContextBuilder::new()
+                                                .push(ContextVariables::Packages,pkgs.join(", "))
+                                                .finish();
+
+                                            b.event_manager.trigger(Trigger::Event(Events::SystemUpdates),ctx).await;
+
+                                            let mut cfg = b.config.lock().await;
+                                            cfg.updates.apt.last_check = Some(chrono::Local::now().timestamp() as u64);
+                                            cfg.updates.apt.packages = Some(pkgs);
+                                            drop(cfg);
+                                            let flush_result = b.flush_config().await.map_err(
+                                                |e| ErrorMessages::E_APT_GET.wrap(Some(vec![Value::String(e.1.to_string())]))
+                                            );
+
+                                            if let Err(e) = flush_result
+                                            {
+                                                Err(anyhow![e])
+                                            } else { Ok(SuccessMessages::S_APT_UPDATE) }
+                                        } else {
+                                            return Err(anyhow![ErrorMessages::E_APT_GET.wrap(Some(vec ! [Value::String("Unknown error".to_string())]))]);
+                                        }
+                                    }
+                                }
+                            })
+                        }),
+                        Some("APT Update".to_string()),
+                    )
+                ),
+                DistroFamily::Rh => Arc::new(
+                    BackgroundTask::new(
+                        Box::new(move |_| {
+                            let b = Arc::clone(&backend);
+                            Box::pin(async move {
+
+                                let dnf_result = DNF(PackageManagerActions::Update,CmdConfig::default())
+                                    .run().await;
+
+                                match dnf_result
+                                {
+                                    Err(e) => return Err(anyhow![ErrorMessages::E_APT_GET.wrap(Some(vec! [Value::String(e.to_string())]))]),
+                                    Ok(out) =>
+                                    {
+                                        if let Some(output) = out
+                                        {
+                                            if output.exit_code != 0
+                                            {
+                                                return Err(anyhow![ErrorMessages::E_APT_GET.wrap(Some(vec ! [Value::String(output.stderr)]))]);
+                                            }
+
+                                            let re = Regex::new(r"^(.*?)[\s]+(.*)$").unwrap();
+
+                                            let pkgs: Vec<String> = output.stdout
+                                                .lines()
+                                                .filter_map(|line| re.captures(line))
+                                                .filter_map(|captures| captures.get(1))
+                                                .map(|m| m.as_str().to_string())
+                                                .collect();
+
+                                            let ctx = ContextBuilder::new()
+                                                .push(ContextVariables::Packages,pkgs.join(", "))
+                                                .finish();
+
+                                            b.event_manager.trigger(Trigger::Event(Events::SystemUpdates),ctx).await;
+
+                                            let mut cfg = b.config.lock().await;
+                                            cfg.updates.apt.last_check = Some(chrono::Local::now().timestamp() as u64);
+                                            cfg.updates.apt.packages = Some(pkgs);
+                                            drop(cfg);
+                                            let flush_result = b.flush_config().await.map_err(
+                                                |e| ErrorMessages::E_APT_GET.wrap(Some(vec![Value::String(e.1.to_string())]))
+                                            );
+
+                                            if let Err(e) = flush_result
+                                            {
+                                                return Err(anyhow![e]);
+                                            } else { return Ok(SuccessMessages::S_APT_UPDATE); }
+
+                                        }
+                                        else
+                                        {
+                                            return Err(anyhow![ErrorMessages::E_APT_GET.wrap(Some(vec ! [Value::String("Unknown error".to_string())]))]);
+                                        }
+                                    }
+                                }
+                            })
+                        }),
+                        Some("DNF Update".to_string()),
+                    )
+                ),
+                _ => return Err(ErrorMessages::E_APT_GET.wrap_with_status_code(Some(vec![Value::String("Linux Distribution not recognised".to_string())])))
+            };
+
+
+        Ok(self.background_task_manager.add_task(update_task).await)
     }
 }
 
