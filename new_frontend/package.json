@@ -1,0 +1,15 @@
+{
+  "name": "nms-frontend",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "box",
+    "dashboard"
+  ],
+  "scripts": {
+    "build:box": "npm run build --workspace=box",
+    "build:dashboard": "npm run build --workspace=dashboard",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  }
+}

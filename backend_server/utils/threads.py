@@ -330,6 +330,8 @@ class PoolExpansionStatus(NMSThread):
 
             done = not status.is_running
 
+
+
             time.sleep(1)
 
         this._message =  SuccessMessage(code=SuccessMessages.S_POOL_EXPANDED.name)
