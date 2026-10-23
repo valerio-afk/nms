@@ -35,10 +35,10 @@ impl std::fmt::Display for SystemctlAction
 
 pub fn Journalctl
 (
-    service:&String,
-    grep:Option<&String>,
-    since:Option<&String>,
-    until:Option<&String>,
+    service:String,
+    grep:Option<String>,
+    since:Option<String>,
+    until:Option<String>,
     config:CmdConfig
 ) -> CommandLine
 {

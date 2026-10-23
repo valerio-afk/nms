@@ -7,9 +7,6 @@
 <div class="d-flex align-items-center border-bottom">
   <ul class="nav nav-tabs">
     <li class="nav-item">
-      <a class="nav-link {% if active == 'frontend' %} active {% endif %}" href="{{ url_for('main.system_logs',log='frontend',start=date_filter['start'],end=date_filter['end']) }}"><i class="bi bi-window-sidebar"></i> {{ _("Web App") }}</a>
-    </li>
-    <li class="nav-item">
       <a class="nav-link {% if active == 'backend' %} active {% endif %}" href="{{ url_for('main.system_logs',log='backend',start=date_filter['start'],end=date_filter['end']) }}"><i class="bi bi-gear-wide-connected"></i> {{ _("Backend") }}</a>
     </li>
 

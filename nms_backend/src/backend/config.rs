@@ -8,6 +8,7 @@ use strum::Display;
 use super::api::v1::jwt::TokenPurposes;
 use super::utils::{DistroFamily, detect_distro_family};
 
+pub const GITHUB_REPO:&'static str = "https://api.github.com/repos/valerio-afk/nms/releases/latest";
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CfgPool
@@ -126,7 +127,10 @@ pub struct CfgNMSRelease
     pub version:String,
 
     #[serde(default)]
-    pub tarball_url: String
+    pub tarball_url: String,
+
+    #[serde(default)]
+    pub body: Option<String>
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -260,7 +264,7 @@ impl Default for Config
                 ap: None,
             },
             updates: CfgUpdates { 
-                apt: CfgAPTUpdates { last_check: None, packages: None }, 
+                apt: CfgAPTUpdates { last_check: None, packages: None },
                 releases: None,
             }, 
             systemd: init_systemd_services(), 

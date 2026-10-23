@@ -261,7 +261,7 @@ def system_logs(log):
         case "backend":
             log_filter = LogFilter.BACKEND
         case _:
-            log_filter = LogFilter.FRONTEND
+            log_filter = LogFilter.BACKEND
 
     start = request.args.get('start')
     end = request.args.get('end')

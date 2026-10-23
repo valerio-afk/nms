@@ -4,81 +4,16 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="0ddb49fd-44e3-4605-a704-cc1f15248c46" name="Changes" comment="in advanced page, some of the updates endpoint have been implemeneted. Also the restart of systemd services has been implemented. To implement: check for updates, syslogs, eventsm and danger zone functionality">
-      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/.env.development" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/.env.production" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/package.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/postcss.config.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/App.tsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/components/ConfirmModal.tsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/components/Header.tsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/components/widgets/AccessOverviewWidget.tsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/components/widgets/DiskOverviewWidget.tsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/components/widgets/DiskUsageWidget.tsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/components/widgets/NetworkOverviewWidget.tsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/components/widgets/SensorsWidget.tsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/components/widgets/SystemInfoWidget.tsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/i18n/config.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/i18n/locales/en/translation.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/i18n/locales/it/translation.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/index.css" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/main.tsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/pages/DashboardPage.tsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/pages/PlaceholderPage.tsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/types/dashboard.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/utils/api.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/utils/formatters.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/tailwind.config.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/tsconfig.app.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/tsconfig.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/tsconfig.node.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/dashboard/vite.config.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/package-lock.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/package.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/shared/package.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/shared/src/components/Login.tsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/shared/src/components/OtpInputs.tsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/shared/src/i18n/authTranslations.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/shared/src/index.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/shared/src/types/auth.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/shared/src/utils/api.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/shared/src/utils/cn.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/new_frontend/shared/tsconfig.json" afterDir="false" />
+    <list default="true" id="0ddb49fd-44e3-4605-a704-cc1f15248c46" name="Changes" comment="new dashboard in react to be made with antigravity. it's gonna take weeks, so does for the rest">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend_server/utils/threads.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend_server/utils/threads.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/.env.development" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/.env.development" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/.env.production" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/.env.production" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/eslint.config.js" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/eslint.config.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/package-lock.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/package.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/postcss.config.js" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/postcss.config.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/public/logo.svg" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/public/logo.svg" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/src/App.css" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/src/App.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/src/App.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/src/Login.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/src/Login.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/src/components/FileBrowser.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/src/components/FilePreviewModal.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/src/components/OnlyOfficeModal.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/src/components/OtpInputs.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/src/components/ShareModal.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/src/components/StorageBar.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/src/i18n/config.ts" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/src/i18n/locales/en/translation.ts" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/src/i18n/locales/it/translation.ts" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/src/index.css" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/src/index.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/src/main.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/src/main.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/src/utils/api.ts" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/src/utils/formats.ts" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/tailwind.config.js" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/tailwind.config.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/tsconfig.app.json" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/tsconfig.app.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/tsconfig.json" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/tsconfig.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/tsconfig.node.json" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/tsconfig.node.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/box/vite.config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/vite.config.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/advanced.py" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/advanced.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/templates/advanced.logs.html" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/templates/advanced.logs.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/api/v1/system.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/api/v1/system.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/config.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/config.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/utils.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/utils.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/src/cmdl/systemd.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/cmdl/systemd.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_shared/src/nms_shared/msg.py" beforeDir="false" afterPath="$PROJECT_DIR$/nms_shared/src/nms_shared/msg.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -249,14 +184,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1762034282613</updated>
-    </task>
-    <task id="LOCAL-00041" summary="restored pool import (attach). Fixed the installation program. Handled the alignment between users and home dir when a new pool is created/imported. All to be tested :)">
-      <option name="closed" value="true" />
-      <created>1773705859236</created>
-      <option name="number" value="00041" />
-      <option name="presentableId" value="LOCAL-00041" />
-      <option name="project" value="LOCAL" />
-      <updated>1773705859236</updated>
     </task>
     <task id="LOCAL-00042" summary="fixed again the bash installation file">
       <option name="closed" value="true" />
@@ -642,7 +569,15 @@
       <option name="project" value="LOCAL" />
       <updated>1792255315959</updated>
     </task>
-    <option name="localTasksCounter" value="90" />
+    <task id="LOCAL-00090" summary="new dashboard in react to be made with antigravity. it's gonna take weeks, so does for the rest">
+      <option name="closed" value="true" />
+      <created>1792362890015</created>
+      <option name="number" value="00090" />
+      <option name="presentableId" value="LOCAL-00090" />
+      <option name="project" value="LOCAL" />
+      <updated>1792362890015</updated>
+    </task>
+    <option name="localTasksCounter" value="91" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -663,7 +598,6 @@
     <ignored-roots>
       <path value="$PROJECT_DIR$/nms_backend" />
     </ignored-roots>
-    <MESSAGE value="file sharing implemented (a few stuff needs to be still made, such as the possibility to upload files in shared dir) and of course needs to be tested" />
     <MESSAGE value="jellyfin integration done" />
     <MESSAGE value="minor production bug fixed. Rpi temp/volt now should be integrated. SMARTCTL bug fixed. HDD detection also fixed in production. These minor bugs should be solved by now." />
     <MESSAGE value="Apart from some unexpected minor bug that will come up in production, rc1 seems complete" />
@@ -688,7 +622,8 @@
     <MESSAGE value="keeping making strides with adding pool properties." />
     <MESSAGE value="all pool properties implemented - most to be tested" />
     <MESSAGE value="in advanced page, some of the updates endpoint have been implemeneted. Also the restart of systemd services has been implemented. To implement: check for updates, syslogs, eventsm and danger zone functionality" />
-    <option name="LAST_COMMIT_MESSAGE" value="in advanced page, some of the updates endpoint have been implemeneted. Also the restart of systemd services has been implemented. To implement: check for updates, syslogs, eventsm and danger zone functionality" />
+    <MESSAGE value="new dashboard in react to be made with antigravity. it's gonna take weeks, so does for the rest" />
+    <option name="LAST_COMMIT_MESSAGE" value="new dashboard in react to be made with antigravity. it's gonna take weeks, so does for the rest" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>

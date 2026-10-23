@@ -1,7 +1,7 @@
 use axum_auth::AuthBearer;
 use axum::Json;
 use axum::routing::{Router, get, post};
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use crate::backend::{Backend, FastAPIComp, HTTPMessage, propagate_unknown_error, BackgroundTaskInformation};
 use crate::backend::jwt::TokenPurposes;
 use crate::backend::permissions::{UserPermissions, check_permission};
@@ -12,6 +12,7 @@ use tracing::warn;
 use crate::backend::api::BackendPropertyResponse;
 use crate::backend::config::CfgNMSRelease;
 use crate::backend::msg::{ErrorMessages, StatusMessage, SuccessMessages};
+use crate::backend::utils::{get_logs, LogFilter};
 use crate::cmdl::acpi::{Reboot, Shutdown};
 use crate::cmdl::{CmdConfig, CommandLine, Executable};
 use crate::events::{ContextData, ContextVariables, Events, Trigger};
@@ -37,6 +38,15 @@ enum APTActions
     Update,
     Upgrade,
 }
+
+#[derive(Debug, Deserialize)]
+struct LogTimeFrame
+{
+    date_from: Option<i64>,
+    date_to: Option<i64>,
+}
+
+
 
 async fn get_sys_property(
     Path(property):Path<SystemProperties>,
@@ -165,6 +175,18 @@ async fn get_nms_cached_release(AuthBearer(token): AuthBearer, State(backend): S
     Ok(Json(backend.get_nms_release().await))
 }
 
+async fn get_nms_get_updates(AuthBearer(token): AuthBearer, State(backend): State<Arc<Backend>>) -> FastAPIComp<()>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::SysAdminUpdates).await?;
+
+    backend.nms_update().await?;
+
+    Ok(Json(()))
+}
+
 async fn restart_services(AuthBearer(token): AuthBearer, State(backend): State<Arc<Backend>>) -> Result<HTTPMessage,HTTPMessage>
 {
     let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
@@ -191,7 +213,7 @@ async fn apt_get(
     let uuid = match action
     {
         APTActions::Update => backend.apt_get_update().await?,
-        APTActions::Upgrade=> backend.apt_get_update().await?,
+        APTActions::Upgrade=> backend.apt_get_upgrade().await?,
     };
 
     let task = backend.get_task_by_id(&uuid.to_string()).await;
@@ -199,6 +221,26 @@ async fn apt_get(
     if let Some(task) = task { Ok(Json(task)) }
     else { Err(ErrorMessages::E_APT_GET.wrap_with_status_code(None)) }
 
+}
+
+async fn journalctl(
+    Path(filter): Path<LogFilter>,
+    Query(timeframe): Query<LogTimeFrame>,
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>
+) -> FastAPIComp<Option<String>>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::SysAdminLogs).await?;
+
+
+    let logs = get_logs(filter,timeframe.date_from,timeframe.date_to)
+        .await
+        .map_err(|e| propagate_unknown_error(e))?;
+
+    Ok(Json(Some(logs)))
 }
 
 pub fn get_route() -> Router<Arc<Backend>>
@@ -212,7 +254,9 @@ pub fn get_route() -> Router<Arc<Backend>>
         .route("/get/{prop}", get(get_sys_property))
         .route("/task/{task_id}", get(get_task_info))
         .route("/apt/{action}", post(apt_get))
+        .route("/logs/{filter}", get(journalctl))
         .route("/nms/updates",get(get_nms_cached_release))
+        .route("/nms/updates",post(get_nms_get_updates))
         .route("/restart-systemd-services",post(restart_services))
     )
 }

@@ -412,7 +412,7 @@ ERROR_MESSAGES = {
     ErrorMessages.E_USER_UID: lambda username, info: _("Error while changing the uid for `%(username)s`: %(info)s.") % {'info':info,'username':username},
     ErrorMessages.E_USER_ALREADY_EXISTS: lambda uname: _("User %(uname)s already exists.") % {'uname':uname},
 
-    ErrorMessages.E_SYSTEM_UPDATES: lambda: _("Unable to retrieve updates."),
+    ErrorMessages.E_SYSTEM_UPDATES:  lambda info = None: _("Error while retrieving system updates: %(info)s") % {'info': info or ErrorMessages.fallback_message()},
     ErrorMessages.E_SYSTEM_DIST: lambda info: _("Error while creating distribution archive: %(info)s.") % {'info':info},
 
     ErrorMessages.E_FS_NOT_FILE: lambda path: _("The provided path `%(path)s` neither exists nor is a file.") % {'path':path},

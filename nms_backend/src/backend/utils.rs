@@ -3,7 +3,7 @@ use crate::cmdl::coreutils::{Cat, Stat, MV, Chown, Chmod, OSUser, FileSystemPerm
 use crate::cmdl::passwd::{UserAdd, UserMod, UserModAction};
 use crate::cmdl::zfs::{ZFS, ZFSActions, ZFSArgs};
 use crate::cmdl::{CmdConfig, Executable, Transaction};
-use chrono::{NaiveDateTime,DateTime};
+use chrono::{NaiveDateTime, DateTime, Local, Utc, TimeDelta};
 use core::result::Result;
 use regex::Regex;
 use std::collections::HashMap;
@@ -15,10 +15,11 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use serde_json::Value;
 use case_insensitive_hashmap::CaseInsensitiveHashMap;
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 use serde::ser::SerializeStruct;
 use crate::backend::msg::{LogWarnings, LoggerMessages};
 use crate::cmdl::error_filters::stderr_contains;
+use crate::cmdl::systemd::Journalctl;
 
 static DISTRO_FAMILY:OnceLock<DistroFamily> = OnceLock::new();
 static SUDO_GROUP:OnceLock<&'static str> = OnceLock::new();
@@ -46,6 +47,19 @@ impl Display for DistroFamily
             DistroFamily::Unk => write!(f,"Unknown")
         }    
     }
+}
+
+#[derive(Debug,Deserialize, Serialize)]
+pub enum LogFilter
+{
+    #[serde(rename = "nginx")]
+    WebServer,
+
+    #[serde(rename = "backend")]
+    Backend,
+
+    // #[serde(rename = "frontend")]
+    // Frontend
 }
 
 
@@ -607,3 +621,47 @@ pub async fn restore_user_home_dir(homedir_basepath:Option<PathBuf>,username:&st
     Ok(())
 }
 
+pub async fn get_logs(filter:LogFilter, from:Option<i64>, to:Option<i64>) -> Result<String, anyhow::Error>
+{
+    let end = match to
+    {
+        Some(t) => DateTime::from_timestamp_secs(t).unwrap_or(Utc::now()).with_timezone(&Local),
+        None => Local::now()
+    }.with_timezone(&Local);
+
+    let start = match from
+    {
+        Some(t) => DateTime::from_timestamp_secs(t).unwrap_or(Utc::now()).with_timezone(&Local),
+        None => end - TimeDelta::hours(-1)
+    }.with_timezone(&Local);
+
+
+    let since = start.format("%Y-%m-%d %H:%M").to_string();
+    let until = end.format("%Y-%m-%d %H:%M").to_string();
+
+    let systemd_unit = match filter
+    {
+        LogFilter::Backend => "nmsbackend.service",
+        LogFilter::WebServer => "nginx.service",
+    };
+
+    let cmd = Journalctl(
+        systemd_unit.to_string(),
+        None,
+        Some(since),
+        Some(until),
+        CmdConfig::default()
+    ).run()
+    .await?
+    .ok_or_else(|| anyhow::Error::msg(format!("Unable to get logs for {}", systemd_unit)))?;
+
+    if cmd.exit_code == 0
+    {
+        Ok(cmd.stdout)
+    }
+    else
+    {
+        Err(anyhow::Error::msg(cmd.stderr))
+    }
+
+}
