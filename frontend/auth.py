@@ -75,7 +75,7 @@ def reauth(operation:str) -> Union[Response,str]:
             else:
                 otp = request.form.get("otp")
 
-                if (token:=BACKEND.verify_otp(otp,purpose=operation,duration=1)):
+                if (token:=BACKEND.verify_otp(otp,purpose=operation)):
                     session["dz_authorisation"] = {"time":time.time(),"timestamp":time.time(),"purpose":operation}
                     BACKEND.set_session_token(operation,token)
                     show_flash(type="success", code=SuccessMessages.S_OTP_DANGEROUS.name)

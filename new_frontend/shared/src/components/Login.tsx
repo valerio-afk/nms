@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, type KeyboardEvent } from 'react';
 import { LogIn, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { verifyOtpLogin, ApiError } from '../utils/api';
+import { getErrorMessage } from '../utils/errors';
 import OtpInputs from './OtpInputs';
 import { useTranslation } from 'react-i18next';
 
@@ -26,15 +27,19 @@ export default function Login({
     onVerifyOtp = verifyOtpLogin,
     headerRightContent
 }: LoginProps) {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const [otp, setOtp] = useState<string[]>(Array(6).fill(''));
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(initialError || null);
+    const [errorInfo, setErrorInfo] = useState<{ code?: string; params?: any; message?: string } | null>(
+        initialError ? { message: initialError } : null
+    );
     const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
     useEffect(() => {
         if (initialError) {
-            setError(initialError);
+            setErrorInfo({ message: initialError });
+        } else {
+            setErrorInfo(null);
         }
     }, [initialError]);
 
@@ -97,38 +102,40 @@ export default function Login({
 
         const otpString = otp.join('');
         if (otpString.length !== 6) {
-            setError(t('login.invalid_otp', 'Invalid one-time password. Please try again.'));
+            setErrorInfo({ message: t('login.invalid_otp', 'Invalid one-time password. Please try again.') });
             return;
         }
 
         setLoading(true);
-        setError(null);
+        setErrorInfo(null);
 
         try {
             const data = await onVerifyOtp(otpString);
             onLoginSuccess(data.username);
         } catch (err: unknown) {
             if (err instanceof ApiError) {
-                if (err.status === 403) {
-                    if (err.code === 'E_AUTH_INVALID') {
-                        setError(t('app.invalid_auth', 'Invalid authentication'));
-                    } else if (err.code === 'E_AUTH_EXPIRED' || err.code === 'E_AUTH_REVOKED') {
-                        setError(t('app.logged_out_msg', "You've been logged out"));
-                    } else {
-                        setError(err.message);
-                    }
+                if (err.code) {
+                    setErrorInfo({
+                        code: err.code,
+                        params: err.params,
+                        message: err.getLocalizedMessage(i18n.language)
+                    });
                 } else {
-                    setError(err.message);
+                    setErrorInfo({ message: err.message });
                 }
             } else if (err instanceof Error) {
-                setError(err.message);
+                setErrorInfo({ message: err.message });
             } else {
-                setError(t('login.network_error', 'Network error, please check connections.'));
+                setErrorInfo({ message: t('login.network_error', 'Network error, please check connections.') });
             }
         } finally {
             setLoading(false);
         }
     };
+
+    const displayedError = errorInfo?.code
+        ? getErrorMessage(errorInfo.code, errorInfo.params, i18n.language)
+        : errorInfo?.message || null;
 
     const displayTitle = title || t('login.secure_access', 'Secure Access');
     const displaySubtitle = subtitle || t('login.subtitle', 'Please authenticate to access the system');
@@ -188,10 +195,10 @@ export default function Login({
                             />
                         </div>
 
-                        {error && (
+                        {displayedError && (
                             <div className="flex items-center gap-2 text-red-600 dark:text-red-400 text-sm font-medium animate-in fade-in slide-in-from-top-1 text-center">
                                 <AlertCircle className="w-4 h-4 shrink-0" />
-                                <span>{error}</span>
+                                <span>{displayedError}</span>
                             </div>
                         )}
                     </div>

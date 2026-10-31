@@ -420,7 +420,7 @@ pub fn RM<S:AsRef<str>+ToString>(filename:S,
     )
 }
 
-pub fn DD(input_file:&String, output_file:&String,bytes:Option<u32>, count:Option<u32>, config:CmdConfig) -> CommandLine
+pub fn DD(input_file:&str, output_file:&str,bytes:Option<u32>, count:Option<u32>, config:CmdConfig) -> CommandLine
 {
     let mut args:Vec<String> = vec![
         format!("if={input_file}"),
@@ -446,9 +446,9 @@ pub fn DD(input_file:&String, output_file:&String,bytes:Option<u32>, count:Optio
     )
 }
 
-pub fn CreateKey(filename:&String,config:CmdConfig) -> CommandLine
+pub fn CreateKey(filename:&str,config:CmdConfig) -> CommandLine
 {
-    DD(&"/dev/urandom".to_string(),filename,Some(32),Some(1),config)
+    DD("/dev/urandom",filename,Some(32),Some(1),config)
 }
 
 pub fn Chmod<S:AsRef<str> + ToString>(permissions:&FileSystemPermissions,

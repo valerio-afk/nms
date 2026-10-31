@@ -16,6 +16,7 @@ use tower_governor::{
 use crate::backend::api::BackendPropertyResponse;
 
 const LOGIN_LIFETIME:i64 = 30*60;
+const RESTRICTED_LIFETIME:i64 = 60;
 
 
 
@@ -75,7 +76,7 @@ fn verify_otp<'a>(otp:&'a str,secret:String,username:&'a Option<String>) -> Resu
                 Err(e) => 
                 {
                     LoggerMessages::Error(LogErrors::OTPInit(username, &e.to_string())).log();
-                    return Err(Box::new(e));
+                    Err(Box::new(e))
                 }
                 
             }
@@ -83,7 +84,7 @@ fn verify_otp<'a>(otp:&'a str,secret:String,username:&'a Option<String>) -> Resu
         Err(e) =>
         {
             LoggerMessages::Error(LogErrors::SecretEncoding(&e.to_string())).log();
-            return Err(Box::new(e));
+            Err(Box::new(e))
         } 
     }
 }
@@ -249,12 +250,16 @@ async fn auth_otp_verify
 
     check_permission(&user, UserPermissions::ClientDashboardAccess).await?;
 
-
+    let lifetime = match otp.purpose
+    {
+        TokenPurposes::Login|TokenPurposes::FirstLogin => LOGIN_LIFETIME,
+        _ => RESTRICTED_LIFETIME
+    };
 
     match create_token(
         username.clone(), 
         otp.purpose, 
-        LOGIN_LIFETIME, //30 mins
+        lifetime,
         backend.secret_key.as_bytes()
     )
     {

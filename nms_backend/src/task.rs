@@ -15,7 +15,7 @@ pub type Runner<S> = Box<dyn  Fn(&S) -> TaskFuture + Send + Sync>;
 
 pub type BackgroundTaskResult<R,E> = Result<R,E>;
 pub type BackgroundTaskFuture<R,E> = Pin<Box<dyn Future<Output = BackgroundTaskResult<R,E>> + Send + Sync>>;
-pub type BackgroundRunner<S,R,E> = Box<dyn  Fn(&S) -> BackgroundTaskFuture<R,E> + Send + Sync>;
+pub type BackgroundRunner<S,R,E> = Arc<dyn  Fn(&S) -> BackgroundTaskFuture<R,E> + Send + Sync>;
 
 #[async_trait]
 pub trait Task: Send + Sync
@@ -138,43 +138,55 @@ impl Task for SimpleTask
     }
 }
 
-pub struct BackgroundTaskInner<S,R>
+pub struct BackgroundTaskInner<R>
 {
     running_state: AtomicBool,
     name:Option<String>,
-    run: BackgroundRunner<S,R,Error>,
-    eta:Option<u32>,
+    run: BackgroundRunner<Arc<RwLock<Self>>,R,Error>,
+    eta:Option<i64>,
     progress:Option<f32>,
     handle: RwLock<Option<JoinHandle<BackgroundTaskResult<R,Error>>>>
 }
 
-impl<S,R> BackgroundTaskInner<S,R>
+impl<R> BackgroundTaskInner<R>
 {
     pub fn get_progress(&self) -> Option<f32> { self.progress }
-    pub fn get_eta(&self) -> Option<u32> { self.eta }
+    pub fn get_eta(&self) -> Option<i64> { self.eta }
     pub fn get_name(&self) -> Option<&String> { self.name.as_ref() }
+
+    pub fn set_progress(&mut self, progress: Option<f32>)
+    {
+        self.progress = progress;
+    }
+
+    pub fn set_eta(&mut self, eta: Option<i64>)
+    {
+        self.eta = eta;
+    }
 }
 
 #[derive(Clone)]
 pub struct BackgroundTask<R>
 {
-    inner:Arc<BackgroundTaskInner<Self,R>>,
+    inner:Arc<RwLock<BackgroundTaskInner<R>>>,
 }
 
 impl<R> BackgroundTask<R>
 {
-    pub fn new(callback:BackgroundRunner<Self,R,Error>,name:Option<String>) -> BackgroundTask<R>
+    pub fn new(callback:BackgroundRunner<Arc<RwLock<BackgroundTaskInner<R>>>,R,Error>,name:Option<String>) -> BackgroundTask<R>
     {
         BackgroundTask{
             inner: Arc::new(
-                BackgroundTaskInner {
-                    running_state: AtomicBool::new(false),
-                    name,
-                    run: callback,
-                    eta: None,
-                    progress: None,
-                    handle: RwLock::new(None)
-                }
+                RwLock::new(
+                    BackgroundTaskInner {
+                        running_state: AtomicBool::new(false),
+                        name,
+                        run: callback,
+                        eta: None,
+                        progress: None,
+                        handle: RwLock::new(None)
+                    }
+                )
             )
         }
     }
@@ -182,7 +194,7 @@ impl<R> BackgroundTask<R>
 
 impl<R> Deref for BackgroundTask<R>
 {
-    type Target = BackgroundTaskInner<Self,R>;
+    type Target = RwLock<BackgroundTaskInner<R>>;
     fn deref(&self) -> &Self::Target
     {
         &self.inner
@@ -204,25 +216,35 @@ where
 
         let r:JoinHandle<_> = tokio::spawn(async move
             {
-                this.running_state.store(true, Ordering::Relaxed);
-                let result = (this.run)(&this).await;
+                let lock = this.inner.write().await;
+                lock.running_state.store(true, Ordering::Relaxed);
+                drop(lock);
+
+                let callback = {
+                    let lock = this.inner.read().await;
+                    Arc::clone(&lock.run)
+                };
+
+                let result = callback(&this.inner).await;
 
                 return result;
             });
 
-
-        let mut h = self.handle.write().await;
+        let lock = self.inner.write().await;
+        let mut h = lock.handle.write().await;
         *h = Some(r);
     }
 
     async fn stop(&self)
     {
-        self.inner.running_state.store(false, Ordering::Relaxed);
+        let lock = self.inner.write().await;
+        lock.running_state.store(false, Ordering::Relaxed);
     }
 
     async fn is_running(&self) -> bool
     {
-        let h = self.handle.read().await;
+        let lock  = self.inner.read().await;
+        let h = lock.handle.read().await;
 
         if let Some(handle) = &*h
         {
@@ -241,7 +263,9 @@ where
 
     async fn join(&self) -> Result<Option<R>,Error>
     {
-        let mut h =self.inner.handle.write().await;
+        let lock = self.inner.write().await;
+        let mut h = lock.handle.write().await;
+
         if h.is_some()
         {
             let r = h.take().unwrap().await;

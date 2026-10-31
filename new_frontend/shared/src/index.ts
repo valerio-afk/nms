@@ -6,5 +6,6 @@ export type { LoginProps } from './components/Login';
 
 export * from './utils/api';
 export * from './utils/cn';
+export * from './utils/errors';
 export * from './types/auth';
 export * from './i18n/authTranslations';

@@ -13,9 +13,10 @@ import SensorsWidget from '../components/widgets/SensorsWidget';
 
 interface DashboardPageProps {
     currentUser: User | null;
+    onNavigate?: (tab: string) => void;
 }
 
-export default function DashboardPage({ currentUser }: DashboardPageProps) {
+export default function DashboardPage({ currentUser, onNavigate }: DashboardPageProps) {
     const { t } = useTranslation();
     const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
     const [loading, setLoading] = useState(true);
@@ -95,7 +96,11 @@ export default function DashboardPage({ currentUser }: DashboardPageProps) {
             ) : metrics ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <DiskUsageWidget pool={metrics.pool} userQuota={currentUser?.quota} />
-                    <DiskOverviewWidget disks={metrics.disks} />
+                    <DiskOverviewWidget
+                        disks={metrics.disks}
+                        pool={metrics.pool}
+                        onNavigateToDisks={() => onNavigate?.('disks')}
+                    />
                     <NetworkOverviewWidget networks={metrics.networks} />
                     <AccessOverviewWidget services={metrics.services} />
                     <SystemInfoWidget system={metrics.system} />

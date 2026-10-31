@@ -3,9 +3,12 @@ use strum::{EnumString, FromRepr};
 use serde::{Serialize};
 use serde_json::{Value,Map};
 use serde_repr::Serialize_repr;
+use crate::backend::HTTPMessage;
+use crate::backend::msg::{ErrorMessages, StatusMessage};
 use crate::cmdl::{CmdConfig, Executable};
-use crate::cmdl::utils::Find;
+use crate::cmdl::utils::{Find, WipeFS};
 use crate::cmdl::utils::{LSBLK, LsblkProperties,UdevAdmInfo};
+use crate::cmdl::zfs::{ZPool, ZPoolActions};
 
 static ACCEPTED_TRAN_TYPES:[&'static str;3] = ["sata","spi","usb"];
 #[derive(Debug, Serialize_repr,FromRepr, PartialEq,EnumString, Clone)]
@@ -145,7 +148,7 @@ impl Device
             return Err(DeviceError::LsblkError(output.stderr));
         }
         
-        return Err(DeviceError::LsblkError(String::new()));
+        Err(DeviceError::LsblkError(String::new()))
                 
     }
 
@@ -209,10 +212,19 @@ impl Device
         else {None}
     }
 
-
     pub fn to_string(&self) -> String
     {
         self.paths[0].to_string()
+    }
+
+    pub fn has_path(&self, path:&String) -> bool
+    {
+        self.paths.contains(path)
+    }
+
+    pub fn has_any_paths(&self, paths:&Vec<String>) -> bool
+    {
+        paths.iter().any(|p| self.has_path(p))
     }
 }
 
@@ -254,7 +266,41 @@ pub async fn get_system_disks() -> Vec<Device>
         }
     }
 
-    return devs;
+    devs
+}
+
+pub async fn format_disk(dev:&str) -> Result<(), HTTPMessage>
+{
+    let cmd = ZPool(ZPoolActions::LabelClear(dev.to_string()),false,CmdConfig::default())
+        .run()
+        .await;
+
+    if let Ok(Some(output)) = cmd && output.exit_code==0
+    {
+        return Ok(());
+    }
+
+    let cmd = WipeFS(dev,true,CmdConfig::default())
+        .run()
+        .await;
+
+    if let Ok(Some(output)) = cmd.as_ref() && output.exit_code==0
+    {
+        Ok(())
+    }
+    else
+    {
+        Err(ErrorMessages::E_DISK_FORMAT.wrap_with_status_code(
+            Some(vec![
+                Value::String(dev.to_string()),
+                match cmd
+                {
+                    Ok(Some(o)) => Value::String(o.stderr),
+                    _ => Value::String("Unknown error".to_string()),
+                },
+            ])
+        ))
+    }
 }
 
 // mod test

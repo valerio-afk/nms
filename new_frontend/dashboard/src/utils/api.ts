@@ -18,38 +18,77 @@ export async function fetchPoolStatus(): Promise<PoolStatus> {
         const isMounted = mountedRes.status === 'fulfilled' ? !!mountedRes.value.value : false;
 
         let capacity: { used: number; total: number } | null = null;
+        let settings = null;
+
         if (isConfigured) {
-            try {
-                const capRes = await apiRequest<PropertyResponse<{ used: number; total: number }>>('/pool/get/pool_capacity');
-                if (capRes?.value) {
-                    capacity = capRes.value;
-                }
-            } catch {
-                // capacity endpoint may fail if not mounted
+            const [capRes, setRes] = await Promise.allSettled([
+                apiRequest<PropertyResponse<{ used: number; total: number }>>('/pool/get/pool_capacity'),
+                apiRequest<PropertyResponse<{ encryption: boolean; redundancy: boolean; compression: boolean }>>('/pool/get/pool_settings')
+            ]);
+            if (capRes.status === 'fulfilled' && capRes.value?.value) {
+                capacity = capRes.value.value;
+            }
+            if (setRes.status === 'fulfilled' && setRes.value?.value) {
+                settings = setRes.value.value;
             }
         }
 
-        return { isConfigured, isMounted, capacity };
+        return { isConfigured, isMounted, capacity, settings };
     } catch {
-        return { isConfigured: false, isMounted: false, capacity: null };
+        return { isConfigured: false, isMounted: false, capacity: null, settings: null };
+    }
+}
+
+export function parseDiskStatus(statusRaw: any): { statusCode: number; status: 'ONLINE' | 'NEW' | 'OFFLINE' | 'CORRUPTED' | 'UNKNOWN' } {
+    let code: number;
+    if (typeof statusRaw === 'number') {
+        code = statusRaw;
+    } else if (typeof statusRaw === 'string') {
+        const s = statusRaw.toUpperCase();
+        if (s === 'ONLINE' || s === 'OK') code = 1;
+        else if (s === 'NEW') code = 0;
+        else if (s === 'OFFLINE' || s === 'UNAVAIL') code = -1;
+        else if (s === 'CORRUPTED' || s === 'DEGRADED' || s === 'FAULTED') code = -2;
+        else code = -3;
+    } else {
+        code = -3;
+    }
+
+    switch (code) {
+        case 1:
+            return { statusCode: 1, status: 'ONLINE' };
+        case 0:
+            return { statusCode: 0, status: 'NEW' };
+        case -1:
+            return { statusCode: -1, status: 'OFFLINE' };
+        case -2:
+            return { statusCode: -2, status: 'CORRUPTED' };
+        default:
+            return { statusCode: -3, status: 'UNKNOWN' };
     }
 }
 
 export async function fetchDisks(): Promise<DiskItem[]> {
     try {
-        const res = await apiRequest<any[]>('/disks/get/disks');
-        if (Array.isArray(res)) {
-            return res.map(d => ({
+        const res = await apiRequest<any>('/disks/get/disks');
+        const items: any[] = Array.isArray(res) ? res : (Array.isArray(res?.value) ? res.value : []);
+
+        return items.map((d: any) => {
+            const { statusCode, status } = parseDiskStatus(d.status ?? d.state);
+            return {
                 name: d.name || d.device || 'Disk',
-                model: d.model,
-                size: d.size,
-                status: d.status || d.state || 'OK',
-                temperature: d.temperature,
-                inPool: !!d.in_pool
-            }));
-        }
-        return [];
-    } catch {
+                model: d.model || '',
+                serial: d.serial || d.serial_number || '',
+                size: typeof d.size === 'number' ? d.size : null,
+                status,
+                statusCode,
+                path: d.path || (d.name ? `/dev/${d.name}` : ''),
+                inPool: statusCode === 1,
+                temperature: typeof d.temperature === 'number' ? d.temperature : undefined
+            };
+        });
+    } catch (err) {
+        console.error('Failed to fetch disks from /disks/get/disks:', err);
         return [];
     }
 }
@@ -144,12 +183,17 @@ export async function fetchDashboardMetrics(): Promise<DashboardMetrics> {
                 capacity: {
                     used: 3435973836800,
                     total: 8000000000000
+                },
+                settings: {
+                    encryption: false,
+                    redundancy: true,
+                    compression: true
                 }
             },
             disks: [
-                { name: 'sda', model: 'Seagate IronWolf 4TB', size: 4000787030016, status: 'ONLINE', temperature: 34, inPool: true },
-                { name: 'sdb', model: 'Seagate IronWolf 4TB', size: 4000787030016, status: 'ONLINE', temperature: 35, inPool: true },
-                { name: 'nvme0n1', model: 'Samsung 980 Pro 500GB', size: 500107862016, status: 'OK', temperature: 41, inPool: false }
+                { name: 'sda', model: 'Seagate IronWolf 4TB', serial: 'W123456', size: 4000787030016, status: 'ONLINE', statusCode: 1, path: '/dev/sda', inPool: true, temperature: 34 },
+                { name: 'sdb', model: 'Seagate IronWolf 4TB', serial: 'W123457', size: 4000787030016, status: 'ONLINE', statusCode: 1, path: '/dev/sdb', inPool: true, temperature: 35 },
+                { name: 'nvme0n1', model: 'Samsung 980 Pro 500GB', serial: 'S980PRO', size: 500107862016, status: 'NEW', statusCode: 0, path: '/dev/nvme0n1', inPool: false, temperature: 41 }
             ],
             networks: [
                 { name: 'eth0', ipAddress: '192.168.1.180', status: 'up', type: 'ethernet', rxBytes: 154829012, txBytes: 89324012 },

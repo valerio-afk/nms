@@ -2,17 +2,17 @@ use anyhow::anyhow;
 use api::v1::jwt::{TokenPurposes, create_token, token_verification};
 use api::v1::msg::{StatusMessage, WrappedResponse};
 use axum::Json;
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use base64::prelude::*;
 use chrono::TimeDelta;
 use config::{CfgDynDNS, CfgPool, CfgToken, Config, CfgUser, GITHUB_REPO};
-use crate::cmdl::coreutils::{Cat, Chown, FileSystemPermissions, Mkdir, OSUser, MV};
+use crate::cmdl::coreutils::{Cat, Chown, FileSystemPermissions, Mkdir, OSUser, MV, CreateKey};
 use crate::cmdl::error_filters::stderr_contains;
 use crate::cmdl::net::{NMCLIDevice, WireGuard, WireGuardAction};
 use crate::cmdl::others::RSync;
 use crate::cmdl::passwd::{GPasswd, GPasswdAction, GetEntPasswd, GroupMod, GroupModAction, Groups};
 use crate::cmdl::passwd::{UserDel, UserMod, UserModAction};
-use crate::cmdl::zfs::{ZFS, ZFSArgs, ZPoolImportArgs, ZFSQuotaArgs, ZFSQuota, ZFSSnapshotArgs};
+use crate::cmdl::zfs::{ZFS, ZFSArgs, ZPoolImportArgs, ZFSQuotaArgs, ZFSQuota, ZFSSnapshotArgs, ZPoolCreateArgs, ZPoolAttachArgs, ZPoolAddArgs, ZPoolDestroyArgs};
 use crate::cmdl::zfs::{ZFSActions, ZFSListArgs, ZFSListType, ZFSLoadKeyArgs, ZPool, ZPoolActions};
 use crate::cmdl::{CmdConfig, CommandLine, Executable, Transaction};
 use crate::dev::get_system_disks;
@@ -216,7 +216,7 @@ pub struct BackgroundTaskInformation
     task_id:String,
     running:bool,
     progress:Option<f32>,
-    eta:Option<u32>,
+    eta:Option<i64>,
     detail: Result<Option<SuccessMessages>, ErrorMessages>,
 }
 
@@ -561,20 +561,30 @@ impl Backend
         {
             let running = task.is_running().await;
 
+            let (progress,eta) = {
+                let t = task.read().await;
+                (t.get_progress(), t.get_eta())
+            };
+
             return Some(BackgroundTaskInformation{
                 task_id: id.to_string(),
                 running,
-                progress: task.get_progress(),
-                eta: task.get_eta(),
+                progress,
+                eta,
                 detail: {
                     if running { Ok(None) }
                     else {
+                        let name = {
+                            let t = task.read().await;
+                            t.get_name().map(|n| n.to_string())
+                        };
+
                         let j = task.join().await;
                         match j
                         {
                             Ok(r) => Ok(r),
                             Err(e) =>  {
-                                LoggerMessages::Error(LogErrors::TaskError(task.get_name(),&e.to_string())).log();
+                                LoggerMessages::Error(LogErrors::TaskError(name,&e.to_string())).log();
                                 Err(ErrorMessages::E_UNKNOWN)
                             }
                         }
@@ -2073,6 +2083,30 @@ impl Backend
         Ok(claims)
     }
 
+    pub async fn verify_extra_auth_from_headers(&self, hdr:HeaderMap,requested_purpose:TokenPurposes) -> Result<(), HTTPMessage>
+    {
+        let header_name = format!("X-Extra-Auth-{}",serde_json::to_value(&requested_purpose)
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string()
+        );
+        
+
+        if let Some(token) = hdr.get(header_name.as_str())
+        {
+            let t = token.to_str().map_err(|e| propagate_error(ErrorMessages::E_UNKNOWN,e.to_string()))?;
+
+            self.verify_token(t, requested_purpose).await?;
+            Ok(())
+        }
+        else
+        {
+            Err(ErrorMessages::E_AUTH_INVALID.wrap_with_status_code(None))
+        }
+    }
+
+
     //Add a new JWT token to the configuration file
     pub async fn push_token(self:&Arc<Self>, token:JWTClaim)
     {
@@ -2768,7 +2802,7 @@ impl Backend
             let backend = Arc::clone(&self);
             let scrub_task = Arc::new(
                 BackgroundTask::new(
-                    Box::new(move |_| {
+                    Arc::new(move |_| {
                         let pool_name = pool_name.clone();
                         let b = Arc::clone(&backend);
 
@@ -2928,26 +2962,7 @@ impl Backend
 
     pub async fn unmount(&self, user:Option<&User>) -> Result<(), HTTPMessage>
     {
-        let services = get_remote_services()
-            .await
-            .map_err(|e| propagate_error(ErrorMessages::E_POOL_UNMOUNT, e))?;
-
-        for s in services.iter()
-        {
-            let mut service = s.write().await;
-            let service_name = service.service_name().await;
-            if service_name != "ssh" //SSH is special - if we disable it we'll lose the possibility to restore the system if needeed (already happened!)
-            {
-                if service.is_active().await.unwrap_or(true)
-                {
-                    service.stop()
-                        .await
-                        .map_err(|e| propagate_error(ErrorMessages::E_POOL_UNMOUNT, e))?;
-
-                    LoggerMessages::Warning(LogWarnings::RemoteServiceStopped(service_name, None)).log();
-                }
-            }
-        }
+        self.disable_all_access_services().await?;
 
         let cfg = self.config.lock().await;
         if let Some(pool) = &cfg.pool && self.is_mounted().await
@@ -3243,6 +3258,307 @@ impl Backend
             Err(ErrorMessages::E_POOL_NO_CONF.wrap_with_status_code(None))
         }
     }
+
+    pub async fn pool_create(
+        &self,
+        disks:Vec<String>,
+        pool_name:String,
+        dataset_name:String,
+        redundancy:bool,
+        encryption:bool,
+        compression:bool
+    ) -> Result<(), HTTPMessage>
+    {
+        if self.is_pool_configured().await
+        {
+            return Err(ErrorMessages::E_POOL_CONFIG.wrap_with_status_code(None));
+        }
+
+        let attached_disks = self.get_disks().await;
+        let disk_objs = attached_disks
+            .iter()
+            .filter(|d| (d.state == DiskState::NEW) && (d.has_any_paths(&disks)))
+            .collect::<Vec<&Device>>();
+
+        for disk in &disks {
+            if !disk_objs.iter().any(|dev| dev.has_path(disk))
+            {
+                return Err(
+                    ErrorMessages::E_POOL_DISK_UNAVAL
+                        .wrap_with_status_code(Some(vec![Value::String(disk.clone())]))
+                );
+            }
+        }
+
+        if redundancy && (disks.len()<3)
+        {
+            return Err(ErrorMessages::E_POOL_REDUNDANCY_MIN.wrap_with_status_code(None));
+        }
+
+        let mut cmds:Vec<CommandLine> = Vec::new();
+
+        if encryption
+        {
+            cmds.push(CreateKey(
+                POOL_KEY_PATH,
+                CmdConfig::default()
+            ));
+        }
+
+        cmds.push(ZPool(ZPoolActions::Create(
+            ZPoolCreateArgs{
+                devices: disks,
+                pool: pool_name.to_string(),
+                redundancy,
+                encryption: if encryption { Some(POOL_KEY_PATH.to_string()) } else {None},
+                compression,
+                posix_acl: true
+            }),
+            false,
+            CmdConfig::default()
+        ));
+
+        cmds.push(ZFS(ZFSActions::Create(
+            ZFSArgs{
+                pool: pool_name,
+                dataset: Some(dataset_name),
+            },None),
+            true,
+            CmdConfig::default()
+        ));
+
+        Transaction::new(cmds)
+            .execute()
+            .await
+            .map_err(|e| propagate_error(ErrorMessages::E_POOL_NEW,e.to_string()) )?;
+
+        self.deinit_pool().await;
+        self.configure_pool().await?;
+
+        Ok(())
+    }
+
+    pub async fn pool_destroy(&self) -> Result<(), HTTPMessage>
+    {
+        if let Some((pool,dataset)) = self.get_pool_identifier().await
+        {
+            self.disable_all_access_services().await?;
+            self.unmount(None).await?;
+
+            let cmds = vec![
+                ZFS(ZFSActions::Destroy(ZFSArgs{
+                    pool: pool.clone(),
+                    dataset: Some(dataset.clone()),
+                }, None),false,CmdConfig::default()),
+                ZPool(ZPoolActions::Destroy(ZPoolDestroyArgs{
+                    pool: pool.clone(),
+                    force:true
+                }),false,CmdConfig::default())
+            ];
+
+            Transaction::new(cmds)
+                .execute()
+                .await
+                .map_err(|e| propagate_error(ErrorMessages::E_POOL_FORMAT,e))?;
+
+            self.deinit_pool().await;
+            
+            LoggerMessages::Info(LogInfos::PoolDestroyed).log();
+
+            Ok(())
+        }
+        else
+        {
+            Err(ErrorMessages::E_POOL_NO_CONF.wrap_with_status_code(None))
+        }
+    }
+
+    pub async fn pool_format(&self) -> Result<(), HTTPMessage>
+    {
+        if let Some((pool,dataset)) = self.get_pool_identifier().await
+        {
+            let disks = self.get_pool_disks().await.iter().map(|d| d.paths[0].clone()).collect::<Vec<String>>();
+
+            self.pool_destroy().await?;
+            self.pool_create(disks, pool, dataset,
+                             self.has_redundancy().await,
+                             self.has_encryption().await,
+                             self.has_compression().await
+            ).await?;
+
+            Ok(())
+
+        }
+        else
+        {
+            Err(ErrorMessages::E_POOL_NO_CONF.wrap_with_status_code(None))
+        }
+    }
+
+    pub async fn pool_expand(self:&Arc<Self>, new_dev:String) -> Result<Option<Uuid>, HTTPMessage>
+    {
+        if let Some((pool,_)) = self.get_pool_identifier().await
+        {
+            let attachable_disks = self.get_disks().await;
+            if attachable_disks.iter().find(|d| d.has_path(&new_dev)).is_some()
+            {
+                self.disable_all_access_services().await?;
+                self.unmount(None).await?;
+
+                let mut make_concurrent = false;
+                let mut cmd:Option<CommandLine> = None;
+
+                if self.has_redundancy().await
+                {
+                    let zpool_status = ZPool(ZPoolActions::Status(pool.clone()),false,CmdConfig::default())
+                        .run()
+                        .await
+                        .map_err(|e| propagate_error(ErrorMessages::E_POOL_EXPAND_INFO,e.to_string()))?;
+
+                    if let Some(zpool_status) = zpool_status
+                    {
+                        if zpool_status.exit_code == 0
+                        {
+                            let json:Value = serde_json::from_str(zpool_status.stdout.as_str())
+                                .map_err(|e| propagate_error(ErrorMessages::E_POOL_EXPAND_INFO,e))?;
+
+                            if let Some(obj) = json.as_object()
+                            {
+                                if let Some(vdevs) = obj["pools"][pool.as_str()]["vdevs"][pool.as_str()]["vdevs"].as_object() && vdevs.len()==1
+                                {
+                                    let value = vdevs.keys().next().unwrap().to_string();
+                                    if let Some(vdevtype) = vdevs[value.as_str()]["vdev_type"].as_str() && (vdevtype == "raidz") &&
+                                       let Some(vdevname) = vdevs[value.as_str()]["name"].as_str()
+                                    {
+                                       cmd = Some(ZPool(ZPoolActions::Attach(ZPoolAttachArgs{
+                                           pool,
+                                           vdev:vdevname.to_string(),
+                                           device: new_dev.clone()
+                                       }),true,CmdConfig::default()));
+                                       make_concurrent = true;
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            return Err(ErrorMessages::E_POOL_EXPAND_INFO.wrap_with_status_code(Some(vec![Value::String(zpool_status.stderr)])));
+                        }
+                    }
+                    else
+                    {
+                        return Err(ErrorMessages::E_POOL_EXPAND_INFO.wrap_with_status_code(Some(vec![Value::String("Unknown error".to_string())])));
+                    }
+
+                }
+                else
+                {
+                    cmd = Some(
+                        ZPool(ZPoolActions::Add(ZPoolAddArgs{
+                            pool,
+                            device:new_dev.clone(),
+                        }), true, CmdConfig::default())
+                    );
+                }
+
+                if let Some(cmd) = cmd
+                {
+                    let o = cmd
+                        .run()
+                        .await
+                        .map_err(|e| propagate_error(ErrorMessages::E_POOL_ATTACH,e.to_string()))?;
+
+
+                    if let Some(output) = o
+                    {
+                        if output.exit_code == 0
+                        {
+                            self.deinit_pool().await;
+                            self.configure_pool().await?;
+
+                            if make_concurrent
+                            {
+                                /* make more magic here */
+                                let backend = Arc::clone(self);
+                                let pool_expansion_task = Arc::new(
+                                    BackgroundTask::new(
+                                        Arc::new(move |task| {
+                                            let b = Arc::clone(&backend);
+                                            let device = new_dev.clone();
+                                            let t = Arc::clone(task);
+                                            Box::pin(async move
+                                                {
+                                                    loop
+                                                    {
+                                                        tokio::time::sleep(Duration::from_secs(1)).await;
+                                                        let status = b
+                                                            .get_expansion_status()
+                                                            .await
+                                                            .map_err(|e| anyhow!(e.1.to_string()))?;
+
+                                                        println!("{:?}",status);
+
+                                                        if let Some(prg) = status.progress
+                                                        {
+                                                            if let Some(eta) = status.eta
+                                                            {
+                                                                println!("------ ENTER CRITICAL SECTION ------");
+                                                                let mut lock = t.write().await;
+                                                                lock.set_progress(Some(prg));
+                                                                lock.set_eta(Some(eta));
+                                                                println!("------ EXIT CRITICAL SECTION ------");
+                                                            }
+
+                                                            if !status.is_running
+                                                            {
+                                                                break;
+                                                            }
+                                                        } else {
+                                                            return Err(anyhow!(device));
+                                                        }
+                                                    }
+
+                                                    LoggerMessages::Info(LogInfos::PoolExpanded).log();
+
+                                                    Ok(SuccessMessages::S_POOL_EXPANDED)
+                                                })
+                                        }),
+                                        Some("Pool expansion status".to_string()),
+                                    )
+                                );
+
+                                let uuid = self.background_task_manager.add_task(pool_expansion_task).await;
+                                Ok(Some(uuid))
+                            } else {
+                                Ok(None)
+                            }
+                        }
+                        else
+                        {
+                            Err(ErrorMessages::E_POOL_ATTACH.wrap_with_status_code(Some(vec![Value::String(output.stderr)])))
+                        }
+                    }
+                    else
+                    {
+                        Err(ErrorMessages::E_POOL_ATTACH.wrap_with_status_code(Some(vec![Value::String("Unknown error".to_string())])))
+                    }
+                }
+                else
+                {
+                    Err(ErrorMessages::E_POOL_EXPAND_INFO.wrap_with_status_code(Some(vec![Value::String(new_dev.to_string())])))
+                }
+
+            }
+            else
+            {
+                Err(ErrorMessages::E_POOL_EXPAND_INFO.wrap_with_status_code(Some(vec![Value::String(new_dev.to_string())])))
+            }
+        }
+        else
+        {
+            Err(ErrorMessages::E_POOL_NO_CONF.wrap_with_status_code(None))
+        }
+    }
 }
 
 //Device-related Methods
@@ -3339,7 +3655,31 @@ impl Backend
             return Err(ErrorMessages::E_ACCESS_SERV_UNK.wrap_with_status_code(Some(vec![Value::String(service_name.to_string())])) );
         }
 
+        Ok(())
+    }
 
+    pub async fn disable_all_access_services(&self) -> Result<(), HTTPMessage>
+    {
+        let services = get_remote_services()
+            .await
+            .map_err(|e| propagate_error(ErrorMessages::E_ACCESS_DISABLING, e))?;
+
+        for s in services.iter()
+        {
+            let mut service = s.write().await;
+            let service_name = service.service_name().await;
+            if service_name != "ssh" //SSH is special - if we disable it we'll lose the possibility to restore the system if needeed (already happened!)
+            {
+                if service.is_active().await.unwrap_or(true)
+                {
+                    service.stop()
+                        .await
+                        .map_err(|e| propagate_error(ErrorMessages::E_ACCESS_DISABLING, e))?;
+
+                    LoggerMessages::Warning(LogWarnings::RemoteServiceStopped(service_name, None)).log();
+                }
+            }
+        }
 
         Ok(())
     }
@@ -4307,7 +4647,7 @@ impl Backend
             {
                 DistroFamily::Deb => Arc::new(
                     BackgroundTask::new(
-                        Box::new(move |_| {
+                        Arc::new(move |_| {
                             let b = Arc::clone(&backend);
                             Box::pin(async move { b.apt_get_update_deb(true).await } )
                         }),
@@ -4316,7 +4656,7 @@ impl Backend
                 ),
                 DistroFamily::Rh => Arc::new(
                     BackgroundTask::new(
-                        Box::new(move |_| {
+                        Arc::new(move |_| {
                             let b = Arc::clone(&backend);
                             Box::pin(async move { b.apt_get_update_rh(true).await } )
                         }),
@@ -4338,7 +4678,7 @@ impl Backend
             {
                 DistroFamily::Deb => Arc::new(
                     BackgroundTask::new(
-                        Box::new(move |_| {
+                        Arc::new(move |_| {
                             let b = Arc::clone(&backend);
                             Box::pin(async move {
 
@@ -4379,7 +4719,7 @@ impl Backend
                 ),
                 DistroFamily::Rh => Arc::new(
                     BackgroundTask::new(
-                        Box::new(move |_| {
+                        Arc::new(move |_| {
                             let b = Arc::clone(&backend);
                             Box::pin(async move {
 

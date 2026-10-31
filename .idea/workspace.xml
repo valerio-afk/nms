@@ -4,16 +4,35 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="0ddb49fd-44e3-4605-a704-cc1f15248c46" name="Changes" comment="new dashboard in react to be made with antigravity. it's gonna take weeks, so does for the rest">
+    <list default="true" id="0ddb49fd-44e3-4605-a704-cc1f15248c46" name="Changes" comment="log retrieval implemented">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/advanced.py" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/advanced.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/templates/advanced.logs.html" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/templates/advanced.logs.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/api/backend_proxy.py" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/api/backend_proxy.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/auth.py" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/auth.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/new_frontend/box/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/src/App.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/new_frontend/box/src/index.css" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/box/src/index.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/.env.development" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/.env.development" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/App.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/src/components/widgets/DiskOverviewWidget.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/components/widgets/DiskOverviewWidget.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/src/i18n/locales/en/translation.ts" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/i18n/locales/en/translation.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/src/i18n/locales/it/translation.ts" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/i18n/locales/it/translation.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/src/index.css" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/index.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/src/pages/DashboardPage.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/pages/DashboardPage.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/src/types/dashboard.ts" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/types/dashboard.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/src/utils/api.ts" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/utils/api.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/vite.config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/vite.config.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/new_frontend/shared/src/components/Login.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/shared/src/components/Login.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/new_frontend/shared/src/index.ts" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/shared/src/index.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/new_frontend/shared/src/utils/api.ts" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/shared/src/utils/api.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/nms_backend/src/backend.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/api/v1/system.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/api/v1/system.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/config.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/config.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/api/v1/auth.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/api/v1/auth.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/api/v1/pool.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/api/v1/pool.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/jwt.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/jwt.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/msg.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/msg.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/utils.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/utils.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/cmdl/systemd.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/cmdl/systemd.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_shared/src/nms_shared/msg.py" beforeDir="false" afterPath="$PROJECT_DIR$/nms_shared/src/nms_shared/msg.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/src/cmdl/coreutils.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/cmdl/coreutils.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/src/cmdl/zfs.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/cmdl/zfs.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/src/dev.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/dev.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/src/task.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/task.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -173,7 +192,7 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-python-sdk-73a66231627c-5bd6d13a2a75-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-262.10968.92" />
+        <option value="bundled-python-sdk-ebb3072d7bdf-5bd6d13a2a75-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-262.11879.98" />
       </set>
     </attachedChunks>
   </component>
@@ -184,14 +203,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1762034282613</updated>
-    </task>
-    <task id="LOCAL-00042" summary="fixed again the bash installation file">
-      <option name="closed" value="true" />
-      <created>1773707067539</created>
-      <option name="number" value="00042" />
-      <option name="presentableId" value="LOCAL-00042" />
-      <option name="project" value="LOCAL" />
-      <updated>1773707067539</updated>
     </task>
     <task id="LOCAL-00043" summary="too much copy and paste can hurt">
       <option name="closed" value="true" />
@@ -577,7 +588,15 @@
       <option name="project" value="LOCAL" />
       <updated>1792362890015</updated>
     </task>
-    <option name="localTasksCounter" value="91" />
+    <task id="LOCAL-00091" summary="log retrieval implemented">
+      <option name="closed" value="true" />
+      <created>1792739854796</created>
+      <option name="number" value="00091" />
+      <option name="presentableId" value="LOCAL-00091" />
+      <option name="project" value="LOCAL" />
+      <updated>1792739854796</updated>
+    </task>
+    <option name="localTasksCounter" value="92" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -598,7 +617,6 @@
     <ignored-roots>
       <path value="$PROJECT_DIR$/nms_backend" />
     </ignored-roots>
-    <MESSAGE value="jellyfin integration done" />
     <MESSAGE value="minor production bug fixed. Rpi temp/volt now should be integrated. SMARTCTL bug fixed. HDD detection also fixed in production. These minor bugs should be solved by now." />
     <MESSAGE value="Apart from some unexpected minor bug that will come up in production, rc1 seems complete" />
     <MESSAGE value="security improved in several areas - licence changed to AGPL, install file can update nginx config file when required now." />
@@ -623,7 +641,8 @@
     <MESSAGE value="all pool properties implemented - most to be tested" />
     <MESSAGE value="in advanced page, some of the updates endpoint have been implemeneted. Also the restart of systemd services has been implemented. To implement: check for updates, syslogs, eventsm and danger zone functionality" />
     <MESSAGE value="new dashboard in react to be made with antigravity. it's gonna take weeks, so does for the rest" />
-    <option name="LAST_COMMIT_MESSAGE" value="new dashboard in react to be made with antigravity. it's gonna take weeks, so does for the rest" />
+    <MESSAGE value="log retrieval implemented" />
+    <option name="LAST_COMMIT_MESSAGE" value="log retrieval implemented" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>

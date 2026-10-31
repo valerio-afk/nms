@@ -247,7 +247,10 @@ export default function App() {
 
             <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
                 {activeTab === 'dashboard' ? (
-                    <DashboardPage currentUser={currentUser} />
+                    <DashboardPage
+                        currentUser={currentUser}
+                        onNavigate={(tab) => setActiveTab(tab)}
+                    />
                 ) : (
                     <PlaceholderPage
                         title={

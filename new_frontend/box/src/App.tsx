@@ -1,7 +1,7 @@
 import { useState, useEffect, createContext, useRef } from 'react';
 import Login from './Login';
 import { LogOut, Sun, Moon, ChevronDown, Check } from 'lucide-react';
-import { logout as apiLogout, setAuthToken, getQuota } from './utils/api';
+import { logout as apiLogout, setAuthToken, getQuota, getErrorMessage } from './utils/api';
 import StorageBar from './components/StorageBar'
 import FileBrowser from './components/FileBrowser';
 import { useTranslation } from 'react-i18next';
@@ -89,10 +89,8 @@ function App() {
 
   const handleAuthError = (code?: string) => {
     let msg = t('app.logged_out_msg');
-    if (code === 'E_AUTH_INVALID') {
-      msg = t('app.invalid_auth');
-    } else if (code === 'E_AUTH_EXPIRED' || code === 'E_AUTH_REVOKED') {
-      msg = t('app.logged_out_msg');
+    if (code) {
+      msg = getErrorMessage(code, null, i18n.language);
     }
     setAuthError(msg);
     setIsLoggedIn(false);

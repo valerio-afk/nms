@@ -29,7 +29,13 @@ pub enum TokenPurposes
     Login,
 
     #[serde(rename = "first_login")]
-    FirstLogin
+    FirstLogin,
+
+    #[serde(rename = "format")]
+    FormatDiskArray,
+
+    #[serde(rename = "destroy")]
+    DestroyDiskArray
 }
 
 #[derive(Debug, Deserialize, Serialize)]

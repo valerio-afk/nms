@@ -399,7 +399,7 @@ pub enum LogErrors<'a>
     INotifyStart(&'a String),
     INotifyIOError(&'a std::io::Error),
     INotifyStopped(&'a ExitStatus),
-    TaskError(Option<&'a String>, &'a String),
+    TaskError(Option<String>, &'a String),
     NginxRestarted(&'a String),
     MailFlushError(&'a String),
     AccessServiceTriggerError(&'a String),
@@ -585,6 +585,9 @@ pub enum LogInfos<'a>
     SnapshotCreated(&'a str),
     SnapshotDeleted(&'a str),
     SnapshotRolledback(&'a str),
+    NewPool(&'a str, &'a str,bool,bool,bool,&'a[&'a str]),
+    PoolExpanded,
+    PoolDestroyed,
 }
 
 impl<'a> Display for LogInfos<'a>
@@ -633,6 +636,10 @@ impl<'a> Display for LogInfos<'a>
             LogInfos::SnapshotCreated(snapshot_name) => write!(f,"Snapshot {} created successfully", snapshot_name),
             LogInfos::SnapshotDeleted(snapshot_name) => write!(f,"Snapshot {} deleted successfully", snapshot_name),
             LogInfos::SnapshotRolledback(snapshot_name) => write!(f,"Pool rolled back to snapshot {}",snapshot_name),
+            LogInfos::NewPool(pool,dataset,red,enc,comp,dev) => write!(f,"New pool created:\n\
+            Pool name: {}\nDataset name: {}\n Redundancy: {}\n Encryption: {}\nCompression: {}\nDevices: {}",pool,dataset,red,enc,comp,dev.join(", ")),
+            LogInfos::PoolExpanded => write!(f,"Pool expansion completed successfully"),
+            LogInfos::PoolDestroyed => write!(f,"Pool destroyed successfully"),
         }
     }
 }

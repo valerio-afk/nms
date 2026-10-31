@@ -11,7 +11,8 @@ use super::disks::CompatibleDisk;
 use std::sync::Arc;
 use axum::{Json, Router};
 use axum::routing::{delete, get, patch, post};
-use axum::extract::{State,Path, Multipart};
+use axum::extract::{State, Path, Multipart, Query};
+use axum::http::HeaderMap;
 use axum_auth::AuthBearer;
 use serde_json::Value;
 use serde::{Deserialize, Serialize};
@@ -38,6 +39,12 @@ impl PoolFlags
             compression : backend.has_compression().await,
         }
     }
+}
+
+#[derive(Deserialize)]
+struct PoolExpand
+{
+    new_device: String
 }
 
 #[derive(Clone,Debug,Deserialize, Serialize)]
@@ -103,6 +110,17 @@ struct ImportPool
 {
     pool_name:String,
     load_key: bool
+}
+
+#[derive(Debug,Deserialize)]
+struct CreatePool
+{
+    pool_name:String,
+    dataset_name: String,
+    redundancy: bool,
+    encryption: bool,
+    compression: bool,
+    disks: Vec<String>
 }
 
 async fn get_attachable_disks(backend:Arc<Backend>) -> Vec<Device>
@@ -252,7 +270,7 @@ async fn pool_mount(AuthBearer(token): AuthBearer, State(backend): State<Arc<Bac
     Ok(SuccessMessages::S_POOL_MOUNTED.wrap_with_status_code(None))
 }
 
-async fn pool_detatch(AuthBearer(token): AuthBearer, State(backend): State<Arc<Backend>>) -> FastAPIComp<()>
+async fn pool_detach(AuthBearer(token): AuthBearer, State(backend): State<Arc<Backend>>) -> FastAPIComp<()>
 {
     let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
     let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
@@ -423,6 +441,100 @@ async fn rollback_to_snapshot(
     }
 }
 
+async fn create_pool(
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>,
+    Json(new_pool): Json<CreatePool>
+) -> Result<HTTPMessage, HTTPMessage>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::PoolConfCreate).await?;
+
+    backend.pool_create(
+        new_pool.disks.clone(),
+        new_pool.pool_name.clone(),
+        new_pool.dataset_name.clone(),
+        new_pool.redundancy,
+        new_pool.encryption,
+        new_pool.compression
+    ).await?;
+
+    LoggerMessages::Info(LogInfos::NewPool(
+        &new_pool.pool_name,
+        &new_pool.dataset_name,
+        new_pool.redundancy,
+        new_pool.encryption,
+        new_pool.compression,
+        new_pool.disks.iter().map(|x|x.as_str()).collect::<Vec<&str>>().as_slice()
+    )).log();
+
+    Ok(SuccessMessages::S_POOL_CREATED.wrap_with_status_code(None))
+}
+
+async fn pool_expand(
+    Query(params):Query<PoolExpand>, //to fix
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>
+) -> FastAPIComp<Option<BackgroundTaskInformation>>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::PoolConfExpand).await?;
+
+    let uuid = backend.pool_expand(params.new_device.clone()).await?;
+
+    if let Some(id) = uuid
+    {
+        let task = backend.get_task_by_id(&id.to_string()).await;
+
+        if let Some(task) = task { Ok(Json(Some(task))) }
+        else
+        {
+            Err(propagate_error(ErrorMessages::E_DISK_ATTACH,params.new_device))
+        }
+    }
+    else
+    {
+        Ok(Json(None))
+    }
+}
+
+async fn pool_format(
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>,
+    headers: HeaderMap
+) -> Result<HTTPMessage, HTTPMessage>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    backend.verify_extra_auth_from_headers(headers,TokenPurposes::FormatDiskArray).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::PoolConfFormat).await?;
+
+    backend.pool_format().await?;
+
+    Ok(SuccessMessages::S_POOL_FORMATTED.wrap_with_status_code(None))
+}
+
+async fn pool_destroy(
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>,
+    headers: HeaderMap
+) -> Result<HTTPMessage, HTTPMessage>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    backend.verify_extra_auth_from_headers(headers,TokenPurposes::DestroyDiskArray).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::PoolConfDestroy).await?;
+
+    backend.pool_destroy().await?;
+
+    Ok(SuccessMessages::S_POOL_DESTROYED.wrap_with_status_code(None))
+}
 
 pub fn get_route() -> Router<Arc<Backend>>
 {
@@ -430,10 +542,14 @@ pub fn get_route() -> Router<Arc<Backend>>
     Router::new().nest("/pool",
         Router::new()
             .route("/get/{property}", get(get_pool_property))
+            .route("/create", post(create_pool))
             .route("/mount", post(pool_mount))
             .route("/unmount", post(pool_unmount))
-            .route("/detach", post(pool_detatch))
+            .route("/detach", post(pool_detach))
             .route("/attach", post(pool_attach))
+            .route("/expand", post(pool_expand))
+            .route("/format", post(pool_format))
+            .route("/destroy", post(pool_destroy))
             .route("/scrub", post(start_scrub))
             .route("/import/key",post(upload_key))
             .route("/snapshot/{snapshot_name}", post(create_snapshot))

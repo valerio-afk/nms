@@ -3,15 +3,15 @@ use std::collections::HashMap;
 
 pub struct ZPoolAttachArgs
 {
-    pool:String,
-    vdev: String,
-    device: String
+    pub pool:String,
+    pub vdev: String,
+    pub device: String
 }
 
 pub struct ZPoolAddArgs
 {
-    pool:String,
-    device: String,
+    pub pool:String,
+    pub device: String,
 }
 
 pub struct ZPoolReplaceArgs
@@ -31,12 +31,12 @@ pub type ZPoolImportArgs = ZPoolDestroyArgs;
 
 pub struct ZPoolCreateArgs
 {
-    devices:Vec<String>,
-    pool: String,
-    redundancy:bool,
-    encryption:Option<String>,
-    compression:bool,
-    posix_acl:bool
+    pub devices:Vec<String>,
+    pub pool: String,
+    pub redundancy:bool,
+    pub encryption:Option<String>,
+    pub compression:bool,
+    pub posix_acl:bool
 }
 
 pub enum ZPoolActions
@@ -269,7 +269,7 @@ pub fn ZPool(
         }
 
         ZPoolActions::Destroy(params) => {
-                args.push("add".to_string());
+                args.push("destroy".to_string());
                 if params.force
                 {
                     args.push("-f".to_string());

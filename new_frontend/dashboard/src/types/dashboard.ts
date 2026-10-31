@@ -3,19 +3,31 @@ export interface PoolCapacity {
     total: number;
 }
 
+export interface PoolSettings {
+    encryption: boolean;
+    redundancy: boolean;
+    compression: boolean;
+}
+
 export interface PoolStatus {
     isConfigured: boolean;
     isMounted: boolean;
     capacity: PoolCapacity | null;
+    settings?: PoolSettings | null;
 }
+
+export type DiskStatusCode = 'ONLINE' | 'NEW' | 'OFFLINE' | 'CORRUPTED' | 'UNKNOWN';
 
 export interface DiskItem {
     name: string;
-    model?: string;
-    size?: number;
-    status: string;
+    model: string;
+    serial?: string;
+    size?: number | null;
+    status: DiskStatusCode;
+    statusCode: number; // 1 = ONLINE, 0 = NEW, -1 = OFFLINE, -2 = CORRUPTED, -3 = UNKNOWN
+    path?: string;
+    inPool: boolean;
     temperature?: number;
-    inPool?: boolean;
 }
 
 export interface NetworkInterfaceItem {

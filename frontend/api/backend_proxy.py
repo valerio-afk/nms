@@ -483,11 +483,10 @@ class BackEndProxy:
             session['tokens'] = {}
         session['tokens'][purpose] = token
 
-    def verify_otp(this,otp:str,purpose:str="login",duration:int=TOKEN_LONGEVITY) -> Optional[str]:
+    def verify_otp(this,otp:str,purpose:str="login") -> Optional[str]:
         data = {
             "otp": otp,
-            "purpose": purpose,
-            "duration": duration
+            "purpose": purpose
         }
 
         r = this._request("auth/otp", RequestMethod.POST, body_params=data)
