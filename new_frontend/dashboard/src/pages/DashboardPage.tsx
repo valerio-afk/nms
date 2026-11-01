@@ -25,13 +25,15 @@ export default function DashboardPage({ currentUser, onNavigate }: DashboardPage
 
     const loadMetrics = useCallback(async (isManualRefresh = false) => {
         if (isManualRefresh) setRefreshing(true);
-        setError(null);
         try {
             const data = await fetchDashboardMetrics();
             setMetrics(data);
+            setError(null);
         } catch (err: any) {
             console.error('Failed to load dashboard metrics', err);
-            setError(err?.message || t('dashboard.error_loading', 'Failed to retrieve metrics'));
+            if (isManualRefresh) {
+                setError(err?.message || t('dashboard.error_loading', 'Failed to retrieve metrics'));
+            }
         } finally {
             setLoading(false);
             if (isManualRefresh) setRefreshing(false);
@@ -40,10 +42,10 @@ export default function DashboardPage({ currentUser, onNavigate }: DashboardPage
 
     useEffect(() => {
         loadMetrics();
-        // Auto-refresh metrics every 15 seconds
+        // Flask app uses GlobalRefresher with 3000ms (3 seconds) interval
         const timer = setInterval(() => {
-            loadMetrics();
-        }, 15000);
+            loadMetrics(false);
+        }, 3000);
         return () => clearInterval(timer);
     }, [loadMetrics]);
 
@@ -101,7 +103,10 @@ export default function DashboardPage({ currentUser, onNavigate }: DashboardPage
                         pool={metrics.pool}
                         onNavigateToDisks={() => onNavigate?.('disks')}
                     />
-                    <NetworkOverviewWidget networks={metrics.networks} />
+                    <NetworkOverviewWidget
+                        networks={metrics.networks}
+                        onNavigateToNetwork={() => onNavigate?.('network')}
+                    />
                     <AccessOverviewWidget services={metrics.services} />
                     <SystemInfoWidget system={metrics.system} />
                     <SensorsWidget sensors={metrics.sensors} />

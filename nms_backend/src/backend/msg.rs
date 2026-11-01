@@ -507,6 +507,7 @@ pub enum LogWarnings<'a>
     NoOutput(&'a str),
     NetworkFailsafeEnganged,
     SystemdRestart,
+    PoolRecovery,
 }
 
 impl<'a> Display for LogWarnings<'a>
@@ -549,6 +550,7 @@ impl<'a> Display for LogWarnings<'a>
             LogWarnings::ZfsDkms(kernel_rel) => write!(f,"No ZFS DKMS module found for the kernel version {}. An attempt to install it will be made, but it will take a while...",kernel_rel),
             LogWarnings::NetworkFailsafeEnganged => write!(f,"It seems there is no network interface active. Activating failsafe..."),
             LogWarnings::SystemdRestart => write!(f,"Restarting systemd services. Be right back..."),
+            LogWarnings::PoolRecovery => write!(f,"Attempting to recover pool initiated."),
         }
     }
 }

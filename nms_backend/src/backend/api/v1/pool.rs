@@ -536,6 +536,24 @@ async fn pool_destroy(
     Ok(SuccessMessages::S_POOL_DESTROYED.wrap_with_status_code(None))
 }
 
+
+async fn pool_recovery(
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>,
+    headers: HeaderMap
+) -> Result<HTTPMessage, HTTPMessage>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    backend.verify_extra_auth_from_headers(headers,TokenPurposes::RecoverDiskArray).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+
+    check_permission(&user, UserPermissions::PoolToolsRecovery).await?;
+
+    backend.pool_recover().await?;
+
+    Ok(SuccessMessages::S_RECOVERY.wrap_with_status_code(None))
+}
+
 pub fn get_route() -> Router<Arc<Backend>>
 {
    
@@ -549,6 +567,7 @@ pub fn get_route() -> Router<Arc<Backend>>
             .route("/attach", post(pool_attach))
             .route("/expand", post(pool_expand))
             .route("/format", post(pool_format))
+            .route("/recover", post(pool_recovery))
             .route("/destroy", post(pool_destroy))
             .route("/scrub", post(start_scrub))
             .route("/import/key",post(upload_key))

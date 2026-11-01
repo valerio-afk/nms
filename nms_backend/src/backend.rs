@@ -1005,7 +1005,7 @@ impl Backend
             else { false };
             let mut redundancy = false;
 
-            let output = ZPool(ZPoolActions::Status(pool.name.clone()),false,CmdConfig::Empty)
+            let output = ZPool(ZPoolActions::Status(pool.name.clone()),true,false,CmdConfig::Empty)
                 .run()
                 .await
                 .map_err(|e| propagate_error(ErrorMessages::E_POOL_MOUNT, e))?
@@ -2091,7 +2091,6 @@ impl Backend
             .unwrap()
             .to_string()
         );
-        
 
         if let Some(token) = hdr.get(header_name.as_str())
         {
@@ -2324,7 +2323,7 @@ impl Backend
         {
             if let Ok(output_result) = ZPool(
                 ZPoolActions::Status(pool_name),
-                false,CmdConfig::Empty).run().await && let Some(output) = output_result
+                true,false,CmdConfig::Empty).run().await && let Some(output) = output_result
             {
                 return output.is_success().is_ok();
             }
@@ -2340,7 +2339,7 @@ impl Backend
         {
             if let Ok(output_result) = ZPool(
                 ZPoolActions::Status(pool_name.clone()),
-                false,CmdConfig::Empty
+                true,false,CmdConfig::Empty
             )
             .run().await && let Some(output) = output_result
             {
@@ -2418,6 +2417,7 @@ impl Backend
 
         if let Ok(output_result) = ZPool(
             ZPoolActions::Status(pool_name),
+            false,
             false,
             CmdConfig::Empty
         ).run().await && let Some(output) = output_result
@@ -2513,7 +2513,7 @@ impl Backend
     {
         let zpool_output = ZPool(
             ZPoolActions::Import(None),
-        false,
+            true,false,
             CmdConfig::default()
         )
         .run()
@@ -2737,7 +2737,7 @@ impl Backend
         {
             let zpool_output = ZPool(
                 ZPoolActions::Status(pool_name.clone()),
-                false, 
+                true,false, 
                 CmdConfig::default()
             ).run().await;
 
@@ -2791,7 +2791,7 @@ impl Backend
     {
         if let Some((pool_name, _)) = self.get_pool_identifier().await
         {
-            ZPool(ZPoolActions::Scrub(pool_name.clone()),false,CmdConfig::default())
+            ZPool(ZPoolActions::Scrub(pool_name.clone()),true,false,CmdConfig::default())
                 .run()
                 .await
                 .map_err(|e| propagate_error(ErrorMessages::E_POOL_SCRUB, e))?
@@ -2810,7 +2810,7 @@ impl Backend
                             loop {
                                 sleep(Duration::from_secs(2)).await;
 
-                                let output = ZPool(ZPoolActions::Status(pool_name.clone()),false,CmdConfig::Empty)
+                                let output = ZPool(ZPoolActions::Status(pool_name.clone()),true,false,CmdConfig::Empty)
                                    .run()
                                    .await;
 
@@ -3029,7 +3029,7 @@ impl Backend
         {
             self.unmount(user).await?;
 
-            ZPool(ZPoolActions::Export(pool_name),false,CmdConfig::default())
+            ZPool(ZPoolActions::Export(pool_name),true,false,CmdConfig::default())
                 .run()
                 .await
                 .map_err(|e| propagate_error(ErrorMessages::E_POOL_DETACH,e))?
@@ -3057,7 +3057,7 @@ impl Backend
             Some(ZPoolImportArgs {
                 pool: pool_name.to_string(),
                 force: true
-            })),true,CmdConfig::default()
+            })),true,true,CmdConfig::default()
         )];
 
         if load_key
@@ -3313,8 +3313,7 @@ impl Backend
                 encryption: if encryption { Some(POOL_KEY_PATH.to_string()) } else {None},
                 compression,
                 posix_acl: true
-            }),
-            false,
+            }), true,false,
             CmdConfig::default()
         ));
 
@@ -3353,7 +3352,7 @@ impl Backend
                 ZPool(ZPoolActions::Destroy(ZPoolDestroyArgs{
                     pool: pool.clone(),
                     force:true
-                }),false,CmdConfig::default())
+                }),true,false,CmdConfig::default())
             ];
 
             Transaction::new(cmds)
@@ -3410,7 +3409,7 @@ impl Backend
 
                 if self.has_redundancy().await
                 {
-                    let zpool_status = ZPool(ZPoolActions::Status(pool.clone()),false,CmdConfig::default())
+                    let zpool_status = ZPool(ZPoolActions::Status(pool.clone()),true,false,CmdConfig::default())
                         .run()
                         .await
                         .map_err(|e| propagate_error(ErrorMessages::E_POOL_EXPAND_INFO,e.to_string()))?;
@@ -3434,7 +3433,7 @@ impl Backend
                                            pool,
                                            vdev:vdevname.to_string(),
                                            device: new_dev.clone()
-                                       }),true,CmdConfig::default()));
+                                       }),true,true,CmdConfig::default()));
                                        make_concurrent = true;
                                     }
                                 }
@@ -3457,7 +3456,7 @@ impl Backend
                         ZPool(ZPoolActions::Add(ZPoolAddArgs{
                             pool,
                             device:new_dev.clone(),
-                        }), true, CmdConfig::default())
+                        }), true,true, CmdConfig::default())
                     );
                 }
 
@@ -3496,24 +3495,22 @@ impl Backend
                                                             .await
                                                             .map_err(|e| anyhow!(e.1.to_string()))?;
 
-                                                        println!("{:?}",status);
-
                                                         if let Some(prg) = status.progress
                                                         {
                                                             if let Some(eta) = status.eta
                                                             {
-                                                                println!("------ ENTER CRITICAL SECTION ------");
                                                                 let mut lock = t.write().await;
                                                                 lock.set_progress(Some(prg));
                                                                 lock.set_eta(Some(eta));
-                                                                println!("------ EXIT CRITICAL SECTION ------");
                                                             }
 
                                                             if !status.is_running
                                                             {
                                                                 break;
                                                             }
-                                                        } else {
+                                                        }
+                                                        else
+                                                        {
                                                             return Err(anyhow!(device));
                                                         }
                                                     }
@@ -3553,6 +3550,25 @@ impl Backend
             {
                 Err(ErrorMessages::E_POOL_EXPAND_INFO.wrap_with_status_code(Some(vec![Value::String(new_dev.to_string())])))
             }
+        }
+        else
+        {
+            Err(ErrorMessages::E_POOL_NO_CONF.wrap_with_status_code(None))
+        }
+    }
+
+    pub async fn pool_recover(&self) -> Result<(), HTTPMessage>
+    {
+        if let Some((pool,_)) = self.get_pool_identifier().await
+        {
+            ZPool(ZPoolActions::Clear(pool),false,false,CmdConfig::default())
+                .run()
+                .await
+                .map_err(|e| propagate_error(ErrorMessages::E_POOL_RECOVERY,e.to_string()))?;
+
+            LoggerMessages::Warning(LogWarnings::PoolRecovery).log();
+
+            Ok(())
         }
         else
         {

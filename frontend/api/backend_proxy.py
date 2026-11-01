@@ -631,7 +631,7 @@ class BackEndProxy:
     #DISK METHODS
     def format_disk(this,dev:str, auth_token:str) -> None:
         this._request(
-            "pool/import/key",
+            "disks/format",
             RequestMethod.POST,
             qstring_params={"dev":dev},
             extra_headers={"X-Extra-Auth-format-disk":auth_token}

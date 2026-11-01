@@ -210,7 +210,6 @@ async fn edit_ddns_provider(
     Json(cfg) : Json<DDNSEditProvider>
 ) -> Result<HTTPMessage,HTTPMessage>
 {
-    println!("{:?}",cfg);
     _add_ddns_provider(token, backend, cfg.data, cfg.enabled,true).await
 }
 //

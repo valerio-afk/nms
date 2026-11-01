@@ -1,6 +1,6 @@
 export * from '@nms/shared';
 import { apiRequest } from '@nms/shared';
-import type { DashboardMetrics, PoolStatus, DiskItem, NetworkInterfaceItem, RemoteServiceItem, SystemInfo, HardwareSensor } from '../types/dashboard';
+import type { DashboardMetrics, PoolStatus, DiskItem, NetworkInterfaceItem, NetworkIfaceType, RemoteServiceItem, SystemInfo, HardwareSensor } from '../types/dashboard';
 
 interface PropertyResponse<T> {
     property: string;
@@ -95,19 +95,69 @@ export async function fetchDisks(): Promise<DiskItem[]> {
 
 export async function fetchNetworks(): Promise<NetworkInterfaceItem[]> {
     try {
-        const res = await apiRequest<any[]>('/net/ifaces');
-        if (Array.isArray(res)) {
-            return res.map(iface => ({
-                name: iface.name || iface.iface,
-                ipAddress: iface.ipv4?.address || iface.ip || iface.address,
-                status: iface.is_up || iface.up || iface.active ? 'up' : 'down',
-                type: iface.name?.startsWith('wl') ? 'wifi' : iface.name?.startsWith('wg') ? 'vpn' : 'ethernet',
-                rxBytes: iface.rx_bytes,
-                txBytes: iface.tx_bytes
-            }));
+        const [ifacesRes, vpnRes] = await Promise.allSettled([
+            apiRequest<any>('/net/ifaces'),
+            apiRequest<any>('/net/vpn')
+        ]);
+
+        let rawIfaces: any[] = [];
+        if (ifacesRes.status === 'fulfilled') {
+            const val = ifacesRes.value;
+            rawIfaces = Array.isArray(val) ? val : (Array.isArray(val?.value) ? val.value : []);
         }
-        return [];
-    } catch {
+
+        if (vpnRes.status === 'fulfilled' && vpnRes.value && typeof vpnRes.value === 'object') {
+            const vpnData = vpnRes.value.value ?? vpnRes.value;
+            if (vpnData && vpnData.name && !rawIfaces.some(i => i.name === vpnData.name)) {
+                rawIfaces.push(vpnData);
+            }
+        }
+
+        return rawIfaces.map((iface: any) => {
+            const isEnabled = !!iface.enabled;
+            const rawType = (iface.type || '').toLowerCase();
+            const ifaceType: NetworkIfaceType =
+                rawType === 'wifi' ? 'wifi' :
+                rawType === 'vpn' ? 'vpn' :
+                rawType === 'ethernet' ? 'ethernet' :
+                (iface.name?.startsWith('wl') ? 'wifi' : iface.name?.startsWith('wg') || iface.name === 'vpn' ? 'vpn' : 'ethernet');
+
+            const ipv4 = iface.ipv4 ? {
+                dynamic: !!iface.ipv4.dynamic,
+                address: iface.ipv4.address ? String(iface.ipv4.address) : null,
+                netmask: iface.ipv4.netmask ? String(iface.ipv4.netmask) : null,
+                gateway: iface.ipv4.gateway ? String(iface.ipv4.gateway) : null,
+                dns: Array.isArray(iface.ipv4.dns) ? iface.ipv4.dns.map(String) : []
+            } : null;
+
+            const ipv6 = iface.ipv6 ? {
+                enabled: !!iface.ipv6.enabled,
+                dynamic: !!iface.ipv6.dynamic,
+                address: iface.ipv6.address ? String(iface.ipv6.address) : null,
+                netmask: iface.ipv6.netmask ? String(iface.ipv6.netmask) : null,
+                gateway: iface.ipv6.gateway ? String(iface.ipv6.gateway) : null,
+                dns: Array.isArray(iface.ipv6.dns) ? iface.ipv6.dns.map(String) : []
+            } : null;
+
+            const primaryIp = ipv4?.address || ipv6?.address || (typeof iface.ipAddress === 'string' ? iface.ipAddress : undefined);
+
+            return {
+                name: iface.name || iface.iface || 'Interface',
+                enabled: isEnabled,
+                network_name: iface.network_name || '',
+                type: ifaceType,
+                ipv4,
+                ipv6,
+                has_profile: !!iface.has_profile,
+                ap: iface.ap ?? null,
+                status: isEnabled ? 'up' : 'down',
+                ipAddress: primaryIp,
+                rxBytes: iface.rxBytes ?? iface.rx_bytes,
+                txBytes: iface.txBytes ?? iface.tx_bytes
+            };
+        });
+    } catch (err) {
+        console.error('Failed to fetch network interfaces:', err);
         return [];
     }
 }
@@ -135,14 +185,25 @@ export async function fetchSystemInfo(): Promise<SystemInfo> {
         return {
             hostname: val.hostname || val.nodename,
             os: val.os || val.distribution || val.sysname,
+            cpu: val.cpu,
+            nmsVer: val.nms_ver,
             kernel: val.kernel || val.release,
-            uptime: typeof val.uptime === 'number' ? val.uptime : undefined,
-            cpuLoad: val.cpu_load || val.load,
+            uptime: typeof val.uptime === 'number' ? val.uptime : (val.uptime ? Number(val.uptime) : undefined),
+            cpuLoad: typeof val.cpu_load === 'number' ? val.cpu_load : (val.cpu_load ? Number(val.cpu_load) : undefined),
+            memoryLoad: typeof val.memory_load === 'number' ? val.memory_load : (val.memory_load ? Number(val.memory_load) : undefined),
+            swapLoad: typeof val.swap_load === 'number' ? val.swap_load : (val.swap_load ? Number(val.swap_load) : undefined),
+            netCounters: val.net_counters ? {
+                bytes_recv: Number(val.net_counters.bytes_recv || 0),
+                bytes_sent: Number(val.net_counters.bytes_sent || 0),
+                total_bytes_recv: Number(val.net_counters.total_bytes_recv || 0),
+                total_bytes_sent: Number(val.net_counters.total_bytes_sent || 0)
+            } : undefined,
             memoryUsed: val.memory_used || val.mem_used,
             memoryTotal: val.memory_total || val.mem_total,
             hasUpdates: !!val.updates
         };
-    } catch {
+    } catch (err) {
+        console.error('Failed to fetch system info:', err);
         return {};
     }
 }
@@ -196,9 +257,69 @@ export async function fetchDashboardMetrics(): Promise<DashboardMetrics> {
                 { name: 'nvme0n1', model: 'Samsung 980 Pro 500GB', serial: 'S980PRO', size: 500107862016, status: 'NEW', statusCode: 0, path: '/dev/nvme0n1', inPool: false, temperature: 41 }
             ],
             networks: [
-                { name: 'eth0', ipAddress: '192.168.1.180', status: 'up', type: 'ethernet', rxBytes: 154829012, txBytes: 89324012 },
-                { name: 'wlan0', ipAddress: '192.168.1.185', status: 'up', type: 'wifi', rxBytes: 1204012, txBytes: 492012 },
-                { name: 'wg0', ipAddress: '10.8.0.1', status: 'up', type: 'vpn' }
+                {
+                    name: 'eth0',
+                    enabled: true,
+                    status: 'up',
+                    network_name: 'Wired connection 1',
+                    type: 'ethernet',
+                    ipAddress: '192.168.1.180',
+                    has_profile: true,
+                    ipv4: {
+                        dynamic: true,
+                        address: '192.168.1.180',
+                        netmask: '255.255.255.0',
+                        gateway: '192.168.1.1',
+                        dns: ['1.1.1.1', '8.8.8.8']
+                    },
+                    ipv6: {
+                        enabled: true,
+                        dynamic: false,
+                        address: 'fe80::1',
+                        netmask: 'ffff:ffff:ffff:ffff::',
+                        gateway: null,
+                        dns: []
+                    },
+                    rxBytes: 154829012,
+                    txBytes: 89324012
+                },
+                {
+                    name: 'wlan0',
+                    enabled: false,
+                    status: 'down',
+                    network_name: 'Home_WiFi_5G',
+                    type: 'wifi',
+                    ipAddress: '192.168.1.185',
+                    has_profile: true,
+                    ap: false,
+                    ipv4: {
+                        dynamic: true,
+                        address: '192.168.1.185',
+                        netmask: '255.255.255.0',
+                        gateway: '192.168.1.1',
+                        dns: ['1.1.1.1']
+                    },
+                    ipv6: null,
+                    rxBytes: 1204012,
+                    txBytes: 492012
+                },
+                {
+                    name: 'vpn',
+                    enabled: true,
+                    status: 'up',
+                    network_name: 'VPN',
+                    type: 'vpn',
+                    ipAddress: '10.8.0.2',
+                    has_profile: false,
+                    ipv4: {
+                        dynamic: false,
+                        address: '10.8.0.2',
+                        netmask: '255.255.255.0',
+                        gateway: null,
+                        dns: []
+                    },
+                    ipv6: null
+                }
             ],
             services: [
                 { id: 'ssh', name: 'SSH', active: true },
@@ -209,9 +330,19 @@ export async function fetchDashboardMetrics(): Promise<DashboardMetrics> {
             system: {
                 hostname: 'nms-node-01',
                 os: 'Ubuntu 24.04 LTS',
+                cpu: 'Intel(R) Core(TM) i7-10700 with 16 core(s)',
+                nmsVer: '0.1rc1',
                 kernel: 'Linux 6.8.0-31-generic',
-                uptime: 432890,
-                cpuLoad: 14.5,
+                uptime: Math.floor(Date.now() / 1000) - 432890,
+                cpuLoad: 14,
+                memoryLoad: 42,
+                swapLoad: 4,
+                netCounters: {
+                    bytes_recv: 1245000,
+                    bytes_sent: 450000,
+                    total_bytes_recv: 8593812000,
+                    total_bytes_sent: 3491823000
+                },
                 memoryUsed: 4294967296,
                 memoryTotal: 17179869184,
                 hasUpdates: false
@@ -225,7 +356,7 @@ export async function fetchDashboardMetrics(): Promise<DashboardMetrics> {
         };
     }
 
-    const [pool, disks, networks, services, system, sensors] = await Promise.all([
+    const [poolRes, disksRes, networksRes, servicesRes, systemRes, sensorsRes] = await Promise.allSettled([
         fetchPoolStatus(),
         fetchDisks(),
         fetchNetworks(),
@@ -235,11 +366,11 @@ export async function fetchDashboardMetrics(): Promise<DashboardMetrics> {
     ]);
 
     return {
-        pool,
-        disks,
-        networks,
-        services,
-        system,
-        sensors
+        pool: poolRes.status === 'fulfilled' ? poolRes.value : { isConfigured: false, isMounted: false, capacity: null },
+        disks: disksRes.status === 'fulfilled' ? disksRes.value : [],
+        networks: networksRes.status === 'fulfilled' ? networksRes.value : [],
+        services: servicesRes.status === 'fulfilled' ? servicesRes.value : [],
+        system: systemRes.status === 'fulfilled' ? systemRes.value : {},
+        sensors: sensorsRes.status === 'fulfilled' ? sensorsRes.value : []
     };
 }

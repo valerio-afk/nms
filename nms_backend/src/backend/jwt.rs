@@ -34,8 +34,14 @@ pub enum TokenPurposes
     #[serde(rename = "format")]
     FormatDiskArray,
 
+    #[serde(rename = "format-disk")]
+    FormatDisk,
+
     #[serde(rename = "destroy")]
-    DestroyDiskArray
+    DestroyDiskArray,
+
+    #[serde(rename = "recover")]
+    RecoverDiskArray
 }
 
 #[derive(Debug, Deserialize, Serialize)]

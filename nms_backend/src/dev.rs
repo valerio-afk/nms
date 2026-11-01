@@ -271,7 +271,7 @@ pub async fn get_system_disks() -> Vec<Device>
 
 pub async fn format_disk(dev:&str) -> Result<(), HTTPMessage>
 {
-    let cmd = ZPool(ZPoolActions::LabelClear(dev.to_string()),false,CmdConfig::default())
+    let cmd = ZPool(ZPoolActions::LabelClear(dev.to_string()),true,false,CmdConfig::default())
         .run()
         .await;
 

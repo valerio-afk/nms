@@ -243,22 +243,27 @@ where
 
     async fn is_running(&self) -> bool
     {
-        let lock  = self.inner.read().await;
-        let h = lock.handle.read().await;
-
-        if let Some(handle) = &*h
+        let finished:bool =  // this arrangement is to avoid deadlocks when calling stop method
         {
-            let finished = handle.is_finished();
-            
-            if finished
-            {
-                self.stop().await;
-            }
+            let lock = self.inner.read().await;
+            let h = lock.handle.read().await;
 
-            return !finished;
+            if let Some(handle) = &*h
+            {
+                handle.is_finished()
+            }
+            else
+            {
+                true
+            }
+        };
+
+        if finished
+        {
+            self.stop().await;
         }
 
-        false
+        !finished
     }
 
     async fn join(&self) -> Result<Option<R>,Error>

@@ -193,8 +193,9 @@ impl NFSService
                     {
                         props.insert(ServiceProperty::IpAddr,Value::String(addr.to_string()));
                     }
-                    else {
-                        println!("dio porco");
+                    else 
+                    {
+                        return Err(ServiceError::Configuration(addr.to_string()));
                     }
                 }
                 break;

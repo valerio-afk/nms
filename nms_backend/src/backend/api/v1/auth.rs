@@ -97,7 +97,7 @@ async fn get_auth_property(
 ) -> Json<BackendPropertyResponse<AuthProperties>>
 {
     Json(BackendPropertyResponse {
-        property: property,
+        property,
         value: Value::Bool(backend.is_otp_configured().await)
     })
 }

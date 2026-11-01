@@ -207,13 +207,15 @@ where S:AsRef<str> + ToString + Display
 
 pub fn ZPool(
     action:ZPoolActions,
+    show_json:bool,
     revertible:bool,
     config:CmdConfig
 ) -> CommandLine
 {
     let mut args : Vec<String> = Vec::new();
     let mut rev_cmd:Option<CommandLine> = None;
-    let json_params = &["-p".to_string(),"-j".to_string()];
+    let json_params:&[String] = if show_json {  &["-p".to_string(),"-j".to_string()] }
+    else { &[] };
 
     match action
     {
@@ -236,7 +238,7 @@ pub fn ZPool(
                         pool: pool,
                         force:true
                     })
-                ),false,config.clone()));
+                ), show_json,false,config.clone()));
             }
         },
         ZPoolActions::Clear(pool) => {
@@ -289,7 +291,7 @@ pub fn ZPool(
 
                     if revertible 
                     {
-                        rev_cmd = Some(ZPool(ZPoolActions::Export(params.unwrap().pool),false,config.clone()));
+                        rev_cmd = Some(ZPool(ZPoolActions::Export(params.unwrap().pool),show_json,false,config.clone()));
                     }
                 }
         }
@@ -346,7 +348,7 @@ pub fn ZPool(
             {
                 rev_cmd = Some(ZPool(ZPoolActions::Destroy(
                     ZPoolDestroyArgs { pool: params.pool, force: true },
-                ),false,config.clone()));
+                ),show_json,false,config.clone()));
             }
 
         }

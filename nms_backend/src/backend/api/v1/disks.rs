@@ -1,15 +1,18 @@
 use crate::backend::api::BackendPropertyResponse;
 use crate::backend::jwt::TokenPurposes;
 use crate::backend::permissions::{UserPermissions, check_permission};
-use crate::dev::{get_system_disks};
-use crate::backend::{Backend, FastAPIComp, propagate_unknown_error};
+use crate::dev::{format_disk, get_system_disks};
+use crate::backend::{propagate_unknown_error, Backend, FastAPIComp, HTTPMessage};
 use crate::dev::{Device, DiskState};
-use axum::extract::{Path, State};
-use axum::routing::get;
+use axum::extract::{Path, Query, State};
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use axum_auth::AuthBearer;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use axum::http::HeaderMap;
+use serde_json::Value;
+use crate::backend::msg::{StatusMessage, SuccessMessages};
 
 #[derive(Clone,Debug,Deserialize, Serialize)]
 enum DisksProperties
@@ -53,6 +56,12 @@ impl CompatibleDisk
     }
 }
 
+#[derive(Debug,Deserialize)]
+pub struct DiskFormat
+{
+    dev:String
+}
+
 async fn get_disks_property(
     Path(property):Path<DisksProperties>,
     AuthBearer(token): AuthBearer,
@@ -82,12 +91,31 @@ async fn get_disks_property(
     }))
 }
 
+async fn disk_format(
+    Query(params):Query<DiskFormat>, //to fix
+    AuthBearer(token): AuthBearer,
+    State(backend): State<Arc<Backend>>,
+    headers: HeaderMap
+) -> Result<HTTPMessage,HTTPMessage>
+{
+    let jwt = backend.verify_token(&token, TokenPurposes::Login).await?;
+    let user = backend.get_user(&jwt.claims.username.unwrap()).await?;
+    backend.verify_extra_auth_from_headers(headers,TokenPurposes::FormatDisk).await?;
+
+    check_permission(&user, UserPermissions::PoolDisksFormat).await?;
+
+    format_disk(params.dev.as_str()).await?;
+
+    Ok(SuccessMessages::S_DISK_FORMATTED.wrap_with_status_code(Some(vec![Value::String(params.dev.to_string())])))
+}
+
 pub fn get_route() -> Router<Arc<Backend>>
 {
    
     Router::new().nest("/disks",
         Router::new()
         .route("/get/{property}", get(get_disks_property))
+        .route("/format", post(disk_format))
     )
 }
 

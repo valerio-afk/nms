@@ -35,7 +35,7 @@ impl Capacity
 {
     pub async fn from_zfs(pool_name:&str) -> Result<Self,Option<String>>
     {
-        let cmd = ZPool(ZPoolActions::List(pool_name.to_string()), false, CmdConfig::Empty);
+        let cmd = ZPool(ZPoolActions::List(pool_name.to_string()),true, false, CmdConfig::Empty);
         if let Some(output) = cmd.run().await.map_err(|e| Some(e.to_string()))?
         {
             if output.exit_code != 0 { return Err(Some(output.stderr)); }

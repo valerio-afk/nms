@@ -41,6 +41,7 @@ pub enum ServiceError
     PropertyValue(ServiceProperty,&'static str),
     ReadOnlyProperty(ServiceProperty),
     Configuration(String),
+    ParseError(String),
     TmpFileCreate(PathBuf, String),
     TmpFileWrite(PathBuf, String),
     TmpFileMove(PathBuf,PathBuf,String),
@@ -68,6 +69,7 @@ impl Display for ServiceError
             ServiceError::InitialisationError(err) => write!(f, "Initialisation Error: {}", err),
             ServiceError::Selinux(err) => write!(f, "Error while setting up SeLinux: {}", err),
             ServiceError::Firewall(err) => write!(f, "Error while setting up the firewall: {}", err),
+            ServiceError::ParseError(str) => write!(f, "Unable to parse {}", str),
             // ServiceError::Systemd(err) => write!(f, "Error while using systemd: {}", err),
         }
     }
