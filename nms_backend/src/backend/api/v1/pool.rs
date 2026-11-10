@@ -473,6 +473,8 @@ async fn create_pool(
     Ok(SuccessMessages::S_POOL_CREATED.wrap_with_status_code(None))
 }
 
+
+//TODO: Fix the new react dashboard to send the drive name as qstring
 async fn pool_expand(
     Query(params):Query<PoolExpand>, //to fix
     AuthBearer(token): AuthBearer,

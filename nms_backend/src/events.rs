@@ -4,13 +4,15 @@ use crate::cmdl::coreutils::{Stat,StatFormat};
 use crate::cmdl::notify::{INotifyEvents,INotifyWait};
 use crate::cmdl::{CmdConfig, Executable};
 use crate::task::{Task, SimpleTask, Runner};
-use serde::{Serialize,Deserialize};
+use serde::{Serialize,Deserialize, Serializer};
+use strum::VariantArray;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool,Ordering};
 use std::time::Duration;
+use serde::ser::SerializeMap;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::{mpsc,Mutex};
 use tokio::time::sleep;
@@ -28,7 +30,7 @@ pub type EventData = (Trigger,Option<ContextData>);
 
 static INOTIFY_TASK:&'static str = "inotify_task";
 
-#[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize, VariantArray)]
 pub enum Events
 {
     SystemStartup,
@@ -59,11 +61,120 @@ pub enum Events
     FileShared
 }
 
+#[derive(Serialize, Debug)]
+pub enum EventMetaTypes
+{
+    #[serde(rename="numeric")]
+    Numeric,
+    #[serde(rename="string")]
+    String,
+    #[serde(rename="bool")]
+    Bool,
+    #[serde(rename="multiline-string")]
+    MultilineString,
+    #[serde(rename="user")]
+    User
+}
+
+#[derive(Serialize)]
+pub struct EventParameterMetadata
+{
+    pub metavar: &'static str,
+    pub metatype: EventMetaTypes
+}
+
 #[derive(Clone)]
-pub enum EventParameters
+pub enum EventParameterTypes
+{
+    Timer,
+    User,
+    Notification,
+    Path,
+    RunScript,
+    FileOwnership,
+    FilePermission,
+}
+
+impl Serialize for EventParameterTypes
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(None)?;
+
+        match self
+        {
+            EventParameterTypes::Timer =>
+                {
+                    map.serialize_entry("minutes", &EventParameterMetadata{
+                        metavar:"MINUTES",
+                        metatype: EventMetaTypes::Numeric
+                    })?;
+                },
+            EventParameterTypes::User =>
+                {
+                    map.serialize_entry("user", &EventParameterMetadata{
+                        metavar:"USER",
+                        metatype: EventMetaTypes::User
+                    })?;
+                },
+            EventParameterTypes::Notification =>
+                {
+                    map.serialize_entry("subject", &EventParameterMetadata{
+                        metavar:"SUBJECT",
+                        metatype: EventMetaTypes::String
+                    })?;
+
+                    map.serialize_entry("message", &EventParameterMetadata{
+                        metavar:"MESSAGE",
+                        metatype: EventMetaTypes::MultilineString
+                    })?;
+                },
+            EventParameterTypes::Path =>
+                {
+                    map.serialize_entry("path", &EventParameterMetadata{
+                        metavar:"PATH",
+                        metatype: EventMetaTypes::String
+                    })?;
+                },
+            EventParameterTypes::RunScript =>
+                {
+                    map.serialize_entry("run_sudo", &EventParameterMetadata{
+                        metavar:"SUDO",
+                        metatype: EventMetaTypes::Bool
+                    })?;
+                },
+            EventParameterTypes::FileOwnership =>
+                {
+                    map.serialize_entry("group", &EventParameterMetadata{
+                        metavar:"GROUP",
+                        metatype: EventMetaTypes::String
+                    })?;
+                },
+            EventParameterTypes::FilePermission =>
+                {
+                    map.serialize_entry("permissions", &EventParameterMetadata{
+                        metavar:"PERMISSIONS",
+                        metatype: EventMetaTypes::String
+                    })?;
+                },
+        }
+
+        map.end()
+    }
+}
+
+#[derive(Clone)]
+pub enum EventParameterValues
 {
     Timer(u64),
-    None // just to silence the compiler with irrifutable bla bla bla
+    User(String),
+    Notification(String,String),
+    Path(String),
+    RunScript(bool),
+    FileOwnership(Option<String>),
+    FilePermission(String)
 }
 
 impl std::fmt::Display for Events
@@ -132,7 +243,16 @@ impl Events
             _ => ()
         }
 
-        return ctx_var;
+        ctx_var
+    }
+
+    pub fn get_parameters(&self) -> Vec<EventParameterTypes>
+    {
+        match self
+        {
+            Events::Timer => vec![EventParameterTypes::Timer],
+            _ => vec![]            
+        }
     }
 }
 
@@ -612,7 +732,7 @@ impl EventManager
         event:&Events,
         action:Arc<EventCallback>,
         uuid:Option<String>,
-        event_params:Option<Vec<EventParameters>>
+        event_params:Option<Vec<EventParameterValues>>
     )
     {
         let mut map = self.registered_actions.lock().await;
@@ -651,7 +771,7 @@ impl EventManager
             {
                 for a in args
                 {
-                    if let EventParameters::Timer(s) = a
+                    if let EventParameterValues::Timer(s) = a
                     {
                         secs = s;
                     }
@@ -704,7 +824,7 @@ impl EventManager
         &self,
         events:&[&Events],
         action:Arc<EventCallback>,
-        event_params:Option<Vec<EventParameters>>
+        event_params:Option<Vec<EventParameterValues>>
     )
     {
         for e in events

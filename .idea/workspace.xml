@@ -4,31 +4,23 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="0ddb49fd-44e3-4605-a704-cc1f15248c46" name="Changes" comment="log retrieval implemented">
+    <list default="true" id="0ddb49fd-44e3-4605-a704-cc1f15248c46" name="Changes" comment="implemented all the dangerous stuff in the advanced page. progressed with antigravity with the new dashboard. Fixed some minor bugs. Now some hard shit is on the way: events!">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/api/backend_proxy.py" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/api/backend_proxy.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/templates/element.square_btn_select.html" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/templates/element.square_btn_select.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/src/components/widgets/NetworkOverviewWidget.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/components/widgets/NetworkOverviewWidget.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/src/components/widgets/SystemInfoWidget.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/components/widgets/SystemInfoWidget.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/App.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/src/components/Header.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/components/Header.tsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/src/i18n/locales/en/translation.ts" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/i18n/locales/en/translation.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/src/i18n/locales/it/translation.ts" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/i18n/locales/it/translation.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/src/pages/DashboardPage.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/pages/DashboardPage.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/src/main.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/main.tsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/src/types/dashboard.ts" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/types/dashboard.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/src/utils/api.ts" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/utils/api.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/new_frontend/dashboard/src/utils/formatters.ts" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/dashboard/src/utils/formatters.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/new_frontend/shared/src/i18n/authTranslations.ts" beforeDir="false" afterPath="$PROJECT_DIR$/new_frontend/shared/src/i18n/authTranslations.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/nms_backend/src/backend.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/api/v1/auth.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/api/v1/auth.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/api/v1/disks.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/api/v1/disks.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/api/v1/net.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/api/v1/net.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/api/v1/pool.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/api/v1/pool.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/jwt.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/jwt.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/msg.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/msg.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/remote_access.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/remote_access.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/remote_access/nfs.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/remote_access/nfs.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/cmdl/zfs.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/cmdl/zfs.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/dev.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/dev.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/task.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/task.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/nms_backend/src/vfs.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/vfs.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/config.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/config.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/src/backend/remote_access/web.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/backend/remote_access/web.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/src/events.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/events.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/nms_backend/src/events/actions.rs" beforeDir="false" afterPath="$PROJECT_DIR$/nms_backend/src/events/actions.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -73,23 +65,23 @@
 }</component>
   <component name="NextEditCompletionFeaturesState">
     <decayedCancelled>
-      <entry key="MS100" value="1.0" />
-      <entry key="MS500" value="1.0" />
-      <entry key="S2" value="1.0" />
-      <entry key="S5" value="1.0" />
-      <entry key="S10" value="1.0" />
-      <entry key="S30" value="1.0000000000069016" />
-      <entry key="S60" value="1.0000045464968355" />
-      <entry key="M2" value="1.0036924173329003" />
-      <entry key="M5" value="1.2056723943264163" />
-      <entry key="M10" value="1.785498084137596" />
-      <entry key="M15" value="2.2278247822511204" />
-      <entry key="M30" value="2.9192362444581526" />
-      <entry key="H1" value="3.3995220693364767" />
-      <entry key="H2" value="3.683014238541572" />
-      <entry key="H4" value="3.8370834480074905" />
-      <entry key="D1" value="3.9722116338198203" />
-      <entry key="W1" value="3.9960143832475454" />
+      <entry key="MS100" value="1.347485260762315" />
+      <entry key="MS500" value="3.0205053314199217" />
+      <entry key="S2" value="4.323813281283195" />
+      <entry key="S5" value="4.726507527066996" />
+      <entry key="S10" value="5.603976482184528" />
+      <entry key="S30" value="16.75261606595977" />
+      <entry key="S60" value="29.375674254778623" />
+      <entry key="M2" value="40.40003400818222" />
+      <entry key="M5" value="49.617664252506685" />
+      <entry key="M10" value="53.68021155132679" />
+      <entry key="M15" value="55.372054201135676" />
+      <entry key="M30" value="57.40578133867316" />
+      <entry key="H1" value="58.614115369210275" />
+      <entry key="H2" value="59.28193946193608" />
+      <entry key="H4" value="59.63428025360886" />
+      <entry key="D1" value="59.93808053513387" />
+      <entry key="W1" value="59.99113020103154" />
     </decayedCancelled>
     <decayedSelected>
       <entry key="MS100" value="0.0" />
@@ -111,23 +103,23 @@
       <entry key="W1" value="0.0" />
     </decayedSelected>
     <decayedShown>
-      <entry key="MS100" value="0.9265880618903709" />
-      <entry key="MS500" value="0.9848664428955506" />
-      <entry key="S2" value="0.9961949481330542" />
-      <entry key="S5" value="0.9984762383082793" />
-      <entry key="S10" value="0.9992378287015956" />
-      <entry key="S30" value="0.9997458783350698" />
-      <entry key="S60" value="0.9998774743143962" />
-      <entry key="M2" value="1.0036275301877593" />
-      <entry key="M5" value="1.205616598780226" />
-      <entry key="M10" value="1.7854271800053416" />
-      <entry key="M15" value="2.2277556018720515" />
-      <entry key="M30" value="2.9191845116764483" />
-      <entry key="H1" value="3.3994902444639545" />
-      <entry key="H2" value="3.6829965669147238" />
-      <entry key="H4" value="3.8370741340690864" />
-      <entry key="D1" value="3.9722100115976113" />
-      <entry key="W1" value="3.9960141497424484" />
+      <entry key="MS100" value="1.3282464766181166" />
+      <entry key="MS500" value="3.010395067846292" />
+      <entry key="S2" value="4.319989193017798" />
+      <entry key="S5" value="4.724803972390394" />
+      <entry key="S10" value="5.602465888205763" />
+      <entry key="S30" value="16.74827664137753" />
+      <entry key="S60" value="29.371248621623877" />
+      <entry key="M2" value="40.39683583542656" />
+      <entry key="M5" value="49.61604437769228" />
+      <entry key="M10" value="53.67930289963022" />
+      <entry key="M15" value="55.37141249428737" />
+      <entry key="M30" value="57.405434760733336" />
+      <entry key="H1" value="58.6139334127666" />
+      <entry key="H2" value="59.28184593945984" />
+      <entry key="H4" value="59.63423280133312" />
+      <entry key="D1" value="59.93807252536496" />
+      <entry key="W1" value="59.99112905423481" />
     </decayedShown>
   </component>
   <component name="ProjectColorInfo">{
@@ -157,8 +149,10 @@
     &quot;last_opened_file_path&quot;: &quot;/home/tuttoweb/Documents/repositories/nms&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.jshint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
     &quot;node.js.selected.package.jshint&quot;: &quot;&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
     &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
     &quot;python.packages.toolwindow.project.migrated.to.right.top.v2&quot;: &quot;true&quot;,
     &quot;settings.editor.selected.configurable&quot;: &quot;project.propVCSSupport.DirectoryMappings&quot;
@@ -195,8 +189,8 @@
       <option name="IS_MODULE_SDK" value="false" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="DEBUG_JUST_MY_CODE" value="true" />
       <option name="RUN_TOOL" value="" />
+      <option name="RUN_AS_SCRIPT" value="" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/frontend/app.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
@@ -220,8 +214,8 @@
       <option name="IS_MODULE_SDK" value="false" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="DEBUG_JUST_MY_CODE" value="true" />
       <option name="RUN_TOOL" value="" />
+      <option name="RUN_AS_SCRIPT" value="" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/check_perms.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
@@ -247,7 +241,7 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-python-sdk-ebb3072d7bdf-5bd6d13a2a75-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-262.11879.98" />
+        <option value="bundled-python-sdk-34611be1ca5a-e0583fc556d1-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-263.7307.206" />
       </set>
     </attachedChunks>
   </component>
@@ -258,14 +252,6 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1762034282613</updated>
-    </task>
-    <task id="LOCAL-00043" summary="too much copy and paste can hurt">
-      <option name="closed" value="true" />
-      <created>1773707750274</created>
-      <option name="number" value="00043" />
-      <option name="presentableId" value="LOCAL-00043" />
-      <option name="project" value="LOCAL" />
-      <updated>1773707750274</updated>
     </task>
     <task id="LOCAL-00044" summary="fixed a minor bug in importing pools">
       <option name="closed" value="true" />
@@ -651,7 +637,15 @@
       <option name="project" value="LOCAL" />
       <updated>1792739854796</updated>
     </task>
-    <option name="localTasksCounter" value="92" />
+    <task id="LOCAL-00092" summary="implemented all the dangerous stuff in the advanced page. progressed with antigravity with the new dashboard. Fixed some minor bugs. Now some hard shit is on the way: events!">
+      <option name="closed" value="true" />
+      <created>1793530433154</created>
+      <option name="number" value="00092" />
+      <option name="presentableId" value="LOCAL-00092" />
+      <option name="project" value="LOCAL" />
+      <updated>1793530433154</updated>
+    </task>
+    <option name="localTasksCounter" value="93" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -672,7 +666,6 @@
     <ignored-roots>
       <path value="$PROJECT_DIR$/nms_backend" />
     </ignored-roots>
-    <MESSAGE value="minor production bug fixed. Rpi temp/volt now should be integrated. SMARTCTL bug fixed. HDD detection also fixed in production. These minor bugs should be solved by now." />
     <MESSAGE value="Apart from some unexpected minor bug that will come up in production, rc1 seems complete" />
     <MESSAGE value="security improved in several areas - licence changed to AGPL, install file can update nginx config file when required now." />
     <MESSAGE value="now uid can be changed, facilitating integration with NFS and existing linux users" />
@@ -697,7 +690,8 @@
     <MESSAGE value="in advanced page, some of the updates endpoint have been implemeneted. Also the restart of systemd services has been implemented. To implement: check for updates, syslogs, eventsm and danger zone functionality" />
     <MESSAGE value="new dashboard in react to be made with antigravity. it's gonna take weeks, so does for the rest" />
     <MESSAGE value="log retrieval implemented" />
-    <option name="LAST_COMMIT_MESSAGE" value="log retrieval implemented" />
+    <MESSAGE value="implemented all the dangerous stuff in the advanced page. progressed with antigravity with the new dashboard. Fixed some minor bugs. Now some hard shit is on the way: events!" />
+    <option name="LAST_COMMIT_MESSAGE" value="implemented all the dangerous stuff in the advanced page. progressed with antigravity with the new dashboard. Fixed some minor bugs. Now some hard shit is on the way: events!" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>

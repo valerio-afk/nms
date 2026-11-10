@@ -1,6 +1,6 @@
 use chrono::Utc;
 use crate::events::Events;
-use crate::events::actions::UserDefinedActions;
+use crate::events::actions::EventActions;
 use serde::{Deserialize,Serialize};
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
@@ -172,7 +172,7 @@ pub struct CfgActionParameters
 pub struct CfgUserDefinedEvents
 {
     event: Events,
-    action: UserDefinedActions,
+    action: EventActions,
     enabled: bool,
     parameters: CfgActionParameters
 }

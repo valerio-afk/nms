@@ -1,6 +1,21 @@
 export * from '@nms/shared';
 import { apiRequest } from '@nms/shared';
-import type { DashboardMetrics, PoolStatus, DiskItem, NetworkInterfaceItem, NetworkIfaceType, RemoteServiceItem, SystemInfo, HardwareSensor } from '../types/dashboard';
+import type {
+    DashboardMetrics,
+    PoolStatus,
+    DiskItem,
+    NetworkInterfaceItem,
+    NetworkIfaceType,
+    RemoteServiceItem,
+    SystemInfo,
+    HardwareSensor,
+    SnapshotItem,
+    ScrubReport,
+    ScrubInfo,
+    ImportablePool,
+    CreatePoolPayload,
+    SmartInfo
+} from '../types/dashboard';
 
 interface PropertyResponse<T> {
     property: string;
@@ -68,25 +83,31 @@ export function parseDiskStatus(statusRaw: any): { statusCode: number; status: '
     }
 }
 
+export function mapRawDisk(d: any): DiskItem {
+    const { statusCode, status } = parseDiskStatus(d.status ?? d.state);
+    const physicalPaths = Array.isArray(d.physical_paths)
+        ? d.physical_paths
+        : (d.physical_paths ? [d.physical_paths] : (d.path ? [d.path] : []));
+
+    return {
+        name: d.name || d.device || 'Disk',
+        model: d.model || '',
+        serial: d.serial || d.serial_number || '',
+        size: typeof d.size === 'number' ? d.size : null,
+        status,
+        statusCode,
+        path: d.path || (d.name ? `/dev/${d.name}` : ''),
+        physical_paths: physicalPaths,
+        inPool: statusCode === 1,
+        temperature: typeof d.temperature === 'number' ? d.temperature : undefined
+    };
+}
+
 export async function fetchDisks(): Promise<DiskItem[]> {
     try {
         const res = await apiRequest<any>('/disks/get/disks');
         const items: any[] = Array.isArray(res) ? res : (Array.isArray(res?.value) ? res.value : []);
-
-        return items.map((d: any) => {
-            const { statusCode, status } = parseDiskStatus(d.status ?? d.state);
-            return {
-                name: d.name || d.device || 'Disk',
-                model: d.model || '',
-                serial: d.serial || d.serial_number || '',
-                size: typeof d.size === 'number' ? d.size : null,
-                status,
-                statusCode,
-                path: d.path || (d.name ? `/dev/${d.name}` : ''),
-                inPool: statusCode === 1,
-                temperature: typeof d.temperature === 'number' ? d.temperature : undefined
-            };
-        });
+        return items.map(mapRawDisk);
     } catch (err) {
         console.error('Failed to fetch disks from /disks/get/disks:', err);
         return [];
@@ -232,6 +253,153 @@ export async function rebootSystem(): Promise<void> {
 export async function shutdownSystem(): Promise<void> {
     await apiRequest('/system/shutdown', { method: 'POST' });
 }
+
+// --- Disk & Pool Management Methods ---
+
+export async function fetchAttachableDisks(): Promise<DiskItem[]> {
+    try {
+        const res = await apiRequest<any>('/pool/get/attachable-disks');
+        const items: any[] = Array.isArray(res) ? res : (Array.isArray(res?.value) ? res.value : []);
+        return items.map(mapRawDisk);
+    } catch (err) {
+        console.error('Failed to fetch attachable disks:', err);
+        return [];
+    }
+}
+
+export async function fetchImportablePools(): Promise<ImportablePool[]> {
+    try {
+        const res = await apiRequest<any>('/pool/get/pool_list');
+        const items: any[] = Array.isArray(res) ? res : (Array.isArray(res?.value) ? res.value : []);
+        return items.map((p: any) => ({
+            name: p.name || 'Pool',
+            state: p.state || 'ONLINE',
+            disks: Array.isArray(p.disks) ? p.disks : [],
+            message: p.message
+        }));
+    } catch (err) {
+        console.error('Failed to fetch importable pools:', err);
+        return [];
+    }
+}
+
+export async function fetchScrubInfo(): Promise<ScrubInfo | null> {
+    try {
+        const res = await apiRequest<PropertyResponse<any>>('/pool/get/scrub_info');
+        const val = res?.value;
+        if (!val) return null;
+        return {
+            ongoing: !!val.ongoing,
+            last: typeof val.last === 'number' ? val.last : null
+        };
+    } catch {
+        return null;
+    }
+}
+
+export async function fetchLastScrubReport(): Promise<ScrubReport | null> {
+    try {
+        const res = await apiRequest<PropertyResponse<any>>('/pool/get/last_scrub_report');
+        const val = res?.value;
+        if (!val) return null;
+        return {
+            started: val.started || '-',
+            ended: val.ended || '-',
+            errors: String(val.errors ?? '-')
+        };
+    } catch {
+        return null;
+    }
+}
+
+export async function fetchSnapshots(): Promise<SnapshotItem[]> {
+    try {
+        const res = await apiRequest<any>('/pool/get/snapshot');
+        const items: any[] = Array.isArray(res) ? res : (Array.isArray(res?.value) ? res.value : []);
+        return items.map((s: any) => {
+            if (Array.isArray(s)) {
+                return {
+                    name: String(s[0] || ''),
+                    ref_size: typeof s[1] === 'number' ? s[1] : 0
+                };
+            }
+            return {
+                name: String(s.name || ''),
+                ref_size: typeof s.ref_size === 'number' ? s.ref_size : (typeof s.refSize === 'number' ? s.refSize : 0)
+            };
+        });
+    } catch (err) {
+        console.error('Failed to fetch snapshots:', err);
+        return [];
+    }
+}
+
+export async function mountPool(): Promise<void> {
+    await apiRequest('/pool/mount', { method: 'POST' });
+}
+
+export async function unmountPool(): Promise<void> {
+    await apiRequest('/pool/unmount', { method: 'POST' });
+}
+
+export async function startScrub(): Promise<void> {
+    await apiRequest('/pool/scrub', { method: 'POST' });
+}
+
+export async function createSnapshot(name: string): Promise<void> {
+    await apiRequest(`/pool/snapshot/${encodeURIComponent(name)}`, { method: 'POST' });
+}
+
+export async function deleteSnapshot(name: string): Promise<void> {
+    await apiRequest(`/pool/snapshot/${encodeURIComponent(name)}`, { method: 'DELETE' });
+}
+
+export async function rollbackSnapshot(name: string): Promise<void> {
+    await apiRequest(`/pool/snapshot/${encodeURIComponent(name)}`, { method: 'PATCH' });
+}
+
+export async function createPool(payload: CreatePoolPayload): Promise<void> {
+    await apiRequest('/pool/create', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+    });
+}
+
+export async function expandPool(newDevice: string): Promise<void> {
+    await apiRequest('/pool/expand', {
+        method: 'POST',
+        body: JSON.stringify({ new_device: newDevice })
+    });
+}
+
+export async function formatDisk(dev: string): Promise<void> {
+    await apiRequest(`/disks/format?dev=${encodeURIComponent(dev)}`, { method: 'POST' });
+}
+
+export async function fetchSmartInfo(dev: string): Promise<SmartInfo | null> {
+    try {
+        const res = await apiRequest<any>(`/disks/smart?dev=${encodeURIComponent(dev)}`);
+        if (!res) return null;
+        return {
+            device: res.device || dev,
+            available: !!res.available,
+            enabled: !!res.enabled,
+            passed: res.passed ?? null,
+            poweron_time: res.poweron_time ?? null,
+            temperature: typeof res.temperature === 'number' ? res.temperature : null,
+            attributes: Array.isArray(res.attributes) ? res.attributes : [],
+            self_test_logs: Array.isArray(res.self_test_logs) ? res.self_test_logs : []
+        };
+    } catch (err) {
+        console.error(`Failed to fetch SMART info for ${dev}:`, err);
+        return null;
+    }
+}
+
+export async function runSmartTest(dev: string, testType: 'short' | 'long'): Promise<void> {
+    await apiRequest(`/disks/smart/test/${testType}?dev=${encodeURIComponent(dev)}`, { method: 'POST' });
+}
+
 
 export async function fetchDashboardMetrics(): Promise<DashboardMetrics> {
     const isDemo = typeof window !== 'undefined' && window.location.search.includes('demo=true');

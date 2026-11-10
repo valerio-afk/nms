@@ -17,7 +17,7 @@ use crate::cmdl::zfs::{ZFSActions, ZFSListArgs, ZFSListType, ZFSLoadKeyArgs, ZPo
 use crate::cmdl::{CmdConfig, CommandLine, Executable, Transaction};
 use crate::dev::get_system_disks;
 use crate::dev::{Device, DiskState};
-use crate::events::{ContextBuilder, ContextData, ContextVariables, EventManager, EventParameters, Events, Trigger};
+use crate::events::{ContextBuilder, ContextData, ContextVariables, EventManager, EventParameterTypes, EventParameterValues, Events, Trigger};
 use crate::task::{BackgroundTaskManager, Task, BackgroundTask};
 use crate::vfs::{Capacity, VFS};
 use futures::stream::{self, StreamExt};
@@ -47,7 +47,7 @@ use std::time::{Duration, UNIX_EPOCH};
 use indexmap::IndexMap;
 use ipnet::Ipv4Net;
 use psutil::host::boot_time;
-use strum::Display;
+use strum::{Display, VariantArray};
 use sysinfo::{Networks, System, MINIMUM_CPU_UPDATE_INTERVAL};
 use tokio::fs::{File, read_to_string, rename};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -67,6 +67,7 @@ use crate::cmdl::package_mngt::{PackageManagerActions, DNF, AptGet, PackageMngtU
 use crate::cmdl::selinux::Protocol;
 use crate::cmdl::systemd::{Systemctl, SystemctlAction, SystemdRun};
 use crate::cmdl::utils::{Find, Uname, UnameOptions};
+use crate::events::actions::EventActions;
 
 pub static BACKEND_VERSION:&'static str = env!("CARGO_PKG_VERSION");
 static POOL_KEY_PATH: &'static str = "/root/tank.key";
@@ -448,6 +449,24 @@ pub enum IfaceStatusAction
 }
 
 
+pub struct EventRelatedParameters
+{
+    action_parameters: Vec<EventParameterTypes>,
+    event_parameters: Vec<EventParameterTypes>
+}
+
+pub struct EventActionSpec
+{
+    category: String,
+    tag: String,
+    parameters: EventRelatedParameters,
+    context: Vec<ContextVariables>
+}
+pub struct EventSpec
+{
+    event: String,
+    allowed_actions:Vec<EventActionSpec>,
+}
 
 pub struct Backend
 {
@@ -736,7 +755,7 @@ impl Backend
                 )
             ),
             None,
-            Some(vec![EventParameters::Timer(3)])
+            Some(vec![EventParameterValues::Timer(3)])
         ).await;
     }
 
@@ -760,7 +779,7 @@ impl Backend
                 )
             ),
             None,
-            Some(vec![EventParameters::Timer(10)])
+            Some(vec![EventParameterValues::Timer(10)])
         ).await;
     }
 
@@ -4820,6 +4839,41 @@ impl Backend
         self.flush_config().await?;
 
         Ok(())
+    }
+}
+
+//Event-based methods
+impl Backend
+{
+    pub fn get_list_of_events(&self) -> Vec<EventSpec>
+    {
+        let mut event: Vec<EventSpec> = Vec::new();
+
+        for e in Events::VARIANTS.iter()
+        {
+            let event_related_actions = EventActions::VARIANTS
+                .iter()
+                .filter(|act| act.get_events().iter().any(|evt| evt == e))
+                .map(|act|{
+                    EventActionSpec {
+                        category: act.get_category().to_string(),
+                        tag: act.to_string(),
+                        parameters: EventRelatedParameters {
+                            event_parameters: e.get_parameters(),
+                            action_parameters: act.get_action_parameters()
+                        },
+                        context: act.get_context_variables_from_event(e)
+                    }
+                })
+                .collect();
+            
+            event.push(EventSpec {
+                event: e.to_string(),
+                allowed_actions: event_related_actions
+            });
+        }
+
+        event
     }
 }
 

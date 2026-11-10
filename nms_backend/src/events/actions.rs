@@ -1,10 +1,31 @@
-use super::{Events,ContextVariables};
+use super::{Events, ContextVariables, EventParameterTypes, EventParameterValues};
 use serde::{Serialize,Deserialize};
+use strum::VariantArray;
+use crate::backend::EventActionSpec;
 
+#[derive(Debug, Deserialize, Serialize)]
+pub enum ActionCategories
+{
+    Notification,
+    Execution,
+    File,
+}
 
-#[derive(Debug, Serialize, Deserialize)]
+impl std::fmt::Display for ActionCategories
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result
+    {
+        match self
+        {
+            ActionCategories::Notification => f.write_str("notification"),
+            ActionCategories::Execution => f.write_str("execution"),
+            ActionCategories::File => f.write_str("file"),
+        }
+    }
+}
 
-pub enum UserDefinedActions
+#[derive(Debug, Serialize, Deserialize, VariantArray)]
+pub enum EventActions
 {
     SendTo,
     SendToAll,
@@ -14,23 +35,23 @@ pub enum UserDefinedActions
     ChangePermissions
 }
 
-impl std::fmt::Display for UserDefinedActions
+impl std::fmt::Display for EventActions
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result 
     {
         match self
         {
-            UserDefinedActions::SendTo => write!(f,"send_to"),
-            UserDefinedActions::SendToAll => write!(f,"send_to_all"),
-            UserDefinedActions::SendToAdmin => write!(f,"send_to_admins"),
-            UserDefinedActions::RunScript => write!(f,"run_script"),
-            UserDefinedActions::ChangeOwner => write!(f,"change_owner"),
-            UserDefinedActions::ChangePermissions => write!(f,"change_permissions"),
+            EventActions::SendTo => write!(f, "send_to"),
+            EventActions::SendToAll => write!(f, "send_to_all"),
+            EventActions::SendToAdmin => write!(f, "send_to_admins"),
+            EventActions::RunScript => write!(f, "run_script"),
+            EventActions::ChangeOwner => write!(f, "change_owner"),
+            EventActions::ChangePermissions => write!(f, "change_permissions"),
         }
     }
 }
 
-impl std::str::FromStr for UserDefinedActions
+impl std::str::FromStr for EventActions
 {
     type Err = ();
 
@@ -38,24 +59,24 @@ impl std::str::FromStr for UserDefinedActions
     {
         match s
         {
-            "send_to" => Ok(UserDefinedActions::SendTo),
-            "send_to_all" => Ok(UserDefinedActions::SendToAll),
-            "send_to_admins" => Ok(UserDefinedActions::SendToAdmin),
-            "run_script" => Ok(UserDefinedActions::RunScript),
-            "change_owner" => Ok(UserDefinedActions::ChangeOwner),
-            "change_permissions" => Ok(UserDefinedActions::ChangePermissions),
+            "send_to" => Ok(EventActions::SendTo),
+            "send_to_all" => Ok(EventActions::SendToAll),
+            "send_to_admins" => Ok(EventActions::SendToAdmin),
+            "run_script" => Ok(EventActions::RunScript),
+            "change_owner" => Ok(EventActions::ChangeOwner),
+            "change_permissions" => Ok(EventActions::ChangePermissions),
             _ => Err(())
         }    
     }
 }
 
-impl UserDefinedActions
+impl EventActions
 {
     pub fn get_events(&self) -> Vec<Events>
     {
         match self
         {
-            UserDefinedActions::SendTo => vec![
+            EventActions::SendTo => vec![
                 Events::SystemStartup,
                 Events::SystemReboot,
                 Events::SystemPoweroff,
@@ -74,7 +95,7 @@ impl UserDefinedActions
                 Events::FileShared
 
             ],
-            UserDefinedActions::SendToAll => vec![
+            EventActions::SendToAll => vec![
                 Events::SystemStartup,
                 Events::SystemReboot,
                 Events::SystemPoweroff,
@@ -93,7 +114,7 @@ impl UserDefinedActions
 
 
             ],
-            UserDefinedActions::SendToAdmin => vec![
+            EventActions::SendToAdmin => vec![
                 Events::SystemStartup,
                 Events::SystemReboot,
                 Events::SystemPoweroff,
@@ -109,10 +130,9 @@ impl UserDefinedActions
                 Events::AccessDisabled,
                 Events::VPNEnabled,
                 Events::VPNDisabled,
-
-
             ],
-            UserDefinedActions::RunScript => vec![
+
+            EventActions::RunScript => vec![
                 Events::SystemStartup,
                 Events::SystemReboot,
                 Events::SystemPoweroff,
@@ -132,13 +152,13 @@ impl UserDefinedActions
                 Events::FileShared
 
             ],
-            UserDefinedActions::ChangeOwner => vec![
+            EventActions::ChangeOwner => vec![
                 Events::FileCreated,
                 Events::FileDeleted,
                 Events::FileModified
                 
             ],
-            UserDefinedActions::ChangePermissions => vec![
+            EventActions::ChangePermissions => vec![
                 Events::FileCreated,
                 Events::FileDeleted,
                 Events::FileModified
@@ -151,14 +171,14 @@ impl UserDefinedActions
     {
         match self
         {
-            UserDefinedActions::SendToAll => vec![ContextVariables::User],
-            UserDefinedActions::SendToAdmin => vec![ContextVariables::User],
-            UserDefinedActions::ChangeOwner => vec![
+            EventActions::SendToAll => vec![ContextVariables::User],
+            EventActions::SendToAdmin => vec![ContextVariables::User],
+            EventActions::ChangeOwner => vec![
                 ContextVariables::User,
                 ContextVariables::Group,
                 ContextVariables::Permissions,
             ],
-            UserDefinedActions::ChangePermissions => vec![
+            EventActions::ChangePermissions => vec![
                 ContextVariables::User,
                 ContextVariables::Group,
                 ContextVariables::Permissions,
@@ -167,11 +187,34 @@ impl UserDefinedActions
         }
     }
 
+    pub fn get_action_parameters(&self) -> Vec<EventParameterTypes>
+    {
+        match self
+        {
+            EventActions::SendTo => vec![EventParameterTypes::User, EventParameterTypes::Notification],
+            EventActions::SendToAdmin | EventActions::SendToAll => vec![EventParameterTypes::Notification],
+            EventActions::RunScript => vec![EventParameterTypes::RunScript],
+            EventActions::ChangeOwner => vec![EventParameterTypes::FileOwnership],
+            EventActions::ChangePermissions => vec![EventParameterTypes::FilePermission],
+            _ => vec![]
+        }
+    }
+
     pub fn get_context_variables_from_event(&self, event:&Events) -> Vec<ContextVariables>
     {
         let mut ctx =  event.get_context_variables();
         ctx.extend(self.get_context_variables());
 
-        return ctx;
+        ctx
+    }
+
+    pub fn get_category(&self) -> ActionCategories
+    {
+        match self
+        {
+            EventActions::SendTo | EventActions::SendToAdmin | EventActions::SendToAll => ActionCategories::Notification,
+            EventActions::RunScript => ActionCategories::Execution,
+            EventActions::ChangeOwner | EventActions::ChangePermissions => ActionCategories::File
+        }
     }
 }

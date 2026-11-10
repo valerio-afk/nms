@@ -1,15 +1,41 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Login, getCurrentUser, logout as apiLogout, setAuthToken, type User } from '@nms/shared';
 import Header from './components/Header';
 import ConfirmModal from './components/ConfirmModal';
+import ServerOfflineBanner from './components/ServerOfflineBanner';
+import { useServerStatus } from './hooks/useServerStatus';
 import DashboardPage from './pages/DashboardPage';
+import DiskManagementPage from './pages/DiskManagementPage';
 import PlaceholderPage from './pages/PlaceholderPage';
 import { rebootSystem, shutdownSystem } from './utils/api';
 import { useTranslation } from 'react-i18next';
 import { Sun, Moon, ChevronDown, Check } from 'lucide-react';
 
+/** Map URL hash paths to tab IDs and back */
+const PATH_TO_TAB: Record<string, string> = {
+    '/': 'dashboard',
+    '/dashboard': 'dashboard',
+    '/disks': 'disks',
+    '/network': 'network',
+    '/users': 'users',
+    '/access': 'access',
+    '/advanced': 'advanced',
+};
+const TAB_TO_PATH: Record<string, string> = {
+    dashboard: '/dashboard',
+    disks: '/disks',
+    network: '/network',
+    users: '/users',
+    access: '/access',
+    advanced: '/advanced',
+};
+
 export default function App() {
     const { t, i18n } = useTranslation();
+    const navigate = useNavigate();
+    const location = useLocation();
+
     const searchParams = new URLSearchParams(window.location.search);
     const isDemoMode = searchParams.get('demo') === 'true';
     const [isLoggedIn, setIsLoggedIn] = useState(() => isDemoMode || !!localStorage.getItem('authToken'));
@@ -26,11 +52,22 @@ export default function App() {
         return null;
     });
     const [authError, setAuthError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState('dashboard');
     const [isDark, setIsDark] = useState(() => {
         const saved = localStorage.getItem('theme');
         return saved ? saved === 'dark' : true;
     });
+
+    // Server reachability probe — aware of login state to avoid false-positive banner on login
+    const serverStatus = useServerStatus(isLoggedIn);
+
+    // Derive activeTab from the current URL path
+    const activeTab = PATH_TO_TAB[location.pathname] ?? 'dashboard';
+
+    // Navigate to a tab by updating the URL
+    const setActiveTab = (tab: string) => {
+        const path = TAB_TO_PATH[tab] ?? '/dashboard';
+        navigate(path);
+    };
 
     // Language dropdown state on Login screen
     const [isLoginLangOpen, setIsLoginLangOpen] = useState(false);
@@ -202,7 +239,7 @@ export default function App() {
             <Login
                 onLoginSuccess={handleLoginSuccess}
                 initialError={authError}
-                appName={t('app.title', 'NAS Management System')}
+                appName={t('app.title', 'NMS')}
                 title={t('login.secure_access', 'Secure Access')}
                 subtitle={t('login.subtitle', 'Please authenticate to access the dashboard')}
                 headerRightContent={loginHeaderControls}
@@ -236,6 +273,7 @@ export default function App() {
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 text-gray-900 dark:text-gray-100 flex flex-col transition-colors duration-300">
+            <ServerOfflineBanner status={serverStatus} />
             <Header
                 currentUser={currentUser}
                 activeTab={activeTab}
@@ -251,18 +289,20 @@ export default function App() {
                         currentUser={currentUser}
                         onNavigate={(tab) => setActiveTab(tab)}
                     />
+                ) : activeTab === 'disks' ? (
+                    <DiskManagementPage
+                        onNavigate={(tab) => setActiveTab(tab)}
+                    />
                 ) : (
                     <PlaceholderPage
                         title={
-                            activeTab === 'disks'
-                                ? t('nav.disks', 'Disk Management')
-                                : activeTab === 'network'
+                            activeTab === 'network'
                                 ? t('nav.network', 'Network')
                                 : activeTab === 'users'
-                                ? t('nav.users', 'Users')
-                                : activeTab === 'access'
-                                ? t('nav.access', 'Remote Access')
-                                : t('nav.advanced', 'Advanced')
+                                    ? t('nav.users', 'Users')
+                                    : activeTab === 'access'
+                                        ? t('nav.access', 'Remote Access')
+                                        : t('nav.advanced', 'Advanced')
                         }
                         onBack={() => setActiveTab('dashboard')}
                     />

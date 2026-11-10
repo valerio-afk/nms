@@ -18,7 +18,7 @@ use anyhow::Error;
 use crate::backend::msg::{LogErrors, LogInfos, LogWarnings, LoggerMessages};
 use super::{RemoteService, ServiceAuth, ServiceError, ServicePermissionHooks, ServiceProperties, ServiceProperty, SystemdService};
 
-static NGINX_BLOCK:[&'static str;2] = ["/box", "/api"];
+static NGINX_BLOCK:[&'static str;1] = ["/box"];
 
 
 

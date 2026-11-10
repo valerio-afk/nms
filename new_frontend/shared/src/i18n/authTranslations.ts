@@ -1,6 +1,6 @@
 export const sharedEn = {
     app: {
-        title: "NAS Management System",
+        title: "NMS",
         logout: "Logout",
         logged_out_msg: "You've been logged out",
         invalid_auth: "Invalid authentication",
@@ -35,7 +35,7 @@ export const sharedEn = {
 
 export const sharedIt = {
     app: {
-        title: "NAS Management System",
+        title: "NMS",
         logout: "Disconnetti",
         logged_out_msg: "Sei stato disconnesso",
         invalid_auth: "Autenticazione non valida",

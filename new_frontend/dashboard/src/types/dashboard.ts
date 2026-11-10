@@ -109,3 +109,63 @@ export interface DashboardMetrics {
     system: SystemInfo;
     sensors: HardwareSensor[];
 }
+
+export interface SnapshotItem {
+    name: string;
+    ref_size: number;
+}
+
+export interface ScrubReport {
+    started: string;
+    ended: string;
+    errors: string;
+}
+
+export interface ScrubInfo {
+    ongoing: boolean;
+    last: number | null;
+}
+
+export interface ImportablePool {
+    name: string;
+    state: string;
+    disks: string[];
+    message?: string;
+}
+
+export interface CreatePoolPayload {
+    pool_name: string;
+    dataset_name: string;
+    redundancy: boolean;
+    encryption: boolean;
+    compression: boolean;
+    disks: string[];
+}
+
+export interface SmartAttribute {
+    id: number;
+    name: string;
+    value: number;
+    worst: number;
+    thresh: number;
+    when_failed?: string | null;
+}
+
+export interface SmartSelfTestLog {
+    type: string;
+    status: string;
+    progress?: number | null;
+    passed?: boolean;
+}
+
+export interface SmartInfo {
+    device: string;
+    available: boolean;
+    enabled: boolean;
+    passed?: boolean | null;
+    poweron_time?: { hours?: number; days?: number } | null;
+    temperature?: number | null;
+    attributes: SmartAttribute[];
+    self_test_logs: SmartSelfTestLog[];
+}
+

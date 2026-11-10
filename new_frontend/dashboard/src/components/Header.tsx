@@ -1,18 +1,18 @@
 import { useState, useRef, useEffect } from 'react';
-import { 
-    LayoutDashboard, 
-    HardDrive, 
-    Network, 
-    Users, 
-    Terminal, 
-    Settings, 
-    Sun, 
-    Moon, 
-    ChevronDown, 
-    Check, 
-    Power, 
-    LogOut, 
-    RotateCcw, 
+import {
+    LayoutDashboard,
+    HardDrive,
+    Network,
+    Users,
+    Terminal,
+    Settings,
+    Sun,
+    Moon,
+    ChevronDown,
+    Check,
+    Power,
+    LogOut,
+    RotateCcw,
     Menu,
     X
 } from 'lucide-react';
@@ -82,7 +82,7 @@ export default function Header({
                                 N
                             </div>
                             <h1 className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-600 hidden sm:inline-block">
-                                {t('app.title', 'NAS Management System')}
+                                {t('app.title', 'NMS')}
                             </h1>
                         </div>
 
@@ -95,11 +95,10 @@ export default function Header({
                                     <button
                                         key={item.id}
                                         onClick={() => setActiveTab(item.id)}
-                                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                                            isActive
+                                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${isActive
                                                 ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-semibold'
                                                 : 'text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800 hover:text-gray-900 dark:hover:text-zinc-200'
-                                        }`}
+                                            }`}
                                     >
                                         <Icon className="w-4 h-4" />
                                         <span>{item.label}</span>
@@ -248,11 +247,10 @@ export default function Header({
                                         setActiveTab(item.id);
                                         setIsMobileNavOpen(false);
                                     }}
-                                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer ${
-                                        isActive
+                                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer ${isActive
                                             ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400'
                                             : 'text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800'
-                                    }`}
+                                        }`}
                                 >
                                     <Icon className="w-4 h-4" />
                                     <span>{item.label}</span>
