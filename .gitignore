@@ -7,6 +7,10 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+#conf files
+nms.json
+#node stuff
+
 node_modules
 dist
 dist-ssr
@@ -22,3 +26,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+#python crap
+__pycache__/
+*.pyc
