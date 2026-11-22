@@ -4,9 +4,12 @@ import { Login, getCurrentUser, logout as apiLogout, setAuthToken, type User } f
 import Header from './components/Header';
 import ConfirmModal from './components/ConfirmModal';
 import ServerOfflineBanner from './components/ServerOfflineBanner';
+import ToastRenderer from './components/ToastRenderer';
+import { ToastProvider } from './context/ToastContext';
 import { useServerStatus } from './hooks/useServerStatus';
 import DashboardPage from './pages/DashboardPage';
 import DiskManagementPage from './pages/DiskManagementPage';
+import NetworkPage from './pages/NetworkPage';
 import PlaceholderPage from './pages/PlaceholderPage';
 import { rebootSystem, shutdownSystem } from './utils/api';
 import { useTranslation } from 'react-i18next';
@@ -272,6 +275,7 @@ export default function App() {
     const currentModalInfo = confirmModal.action ? modalTexts[confirmModal.action] : null;
 
     return (
+        <ToastProvider>
         <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 text-gray-900 dark:text-gray-100 flex flex-col transition-colors duration-300">
             <ServerOfflineBanner status={serverStatus} />
             <Header
@@ -293,16 +297,18 @@ export default function App() {
                     <DiskManagementPage
                         onNavigate={(tab) => setActiveTab(tab)}
                     />
+                ) : activeTab === 'network' ? (
+                    <NetworkPage
+                        onNavigate={(tab) => setActiveTab(tab)}
+                    />
                 ) : (
                     <PlaceholderPage
                         title={
-                            activeTab === 'network'
-                                ? t('nav.network', 'Network')
-                                : activeTab === 'users'
-                                    ? t('nav.users', 'Users')
-                                    : activeTab === 'access'
-                                        ? t('nav.access', 'Remote Access')
-                                        : t('nav.advanced', 'Advanced')
+                            activeTab === 'users'
+                                ? t('nav.users', 'Users')
+                                : activeTab === 'access'
+                                    ? t('nav.access', 'Remote Access')
+                                    : t('nav.advanced', 'Advanced')
                         }
                         onBack={() => setActiveTab('dashboard')}
                     />
@@ -321,6 +327,8 @@ export default function App() {
                     onCancel={() => setConfirmModal({ isOpen: false, action: null, isLoading: false })}
                 />
             )}
+            <ToastRenderer />
         </div>
+        </ToastProvider>
     );
 }

@@ -17,7 +17,12 @@ i18n.use(initReactI18next).init({
     }
   },
   ns: ['translations'],
-  defaultNS: 'translations'
+  defaultNS: 'translations',
+  interpolation: {
+    // React already escapes output — disable i18next's double-escaping
+    // so that interpolated values like /dev/sdc are not mangled to &#x2F;dev&#x2F;sdc
+    escapeValue: false
+  }
 });
 
 export default i18n;

@@ -3,6 +3,7 @@ import { X, Activity, Thermometer, Clock, ShieldCheck, ShieldAlert, Play, CheckC
 import { useTranslation } from 'react-i18next';
 import type { DiskItem, SmartInfo } from '../../types/dashboard';
 import { fetchSmartInfo, runSmartTest } from '../../utils/api';
+import { useToast } from '../../context/ToastContext';
 
 interface SmartModalProps {
     disk: DiskItem | null;
@@ -12,18 +13,17 @@ interface SmartModalProps {
 
 export default function SmartModal({ disk, isOpen, onClose }: SmartModalProps) {
     const { t } = useTranslation();
+    const { toastError, toastSuccess } = useToast();
 
     const [smartData, setSmartData] = useState<SmartInfo | null>(null);
     const [loading, setLoading] = useState(false);
     const [testLoading, setTestLoading] = useState<'short' | 'long' | null>(null);
-    const [testMessage, setTestMessage] = useState<string | null>(null);
 
     const devPath = disk?.path || (disk?.name ? `/dev/${disk.name}` : '');
 
     useEffect(() => {
         if (!isOpen || !devPath) {
             setSmartData(null);
-            setTestMessage(null);
             return;
         }
 
@@ -35,6 +35,7 @@ export default function SmartModal({ disk, isOpen, onClose }: SmartModalProps) {
             })
             .catch(err => {
                 console.error('Failed to load SMART info', err);
+                if (isMounted) toastError(err?.message || t('disks.smart.loading', 'Failed to load disk health data.'));
             })
             .finally(() => {
                 if (isMounted) setLoading(false);
@@ -43,15 +44,14 @@ export default function SmartModal({ disk, isOpen, onClose }: SmartModalProps) {
         return () => {
             isMounted = false;
         };
-    }, [isOpen, devPath]);
+    }, [isOpen, devPath, t, toastError]);
 
     const handleRunTest = async (testType: 'short' | 'long') => {
         if (!devPath) return;
         setTestLoading(testType);
-        setTestMessage(null);
         try {
             await runSmartTest(devPath, testType);
-            setTestMessage(
+            toastSuccess(
                 testType === 'short'
                     ? t('disks.smart.test_short_started', 'Quick self-test initiated successfully.')
                     : t('disks.smart.test_long_started', 'Extended self-test initiated successfully.')
@@ -61,7 +61,7 @@ export default function SmartModal({ disk, isOpen, onClose }: SmartModalProps) {
                 fetchSmartInfo(devPath).then(data => setSmartData(data));
             }, 1000);
         } catch (err: any) {
-            setTestMessage(err?.message || t('disks.smart.test_failed', 'Failed to start self-test.'));
+            toastError(err?.message || t('disks.smart.test_failed', 'Failed to start self-test.'));
         } finally {
             setTestLoading(null);
         }
@@ -104,12 +104,6 @@ export default function SmartModal({ disk, isOpen, onClose }: SmartModalProps) {
                         </div>
                     ) : (
                         <>
-                            {testMessage && (
-                                <div className="p-3.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/50 text-indigo-700 dark:text-indigo-300">
-                                    {testMessage}
-                                </div>
-                            )}
-
                             {/* Status Overview Cards */}
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                 {/* Passed Status */}

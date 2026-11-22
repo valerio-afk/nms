@@ -1,4 +1,4 @@
-import { HardDrive, Activity, RefreshCw, Thermometer, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { HardDrive, Activity, RefreshCw, Thermometer, Check, ShieldAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { DiskItem } from '../../types/dashboard';
 import { formatBytes } from '../../utils/formatters';
@@ -40,7 +40,7 @@ export default function DiskCard({
             case 1:
                 return (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50">
-                        <ShieldCheck className="w-3 h-3" />
+                        <Check className="w-3 h-3" />
                         {t('disks.status.online', 'Online')}
                     </span>
                 );

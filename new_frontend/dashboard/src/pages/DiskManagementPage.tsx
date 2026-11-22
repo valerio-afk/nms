@@ -5,11 +5,12 @@ import {
     ArrowLeft,
     AlertTriangle,
     Database,
-    Shield,
+    LayersPlus,
     Lock,
     Archive
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useToast } from '../context/ToastContext';
 import type {
     DiskItem,
     PoolStatus,
@@ -35,7 +36,9 @@ import {
     rollbackSnapshot,
     createPool,
     expandPool,
-    formatDisk
+    formatDisk,
+    uploadPoolKey,
+    importPool
 } from '../utils/api';
 import { formatBytes, formatPercent } from '../utils/formatters';
 import DiskCard from '../components/disks/DiskCard';
@@ -54,6 +57,7 @@ interface DiskManagementPageProps {
 
 export default function DiskManagementPage({ onNavigate }: DiskManagementPageProps) {
     const { t } = useTranslation();
+    const { toastError, toastSuccess } = useToast();
 
     // Data states
     const [disks, setDisks] = useState<DiskItem[]>([]);
@@ -66,7 +70,6 @@ export default function DiskManagementPage({ onNavigate }: DiskManagementPagePro
 
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     // Selected disk for SMART diagnostic modal
     const [selectedSmartDisk, setSelectedSmartDisk] = useState<DiskItem | null>(null);
@@ -86,7 +89,7 @@ export default function DiskManagementPage({ onNavigate }: DiskManagementPagePro
         message: '',
         confirmText: '',
         variant: 'warning',
-        onConfirm: async () => {}
+        onConfirm: async () => { }
     });
 
     // Create snapshot dialog state
@@ -123,12 +126,10 @@ export default function DiskManagementPage({ onNavigate }: DiskManagementPagePro
             if (scrubInfoRes.status === 'fulfilled') setScrubInfo(scrubInfoRes.value);
             if (scrubReportRes.status === 'fulfilled') setScrubReport(scrubReportRes.value);
             if (snapshotsRes.status === 'fulfilled') setSnapshots(snapshotsRes.value);
-
-            setError(null);
         } catch (err: any) {
             console.error('Failed to load disk management data', err);
             if (isManual) {
-                setError(err?.message || t('disks.error_loading', 'Failed to retrieve disk information'));
+                toastError(err?.message || t('disks.error_loading', 'Failed to retrieve disk information'));
             }
         } finally {
             setLoading(false);
@@ -156,13 +157,13 @@ export default function DiskManagementPage({ onNavigate }: DiskManagementPagePro
                 : t('disks.actions.mount_title', 'Mount Disk Array'),
             message: willUnmount
                 ? t(
-                      'disks.actions.unmount_confirm',
-                      'Are you sure you want to unmount the disk array? Any active network shares, file browser sessions, or remote access will be temporarily unavailable.'
-                  )
+                    'disks.actions.unmount_confirm',
+                    'Are you sure you want to unmount the disk array? Any active network shares, file browser sessions, or remote access will be temporarily unavailable.'
+                )
                 : t(
-                      'disks.actions.mount_confirm',
-                      'Mount the disk array to make your files accessible.'
-                  ),
+                    'disks.actions.mount_confirm',
+                    'Mount the disk array to make your files accessible.'
+                ),
             confirmText: willUnmount
                 ? t('disks.tools.unmount', 'Unmount')
                 : t('disks.tools.mount', 'Mount'),
@@ -176,6 +177,8 @@ export default function DiskManagementPage({ onNavigate }: DiskManagementPagePro
                         await mountPool();
                     }
                     await loadData(true);
+                } catch (err: any) {
+                    toastError(err?.message || t('disks.error_loading', 'Failed to perform mount operation'));
                 } finally {
                     setConfirmModal(prev => ({ ...prev, isOpen: false, isLoading: false }));
                 }
@@ -189,7 +192,7 @@ export default function DiskManagementPage({ onNavigate }: DiskManagementPagePro
             await startScrub();
             await loadData(true);
         } catch (err: any) {
-            setError(err?.message || t('disks.scrub.error_starting', 'Failed to start disk verification.'));
+            toastError(err?.message || t('disks.scrub.error_starting', 'Failed to start disk verification.'));
         } finally {
             setIsActionLoading(null);
         }
@@ -209,7 +212,7 @@ export default function DiskManagementPage({ onNavigate }: DiskManagementPagePro
             setIsSnapshotDialogOpen(false);
             await loadData(true);
         } catch (err: any) {
-            setError(err?.message || t('disks.snapshots.error_create', 'Failed to create snapshot.'));
+            toastError(err?.message || t('disks.snapshots.error_create', 'Failed to create snapshot.'));
         } finally {
             setIsActionLoading(null);
         }
@@ -229,6 +232,8 @@ export default function DiskManagementPage({ onNavigate }: DiskManagementPagePro
                 try {
                     await deleteSnapshot(name);
                     await loadData(true);
+                } catch (err: any) {
+                    toastError(err?.message || t('disks.snapshots.error_create', 'Failed to delete snapshot.'));
                 } finally {
                     setConfirmModal(prev => ({ ...prev, isOpen: false, isLoading: false }));
                 }
@@ -252,6 +257,8 @@ export default function DiskManagementPage({ onNavigate }: DiskManagementPagePro
                 try {
                     await rollbackSnapshot(name);
                     await loadData(true);
+                } catch (err: any) {
+                    toastError(err?.message || t('disks.error_loading', 'Failed to rollback snapshot.'));
                 } finally {
                     setConfirmModal(prev => ({ ...prev, isOpen: false, isLoading: false }));
                 }
@@ -276,7 +283,7 @@ export default function DiskManagementPage({ onNavigate }: DiskManagementPagePro
                     await createPool(payload);
                     await loadData(true);
                 } catch (err: any) {
-                    setError(err?.message || t('disks.create.error', 'Failed to create disk array.'));
+                    toastError(err?.message || t('disks.create.error', 'Failed to create disk array.'));
                 } finally {
                     setConfirmModal(prev => ({ ...prev, isOpen: false, isLoading: false }));
                 }
@@ -301,7 +308,7 @@ export default function DiskManagementPage({ onNavigate }: DiskManagementPagePro
                     await expandPool(diskPath);
                     await loadData(true);
                 } catch (err: any) {
-                    setError(err?.message || t('disks.add.error', 'Failed to expand disk array.'));
+                    toastError(err?.message || t('disks.add.error', 'Failed to expand disk array.'));
                 } finally {
                     setConfirmModal(prev => ({ ...prev, isOpen: false, isLoading: false }));
                 }
@@ -325,12 +332,28 @@ export default function DiskManagementPage({ onNavigate }: DiskManagementPagePro
                     await formatDisk(path);
                     await loadData(true);
                 } catch (err: any) {
-                    setError(err?.message || t('disks.format_modal.error', 'Failed to format disk.'));
+                    toastError(err?.message || t('disks.format_modal.error', 'Failed to format disk.'));
                 } finally {
                     setConfirmModal(prev => ({ ...prev, isOpen: false, isLoading: false }));
                 }
             }
         });
+    };
+
+    const handleImportPool = async (poolName: string, keyFile?: File | null) => {
+        setIsActionLoading(`import-${poolName}`);
+        try {
+            if (keyFile) {
+                await uploadPoolKey(keyFile);
+            }
+            await importPool(poolName, !!keyFile);
+            toastSuccess(t('disks.import.success', 'Disk array "{{name}}" imported successfully.', { name: poolName }));
+            await loadData(true);
+        } catch (err: any) {
+            toastError(err?.message || t('disks.import.error', 'Failed to import disk array.'));
+        } finally {
+            setIsActionLoading(null);
+        }
     };
 
     // Calculate capacity percentages
@@ -383,17 +406,38 @@ export default function DiskManagementPage({ onNavigate }: DiskManagementPagePro
                 </div>
             </div>
 
-            {error && (
-                <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 text-xs flex items-center justify-between">
-                    <span>{error}</span>
-                    <button onClick={() => setError(null)} className="font-semibold cursor-pointer">
-                        ✕
-                    </button>
-                </div>
-            )}
+            {/* Loading Skeleton */}
+            {loading && !pool ? (
+                <div className="space-y-6 animate-pulse">
+                    {/* Array Overview Banner Skeleton */}
+                    <div className="h-36 rounded-2xl bg-gray-200 dark:bg-zinc-800/60" />
 
-            {/* Array Overview Banner (if configured) */}
-            {pool && pool.isConfigured && (
+                    {/* Physical Disks Section Skeleton */}
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div className="h-5 w-36 rounded-lg bg-gray-200 dark:bg-zinc-800/60" />
+                            <div className="h-4 w-24 rounded-lg bg-gray-200 dark:bg-zinc-800/60" />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            {[1, 2, 3, 4].map(i => (
+                                <div key={i} className="h-48 rounded-2xl bg-gray-200 dark:bg-zinc-800/60" />
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Tools / Operations Section Skeleton */}
+                    <div className="space-y-4 pt-2">
+                        <div className="h-28 rounded-2xl bg-gray-200 dark:bg-zinc-800/60" />
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div className="h-64 rounded-2xl bg-gray-200 dark:bg-zinc-800/60" />
+                            <div className="h-64 rounded-2xl bg-gray-200 dark:bg-zinc-800/60" />
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <>
+                    {/* Array Overview Banner (if configured) */}
+                    {pool && pool.isConfigured && (
                 <div className="p-6 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/5 to-transparent border border-indigo-500/20 dark:border-indigo-500/30">
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                         <div className="space-y-2">
@@ -407,11 +451,10 @@ export default function DiskManagementPage({ onNavigate }: DiskManagementPagePro
                                             {t('disks.array_title', 'Disk Array')}
                                         </h3>
                                         <span
-                                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                                                pool.isMounted
+                                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${pool.isMounted
                                                     ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50'
                                                     : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50'
-                                            }`}
+                                                }`}
                                         >
                                             {pool.isMounted
                                                 ? t('disks.status.mounted', 'Mounted & Accessible')
@@ -427,7 +470,7 @@ export default function DiskManagementPage({ onNavigate }: DiskManagementPagePro
                             {/* Features badges */}
                             <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/80 dark:bg-zinc-800/80 border border-gray-200/80 dark:border-zinc-700 text-gray-700 dark:text-zinc-300">
-                                    <Shield className="w-3.5 h-3.5 text-emerald-500" />
+                                    <LayersPlus className="w-3.5 h-3.5 text-emerald-500" />
                                     <span>{pool.settings?.redundancy ? t('disks.settings.redundancy', 'Redundancy') : t('disks.settings.standard', 'Standard')}</span>
                                 </span>
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/80 dark:bg-zinc-800/80 border border-gray-200/80 dark:border-zinc-700 text-gray-700 dark:text-zinc-300">
@@ -454,9 +497,8 @@ export default function DiskManagementPage({ onNavigate }: DiskManagementPagePro
                                 </div>
                                 <div className="w-full bg-gray-100 dark:bg-zinc-800 rounded-full h-2.5 overflow-hidden">
                                     <div
-                                        className={`h-full rounded-full transition-all duration-500 ${
-                                            capacityPercent > 85 ? 'bg-red-500' : 'bg-indigo-600 dark:bg-indigo-500'
-                                        }`}
+                                        className={`h-full rounded-full transition-all duration-500 ${capacityPercent > 85 ? 'bg-red-500' : 'bg-indigo-600 dark:bg-indigo-500'
+                                            }`}
                                         style={{ width: `${Math.min(100, capacityPercent)}%` }}
                                     />
                                 </div>
@@ -484,13 +526,7 @@ export default function DiskManagementPage({ onNavigate }: DiskManagementPagePro
                     </span>
                 </div>
 
-                {loading && disks.length === 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-pulse">
-                        {[1, 2, 3, 4].map(i => (
-                            <div key={i} className="h-48 rounded-2xl bg-gray-200 dark:bg-zinc-800/60" />
-                        ))}
-                    </div>
-                ) : disks.length === 0 ? (
+                {disks.length === 0 ? (
                     <div className="p-8 rounded-2xl bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 text-center text-xs text-gray-500 dark:text-zinc-400">
                         <HardDrive className="w-8 h-8 mx-auto mb-2 opacity-40 text-gray-400" />
                         <p>{t('disks.no_disks_found', 'No storage drives were detected on this system.')}</p>
@@ -570,13 +606,16 @@ export default function DiskManagementPage({ onNavigate }: DiskManagementPagePro
                                 <ImportArrayCard
                                     key={p.name || idx}
                                     pool={p}
-                                    onImport={(pName) => console.log('Importing pool', pName)}
+                                    isLoading={isActionLoading === `import-${p.name}`}
+                                    onImport={(pName, keyFile) => handleImportPool(pName, keyFile)}
                                 />
                             ))}
                         </div>
                     </>
                 )}
             </div>
+            </>
+            )}
 
             {/* SMART Diagnostics Dialog */}
             <SmartModal

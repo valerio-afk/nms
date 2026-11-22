@@ -16,6 +16,7 @@ import type {
     CreatePoolPayload,
     SmartInfo
 } from '../types/dashboard';
+import type { DdnsProviderConfig, WifiNetworkItem, WifiConnectPayload, HotspotPayload } from '../types/network';
 
 interface PropertyResponse<T> {
     property: string;
@@ -366,9 +367,27 @@ export async function createPool(payload: CreatePoolPayload): Promise<void> {
 }
 
 export async function expandPool(newDevice: string): Promise<void> {
-    await apiRequest('/pool/expand', {
+    await apiRequest(`/pool/expand?new_device=${encodeURIComponent(newDevice)}`, {
+        method: 'POST'
+    });
+}
+
+export async function uploadPoolKey(file: File): Promise<void> {
+    const formData = new FormData();
+    formData.append('key_file', file);
+    await apiRequest('/pool/import/key', {
         method: 'POST',
-        body: JSON.stringify({ new_device: newDevice })
+        body: formData
+    });
+}
+
+export async function importPool(poolName: string, loadKey: boolean): Promise<void> {
+    await apiRequest('/pool/attach', {
+        method: 'POST',
+        body: JSON.stringify({
+            pool_name: poolName,
+            load_key: loadKey
+        })
     });
 }
 
@@ -541,4 +560,179 @@ export async function fetchDashboardMetrics(): Promise<DashboardMetrics> {
         system: systemRes.status === 'fulfilled' ? systemRes.value : {},
         sensors: sensorsRes.status === 'fulfilled' ? sensorsRes.value : []
     };
+}
+
+// --- Network Management Methods ---
+
+export async function setIfaceStatus(iface: string, action: 'up' | 'down'): Promise<void> {
+    await apiRequest(`/net/${encodeURIComponent(iface)}/${action}`, {
+        method: 'POST'
+    });
+}
+
+export async function fetchVpnEndpoint(): Promise<string | null> {
+    try {
+        const res = await apiRequest<string | null>('/net/vpn/endpoint');
+        return res ?? null;
+    } catch {
+        return null;
+    }
+}
+
+export async function fetchVpnPublicKey(): Promise<string | null> {
+    try {
+        const res = await apiRequest<string | null>('/net/vpn/pubkey');
+        return res ?? null;
+    } catch {
+        return null;
+    }
+}
+
+export async function updateVpnConfig(cfg: { address: string; netmask: string; endpoint: string }): Promise<void> {
+    await apiRequest('/net/vpn', {
+        method: 'PATCH',
+        body: JSON.stringify(cfg)
+    });
+}
+
+export async function generateVpnKeys(): Promise<void> {
+    await apiRequest('/net/vpn/gen-keys', {
+        method: 'POST'
+    });
+}
+
+export async function fetchVpnPeers(): Promise<[string, string][]> {
+    try {
+        const res = await apiRequest<any>('/net/vpn/peers');
+        if (Array.isArray(res)) {
+            return res.map((p: any) => [String(p[0] || ''), String(p[1] || '')]);
+        }
+        return [];
+    } catch {
+        return [];
+    }
+}
+
+export async function addVpnPeer(name: string, publicKey: string): Promise<void> {
+    await apiRequest('/net/vpn/peers', {
+        method: 'POST',
+        body: JSON.stringify({ name, public_key: publicKey })
+    });
+}
+
+export async function deleteVpnPeer(name: string): Promise<void> {
+    await apiRequest(`/net/vpn/peers?name=${encodeURIComponent(name)}`, {
+        method: 'DELETE'
+    });
+}
+
+export async function fetchDdnsProviders(): Promise<Record<string, DdnsProviderConfig>> {
+    try {
+        const res = await apiRequest<Record<string, DdnsProviderConfig>>('/net/ddns');
+        return res && typeof res === 'object' ? res : {};
+    } catch {
+        return {};
+    }
+}
+
+export async function fetchDdnsProtocols(): Promise<string[]> {
+    try {
+        const res = await apiRequest<string[]>('/net/ddns/protocols');
+        return Array.isArray(res) && res.length > 0 ? res : ['duckdns', 'noip', 'dynu', 'freedns', 'dnsexit', 'dynv6', 'cloudns'];
+    } catch {
+        return ['duckdns', 'noip', 'dynu', 'freedns', 'dnsexit', 'dynv6', 'cloudns'];
+    }
+}
+
+export async function addDdnsProvider(payload: {
+    name: string;
+    proto: string;
+    server?: string;
+    username?: string;
+    password?: string;
+    hostname?: string;
+}): Promise<void> {
+    await apiRequest('/net/ddns', {
+        method: 'POST',
+        body: JSON.stringify({
+            name: payload.name,
+            proto: payload.proto,
+            server: payload.server || null,
+            username: payload.username || null,
+            password: payload.password || null,
+            hostname: payload.hostname || null
+        })
+    });
+}
+
+export async function editDdnsProvider(payload: {
+    name: string;
+    enabled: boolean;
+    proto: string;
+    server?: string;
+    username?: string;
+    password?: string;
+    hostname?: string;
+}): Promise<void> {
+    await apiRequest('/net/ddns', {
+        method: 'PATCH',
+        body: JSON.stringify({
+            enabled: payload.enabled,
+            data: {
+                name: payload.name,
+                proto: payload.proto,
+                server: payload.server || null,
+                username: payload.username || null,
+                password: payload.password || null,
+                hostname: payload.hostname || null
+            }
+        })
+    });
+}
+
+export async function deleteDdnsProvider(name: string): Promise<void> {
+    await apiRequest(`/net/ddns/${encodeURIComponent(name)}`, {
+        method: 'DELETE'
+    });
+}
+
+export async function fetchWifiNetworks(iface: string): Promise<WifiNetworkItem[]> {
+    const isDemo = typeof window !== 'undefined' && window.location.search.includes('demo=true');
+    if (isDemo) {
+        return [
+            { connected: true, bssid: '00:11:22:33:44:55', ssid: 'Home_WiFi_5G', strength: 4, security: 'WPA2' },
+            { connected: false, bssid: 'AA:BB:CC:DD:EE:FF', ssid: 'Office_Guest', strength: 3, security: null },
+            { connected: false, bssid: '11:22:33:44:55:66', ssid: 'Neighbor_Net', strength: 2, security: 'WPA3' }
+        ];
+    }
+    try {
+        const res = await apiRequest<any>(`/net/${encodeURIComponent(iface)}/list`);
+        if (Array.isArray(res)) {
+            return res.map((n: any) => ({
+                connected: !!n.connected,
+                bssid: String(n.bssid || ''),
+                ssid: n.ssid ? String(n.ssid) : null,
+                strength: typeof n.strength === 'number' ? n.strength : 3,
+                security: n.security ? String(n.security) : null
+            }));
+        }
+        return [];
+    } catch (err) {
+        console.error(`Failed to scan wifi networks on ${iface}:`, err);
+        return [];
+    }
+}
+
+export async function connectWifi(iface: string, payload: WifiConnectPayload): Promise<void> {
+    await apiRequest(`/net/${encodeURIComponent(iface)}/connect`, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+    });
+}
+
+export async function enableHotspot(payload: HotspotPayload): Promise<void> {
+    await apiRequest('/net/ap', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+    });
 }

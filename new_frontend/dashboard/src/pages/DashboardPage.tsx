@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { User } from '@nms/shared';
 import type { DashboardMetrics } from '../types/dashboard';
 import { fetchDashboardMetrics } from '../utils/api';
+import { useToast } from '../context/ToastContext';
 import DiskUsageWidget from '../components/widgets/DiskUsageWidget';
 import DiskOverviewWidget from '../components/widgets/DiskOverviewWidget';
 import NetworkOverviewWidget from '../components/widgets/NetworkOverviewWidget';
@@ -18,27 +19,26 @@ interface DashboardPageProps {
 
 export default function DashboardPage({ currentUser, onNavigate }: DashboardPageProps) {
     const { t } = useTranslation();
+    const { toastError } = useToast();
     const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     const loadMetrics = useCallback(async (isManualRefresh = false) => {
         if (isManualRefresh) setRefreshing(true);
         try {
             const data = await fetchDashboardMetrics();
             setMetrics(data);
-            setError(null);
         } catch (err: any) {
             console.error('Failed to load dashboard metrics', err);
             if (isManualRefresh) {
-                setError(err?.message || t('dashboard.error_loading', 'Failed to retrieve metrics'));
+                toastError(err?.message || t('dashboard.error_loading', 'Failed to retrieve metrics'));
             }
         } finally {
             setLoading(false);
             if (isManualRefresh) setRefreshing(false);
         }
-    }, [t]);
+    }, [t, toastError]);
 
     useEffect(() => {
         loadMetrics();
@@ -81,12 +81,6 @@ export default function DashboardPage({ currentUser, onNavigate }: DashboardPage
                     </button>
                 </div>
             </div>
-
-            {error && (
-                <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 text-sm">
-                    {error}
-                </div>
-            )}
 
             {/* Widgets Grid */}
             {loading && !metrics ? (

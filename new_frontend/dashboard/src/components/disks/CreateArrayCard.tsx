@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { PlusCircle, Shield, Lock, Archive, ChevronDown, ChevronUp, HardDrive, Check, HelpCircle } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { PlusCircle, LayersPlus, Lock, Archive, ChevronDown, ChevronUp, HardDrive, Check, HelpCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { DiskItem, CreatePoolPayload } from '../../types/dashboard';
 import { formatBytes } from '../../utils/formatters';
@@ -29,8 +29,21 @@ export default function CreateArrayCard({
     const [selectedDisks, setSelectedDisks] = useState<string[]>(() =>
         availableDisks.map(d => d.path || (d.name ? `/dev/${d.name}` : d.name))
     );
+    // Track whether the user has manually changed the selection
+    const userModifiedRef = useRef(false);
+
+    // If availableDisks loads/changes and the user hasn't touched the picker yet,
+    // keep the selection in sync (handles the case where disks arrive after mount)
+    useEffect(() => {
+        if (!userModifiedRef.current) {
+            setSelectedDisks(
+                availableDisks.map(d => d.path || (d.name ? `/dev/${d.name}` : d.name))
+            );
+        }
+    }, [availableDisks]);
 
     const toggleDiskSelection = (path: string) => {
+        userModifiedRef.current = true;
         setSelectedDisks(prev =>
             prev.includes(path) ? prev.filter(p => p !== path) : [...prev, path]
         );
@@ -80,14 +93,13 @@ export default function CreateArrayCard({
                 {/* Switches */}
                 <div className="space-y-4">
                     {/* Redundancy */}
-                    <div className={`flex items-center justify-between p-3.5 rounded-xl border transition-all ${
-                        redundancyDisabled
-                            ? 'bg-gray-50/50 dark:bg-zinc-800/20 border-gray-100 dark:border-zinc-800 opacity-50'
-                            : 'bg-gray-50 dark:bg-zinc-800/50 border-gray-100 dark:border-zinc-800'
-                    }`}>
+                    <div className={`flex items-center justify-between p-3.5 rounded-xl border transition-all ${redundancyDisabled
+                        ? 'bg-gray-50/50 dark:bg-zinc-800/20 border-gray-100 dark:border-zinc-800 opacity-50'
+                        : 'bg-gray-50 dark:bg-zinc-800/50 border-gray-100 dark:border-zinc-800'
+                        }`}>
                         <div className="flex items-center gap-3">
                             <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
-                                <Shield className="w-4 h-4" />
+                                <LayersPlus className="w-4 h-4" />
                             </div>
                             <div>
                                 <div className="flex items-center gap-1.5">
@@ -249,19 +261,17 @@ export default function CreateArrayCard({
                                             <div
                                                 key={dPath || i}
                                                 onClick={() => toggleDiskSelection(dPath)}
-                                                className={`flex items-center justify-between p-2.5 rounded-lg border cursor-pointer transition-colors ${
-                                                    isSelected
-                                                        ? 'bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-800'
-                                                        : 'bg-gray-50 dark:bg-zinc-800/40 border-gray-200 dark:border-zinc-700'
-                                                }`}
+                                                className={`flex items-center justify-between p-2.5 rounded-lg border cursor-pointer transition-colors ${isSelected
+                                                    ? 'bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-800'
+                                                    : 'bg-gray-50 dark:bg-zinc-800/40 border-gray-200 dark:border-zinc-700'
+                                                    }`}
                                             >
                                                 <div className="flex items-center gap-2">
                                                     <div
-                                                        className={`w-4 h-4 rounded border flex items-center justify-center text-white text-[10px] ${
-                                                            isSelected
-                                                                ? 'bg-indigo-600 border-indigo-600'
-                                                                : 'border-gray-300 dark:border-zinc-600'
-                                                        }`}
+                                                        className={`w-4 h-4 rounded border flex items-center justify-center text-white text-[10px] ${isSelected
+                                                            ? 'bg-indigo-600 border-indigo-600'
+                                                            : 'border-gray-300 dark:border-zinc-600'
+                                                            }`}
                                                     >
                                                         {isSelected && <Check className="w-3 h-3" />}
                                                     </div>
